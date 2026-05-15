@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { ModoScraper } from '@/lib/scrapers/modo';
 import { NextResponse } from 'next/server';
 
