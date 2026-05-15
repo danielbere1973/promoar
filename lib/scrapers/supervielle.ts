@@ -120,7 +120,7 @@ function parseItem(item: any, esIdentite = false): ScrapedPromo[] {
   const base: Partial<ScrapedPromo> = {
     storeName,
     description,
-    sourceText:   description,
+    sourceText:   item.legales ? item.legales.slice(0, 8000) : description,
     sourceUrl:    item.web || `${BASE_URL}?rubro=${encodeURIComponent(rubro)}`,
     validDays,
     validUntil,

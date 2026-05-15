@@ -144,9 +144,11 @@ function detectCategoria(storeName: string): string {
 
 // ─── RawCard (extraído del DOM) ───────────────────────────────────────────────
 interface RawCard {
-  activeDayBits: number;       // bitmask de días activos
-  lines: string[];             // content-line-1 .. line-5
-  altText: string;             // alt del <a> — contiene CABAL/VISA/MODO
+  activeDayBits: number;
+  lines: string[];
+  altText: string;
+  bid?: string;
+  pageId?: string;
 }
 
 // ─── parseCard ────────────────────────────────────────────────────────────────
@@ -289,7 +291,16 @@ export const CabalScraper: Scraper = {
           const link = card.querySelector('a[alt]');
           const altText = link?.getAttribute('alt') ?? '';
 
-          results.push({ activeDayBits: bits, lines, altText });
+          // bid y page_id para URL de detalle y legales
+          const cardEl = card as HTMLElement;
+          const bid = cardEl.dataset?.bid || cardEl.getAttribute('data-bid') || '';
+          const pageId = cardEl.dataset?.pageId || cardEl.getAttribute('data-page-id') || '';
+          // También buscar en links internos
+          const detailLink = card.querySelector('a[href*="bid="]');
+          const hrefBid = detailLink?.getAttribute('href')?.match(/bid=(\d+)/)?.[1] || '';
+          const hrefPageId = detailLink?.getAttribute('href')?.match(/page_id=(\d+)/)?.[1] || '';
+
+          results.push({ activeDayBits: bits, lines, altText, bid: bid || hrefBid, pageId: pageId || hrefPageId });
         });
 
         return results;
@@ -297,8 +308,35 @@ export const CabalScraper: Scraper = {
 
       console.log(`[Cabal] ${rawCards.length} cards encontradas`);
 
+      const LEGAL_API = 'https://www.beneficios.bancocredicoop.coop/coop/beneficios/xapi_get_page.php';
+      const DETAIL_BASE = 'https://www.beneficios.bancocredicoop.coop/coop/beneficios/?p=page&homeredirect=1&fromhome=1';
+
       for (const card of rawCards) {
         const promos = parseCard(card, BASE_URL);
+
+        // Enriquecer con legales y URL si tenemos bid/pageId
+        if (card.bid || card.pageId) {
+          const detailUrl = card.bid && card.pageId
+            ? `${DETAIL_BASE}&page_id=${card.pageId}&bid=${card.bid}`
+            : BASE_URL;
+          let legalText = '';
+          if (card.pageId) {
+            try {
+              const res = await context.request.get(`${LEGAL_API}?page_id=${card.pageId}`, { timeout: 8000 });
+              if (res.ok()) {
+                const data = await res.json().catch(() => null);
+                if (data?.body) {
+                  legalText = data.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 8000);
+                }
+              }
+            } catch { /* silencioso */ }
+          }
+          for (const p of promos) {
+            p.sourceUrl = detailUrl;
+            if (legalText) p.sourceText = legalText;
+          }
+        }
+
         allPromos.push(...promos);
       }
 

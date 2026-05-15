@@ -97,8 +97,9 @@ function parseItem(item: any, rubroId: number): ScrapedPromo[] {
   const walletNames = /\bMODO\b/.test(allText) ? ['MODO'] : undefined;
 
   const description = fullText.slice(0, 500);
+  const legalText = [item.descripcion, item.legales, item.leyendaLegal, item.textoLegal, item.terminosCondiciones].filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').trim();
   const base: Partial<ScrapedPromo> = {
-    storeName, description, sourceText: description, sourceUrl: PAGE_URL,
+    storeName, description, sourceText: legalText || description, sourceUrl: PAGE_URL,
     validFrom, validUntil, validDays, cap,
     bankNames: [BANK_NAME], cardNetworks, categoria,
     paymentChannel, walletNames,

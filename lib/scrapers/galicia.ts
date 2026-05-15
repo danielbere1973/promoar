@@ -128,7 +128,7 @@ function parseLeyendaDias(leyenda: string): number {
 
 function parseDetail(detail: any): {
   cap?: number; capTarget?: 'USER' | 'CARD'; capPeriod?: 'MONTHLY' | 'WEEKLY' | 'DAILY';
-  leyendaTope?: string; descripcion?: string;
+  leyendaTope?: string; descripcion?: string; legal?: string;
 } {
   if (!detail) return {};
 
@@ -151,12 +151,22 @@ function parseDetail(detail: any): {
     detail.descripcionAdicional,
   ].filter(Boolean).join(' | ');
 
+  // Texto legal — varios nombres posibles según el endpoint
+  const legal = detail.leyendaLegal
+    || detail.textoLegal
+    || detail.terminosCondiciones
+    || detail.bases
+    || detail.condiciones
+    || detail.legal
+    || undefined;
+
   return {
     cap:          capValue ?? undefined,
     capTarget:    capTarget,
     capPeriod:    capPeriod,
     leyendaTope:  detail.leyendaTope ?? undefined,
     descripcion:  descripcion || undefined,
+    legal:        typeof legal === 'string' ? legal.replace(/<[^>]+>/g, ' ').trim() : undefined,
   };
 }
 
@@ -224,7 +234,7 @@ function parseItem(item: any, categoriaNombre: string, detail?: any, catId?: num
   const base: Partial<ScrapedPromo> = {
     storeName,
     description,
-    sourceText:     description,
+    sourceText:     detailData.legal || description,
     sourceUrl:      promoSourceUrl,
     validUntil,
     validDays,

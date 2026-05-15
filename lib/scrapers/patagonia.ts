@@ -179,6 +179,10 @@ async function fetchPromoPage(slug: string, storeName: string): Promise<ScrapedP
     const catAlt  = catImgM ? (catImgM[1].match(/alt="([^"]+)"/i)?.[1] || '') : '';
     const categoria = detectCategoria(storeName, catAlt);
 
+    // Legales completos desde #popup-modal
+    const popupM = html.match(/<div[^>]*id="popup-modal"[^>]*>([\s\S]*?)<\/div>/i);
+    const fullLegal = popupM ? popupM[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim() : '';
+
     // Tipo de descuento desde legales
     const legales = html.replace(/<[^>]+>/g, ' ');
     const isReintegro = /reintegro|reembolso/i.test(legales);
@@ -215,7 +219,7 @@ async function fetchPromoPage(slug: string, storeName: string): Promise<ScrapedP
       const base: Partial<ScrapedPromo> = {
         storeName:     title,
         description:   title,
-        sourceText:    title,
+        sourceText:    fullLegal || title,
         sourceUrl:     url,
         validFrom,
         validUntil,

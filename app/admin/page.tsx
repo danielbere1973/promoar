@@ -299,7 +299,7 @@ function PinGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'clasificar' | 'users' | 'entities' | 'form' | 'cleanup'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -317,6 +317,32 @@ export default function AdminPage() {
   const [filterText, setFilterText] = useState('')
   const [filterCommerce, setFilterCommerce] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkCategory, setBulkCategory] = useState('')
+  const [bulkSaving, setBulkSaving] = useState(false)
+
+  const toggleBulkSelect = (id: string) => setSelectedIds(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+  })
+
+  const applyBulkCategory = async () => {
+    if (!bulkCategory || selectedIds.size === 0) return
+    setBulkSaving(true)
+    await fetch('/api/admin/promos', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.from(selectedIds), categoryId: bulkCategory })
+    })
+    setSelectedIds(new Set())
+    setBulkMode(false)
+    setBulkCategory('')
+    setBulkSaving(false)
+    // Recargar promos
+    const res = await fetch('/api/admin/promos')
+    const data = await res.json()
+    if (data.promos) setPromos(data.promos)
+  }
 
   // Estados ABM Entidades
   const [editingEntity, setEditingEntity] = useState<{
@@ -743,9 +769,6 @@ export default function AdminPage() {
         <TabButton active={tab === 'entities'} icon={Building2} onClick={() => { setTab('entities'); setSubTab('banks') }}>
           Entidades y Config
         </TabButton>
-        <TabButton active={tab === 'clasificar'} icon={Tag} onClick={() => setTab('clasificar')}>
-          Por Clasificar
-        </TabButton>
         <TabButton active={tab === 'expired'} icon={RefreshCw} onClick={() => setTab('expired')}>
           Expiradas
         </TabButton>
@@ -838,6 +861,26 @@ export default function AdminPage() {
               <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full ml-auto">
                 {isSearching ? `${filteredPromos.length} resultados` : `${filteredPromos.length} PROMOS`}
               </span>
+              <button
+                onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()) }}
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${bulkMode ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+              >
+                {bulkMode ? `✓ ${selectedIds.size} sel.` : 'Categorizar'}
+              </button>
+              {bulkMode && (
+                <button
+                  onClick={() => {
+                    if (selectedIds.size === filteredPromos.length) {
+                      setSelectedIds(new Set())
+                    } else {
+                      setSelectedIds(new Set(filteredPromos.map(p => p.id)))
+                    }
+                  }}
+                  className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                >
+                  {selectedIds.size === filteredPromos.length ? 'Ninguno' : 'Todos'}
+                </button>
+              )}
             </div>
 
             {/* Chips de categoría (solo en modo búsqueda) */}
@@ -881,9 +924,32 @@ export default function AdminPage() {
 
             {/* Grilla — en modo browse siempre, en modo search solo con 3+ chars */}
             {(!isSearching || filterText.length >= 3) && (
+              bulkMode ? (
+                /* Vista compacta de líneas para categorización bulk */
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                  {filteredPromos.map((p, i) => (
+                    <div
+                      key={p.id}
+                      onClick={() => toggleBulkSelect(p.id)}
+                      className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${selectedIds.has(p.id) ? 'bg-indigo-50' : 'hover:bg-slate-100'}`}
+                    >
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${selectedIds.has(p.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                        {selectedIds.has(p.id) && <Check size={11} className="text-white" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-800 truncate">{p.commerce?.name}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{p.title}</p>
+                      </div>
+                      <span className="text-[10px] font-black text-indigo-600 shrink-0">{discountLabel(p.requirements.reduce((max, r) => (r.discountValue ?? 0) > (max.discountValue ?? 0) ? r : max, p.requirements[0] ?? {}))}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full shrink-0" style={{ background: p.category?.color + '20', color: p.category?.color }}>{p.category?.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {loading && <Loader message="Cargando promociones..." />}
                 {filteredPromos.map(p => (
+                  <div key={p.id} className="relative">
                   <PromoCard
                     key={p.id}
                     promo={p}
@@ -902,7 +968,36 @@ export default function AdminPage() {
                       ...p.requirements.map(r => reqLabel(r))
                     ]}
                   />
+                  </div>
                 ))}
+              </div>
+              )
+            )}
+
+            {/* Barra flotante de categorización bulk */}
+            {bulkMode && selectedIds.size > 0 && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3 animate-in slide-in-from-bottom-4">
+                <span className="text-sm font-bold">{selectedIds.size} promos</span>
+                <select
+                  value={bulkCategory}
+                  onChange={e => setBulkCategory(e.target.value)}
+                  className="text-sm bg-slate-800 border border-slate-600 rounded-xl px-3 py-1.5 text-white focus:outline-none"
+                >
+                  <option value="">Elegir categoría...</option>
+                  {entities?.categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={applyBulkCategory}
+                  disabled={!bulkCategory || bulkSaving}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-1.5 rounded-xl transition-all"
+                >
+                  {bulkSaving ? 'Guardando...' : 'Aplicar'}
+                </button>
+                <button onClick={() => { setBulkMode(false); setSelectedIds(new Set()) }} className="text-slate-400 hover:text-white">
+                  <X size={16} />
+                </button>
               </div>
             )}
           </div>
@@ -913,13 +1008,6 @@ export default function AdminPage() {
           <CleanupTab commerces={entities?.commerces ?? []} />
         )}
 
-        {tab === 'clasificar' && (
-          <ClasificarTab
-            promos={promos.filter(p => p.category?.slug === 'sin-categoria')}
-            categories={entities?.categories.filter(c => (c as any).slug !== 'sin-categoria') ?? []}
-            onAssigned={fetchPromos}
-          />
-        )}
 
         {tab === 'expired' && (
           <div className="space-y-6">

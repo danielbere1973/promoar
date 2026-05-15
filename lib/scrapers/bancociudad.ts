@@ -99,7 +99,7 @@ function parseItem(item: any, rubroMap: Map<number, string>): RawBankPromo | nul
 
   // Categoría desde el rubroId del item
   const rubroNombre = rubroMap.get(item.rubroId) ?? '';
-  const categoria   = mapRubro(rubroNombre);
+  const categoria   = mapRubro(rubroNombre) || detectCategoria(storeName);
 
   // Medios de pago → wallets y redes
   const WALLET_KEYWORDS = ['buepp', 'guepp', 'app ciudad', 'modo', 'mercado pago', 'personal pay', 'cuenta dni', 'naranja x'];
@@ -140,6 +140,9 @@ function parseItem(item: any, rubroMap: Map<number, string>): RawBankPromo | nul
   if (!text) return null;
 
   const logoPath = item.comercio?.logo ?? item.logo ?? '';
+  const promoId = item.id ?? item.idBeneficio ?? item.beneficio_id ?? null;
+  const promoUrl = promoId ? `https://www.bancociudad.com.ar/beneficios/detalle/${promoId}` : undefined;
+  const legalText = [item.resumen, item.descripcion, item.leyenda, item.legal].filter(Boolean).join(' ').trim();
   return {
     storeName: storeName.trim(),
     text: text.trim(),
@@ -148,6 +151,8 @@ function parseItem(item: any, rubroMap: Map<number, string>): RawBankPromo | nul
     paymentChannel,
     _categoria: categoria || undefined,
     _storeLogoUrl: logoPath ? `https://www.bancociudad.com.ar/beneficios_rest/beneficios/${logoPath}` : undefined,
+    _sourceUrl: promoUrl,
+    _sourceText: legalText || text,
   } as any;
 }
 
@@ -295,6 +300,12 @@ export const BancoCiudadScraper: Scraper = {
       }
       if ((raw as any)._storeLogoUrl) {
         for (const p of built) p.storeLogoUrl = (raw as any)._storeLogoUrl;
+      }
+      if ((raw as any)._sourceUrl) {
+        for (const p of built) p.sourceUrl = (raw as any)._sourceUrl;
+      }
+      if ((raw as any)._sourceText) {
+        for (const p of built) p.sourceText = (raw as any)._sourceText;
       }
       promos.push(...built);
     }

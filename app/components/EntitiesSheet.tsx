@@ -20,8 +20,8 @@ const CARD_TYPE_LABEL: Record<string, string> = {
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
-  QR: '📱 QR', NFC: '📶 NFC', TARJETA_FISICA: '💳 Física',
-  TRANSFERENCIA: '💸 Transf.', DINERO_EN_CUENTA: '💰 Cuenta',
+  QR: 'QR / MODO', NFC: 'Sin contacto (NFC)', TARJETA_FISICA: 'Tarjeta física',
+  TRANSFERENCIA: 'Transferencia', DINERO_EN_CUENTA: 'Dinero en cuenta',
 }
 
 const CAP_LABELS: Record<string, string> = {

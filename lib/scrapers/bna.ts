@@ -4,6 +4,7 @@
 //   GET /api/brands/{id} → title del comercio
 
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
+import { detectCategoria } from './bank-helpers';
 
 const API_BASE  = 'https://backend.activx.production.digiventures.la/api';
 const PAGE_URL  = 'https://semananacion.com.ar/semananacion';
@@ -109,7 +110,7 @@ export const BNAScraper: Scraper = {
 
     // 1. Obtener todas las promociones vigentes
     const promoData = await apiFetch(
-      `${API_BASE}/promotions/?bank=bna-semananacion&checkValidity=true&select=brands+incentive+activeDays+endDate+startDate+promotionProducts+categories`
+      `${API_BASE}/promotions/?bank=bna-semananacion&checkValidity=true&select=brands+incentive+activeDays+endDate+startDate+promotionProducts+categories+legal+legalText+terms`
     );
 
     if (!promoData || !Array.isArray(promoData)) {
@@ -198,7 +199,8 @@ export const BNAScraper: Scraper = {
 
       // Categoría del array de categorías
       const catName  = promo.categories?.[0]?.name ?? promo.categories?.[0] ?? '';
-      const categoria = mapCategoria(typeof catName === 'string' ? catName : '');
+      const catFromApi = mapCategoria(typeof catName === 'string' ? catName : '');
+      // fallback a detectCategoria por nombre de comercio (se aplica por brand)
 
       // Una promo puede tener múltiples brands (comercios)
       const brandIds_: string[] = (promo.brands ?? []).map((b: any) =>
@@ -208,6 +210,7 @@ export const BNAScraper: Scraper = {
       for (const brandId of brandIds_) {
         const storeName = brandTitles.get(brandId) ?? '';
         if (!storeName) continue;
+        const categoria = catFromApi || detectCategoria(storeName);
 
         const description = [
           discount ? `${discount}% de reintegro` : '',
@@ -215,10 +218,12 @@ export const BNAScraper: Scraper = {
           catName,
         ].filter(Boolean).join(' | ');
 
+        const legalText = [promo.legal, promo.legalText, promo.terms, incentive.custom?.value]
+          .filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').trim();
         const base: Partial<ScrapedPromo> = {
           storeName,
           description,
-          sourceText:   description,
+          sourceText:   legalText || description,
           sourceUrl:    PAGE_URL,
           validFrom,
           validUntil,

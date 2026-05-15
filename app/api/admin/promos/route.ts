@@ -1,6 +1,22 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+
+// Bulk update category for multiple promos
+export async function PATCH(req: NextRequest) {
+  try {
+    const { ids, categoryId } = await req.json()
+    if (!ids?.length || !categoryId) return NextResponse.json({ error: 'ids y categoryId requeridos' }, { status: 400 })
+    const result = await prisma.promo.updateMany({
+      where: { id: { in: ids } },
+      data: { categoryId },
+    })
+    return NextResponse.json({ updated: result.count })
+  } catch (error) {
+    console.error('[PATCH /api/admin/promos]', error)
+    return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 })
+  }
+}
 
 export async function GET() {
   try {
@@ -42,3 +58,4 @@ export async function GET() {
     return NextResponse.json({ error: 'Error al obtener promociones' }, { status: 500 })
   }
 }
+

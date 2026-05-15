@@ -300,6 +300,8 @@ function HomeContent() {
   const [isCategoryOpen, setIsCategoryOpen] = useState(false)
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null)
   const [entitiesPromo, setEntitiesPromo] = useState<Promo | null>(null)
+  const [expandedPromos, setExpandedPromos] = useState<Set<string>>(new Set())
+  const toggleExpand = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setExpandedPromos(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const categoriaParamApplied = useRef(false)
 
@@ -899,7 +901,7 @@ function HomeContent() {
 
         {/* Promos */}
         <div className={viewMode === 'grid' 
-          ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' 
+          ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5'
           : 'space-y-4'}>
           {promosFiltradas.map(promo => {
             if (viewMode === 'list') {
@@ -929,139 +931,156 @@ function HomeContent() {
               )
             }
 
+            {/* ── CARD V2 ── */}
+            const TIER_LABELS: Record<string, string> = { EMINENT: 'Eminent', SELECTA: 'Selecta', BLACK: 'Black', INFINITE: 'Infinite', SIGNATURE: 'Signature', PLATINUM: 'Platinum', GOLD: 'Gold', CLASSIC: 'Classic' }
+            const seg = promo.requirements.find(r => r.segment)?.segment
+              || (promo.requirements.find(r => r.cardTier)?.cardTier ? TIER_LABELS[promo.requirements.find(r => r.cardTier)!.cardTier!] : undefined)
+            const isExpanded = expandedPromos.has(promo.id)
+            const uniqueEntities = Array.from(new Map([
+              ...promo.requirements.filter(r => r.bankId).map(r => [r.bankId!, { logo: r.bank?.logoUrl, name: r.bank?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
+              ...promo.requirements.filter(r => r.walletId).map(r => [r.walletId!, { logo: r.wallet?.logoUrl, name: r.wallet?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
+            ]).values())
+            const uniqueNets = Array.from(new Set(promo.requirements.map(r => r.cardNetwork?.slug).filter(Boolean)))
+            const daysLabel = formatValidDays(promo.validDays)
+
             return (
-              <div key={promo.id}
-                onClick={() => setSelectedPromo(promo)}
-                className="group relative bg-white dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-[32px] overflow-hidden premium-shadow-hover flex flex-col h-full cursor-pointer">
-                
-                {/* Image/Badge Container */}
-                <div className="relative p-5 pb-0">
-                  <div className="flex justify-between items-start">
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg"
-                          style={{ background: promo.category.color + '15', color: promo.category.color }}
-                        >
-                          {promo.category.name}
-                        </span>
-                      </div>
-                      {getSpecialBadge(promo) && (
-                        <div className={`${getSpecialBadge(promo)!.color} text-white text-[8px] font-black px-2 py-1 rounded-lg w-fit animate-pulse shadow-sm`}>
-                          {getSpecialBadge(promo)!.text}
-                        </div>
-                      )}
+              <div key={promo.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
+
+                {/* Header: logo grande O icono+nombre */}
+                <div className="relative cursor-pointer" onClick={() => setSelectedPromo(promo)}>
+                  {promo.commerce.logoUrl ? (
+                    <div className="h-28 flex items-center justify-center p-5 bg-white">
+                      <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-full max-w-full object-contain" />
                     </div>
-                    
-                    <button
-                      onClick={(e) => toggleSave(promo.id, e)}
-                      className="p-2 bg-white/50 dark:bg-black/20 backdrop-blur-md rounded-full shadow-sm hover:scale-110 active:scale-90 transition-all border border-white/20"
-                    >
-                      <Heart
-                        size={16}
-                        className={promo.isSaved ? 'text-red-500 fill-red-500' : 'text-gray-400'}
-                      />
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="h-28 flex flex-col items-center justify-center gap-2 bg-gray-50 dark:bg-slate-800">
+                      <span className="text-4xl">{promo.category.icon || '🏷️'}</span>
+                      <p className="text-sm font-black text-gray-700 dark:text-gray-200 px-4 text-center line-clamp-2">{promo.commerce.name}</p>
+                    </div>
+                  )}
+                  {/* Corazón flotante */}
+                  <button onClick={(e) => toggleSave(promo.id, e)} className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm">
+                    <Heart size={14} className={promo.isSaved ? 'text-red-500 fill-red-500' : 'text-gray-400'} />
+                  </button>
+                  {/* Nombre cuando hay logo */}
+                  {promo.commerce.logoUrl && (
+                    <div className="absolute bottom-2 left-3">
+                      <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md" style={{ background: promo.category.color + '20', color: promo.category.color }}>{promo.category.name}</span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Content */}
-                <div className="p-5 flex flex-col flex-1">
-                  <div className="flex items-center gap-3 mb-4">
-                    {promo.commerce.logoUrl ? (
-                      <div className="relative group-hover:scale-105 transition-transform duration-500">
-                        <div className="absolute inset-0 bg-indigo-500/10 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <img
-                          src={promo.commerce.logoUrl}
-                          alt={promo.commerce.name}
-                          className="w-12 h-12 rounded-2xl object-contain bg-white border border-gray-100 p-1 relative z-10"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-400 font-black text-xl">
-                        {promo.commerce.name[0]}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <h3 className="font-extrabold text-gray-900 dark:text-white text-base leading-tight truncate">
-                        {promo.commerce.name}
-                      </h3>
-                      <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">{promo.description}</p>
-                    </div>
-                  </div>
+                {/* Bloque descuento */}
+                <div className={`mx-3 mt-3 mb-2 rounded-2xl py-3 px-4 text-center cursor-pointer ${promo.userBestDiscount ? 'bg-indigo-700' : 'bg-gray-900'}`} onClick={() => setSelectedPromo(promo)}>
+                  {seg && <p className="text-[9px] font-black uppercase tracking-[3px] text-indigo-300 mb-0.5">✦ {seg}</p>}
+                  {getSpecialBadge(promo) && <div className={`${getSpecialBadge(promo)!.color} text-white text-[8px] font-black px-2 py-0.5 rounded-lg w-fit mx-auto mb-1`}>{getSpecialBadge(promo)!.text}</div>}
+                  <p className="text-5xl font-black leading-none" style={{ color: '#c6f135' }}>{discountLabel(promo)}</p>
+                  {csiLabel(promo) && <p className="text-[10px] text-gray-400 mt-0.5">{csiLabel(promo)}</p>}
+                </div>
 
-                  <div className="mt-auto">
-                    <div className="flex items-end justify-between gap-2 mb-3">
-                      <div className="flex flex-col">
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight mb-1 flex items-center gap-1">
-                          <Clock size={11} className="text-indigo-400" /> {diasVigencia(promo, true).split('·')[0]}
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                           <div className={`px-3 py-1.5 rounded-2xl flex flex-col items-center justify-center shadow-sm ${
-                             promo.userBestDiscount ? 'bg-indigo-600 shadow-indigo-100' : 'bg-gray-900 shadow-gray-200'
-                           }`}>
-                            <span className="text-white text-base font-black leading-none">{discountLabel(promo)}</span>
-                            {csiLabel(promo) && <span className="text-white/80 text-[8px] font-bold mt-0.5">{csiLabel(promo)}</span>}
-                          </div>
-                        </div>
-                      </div>
+                {/* Info rápida */}
+                <div className="px-4 pb-2 pt-1 space-y-0.5 cursor-pointer" onClick={() => setSelectedPromo(promo)}>
+                  <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{daysLabel}</p>
+                  {capValue(promo) > 0 && <p className="text-[11px] text-gray-500">Tope: <span className="font-bold text-gray-700">{capLabel(promo).split(' ')[0]}</span></p>}
+                  {minPurchaseValue(promo) > 0 && <p className="text-[11px] text-gray-500">Mínimo: <span className="font-bold text-gray-700">${minPurchaseValue(promo).toLocaleString()}</span></p>}
+                </div>
 
-                      <div className="flex flex-col items-end text-right">
-                        {capValue(promo) > 0 && (
-                          <>
-                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Tope</p>
-                            <p className="text-sm font-black text-indigo-600">{capLabel(promo).split(' ')[0]}</p>
-                          </>
-                        )}
-                        {minPurchaseValue(promo) > 0 && (
-                          <>
-                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-2 mb-0.5">Mínimo</p>
-                            <p className="text-[10px] font-bold text-gray-500">${minPurchaseValue(promo).toLocaleString()}</p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Entities & Networks preview */}
-                    <div className="mt-4 pt-4 border-t border-gray-50 dark:border-slate-800 flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <div 
-                          className="flex -space-x-2 overflow-hidden cursor-pointer hover:scale-105 transition-transform"
-                          onClick={(e) => { e.stopPropagation(); setEntitiesPromo(promo) }}
-                        >
-                          {Array.from(new Map([
-                            // Bancos únicos
-                            ...promo.requirements.filter(r => r.bankId).map(r => [r.bankId!, { logo: r.bank?.logoUrl, name: r.bank?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
-                            // Wallets únicas
-                            ...promo.requirements.filter(r => r.walletId).map(r => [r.walletId!, { logo: r.wallet?.logoUrl, name: r.wallet?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
-                          ]).values()).slice(0, 5).map((ent, i) => (
-                            <div key={i} className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-slate-900 bg-white border border-gray-100 flex items-center justify-center p-0.5 overflow-hidden shadow-sm">
-                              {ent.logo ? (
-                                <img src={ent.logo} className="w-full h-full object-contain" />
-                              ) : (
-                                <span className="text-[8px] font-black text-gray-400">{ent.name[0]}</span>
-                              )}
+                {/* Detalle expandido */}
+                {isExpanded && (
+                  <div className="mx-3 mb-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl space-y-2.5">
+                    {/* Nombre del comercio */}
+                    <p className="text-sm font-black text-gray-900 dark:text-white">{promo.commerce.name}</p>
+                    {/* Banco / Billetera */}
+                    {uniqueEntities.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Banco / Billetera</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {uniqueEntities.map((ent, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg px-2 py-1">
+                              {ent.logo && <img src={ent.logo} className="w-6 h-6 object-contain" />}
+                              <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{ent.name}</span>
                             </div>
                           ))}
                         </div>
-                        
-                        <div 
-                          className="flex items-center gap-1.5 cursor-pointer hover:scale-105 transition-transform"
-                          onClick={(e) => { e.stopPropagation(); setEntitiesPromo(promo) }}
-                        >
-                          {Array.from(new Set(promo.requirements.map(r => r.cardNetwork?.slug).filter(Boolean))).map((slug, idx) => (
-                            <img 
-                              key={idx} 
-                              src={CARD_NETWORK_LOGOS[slug!] || 'https://www.google.com/s2/favicons?sz=64&domain=visa.com'} 
-                              className="w-5 h-5 object-contain bg-white rounded-md border border-gray-100 p-0.5 shadow-sm"
-                              alt={slug!}
-                              title={slug!}
-                            />
+                      </div>
+                    )}
+                    {/* Tarjetas */}
+                    {uniqueNets.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Tarjetas</p>
+                        <div className="flex flex-wrap gap-1">
+                          {uniqueNets.map((slug, i) => (
+                            <img key={i} src={CARD_NETWORK_LOGOS[slug!] || ''} className="h-7 w-auto object-contain" alt={slug!} title={slug!} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
                           ))}
                         </div>
                       </div>
+                    )}
+                    {/* Vigencia */}
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Vigencia</p>
+                      <p className="text-[11px] text-gray-700 dark:text-gray-300">{daysLabel}</p>
+                      {(promo.validFrom || promo.validUntil) && (
+                        <p className="text-[11px] text-gray-500">
+                          {promo.validFrom ? new Date(promo.validFrom).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
+                          {promo.validFrom && promo.validUntil ? ' al ' : ''}
+                          {promo.validUntil ? new Date(promo.validUntil).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'sin vencimiento'}
+                        </p>
+                      )}
                     </div>
+                    {/* Forma de pago */}
+                    {promo.requirements.some(r => r.paymentChannel && r.paymentChannel !== 'ANY') && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Forma de pago</p>
+                        <p className="text-[11px] text-gray-700 dark:text-gray-300">{getFormasDePago(promo.requirements)}</p>
+                      </div>
+                    )}
+                    {/* Legales */}
+                    {promo.sourceText && promo.sourceText.length > 50 && promo.sourceText !== promo.description && (
+                      <details className="pt-1 border-t border-gray-200 dark:border-slate-600">
+                        <summary className="text-[10px] font-black uppercase tracking-widest text-gray-400 cursor-pointer select-none">Términos y condiciones</summary>
+                        <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed line-clamp-6">{promo.sourceText}</p>
+                      </details>
+                    )}
+                    {/* Link oficial — solo si apunta a una promo específica */}
+                    {promo.sourceUrl && (() => {
+                      try {
+                        const u = new URL(promo.sourceUrl)
+                        const hasSpecificPath = u.pathname.length > 1 || u.hash.length > 1
+                        if (!hasSpecificPath) return null
+                        return (
+                          <a href={promo.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] text-indigo-500 hover:underline flex items-center gap-1 pt-1 border-t border-gray-200 dark:border-slate-600">
+                            <Globe size={10} /> Ver promo oficial
+                          </a>
+                        )
+                      } catch { return null }
+                    })()}
                   </div>
+                )}
+
+                {/* Footer: logos (clickeable → popup) + botón info */}
+                <div className="px-4 py-3 mt-auto border-t border-gray-50 dark:border-slate-800 flex items-center justify-between gap-2">
+                  <div
+                    className="flex items-center gap-1.5 flex-wrap cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); setEntitiesPromo(promo) }}
+                  >
+                    {uniqueEntities.slice(0, 3).map((ent, i) => (
+                      <div key={i} className="h-9 w-9 rounded-full bg-white border border-gray-200 flex items-center justify-center p-1 overflow-hidden shadow-sm">
+                        {ent.logo ? <img src={ent.logo} className="w-full h-full object-contain" /> : <span className="text-[9px] font-black text-gray-400">{ent.name[0]}</span>}
+                      </div>
+                    ))}
+                    {uniqueNets.slice(0, 4).map((slug, i) => (
+                      <img key={i} src={CARD_NETWORK_LOGOS[slug!] || ''} className="h-8 w-auto object-contain" alt={slug!} title={slug!} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    ))}
+                    {(uniqueEntities.length + uniqueNets.length) === 0 && (
+                      <span className="text-[10px] text-gray-400">Ver entidades</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => toggleExpand(promo.id, e)}
+                    className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 shrink-0 hover:text-indigo-800 transition-colors"
+                  >
+                    {isExpanded ? '− Menos' : '+ Info'}
+                  </button>
                 </div>
               </div>
             )

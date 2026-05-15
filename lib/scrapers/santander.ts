@@ -4,6 +4,7 @@
 
 import { chromium } from 'playwright';
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
+import { detectCategoria } from './bank-helpers';
 
 // Dividir en grupos para evitar timeouts. Correr una vez por grupo:
 // Grupo 1: 'SUP,GAS,DIN,FAR'
@@ -59,7 +60,7 @@ function parseItem(item: any, brandName?: string, brandId?: string | number): Sc
 
   // Ignorar EPM al buscar la categoría principal (es un tag de forma de pago, no un rubro)
   const itemCat = item.categories?.find((c: any) => CODE_MAP[c.code] && c.code !== 'EPM');
-  const categoria = itemCat ? CODE_MAP[itemCat.code] : '';
+  const categoria = (itemCat ? CODE_MAP[itemCat.code] : '') || detectCategoria(storeName);
 
   const isVisaOnly  = item.tag?.code === 'EXV';
   const isMCOnly    = item.tag?.code === 'EXM'; // Exclusivo Mastercard (si existe)
@@ -86,9 +87,13 @@ function parseItem(item: any, brandName?: string, brandId?: string | number): Sc
         : [{ network: 'VISA', type: null }, { network: 'Mastercard', type: null }, { network: 'American Express Banco', type: null }];
 
   const description = [item.texts?.title ?? '', item.texts?.description ?? ''].filter(Boolean).join(' | ');
+  const legalText = [
+    item.texts?.legal, item.texts?.terms, item.texts?.conditions,
+    item.legalText, item.legal, item.additionalText,
+  ].filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').trim();
 
   const base: Partial<ScrapedPromo> = {
-    storeName, description, sourceText: description, 
+    storeName, description, sourceText: legalText || description,
     sourceUrl: item.idPromotion ? `${PAGE_URL}#b${brandId}_p${item.idPromotion}` : (item.id ? `${PAGE_URL}#b${brandId}_p${item.id}` : PAGE_URL),
     validFrom, validUntil, validDays, cap, bankNames: [BANK_NAME],
     cardNetworks, walletNames: walletNames.length > 0 ? walletNames : undefined,
