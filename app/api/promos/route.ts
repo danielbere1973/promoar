@@ -139,8 +139,8 @@ export async function GET(req: NextRequest) {
         },
         requirements: {
           include: {
-            bank: { select: { name: true, logoUrl: true } },
-            wallet: { select: { name: true, logoUrl: true } },
+            bank: { select: { id: true, name: true, logoUrl: true } },
+            wallet: { select: { id: true, name: true, logoUrl: true } },
             cardNetwork: { select: { name: true, slug: true } },
           },
         },
@@ -186,6 +186,16 @@ export async function GET(req: NextRequest) {
     let userProfile = null
     let fetchedUser = null
 
+    // Guest profile: perfil temporal sin registro (viene en query param base64)
+    const guestProfileParam = searchParams.get('guest_profile')
+    let guestCards: any[] | null = null
+    if (guestProfileParam) {
+      try {
+        const decoded = JSON.parse(Buffer.from(guestProfileParam, 'base64').toString('utf-8'))
+        if (Array.isArray(decoded?.cards)) guestCards = decoded.cards
+      } catch {}
+    }
+
     // ADMIN BYPASS: Si es admin, NO filtrar por perfil financiero
     // Mapa cardTier → segmentId: para matchear tiers (Selecta, Eminent) con segmentos del perfil
     const tierToSegmentId = new Map<string, string>()
@@ -208,8 +218,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (userProfile && forMe && !isAdmin) {
-      const userCards = userProfile.cards
+    // Usar guest profile si no hay usuario logueado con perfil en DB
+    const effectiveCards = userProfile?.cards ?? (guestCards && forMe ? guestCards : null)
+
+    if (effectiveCards && forMe && !isAdmin) {
+      const userCards = effectiveCards
       const savedSet = new Set(fetchedUser ? (fetchedUser as any).savedPromos.map((sp: any) => sp.promoId) : [])
 
       // Función estricta de matching: verifica que el perfil del usuario
@@ -361,8 +374,8 @@ export async function GET(req: NextRequest) {
       const globalMaxDiscount = allReqs.length > 0 ? allReqs.reduce((max, r) => (r.discountValue ?? 0) > (max?.discountValue ?? 0) ? r : max, allReqs[0]) : null
 
       let userBestDiscount = null
-      if (userProfile && !isAdmin) {
-        const uCards = userProfile.cards
+      if (effectiveCards && !isAdmin) {
+        const uCards = effectiveCards
         // Reutilizar la misma lógica estricta de matchesProfile para calcular el mejor descuento
         const matching = allReqs.filter(req => {
           const hasEntityConstraint = req.bankId || req.walletId
@@ -418,7 +431,7 @@ export async function GET(req: NextRequest) {
     // ── Deduplicación por tier: si el usuario matchea una promo con cardTier
     // para un banco+comercio, ocultar la promo genérica del mismo banco+comercio
     let dedupedPromos = finalPromos
-    if (forMe && userProfile) {
+    if (forMe && effectiveCards) {
       // Encontrar todos los (commerceId, bankId) que tienen al menos una promo con tier
       const tierKeys = new Set<string>()
       for (const p of finalPromos) {

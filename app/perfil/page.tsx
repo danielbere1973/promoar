@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil } from 'lucide-react'
 import BottomNav from '../components/BottomNav'
+import PromoWizard, { GuestProfile } from '../components/PromoWizard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type BankSegment = { id: string; name: string; bankId: string }
@@ -134,6 +135,7 @@ export default function PerfilPage() {
   const [entities, setEntities] = useState<Entities | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
   const [activeTab, setActiveTab] = useState<'personal' | 'finance'>('personal')
 
   const [showSaved, setShowSaved] = useState(false)
@@ -393,6 +395,43 @@ export default function PerfilPage() {
     resetForm()
   }
 
+  // Convierte el perfil DB al formato GuestProfile para el wizard
+  const profileAsGuestProfile: GuestProfile | null = profile ? {
+    cards: profile.cards.map((c: any) => ({
+      bankId: c.bank?.id ?? undefined,
+      walletId: c.wallet?.id ?? undefined,
+      cardNetworkId: c.cardNetwork?.id ?? undefined,
+      cardType: c.cardType,
+      segmentId: c.segmentRef?.id ?? undefined,
+      cardSegmentId: c.cardSegmentId ?? undefined,
+      isPayroll: c.isPayroll ?? false,
+      isPensioner: c.isPensioner ?? false,
+    }))
+  } : null
+
+  async function handleSaveProfile(guestProfile: GuestProfile) {
+    setSavingProfile(true)
+    try {
+      const res = await fetch('/api/perfil/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cards: guestProfile.cards }),
+      })
+      if (res.ok) {
+        // Recargar el perfil desde DB
+        const r = await fetch('/api/perfil')
+        if (r.ok) {
+          const data = await r.json()
+          if (data.profile) setProfile(data.profile)
+        }
+      }
+    } catch (e) {
+      console.error('Error guardando perfil:', e)
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
   // Completitud
   const completeness = Math.min(100,
     (pf.name ? 10 : 0) + (pf.lastName ? 10 : 0) +
@@ -552,7 +591,32 @@ export default function PerfilPage() {
 
         ) : (
           /* ══════════ TAB PERFIL FINANCIERO ══════════ */
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <PromoWizard
+              open={true}
+              inline={true}
+              onClose={() => {}}
+              initialProfile={profileAsGuestProfile}
+              onComplete={handleSaveProfile}
+              onAdd={async (gp) => {
+                setSavingProfile(true)
+                try {
+                  await fetch('/api/perfil/import-guest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cards: gp.cards }),
+                  })
+                  const r = await fetch('/api/perfil')
+                  if (r.ok) { const d = await r.json(); if (d.profile) setProfile(d.profile) }
+                } catch (e) { console.error(e) }
+                finally { setSavingProfile(false) }
+              }}
+              saveLabel="Guardar perfil"
+              saving={savingProfile}
+            />
+          </div>
+        )}
+        {false && (<div>
 
             <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
               <p className="text-xs text-blue-700 font-medium leading-relaxed">
@@ -1018,11 +1082,10 @@ export default function PerfilPage() {
 
             <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5">
               <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-                CBU y CVU son opcionales. Los números de tarjeta se muestran solo con los últimos 4 dígitos. Nunca guardamos datos sensibles sin tu consentimiento.
+                CBU y CVU son opcionales.
               </p>
             </div>
-          </div>
-        )}
+          </div>)}
       </div>
 
       {/* Modal Promos Guardadas */}

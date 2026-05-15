@@ -10,6 +10,7 @@ import FilterDrawer, { FilterState } from './components/FilterDrawer'
 import ActiveFilters from './components/ActiveFilters'
 import CategorySheet from './components/CategorySheet'
 import EntitiesSheet, { CARD_NETWORK_LOGOS } from './components/EntitiesSheet'
+import PromoWizard, { GuestProfile } from './components/PromoWizard'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -21,13 +22,14 @@ function fechaHoy() {
 
 type Req = {
   id?: string
-  bank?: { name: string; logoUrl?: string | null } | null
-  wallet?: { name: string; logoUrl?: string | null } | null
+  bank?: { id?: string; name: string; logoUrl?: string | null } | null
+  wallet?: { id?: string; name: string; logoUrl?: string | null } | null
   cardNetwork?: { name: string; slug: string } | null
   cardType?: string | null
   paymentChannel?: string | null
   accountType?: string | null
   segment?: string | null
+  cardTier?: string | null
   discountType?: string
   discountValue?: number
   cap?: number | null
@@ -48,7 +50,7 @@ type Promo = {
   specificDates?: string | null
   sourceText?: string | null
   sourceUrl?: string | null
-  category: { name: string; color: string }
+  category: { name: string; color: string; icon?: string }
   commerce: { name: string; logoUrl?: string | null }
   requirements: Req[]
   validFrom: string
@@ -320,11 +322,44 @@ function HomeContent() {
   const [activeFilters, setActiveFilters] = useState<FilterState>(initialFilters)
   const [forMe, setForMe] = useState(status === 'authenticated')
   const [timeFilter, setTimeFilter] = useState<'today' | 'week'>('today')
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null)
+  const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   useEffect(() => {
-    if (status === 'authenticated') setForMe(true)
-    else setForMe(false)
+    if (status === 'authenticated') {
+      setForMe(true)
+      // Importar perfil guest si existe en localStorage
+      const stored = localStorage.getItem('guestProfile')
+      if (stored) {
+        try {
+          const gp: GuestProfile = JSON.parse(stored)
+          if (gp.cards?.length) {
+            fetch('/api/perfil/import-guest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cards: gp.cards }),
+            }).then(() => {
+              localStorage.removeItem('guestProfile')
+              setGuestProfile(null)
+            }).catch(() => {})
+          }
+        } catch {}
+      }
+    } else {
+      // Cargar perfil guest del localStorage
+      const stored = localStorage.getItem('guestProfile')
+      if (stored) {
+        try {
+          const gp = JSON.parse(stored)
+          setGuestProfile(gp)
+          setForMe(true) // ya tiene perfil, activar directamente
+        } catch {}
+      } else {
+        setForMe(false)
+      }
+    }
   }, [status])
 
   // Restaura selectedCats desde la URL al montar
@@ -422,6 +457,10 @@ function HomeContent() {
         if (activeFilters.commerces.length) qParams.set('commerces', activeFilters.commerces.join(','))
         if (activeFilters.discountRanges.length) qParams.set('discountRanges', activeFilters.discountRanges.join(','))
         if (activeFilters.hasInstallments !== null) qParams.set('hasInstallments', String(activeFilters.hasInstallments))
+        // Guest profile: pasar perfil temporal si no está logueado
+        if (forMe && guestProfile?.cards?.length && status !== 'authenticated') {
+          qParams.set('guest_profile', btoa(JSON.stringify(guestProfile)))
+        }
 
         const res = await fetch(`/api/promos?${qParams.toString()}`, {
           cache: 'no-store',
@@ -439,7 +478,7 @@ function HomeContent() {
     }
     load()
     return () => controller.abort()
-  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter])
+  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile])
 
   // Helper para mostrar los chips de "camino de migas"
   const getFilterChips = () => {
@@ -562,7 +601,16 @@ function HomeContent() {
                 Todas
               </button>
               <button
-                onClick={() => setForMe(true)}
+                onClick={() => {
+                  if (status === 'authenticated') {
+                    if (!userProfile?.cards?.length) setWizardOpen(true)
+                    else setForMe(true)
+                  } else if (guestProfile?.cards?.length) {
+                    setForMe(true)
+                  } else {
+                    setWizardOpen(true)
+                  }
+                }}
                 className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
                   forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
                 }`}
@@ -756,6 +804,32 @@ function HomeContent() {
 
             {/* Mobile-only selector y quick filters */}
             <div className="lg:hidden mt-4">
+              {/* Toggle Todas / Para Mí */}
+              <div className="flex gap-1 mb-3">
+                <button
+                  onClick={() => setForMe(false)}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                    !forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-gray-200 text-gray-400'
+                  }`}
+                >
+                  Todas
+                </button>
+                <button
+                  onClick={() => {
+                    if (status === 'authenticated') {
+                      if (!userProfile?.cards?.length) setWizardOpen(true)
+                      else setForMe(true)
+                    } else {
+                      setWizardOpen(true)
+                    }
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                    forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-gray-200 text-gray-400'
+                  }`}
+                >
+                  Para Mí
+                </button>
+              </div>
               <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                 {(['today', 'week'] as const).map(f => (
                   <button
@@ -811,6 +885,36 @@ function HomeContent() {
         </div>
 
         <div className="px-6 py-6 pb-28 max-w-[1440px] w-full mx-auto">
+
+        {/* Banner perfil guest */}
+        {status !== 'authenticated' && guestProfile && !guestBannerDismissed && forMe && (
+          <div className="mb-4 flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-xl shrink-0">✨</span>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-indigo-900">Estás viendo promos para tu perfil</p>
+                <p className="text-[11px] text-indigo-600 truncate">Registrate gratis para no perder tu configuración</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <button
+                onClick={() => setWizardOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-indigo-600 text-[11px] font-black hover:bg-indigo-50 transition-colors whitespace-nowrap"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => router.push('/register')}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-black hover:bg-indigo-700 transition-colors whitespace-nowrap"
+              >
+                Registrarse
+              </button>
+              <button onClick={() => setGuestBannerDismissed(true)} className="text-indigo-300 hover:text-indigo-500 p-1">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Banner acceso denegado */}
         {showAccessDenied && (
@@ -937,8 +1041,8 @@ function HomeContent() {
               || (promo.requirements.find(r => r.cardTier)?.cardTier ? TIER_LABELS[promo.requirements.find(r => r.cardTier)!.cardTier!] : undefined)
             const isExpanded = expandedPromos.has(promo.id)
             const uniqueEntities = Array.from(new Map([
-              ...promo.requirements.filter(r => r.bankId).map(r => [r.bankId!, { logo: r.bank?.logoUrl, name: r.bank?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
-              ...promo.requirements.filter(r => r.walletId).map(r => [r.walletId!, { logo: r.wallet?.logoUrl, name: r.wallet?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
+              ...promo.requirements.filter(r => r.bank?.id).map(r => [r.bank!.id!, { logo: r.bank?.logoUrl, name: r.bank?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
+              ...promo.requirements.filter(r => r.wallet?.id).map(r => [r.wallet!.id!, { logo: r.wallet?.logoUrl, name: r.wallet?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
             ]).values())
             const uniqueNets = Array.from(new Set(promo.requirements.map(r => r.cardNetwork?.slug).filter(Boolean)))
             const daysLabel = formatValidDays(promo.validDays)
@@ -1377,6 +1481,17 @@ function HomeContent() {
         categorias={categorias}
         selected={selectedCats}
         onChange={setSelectedCats}
+      />
+      <PromoWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        initialProfile={guestProfile}
+        onComplete={(profile) => {
+          setGuestProfile(profile)
+          setForMe(true)
+          setWizardOpen(false)
+          setGuestBannerDismissed(false)
+        }}
       />
     </div>
   )
