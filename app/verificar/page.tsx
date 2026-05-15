@@ -1,10 +1,10 @@
 'use client'
-export const dynamic = 'force-dynamic';
+import { Suspense } from 'react'
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 
-export default function VerificarPage() {
+function VerificarContent() {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -141,4 +141,8 @@ export default function VerificarPage() {
       </div>
     </div>
   )
+}
+
+export default function VerificarPage() {
+  return <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Cargando...</p></div>}><VerificarContent /></Suspense>
 }

@@ -1,5 +1,5 @@
 'use client'
-export const dynamic = 'force-dynamic';
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -281,7 +281,7 @@ function getSpecialBadge(p: Promo) {
   return null
 }
 
-export default function Home() {
+function HomeContent() {
   const { data: session, status } = useSession()
   const nombre = session?.user?.name || 'Invitado'
   const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'MODERATOR'
@@ -1361,4 +1361,8 @@ export default function Home() {
       />
     </div>
   )
+}
+
+export default function Home() {
+  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400">Cargando...</p></div>}><HomeContent /></Suspense>
 }
