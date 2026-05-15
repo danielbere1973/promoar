@@ -1,0 +1,71 @@
+ID;Comercio;Titulo
+cmokwe49i000179w860itjw1a;Megatone;12 cuotas sin interés – Megatone
+cmogphiy9001f7b3cr4plh4lp;Farmacity;20% descuento – Farmacity
+cmokwe83c000979w8p60fdh3y;Simplicity;20% descuento – Simplicity
+cmokwe94u000e79w8ctto2jg3;Get the Look;20% descuento – Get The Look
+cmokwemnb001i79w8zmkirehg;Cebra;20% descuento – Cebra
+cmokwenwt001n79w8myf0dldw;Cebra;3 cuotas sin interés – Cebra
+cmogqh6ja00257b3c9mvvq1yt;Combustible.;10% descuento – Combustible.
+cmokwf0sf002z79w8ou0q8h30;YENNY EL ATENEO;20% descuento – El Ateneo
+cmokwf211003479w8ujmkan5u;YENNY EL ATENEO;3 cuotas sin interés – El Ateneo
+cmokwfbw3004679w8qbzxqvvr;Vans;15% descuento – Vans
+cmokwfd5h004b79w8ogpezkxf;Vans;10 cuotas sin interés – Vans
+cmokwfkzs005379w8bd041rmu;STRATFORD ONLINE;20% descuento – STRATFORD ONLINE
+cmokwfm6b005879w8c7yu7wvu;STRATFORD ONLINE;3 cuotas sin interés – STRATFORD ONLINE
+cmokwfwxn006g79w8sqhvf7xh;Grimoldi;15% descuento – Grimoldi
+cmokwfy3i006l79w8ppgtlogg;Grimoldi;10 cuotas sin interés – Grimoldi
+cmogrhcdp0017xdrm9xftzh6n;Juleriaque;10 cuotas sin interés – Juleriaque
+cmokwg3tn007279w8nhdt4vkt;Woopy;20% descuento – Woopy
+cmokwg54x007779w8ea7qk26r;Woopy;3 cuotas sin interés – Woopy
+cmokwgcih008079w87l8cmab2;Jugueterías Carrousel;20% descuento – Carrousel
+cmokwgdly008579w8ktn9jliu;Jugueterías Carrousel;3 cuotas sin interés – Carrousel
+cmokwgjrk008x79w808efv5x4;Libreria Santa Fé;20% descuento – Libreria Santa Fé
+cmokwgkt1009279w81jr6g7he;Libreria Santa Fé;3 cuotas sin interés – Libreria Santa Fé
+cmokwglv8009779w8gn4z5fdv;CITYKIDS;20% descuento – CityKids
+cmokwgmxz009c79w8l4korm5l;CITYKIDS;3 cuotas sin interés – CityKids
+cmokwgpxg009p79w897gxmfxx;Dexter, Moov y Stock Center;20% descuento – Moov
+cmokwgqyh009u79w8a76pyvjf;Dexter, Moov y Stock Center;6 cuotas sin interés – Moov
+cmokwgyfw00ao79w820wi36sc;Giro Didactico;20% descuento – Giro Didáctico
+cmokwgzhh00at79w8k22crphg;Giro Didactico;3 cuotas sin interés – Giro Didáctico
+cmokwh2z400b979w89ft3ekzg;Dexter, Moov y Stock Center;20% descuento – Stock Center
+cmokwh40800be79w8wlz7eopo;Dexter, Moov y Stock Center;6 cuotas sin interés – Stock Center
+cmokwhvqs00ei79w881t72t89;El Mundo del Juguete;20% descuento – El Mundo del Juguete
+cmokwhx0b00en79w85vjz57rk;El Mundo del Juguete;3 cuotas sin interés – El Mundo del Juguete
+cmogqi2vu00607b3cqv6p2luc;WICO;15% descuento – Wico Combustible
+cmogqifq5007h7b3c5araphhk;Farmacias ABC;6 cuotas sin interés – Farmacias ABC
+cmokwihh100gr79w82mbj7rh6;STRATFORD ONLINE;20% descuento – STRATFORD
+cmokwiiqj00gw79w8y7w2ukxw;STRATFORD ONLINE;3 cuotas sin interés – STRATFORD
+cmokwilif00h179w8tpgu9oy4;Casa del audio;12 cuotas sin interés – Casa del Audio
+cmokwis1100hm79w8swz25c3n;Malatesta Libros;20% descuento – Malatesta Libros
+cmokwitas00hr79w8uz4f04bq;Malatesta Libros;3 cuotas sin interés – Malatesta Libros
+cmogrh2420009xdrmbo83myzz;Promo TVs Mundial;20% descuento – Promo TVs Mundial
+cmogqh8os002d7b3cv0eujlww;Coto;20% descuento – Coto
+cmogqhao4002l7b3chqi7o4tf;Frávega;12 cuotas sin interés – Fravega
+cmogrhm0o001wxdrmtf9d90qx;Rouge;10% descuento – Rouge
+cmogrhn210025xdrmulubp3v0;Rouge;10 cuotas sin interés – Rouge
+cmogqhonu004b7b3crb6ngub0;ChangoMas;20% descuento – ChangoMás
+cmogqhxus005d7b3cezf49ylt;Jumbo;20% descuento – Jumbo
+cmogribfn003lxdrmau0pwblx;Beauty 24;10% descuento – Beauty 24
+cmogricod003uxdrmpp3nmdc1;Beauty 24;10 cuotas sin interés – Beauty 24
+cmogrihqt004ixdrms9kdp214;Ruiz y Roca;10 cuotas sin interés – Ruiz y Roca
+cmogqi6ye006i7b3ckwipeeiz;La Anónima;20% descuento – La Anónima
+cmogqi87w006n7b3c6wpl2d2y;Farmacias Del Pueblo;20% descuento – Farmacias Del Pueblo
+cmogqiakh006w7b3cx9gcd76q;Central Oeste;15% descuento – Farmacias Central Oeste
+cmogqicfq00747b3cr0635sak;Frávega;20% descuento – Fravega
+cmogqiep6007d7b3cmazfo1c7;Farmacias ABC;20% descuento – Farmacias ABC
+cmogqir06008t7b3ca56ou87a;Paradiñeiro;35% descuento – Farmacias Paradiñeiro Online
+cmogqirwo008x7b3cxz2ygx1f;La Amistad;20% descuento – Supermercado La Amistad
+cmogqiu7800967b3cwvjypc0d;Farmacia Zentner;10% descuento – Farmacia Zentner
+cmogqj5n200aj7b3cxe5tbpvn;El Puente;15% descuento – Farmacias Del Puente
+cmogqj96200ax7b3c48ldwv54;Diarco;20% descuento – Diarco Barrio
+cmogqjbn800b67b3cjew4mqat;Santa Ana;15% descuento – Farmacia Santa Ana
+cmogqjg5w00bp7b3cupfo69cf;Cordial;10% descuento – Cordial Supermercado
+cmogqjnnl00ci7b3cjlammxhh;Diarco;15% descuento – Diarco Mayorista
+cmogrhbbd000yxdrmzpelen8p;Juleriaque;10% descuento – Juleriaque
+cmogqhquq004k7b3ctndd0pu2;Disco & Vea;20% descuento – Disco
+cmogqi1z8005w7b3cebg1giqh;Vea;20% descuento – Supermercados Vea
+cmogrigkn0049xdrm25tn1uw3;Ruiz y Roca;10% descuento – Ruiz y Roca
+cmogqibib00707b3c13sqnipw;Central Oeste;3 cuotas sin interés – Farmacias Central Oeste
+cmogqik9600807b3c3b61iati;Paradiñeiro;35% descuento – Farmacias Paradiñeiro -
+cmogqj4k100af7b3cvst950a6;Almundo;20% descuento – Almundo
+cmogqkap800et7b3c6j7b377z;Diarco;15% descuento – Diarco Pueblo

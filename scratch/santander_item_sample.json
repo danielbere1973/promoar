@@ -1,0 +1,88 @@
+{
+  "id": 6452,
+  "idPromotion": 12640,
+  "startDatePublication": "2026-02-26T00:00:00",
+  "endDatePublication": "2026-05-31T00:00:00",
+  "monday": false,
+  "tuesday": false,
+  "wednesday": false,
+  "thursday": true,
+  "friday": false,
+  "saturday": false,
+  "sunday": false,
+  "fullWeek": false,
+  "multiPublication": true,
+  "customerDiscount": 30,
+  "topAmount": null,
+  "additionalText": "<p>Exclusivo pagando sin contacto desde el celu con NFC, a través de Apple Pay y Google Pay.<br><br>Exclusivo para locales físicos. No válido para venta online y/o Coto Digital.<br><br>El descuento se aplicará en línea de caja, al momento de realizar el pago.</p>\n",
+  "monthlyCut": false,
+  "initialQuote": 0,
+  "finalQuote": 0,
+  "interestFreeFees": false,
+  "specialCondition": null,
+  "order": 1,
+  "legal": "<p>Promoción vigente en la Ciudad Autónoma de Buenos Aires, Gran Buenos Aires, Neuquén, Mendoza, Entre Rios y Santa Fe, exclusivamente en todas las Sucursales Físicas de Coto ( “Coto”) (el “Territorio”) todos los días jueves, desde el 26 de febrero de 2026 hasta el 28 de mayo de 2026 (la “Vigencia”).&nbsp;</p>\n<p>Promoción vigente para pagos NFC utilizando la Tarjeta Santander Visa débito a través de alguna de las siguientes billeteras digitales (las “Billeteras NFC”):</p>\n<p>• Apple Pay (en caso de tener un dispositivo iOS)</p>\n<p>•  Google Pay, MODO Contactless (en caso de tener un dispositivo Android).</p>\n<p>LA PROMOCIÓN NO APLICA PARA PAGOS QR.</p>\n<p>Durante la Vigencia de la Promoción, el Participante que realice exitosamente un pago sin contacto con una Tarjeta Visa a través de las Billeteras NFC en Coto, recibirá un descuento del 30%. El descuento se aplicará en línea de caja, al momento de realizar el pago.</p>\n<p>Participan de la Promoción únicamente las tiendas presenciales de Coto.</p>\n<p>No válido para venta online y/o Coto Digital (WWW.COTODIGITAL.COM.AR).</p>\n<p>No acumulable con otras promociones vigentes.</p>\n<p>DESCUENTOS NO APLICABLES SOBRE PRODUCTOS INCLUIDOS EN PROGRAMAS DE PRECIOS DEL GOBIERNO Y/O APLICABLES POR NORMATIVA VIGENTE. DESCUENTOS NO VÁLIDOS PARA COMPRAS EN LOS PATIOS DE COMIDAS, COTO EXPRESSO, COTO BAR, ZONA JUEGOS Y ESTACIONAMIENTO PROPIO. NO INCLUYE ELECTRODOMÉSTICOS, NEUMÁTICOS NI RODADOS. NO INCLUYE PRODUCTOS DE BODEGAS CATENA ZAPATA, NICOLA CATENA, BODEGA ERNESTO CATENA (ALMA NEGRA, PADRILLOS, ANIMAL, ENEMIGO Y GRAN ENEMIGO), MALBEC DV CATENA BOT X 1,5LT, MALBEC LA RIOJA DV CATENA, MALBEC SALTA DV CATENA, SAINT FELICIEN, NICASIA, TILIA, BODEGA LA RURAL (RUTINI, TRUMPETER, SAN FELIPE Y CEPA TRADICIONAL SEMILLON/MALBEC- MALBEC/TINTO BLEND), CHANDON Y TERRAZAS DE LOS ANDES (LATITUD 33°, CASTEL, ALTOS DEL PLATA, VALMONT, BELTOUR, CHEVAL Y CLOS DU MOULIN), BODEGA NORTON (LOTE NEGRO, QUORUM VI, PRIVADA FAMILY BLEND), BODEGA CADUS WINES (CADUS), CASA PIRQUE (ALTALAND, LA POSTA, LUCA, ARUMA, PETIT CARO, MALBEC/CABERNET FRANC CASA DE HERRERO, MALBEC OJO DE BUEN CUBERO, MALBEC/CABERNET FRANC/PINOT NOIR CUCHILLO DE PALO, MALBEC RÍO DE LOS CIERVOS ARAUCANA, MALBEC NICO Y BLEND BESO DE DANTE LUCA), BODEGA BIANCHI</p>\n<p>(VINO CHARDONNAY RESERVADO MARÍA CARMEN, VINO GRAN CORTE ENZO BIANCHI, VINOS MALBEC Y CABERNET SAUVIGNON PARTICULAR BIANCHI), BODEGA VALENTÍN BIANCHI (VINO TINTO CORTE Y MALBEC IV GENERACIÓN) BODEGA MONTEVIEJO (FESTIVO Y PETITE FLEUR) NI VINOS EN TETRABRIK NI GENEROSOS. EL DESCUENTO EN CHAMPAÑAS Y ESPUMANTES NO INCLUYE PRODUCTOS DE BODEGAS CHANDON, MERCIER, CATENA ZAPATA, BARÓN B, DOM PERIGNON, POMMERY, MÖET CHANDON, LA GRANDE DAME NI KRUG. NO INCLUYE CORTES DE CARNES DE NOVILLO, NOVILLITO, TERNERA, MENUDENCIAS NI CARNES ELABORADAS. NO INCLUYE POLLO ENTERO NI</p>\n<p>TROZADO, FRESCO NI CONGELADO. NO INCLUYE LECHES INFANTILES ETAPAS 1 Y 2 (FLUÍDAS NI EN POLVO), NI HARINAS EN TODAS SUS PRESENTACIONES, NI AZÚCAR EN TODAS SUS PRESENTACIONES, NI ACEITE DE GIRASOL Y MEZCLA GIRASOL-SOJA EN TODAS SUS PRESENTACIONES. NO INCLUYE TODAS LAS PRESENTACIONES DE LAS SIGUIENTES MARCAS: COCA COLA, COCA COLA LIGHT, COCA COLA SIN AZÚCAR, CRUSH, FANTA, FANTA SIN AZÚCAR, SCHWEPPES, SPRITE, SPRITE SIN AZÚCAR, AQUARIUS, SMARTWATER, CEPITA, BENEDICTINO, POWERADE, ADES, HI-C NI MONSTER.</p>\n<p>El Organizador y el Auspiciante podrán ampliar el tope de la bonificación o el plazo de vigencia de la Promoción. A su vez, cuando circunstancias no imputables al Organizador o no previstas en estos Términos que constituyan caso fortuito o fuerza mayor lo justifiquen, el Organizador podrá suspender, cancelar o modificar la Promoción.</p>\n",
+  "benefitType": {
+    "id": 1,
+    "description": "Ahorro",
+    "code": "A"
+  },
+  "paymentType": {
+    "id": 1,
+    "description": "No Aplica",
+    "code": "N"
+  },
+  "paymentMethod": null,
+  "frecuency": {
+    "id": 1,
+    "description": "No Aplica",
+    "code": "N"
+  },
+  "tag": {
+    "id": 7,
+    "description": "Exclusivo Visa",
+    "code": "EXV",
+    "status": true,
+    "colorCode": "#9E3667"
+  },
+  "brands": [
+    {
+      "id": 131,
+      "code": "",
+      "name": "Coto",
+      "desktopImage": "https://microfe.santander.com.ar/premify/benefits/assets/images/Coto_desktopImage.png",
+      "desktopMinImage": "https://microfe.santander.com.ar/premify/benefits/assets/images/coto_desktopMinImage.png",
+      "mobileImage": "https://microfe.santander.com.ar/premify/benefits/assets/images/Coto_mobileImage.png",
+      "mobileMinImage": "https://microfe.santander.com.ar/premify/benefits/assets/images/Coto_mobileMinImage.png",
+      "active": true,
+      "order": 2,
+      "benefitDescription": null,
+      "colorCode": "",
+      "brandType": {
+        "id": 1,
+        "description": "Standar",
+        "code": "STA",
+        "active": true
+      }
+    }
+  ],
+  "relatedPublications": [],
+  "categories": [
+    {
+      "id": 16,
+      "description": "Supermercados",
+      "code": "SUP"
+    },
+    {
+      "id": 58,
+      "description": "Exclusiva Visa",
+      "code": "EXV"
+    }
+  ],
+  "texts": {
+    "title": "30% de ahorro",
+    "description": "Sin tope de reintegro",
+    "discount": 30,
+    "untilDiscount": false
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\danie\\\\Proyectos\\\\promoar\\\\app\\\\api\\\\promos\\\\route.ts\" | Measure-Object -Line\\).Lines)",
+      "Bash(curl -s \"https://www.bancoprovincia.com.ar/cuentadni/Home/GetBeneficioByRubro?idRubro=27\")",
+      "Bash(curl -s \"https://www.bancoprovincia.com.ar/cuentadni/Home/GetBeneficioByRubro?idRubro=1\")",
+      "Bash(curl -s \"https://www.bancoprovincia.com.ar/cuentadni/Home/GetBeneficioByRubro?idRubro=32\")",
+      "Bash(Get-Content C:\\\\temp\\\\url1.json)",
+      "Bash(curl -s \"https://www.bancoprovincia.com.ar/cuentadni/Home/GetBeneficioByRubro?idRubro=34\")",
+      "PowerShell(Resolve-DnsName \"db.hsaieohgmsbzrwobvzyt.supabase.co\" -Type A -ErrorAction SilentlyContinue)",
+      "PowerShell(Resolve-DnsName \"db.hsaieohgmsbzrwobvzyt.supabase.co\" -Type AAAA -ErrorAction SilentlyContinue)",
+      "Bash(curl -s \"https://www.jumbo.com.ar/api/catalog_system/pub/products/search?fq=skuId:167928\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(curl -s \"https://ahorrosybeneficios.bancopatagonia.com.ar/pub/media/mageplaza/search/ahorrosybeneficios_0.js\")",
+      "Bash(curl -s \"https://ahorrosybeneficios.bancopatagonia.com.ar/ahorrosybeneficios/havanna.html\")",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

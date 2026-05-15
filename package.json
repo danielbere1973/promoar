@@ -1,0 +1,42 @@
+{
+  "name": "promoar",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "axios": "^1.15.0",
+    "bcryptjs": "^3.0.3",
+    "cheerio": "^1.2.0",
+    "lucide-react": "^1.7.0",
+    "next": "14.2.35",
+    "playwright": "^1.59.1",
+    "react": "^18",
+    "react-dom": "^18",
+    "resend": "^6.10.0"
+  },
+  "devDependencies": {
+    "@prisma/client": "^5.22.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "cross-env": "^10.1.0",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "pg": "^8.20.0",
+    "postcss": "^8",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
+  },
+  "prisma": {
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+  }
+}
