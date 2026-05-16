@@ -86,7 +86,7 @@ async function fetchAllPromos(categoria?: string): Promise<ModoCard[]> {
       slots: SLOTS,
       banks: '',
       user_bank_ids: '',
-      limit: '10',
+      limit: '50',
       page: String(page),
       search_text: '',
       source: 'web_modo',
@@ -121,7 +121,7 @@ async function fetchAllPromos(categoria?: string): Promise<ModoCard[]> {
     totalPages = data.metadata?.pagination?.total_pages ?? 1;
     console.log(`[MODO] Página ${page}/${totalPages} — ${cards.length} promos — Total acumuladas: ${all.length}`);
     page++;
-    if (page <= totalPages && page <= 10) await new Promise(r => setTimeout(r, 500));
+    if (page <= totalPages) await new Promise(r => setTimeout(r, 200));
   }
 
   return all;
