@@ -4,7 +4,7 @@
 
 import { chromium } from 'playwright';
 import { Scraper, ScrapedPromo } from './types';
-import { buildPromos, dedup, RawBankPromo, normStr } from './bank-helpers';
+import { buildPromos, dedup, RawBankPromo, normStr, detectCategoria } from './bank-helpers';
 
 const BASE_URL  = 'https://www.bancociudad.com.ar/beneficios/';
 const API_URL   = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios/busqueda';

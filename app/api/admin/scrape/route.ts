@@ -81,7 +81,6 @@ export async function POST(req: NextRequest) {
     for (const [, group] of Array.from(grouped.entries())) {
       const p = group[0]; // base para datos de la promo y matching de entidades
 
-      console.log(`[Route DEBUG ALL] "${p.title}" → discount: ${p.discount}, bankNames: ${p.bankNames?.length || 0}, walletNames: ${p.walletNames?.join(',') || 'ninguna'}, segment: ${p.segment ?? 'N/A'}, tier: ${p.cardTier ?? 'N/A'}`);
       if (!p.title) continue;
 
       // Validar que al menos un item del grupo tenga descuento
@@ -380,6 +379,7 @@ export async function POST(req: NextRequest) {
     const BATCH = 10;
     for (let i = 0; i < resolvedItems.length; i += BATCH) {
       await Promise.all(resolvedItems.slice(i, i + BATCH).map(savePromo));
+      console.log(`[Scrape] Batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(resolvedItems.length / BATCH)} — ${Math.min(i + BATCH, resolvedItems.length)}/${resolvedItems.length}`);
     }
 
     console.log(`[Scrape] ✅ Procesadas: ${processedCount} | Sin categoría: ${skippedNoCategory} | Sin comercio: ${skippedNoCommerce}`);

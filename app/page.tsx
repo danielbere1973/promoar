@@ -20,6 +20,14 @@ function fechaHoy() {
   return `${DIAS[hoy.getDay()]} ${hoy.getDate()} de ${MESES[hoy.getMonth()]}`
 }
 
+function fechaCorta() {
+  const hoy = new Date()
+  const d = String(hoy.getDate()).padStart(2, '0')
+  const m = String(hoy.getMonth() + 1).padStart(2, '0')
+  const a = String(hoy.getFullYear()).slice(2)
+  return `${d}/${m}/${a}`
+}
+
 type Req = {
   id?: string
   bank?: { id?: string; name: string; logoUrl?: string | null } | null
@@ -286,6 +294,11 @@ function getSpecialBadge(p: Promo) {
 function HomeContent() {
   const { data: session, status } = useSession()
   const nombre = session?.user?.name || 'Invitado'
+  const iniciales = (() => {
+    const parts = nombre.trim().split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+    return nombre.slice(0, 2).toUpperCase()
+  })()
   const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'MODERATOR'
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -325,6 +338,8 @@ function HomeContent() {
   const [wizardOpen, setWizardOpen] = useState(false)
   const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null)
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
+  const mobileSearchRef = useRef<HTMLInputElement>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   useEffect(() => {
@@ -750,19 +765,24 @@ function HomeContent() {
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto no-scrollbar">
         {/* Top bar sticky */}
         <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-20 shadow-sm shadow-black/[0.01]">
-          <div className="px-6 py-4">
+          <div className="px-4 lg:px-6 py-3 lg:py-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">{fechaHoy()}</p>
+                  <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest hidden lg:block">{fechaHoy()}</p>
+                  <p className="text-[11px] text-gray-500 font-bold tracking-widest lg:hidden">{fechaCorta()}</p>
                   {status === 'authenticated' && (
-                    <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                    <p className="text-[11px] text-indigo-600 font-bold hidden lg:block">Hola, {nombre.split(' ')[0]} 👋</p>
                   )}
+                  {/* Mobile: Salir inline con la fecha */}
                   {status === 'authenticated' && (
-                    <p className="text-[11px] text-indigo-600 font-bold">Hola, {nombre.split(' ')[0]} 👋</p>
+                    <button onClick={() => { import('next-auth/react').then(m => m.signOut({ callbackUrl: '/login' })) }}
+                      className="lg:hidden text-[10px] font-bold text-gray-300 hover:text-red-400 transition-colors ml-1">
+                      Salir
+                    </button>
                   )}
                 </div>
-                <h1 className="text-2xl lg:text-3xl font-black tracking-tighter text-gray-900 mt-0.5">
+                <h1 className="text-lg lg:text-3xl font-black tracking-tighter text-gray-900 mt-0.5">
                   {timeFilter === 'today' ? 'Promociones Hoy' : 'Catálogo de la Semana'}
                 </h1>
               </div>
@@ -781,17 +801,17 @@ function HomeContent() {
 
                 <button
                   onClick={() => setIsFilterOpen(true)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all ${
+                  className={`hidden md:flex items-center gap-2 px-4 py-3 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all ${
                     getFilterChips().filter(c => c.type !== 'category').length > 0
                       ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100'
                       : 'bg-white border-gray-200 text-gray-700 hover:border-indigo-300'
                   }`}
                 >
                   <SlidersHorizontal size={16} />
-                  <span className="hidden md:inline">Filtros</span>
+                  Filtros
                 </button>
 
-                <div className="flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm shrink-0">
+                <div className="hidden sm:flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm shrink-0">
                   <button onClick={() => setViewMode('grid')} className={`p-2 rounded-xl transition-colors ${viewMode === 'grid' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
                   </button>
@@ -803,17 +823,14 @@ function HomeContent() {
             </div>
 
             {/* Mobile-only selector y quick filters */}
-            <div className="lg:hidden mt-4">
-              {/* Toggle Todas / Para Mí */}
-              <div className="flex gap-1 mb-3">
+            <div className="lg:hidden mt-1.5">
+              <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5 items-center">
                 <button
                   onClick={() => setForMe(false)}
-                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                    !forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-gray-200 text-gray-400'
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${
+                    !forMe ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400'
                   }`}
-                >
-                  Todas
-                </button>
+                >Todas</button>
                 <button
                   onClick={() => {
                     if (status === 'authenticated') {
@@ -823,52 +840,70 @@ function HomeContent() {
                       setWizardOpen(true)
                     }
                   }}
-                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                    forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-gray-200 text-gray-400'
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${
+                    forMe ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400'
                   }`}
-                >
-                  Para Mí
-                </button>
-              </div>
-              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                >Para Mí</button>
+
+                <div className="w-px h-4 bg-gray-200 shrink-0" />
+
                 {(['today', 'week'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setTimeFilter(f)}
-                    className={`whitespace-nowrap px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border ${
-                      timeFilter === f ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500'
-                    }`}
-                  >
-                    {f === 'today' ? 'Solo Hoy' : 'Toda la semana'}
+                  <button key={f} onClick={() => setTimeFilter(f)}
+                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                      timeFilter === f ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500'
+                    }`}>
+                    {f === 'today' ? 'Hoy' : 'Semana'}
                   </button>
                 ))}
-                <div className="w-[1px] bg-gray-200 shrink-0 mx-1" />
-                <button
-                  onClick={() => setIsCategoryOpen(true)}
-                  className={`whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-[10px] uppercase transition-all ${
+
+                <div className="w-px h-4 bg-gray-200 shrink-0" />
+
+                <button onClick={() => setIsCategoryOpen(true)}
+                  className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg border font-bold text-[10px] uppercase transition-all ${
                     selectedCats.length > 0 ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-700'
-                  }`}
-                >
-                  <Tag size={12} /> Categorías {selectedCats.length > 0 && `(${selectedCats.length})`}
+                  }`}>
+                  <Tag size={10} /> {selectedCats.length > 0 ? `Cats (${selectedCats.length})` : 'Categorías'}
                 </button>
               </div>
 
-              {/* Mobile Quick Categories (Wrapped, no scroll) */}
-              <div className="mt-4 flex flex-wrap gap-2">
-                {quickCats.slice(0, 4).map(cat => {
+              {/* Búsqueda mobile (se abre desde BottomNav) */}
+              {mobileSearchOpen && (
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      ref={mobileSearchRef}
+                      type="text"
+                      placeholder="Buscar comercio..."
+                      value={activeFilters.commerces[0] || ''}
+                      onChange={e => setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))}
+                      className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <button onClick={() => { setMobileSearchOpen(false); setActiveFilters(prev => ({ ...prev, commerces: [] })) }}
+                    className="p-2 text-gray-400 hover:text-gray-600">
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
+              {/* Categorías: scroll horizontal, todas visibles */}
+              <div className="mt-1 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                {categorias.sort((a,b) => (b.promoCount ?? 0) - (a.promoCount ?? 0)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
                   const count = forMe ? (promos.filter(p => p.category.name === cat.name).length) : (cat.promoCount ?? 0)
+                  if (count === 0) return null
                   return (
                     <button
                       key={cat.slug}
                       onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border ${
+                      className={`shrink-0 flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[9px] font-bold transition-all border ${
                         isActive ? 'bg-gray-900 border-gray-900 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600'
                       }`}
                     >
-                      <span>{cat.icon}</span>
+                      <span className="text-[10px]">{cat.icon}</span>
                       <span>{cat.name}</span>
-                      {count > 0 && <span className="opacity-60">{count}</span>}
+                      <span className="opacity-50">·{count}</span>
                     </button>
                   )
                 })}
@@ -1078,7 +1113,7 @@ function HomeContent() {
                 <div className={`mx-3 mt-3 mb-2 rounded-2xl py-3 px-4 text-center cursor-pointer ${promo.userBestDiscount ? 'bg-indigo-700' : 'bg-gray-900'}`} onClick={() => setSelectedPromo(promo)}>
                   {seg && <p className="text-[9px] font-black uppercase tracking-[3px] text-indigo-300 mb-0.5">✦ {seg}</p>}
                   {getSpecialBadge(promo) && <div className={`${getSpecialBadge(promo)!.color} text-white text-[8px] font-black px-2 py-0.5 rounded-lg w-fit mx-auto mb-1`}>{getSpecialBadge(promo)!.text}</div>}
-                  <p className="text-5xl font-black leading-none" style={{ color: '#c6f135' }}>{discountLabel(promo)}</p>
+                  <p className="text-3xl sm:text-5xl font-black leading-none" style={{ color: '#c6f135' }}>{discountLabel(promo)}</p>
                   {csiLabel(promo) && <p className="text-[10px] text-gray-400 mt-0.5">{csiLabel(promo)}</p>}
                 </div>
 
@@ -1462,7 +1497,10 @@ function HomeContent() {
         />
       )}
 
-      <BottomNav />
+      <BottomNav
+        onFilter={() => setIsFilterOpen(true)}
+        onSearch={() => { setMobileSearchOpen(v => !v); setTimeout(() => mobileSearchRef.current?.focus(), 100) }}
+      />
       <FilterDrawer
         isOpen={isFilterOpen}
         onClose={() => setIsFilterOpen(false)}

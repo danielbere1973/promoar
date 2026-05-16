@@ -64,20 +64,14 @@ export default function Explorar() {
 
         {/* Banner resumen */}
         {!loading && categories.length > 0 && (
-          <div className="mb-6 bg-gradient-to-br from-indigo-50/80 to-purple-50/50 border border-indigo-100/60 rounded-[24px] p-5 shadow-sm relative overflow-hidden flex justify-between items-center">
-            <div className="absolute right-0 top-0 opacity-10 text-indigo-600 -mt-4 -mr-2">
-              <TrendingUp size={100} />
+          <div className="mb-4 bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <TrendingUp size={16} className="text-indigo-500 shrink-0" />
+              <span className="text-[11px] font-bold text-indigo-700 shrink-0">Hoy:</span>
+              <span className="text-lg font-black text-indigo-700 shrink-0">{promosActivas}</span>
+              <span className="text-[11px] text-indigo-600 font-medium shrink-0">promos activas</span>
             </div>
-            <div className="relative z-10">
-              <p className="text-sm font-semibold text-indigo-900 flex items-center gap-1.5"><TrendingUp size={16} /> Resumen de hoy</p>
-              <div className="flex items-baseline gap-2 mt-2">
-                <span className="text-3xl font-black tracking-tighter text-indigo-700">{promosActivas}</span>
-                <span className="text-sm text-indigo-800/70 font-medium">promos activas</span>
-              </div>
-            </div>
-            <div className="relative z-10 text-right">
-              <p className="text-xs font-medium text-indigo-800/60 mb-1">En <span className="font-bold text-indigo-700">{categoriasActivas}</span> categorías</p>
-            </div>
+            <span className="text-[11px] text-indigo-500 font-bold shrink-0">en {categoriasActivas} cats.</span>
           </div>
         )}
 
@@ -100,44 +94,26 @@ export default function Explorar() {
 
         {/* Categories grid */}
         {!loading && categories.length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             {categories.map(cat => (
               <button
                 key={cat.slug}
                 onClick={() => handleCategoryClick(cat.name)}
-                className="group bg-white border border-gray-100 rounded-3xl p-4 text-left shadow-sm shadow-black/[0.01] hover:shadow-md hover:border-gray-200 transition-all duration-300 relative overflow-hidden flex flex-col justify-between h-full min-h-[140px]"
+                className="flex items-center gap-2.5 bg-white border border-gray-100 rounded-2xl px-3 py-2.5 text-left hover:border-gray-200 hover:shadow-sm transition-all"
               >
-                {/* Glow sutil */}
-                <div 
-                  className="absolute -top-10 -right-10 w-24 h-24 rounded-full blur-2xl opacity-20 pointer-events-none group-hover:scale-150 transition-transform duration-700" 
-                  style={{ backgroundColor: cat.color }}
-                />
-
                 <div
-                  className="w-12 h-12 rounded-[18px] flex items-center justify-center text-2xl relative z-10 transform group-hover:scale-105 group-hover:-rotate-3 transition-transform duration-300"
-                  style={{ backgroundColor: cat.color + '18', color: cat.color }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-xl shrink-0"
+                  style={{ backgroundColor: cat.color + '18' }}
                 >
                   {cat.icon}
                 </div>
-
-                <div className="mt-4 relative z-10 w-full">
-                  <p className="font-bold text-gray-900 leading-tight mb-1 line-clamp-1">{cat.name}</p>
-
-                  <div className="flex items-center justify-between w-full">
-                    {cat.promoCount > 0 ? (
-                      <span
-                        className="text-xs font-semibold px-2 py-0.5 rounded-md mt-1 block w-fit"
-                        style={{ backgroundColor: cat.color + '12', color: cat.color }}
-                      >
-                        {cat.promoCount} hoy
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium text-gray-400 mt-1 block">Sin promos</span>
-                    )}
-
-                    <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-600 transition-colors mt-1 shrink-0" />
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 text-xs leading-tight truncate">{cat.name}</p>
+                  <p className="text-[10px] font-semibold mt-0.5" style={{ color: cat.color }}>
+                    {cat.promoCount > 0 ? `${cat.promoCount} hoy` : 'Sin promos'}
+                  </p>
                 </div>
+                <ChevronRight size={14} className="text-gray-300 shrink-0" />
               </button>
             ))}
           </div>

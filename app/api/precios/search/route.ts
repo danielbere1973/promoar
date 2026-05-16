@@ -411,7 +411,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    let cotoQ = q || '', carrQ = q || '', cencoQ = q || '', diaQ = q || '', walmartQ = q || ''
+    let cotoQ = q || '', carrQ = q || '', cencoQ = q || '', diaQ = q || '', walmartQ = q || '', farmacityQ = q || ''
     let vtexMap = 'c'
     let isCategory = !!cat
 
@@ -424,6 +424,7 @@ export async function GET(request: Request) {
          cencoQ = node.name
          diaQ = node.name
          walmartQ = node.name
+         farmacityQ = node.name
          vtexMap = node.vtexMap || 'c'
       } else {
          return NextResponse.json({ error: 'Category not mapped' }, { status: 404 })
@@ -431,7 +432,7 @@ export async function GET(request: Request) {
     }
 
     // Ejecutar todas en paralelo
-    const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas] = await Promise.all([
+    const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas, farmacity] = await Promise.all([
       cotoQ ? searchCoto(cotoQ, false) : Promise.resolve([]),
       carrQ ? searchCarrefour(carrQ, isCategory) : Promise.resolve([]),
       cencoQ ? searchVtexIS(cencoQ, false, 'Jumbo', 'https://www.jumbo.com.ar', vtexMap) : Promise.resolve([]),
@@ -440,9 +441,10 @@ export async function GET(request: Request) {
       diaQ ? searchVtexIS(diaQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', vtexMap) : Promise.resolve([]),
       walmartQ ? searchVtexIS(walmartQ, false, 'Más Online', 'https://www.masonline.com.ar', vtexMap) : Promise.resolve([]),
       walmartQ ? searchVtexIS(walmartQ, false, 'Changomas', 'https://www.changomas.com.ar', vtexMap) : Promise.resolve([]),
+      farmacityQ ? searchVtexIS(farmacityQ, false, 'Farmacity', 'https://www.farmacity.com', vtexMap) : Promise.resolve([]),
     ])
 
-    const allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas]
+    const allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas, ...farmacity]
       .filter(p => p.finalPrice > 0)
 
     // Agrupamiento por EAN (Consolidación)
