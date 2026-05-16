@@ -43,6 +43,7 @@ export default function StatsView() {
   const [selectedAccountTypes, setSelectedAccountTypes] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedScrapers, setSelectedScrapers] = useState<string[]>([])
+  const [allScrapers, setAllScrapers] = useState<string[]>([])
 
   const [banks, setBanks] = useState<any[]>([])
   const [categories, setCategories] = useState<{id: string, name: string}[]>([])
@@ -84,6 +85,10 @@ export default function StatsView() {
         if (!res.ok) throw new Error('Error al cargar estadísticas')
         const json = await res.json()
         setData(json)
+        // Cargar lista de scrapers activos solo en la carga inicial (sin filtros)
+        if (selectedScrapers.length === 0 && json.byScraper?.length > 0) {
+          setAllScrapers(prev => prev.length > 0 ? prev : json.byScraper.map((s: any) => s.name))
+        }
       } catch (err: any) {
         setError(err.message)
       } finally {
@@ -198,19 +203,11 @@ export default function StatsView() {
             options={categories.map(c => ({ id: c.id, name: c.name }))}
             placeholder="Todos los rubros"
           />
-          <MultiSelect 
-            label="Fuentes" 
-            selected={selectedScrapers} 
+          <MultiSelect
+            label="Fuentes"
+            selected={selectedScrapers}
             onChange={setSelectedScrapers}
-            options={[
-              { id: 'Galicia', name: 'Galicia' },
-              { id: 'Coto', name: 'Coto' },
-              { id: 'Jumbo', name: 'Jumbo' },
-              { id: 'Disco', name: 'Disco' },
-              { id: 'Vea', name: 'Vea' },
-              { id: 'Carrefour', name: 'Carrefour' },
-              { id: 'MODO', name: 'MODO' },
-            ]}
+            options={allScrapers.map(s => ({ id: s, name: s }))}
             placeholder="Todas las fuentes"
           />
         </div>
@@ -279,9 +276,9 @@ export default function StatsView() {
                             <span className="text-slate-300">/</span>
                             <span>{item.segmentName}</span>
                           </span>
-                        ) : item.networkName ? (
+                        ) : (item as any).networkName ? (
                           <span className="flex items-center gap-1.5">
-                            <span className="text-indigo-600/60 font-black text-[10px] uppercase">{item.networkName}</span>
+                            <span className="text-indigo-600/60 font-black text-[10px] uppercase">{(item as any).networkName}</span>
                             <span className="text-slate-300">/</span>
                             <span>{item.segmentName}</span>
                           </span>
