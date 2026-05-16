@@ -191,6 +191,18 @@ export async function PUT(req: Request) {
       return NextResponse.json(network)
     }
 
+    if (type === 'commerce') {
+      const commerce = await prisma.commerce.update({
+        where: { id },
+        data: {
+          name: data.name,
+          logoUrl: data.logoUrl || null,
+          active: data.active ?? true,
+        }
+      })
+      return NextResponse.json(commerce)
+    }
+
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
   } catch (error) {
     return NextResponse.json({ error: 'Error updating entity' }, { status: 500 })
@@ -212,6 +224,8 @@ export async function DELETE(req: Request) {
       await prisma.wallet.delete({ where: { id } })
     } else if (type === 'cardNetwork') {
       await prisma.cardNetwork.delete({ where: { id } })
+    } else if (type === 'commerce') {
+      await prisma.commerce.update({ where: { id }, data: { active: false } })
     } else {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
     }
