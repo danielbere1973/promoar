@@ -13,7 +13,7 @@ import { DIAScraper } from './dia';
 // ─── Billeteras digitales ──────────────────────────────────────────────────────
 import { ModoScraper } from './modo';
 import { MercadoPagoScraper } from './mercadopago';
-import { CuentaDNIScraper } from './cuentadni';
+// CuentaDNI va por ProvinciaScraper (banco + billetera en uno)
 
 // ─── Tarjetas de crédito ───────────────────────────────────────────────────────
 import { VisaScraper } from './visa';
@@ -47,7 +47,6 @@ export const SUPERMERCADO_SCRAPERS: Scraper[] = [
 export const WALLET_SCRAPERS: Scraper[] = [
   ModoScraper,
   MercadoPagoScraper,
-  CuentaDNIScraper,
 ];
 
 export const TARJETA_SCRAPERS: Scraper[] = [
