@@ -534,19 +534,21 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
           <p className="text-xs font-bold">{inline ? '¡Perfil guardado!' : '¡Listo!'}</p>
         </div>
 
-        {selectedBankIds.length > 0 && (
-          <div className="space-y-1.5">
-            <button onClick={() => {
-              setExistingBankIds([...selectedBankIds])
-              setIsAdding(true)
-              setSelectedBankIds([])
-              setBankConfigs({})
-              setSelectedWalletIds([])
-              setDone(false)
-              setStep(1)
-            }} className="w-full py-2.5 rounded-2xl bg-indigo-600 text-white text-xs font-black tracking-wide hover:bg-indigo-700 transition-colors">
-              + Agregar Producto Financiero
-            </button>
+        <div className="space-y-1.5">
+          <button onClick={() => {
+            setExistingBankIds([...selectedBankIds])
+            setIsAdding(true)
+            setSelectedBankIds([])
+            setBankConfigs({})
+            setSelectedWalletIds([])
+            setDone(false)
+            setStep(1)
+          }} className="w-full py-2.5 rounded-2xl bg-indigo-600 text-white text-xs font-black tracking-wide hover:bg-indigo-700 transition-colors">
+            + Agregar Producto Financiero
+          </button>
+
+          {selectedBankIds.length > 0 && (
+            <div className="space-y-1.5">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 pt-1">Bancos y Billeteras</p>
             {selectedBankIds.map((bankId) => {
               const bank = banks.find(b => b.id === bankId)
@@ -607,6 +609,8 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
             })}
           </div>
         )}
+
+        </div>
 
         {selectedWalletIds.length > 0 && (
           <div className="space-y-1.5">
