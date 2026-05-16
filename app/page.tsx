@@ -4,13 +4,14 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Calendar, Tag, Settings, X, Search, Sparkles, Heart, Info, Smartphone, Clock, Globe, SlidersHorizontal, LogIn } from 'lucide-react'
+import { Calendar, Tag, Settings, X, Search, Sparkles, Heart, Info, Smartphone, Clock, Globe, SlidersHorizontal, LogIn, MapPin } from 'lucide-react'
 import BottomNav from './components/BottomNav'
 import FilterDrawer, { FilterState } from './components/FilterDrawer'
 import ActiveFilters from './components/ActiveFilters'
 import CategorySheet from './components/CategorySheet'
 import EntitiesSheet, { CARD_NETWORK_LOGOS } from './components/EntitiesSheet'
 import PromoWizard, { GuestProfile } from './components/PromoWizard'
+import ProvinceSelector from './components/ProvinceSelector'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -340,6 +341,10 @@ function HomeContent() {
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const mobileSearchRef = useRef<HTMLInputElement>(null)
+  const [searchText, setSearchText] = useState('')
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [province, setProvince] = useState<string | null>(null)
+  const [showProvinceSelector, setShowProvinceSelector] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   useEffect(() => {
@@ -369,11 +374,19 @@ function HomeContent() {
         try {
           const gp = JSON.parse(stored)
           setGuestProfile(gp)
-          setForMe(true) // ya tiene perfil, activar directamente
+          setForMe(true)
         } catch {}
       } else {
         setForMe(false)
       }
+    }
+
+    // Cargar provincia guardada (aplica a todos)
+    const savedProvince = localStorage.getItem('userProvince')
+    if (savedProvince) {
+      setProvince(savedProvince)
+    } else {
+      setTimeout(() => setShowProvinceSelector(true), 2000)
     }
   }, [status])
 
@@ -472,9 +485,13 @@ function HomeContent() {
         if (activeFilters.commerces.length) qParams.set('commerces', activeFilters.commerces.join(','))
         if (activeFilters.discountRanges.length) qParams.set('discountRanges', activeFilters.discountRanges.join(','))
         if (activeFilters.hasInstallments !== null) qParams.set('hasInstallments', String(activeFilters.hasInstallments))
-        // Guest profile: pasar perfil temporal si no está logueado
+        // Guest profile
         if (forMe && guestProfile?.cards?.length && status !== 'authenticated') {
           qParams.set('guest_profile', btoa(JSON.stringify(guestProfile)))
+        }
+        // Provincia del usuario (guest o logueado sin addressState)
+        if (province && status !== 'authenticated') {
+          qParams.set('province', province)
         }
 
         const res = await fetch(`/api/promos?${qParams.toString()}`, {
@@ -493,7 +510,7 @@ function HomeContent() {
     }
     load()
     return () => controller.abort()
-  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile])
+  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province])
 
   // Helper para mostrar los chips de "camino de migas"
   const getFilterChips = () => {
@@ -793,8 +810,14 @@ function HomeContent() {
                   <input
                     type="text"
                     placeholder="Buscar comercio..."
-                    value={activeFilters.commerces[0] || ''}
-                    onChange={(e) => setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))}
+                    value={searchText}
+                    onChange={(e) => {
+                      setSearchText(e.target.value)
+                      if (searchTimer.current) clearTimeout(searchTimer.current)
+                      searchTimer.current = setTimeout(() => {
+                        setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
+                      }, 400)
+                    }}
                     className="w-full pl-11 pr-4 py-3 bg-gray-100 border-none rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   />
                 </div>
@@ -866,6 +889,16 @@ function HomeContent() {
                 </button>
               </div>
 
+              {/* Chip de provincia */}
+              {province && (
+                <button
+                  onClick={() => setShowProvinceSelector(true)}
+                  className="mt-1 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-600 w-fit"
+                >
+                  <MapPin size={10} /> {province}
+                </button>
+              )}
+
               {/* Búsqueda mobile (se abre desde BottomNav) */}
               {mobileSearchOpen && (
                 <div className="mt-2 flex items-center gap-2">
@@ -875,8 +908,14 @@ function HomeContent() {
                       ref={mobileSearchRef}
                       type="text"
                       placeholder="Buscar comercio..."
-                      value={activeFilters.commerces[0] || ''}
-                      onChange={e => setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))}
+                      value={searchText}
+                      onChange={e => {
+                        setSearchText(e.target.value)
+                        if (searchTimer.current) clearTimeout(searchTimer.current)
+                        searchTimer.current = setTimeout(() => {
+                          setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
+                        }, 400)
+                      }}
                       className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
                     />
                   </div>
@@ -1531,6 +1570,19 @@ function HomeContent() {
           setGuestBannerDismissed(false)
         }}
       />
+
+      {/* Selector de provincia */}
+      {showProvinceSelector && (
+        <ProvinceSelector
+          currentProvince={province || undefined}
+          onSelect={(prov) => {
+            setProvince(prov)
+            localStorage.setItem('userProvince', prov)
+            setShowProvinceSelector(false)
+          }}
+          onDismiss={() => setShowProvinceSelector(false)}
+        />
+      )}
     </div>
   )
 }

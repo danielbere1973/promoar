@@ -77,18 +77,26 @@ export async function GET(req: NextRequest) {
       ]
     }
 
+    // Filtro por provincia: usuario logueado con addressState, o guest con param ?province=
+    const guestProvince = searchParams.get('province')
+    let userProvince: string | null = null
+
     if (email) {
       const userObj = await prisma.user.findUnique({ where: { email }, select: { addressState: true } })
-      if (userObj?.addressState) {
-        where.AND = [
-          {
-            OR: [
-              { provinces: { hasSome: ['Todas', 'TODAS', userObj.addressState] } },
-              { provinces: { isEmpty: true } }
-            ]
-          }
-        ]
-      }
+      userProvince = userObj?.addressState || null
+    } else if (guestProvince) {
+      userProvince = guestProvince
+    }
+
+    if (userProvince) {
+      where.AND = [
+        {
+          OR: [
+            { provinces: { hasSome: ['Todas', 'TODAS', userProvince] } },
+            { provinces: { isEmpty: true } }
+          ]
+        }
+      ]
     }
 
     if (categorySlugs.length > 0) {
