@@ -6,11 +6,26 @@ import { chromium } from 'playwright';
 import { Scraper, ScrapedPromo } from './types';
 import { buildPromos, dedup, RawBankPromo, normStr, detectCategoria } from './bank-helpers';
 
-const BASE_URL  = 'https://www.bancociudad.com.ar/beneficios/';
-const API_URL   = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios/busqueda';
-const BANK_NAME = 'Banco Ciudad';
-const PAGE_SIZE = 12;
-const MAX_PAGES = 90;
+const BASE_URL    = 'https://www.bancociudad.com.ar/beneficios/';
+const API_URL     = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios/busqueda';
+const DETAIL_URL  = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios';
+const BANK_NAME   = 'Banco Ciudad';
+const PAGE_SIZE   = 12;
+const MAX_PAGES   = 90;
+
+// Promos que no aparecen en busqueda general (rubros especiales como "Exclusivo Buepp")
+const SPECIAL_IDS = [13934, 14443, 14412];
+
+function parseDiasMask(dias: string): number {
+  if (!dias) return 127;
+  // Formato: 7 chars posición por día: L M(mar) M(mie) J V S D
+  const bits = [1, 2, 3, 4, 5, 6, 0]; // bit index para cada posición
+  let mask = 0;
+  for (let i = 0; i < Math.min(dias.length, 7); i++) {
+    if (dias[i] !== '-') mask |= 1 << bits[i];
+  }
+  return mask || 127;
+}
 
 // Mapeo de nombre de rubro de Ciudad → nuestra categoría en DB
 const RUBRO_A_CATEGORIA: Record<string, string> = {
@@ -308,6 +323,49 @@ export const BancoCiudadScraper: Scraper = {
         for (const p of built) p.sourceText = (raw as any)._sourceText;
       }
       promos.push(...built);
+    }
+
+    // Fetch promos especiales que no aparecen en busqueda general
+    for (const id of SPECIAL_IDS) {
+      try {
+        const res = await fetch(`${DETAIL_URL}/${id}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+        });
+        if (!res.ok) continue;
+        const json = await res.json();
+        const ben = json?.retorno?.beneficio;
+        const com = json?.retorno?.comercio;
+        if (!ben || !com?.nombre) continue;
+
+        // Armar item compatible con parseItem
+        const item = {
+          ...ben,
+          comercio_nombre: com.nombre,
+          comercio: { logo: com.logo ?? '' },
+          rubroId: ben.idRubro ?? ben.rubroId,
+        };
+
+        const raw = parseItem(item, rubroMap);
+        if (!raw) continue;
+
+        const validDays = parseDiasMask(ben.dias ?? '');
+        const built = buildPromos(raw, BANK_NAME, BASE_URL, {
+          walletNames: (raw as any).walletNames,
+          cardNetworks: (raw as any).cardNetworks,
+          paymentChannel: (raw as any).paymentChannel,
+        });
+        for (const p of built) {
+          p.validDays = validDays;
+          if ((raw as any)._categoria) p.categoria = (raw as any)._categoria;
+          if ((raw as any)._storeLogoUrl) p.storeLogoUrl = (raw as any)._storeLogoUrl;
+          if ((raw as any)._sourceUrl) p.sourceUrl = (raw as any)._sourceUrl;
+          if ((raw as any)._sourceText) p.sourceText = (raw as any)._sourceText;
+        }
+        promos.push(...built);
+        console.log(`[BancoCiudad] Promo especial ${id}: ${com.nombre} OK`);
+      } catch (e) {
+        console.error(`[BancoCiudad] Error promo especial ${id}:`, e);
+      }
     }
 
     const result = dedup(promos);
