@@ -41,6 +41,7 @@ type BankConfig = {
   id: string
   name: string
   logoUrl?: string | null
+  segmentId?: string   // paquete bancario (Eminent, Selecta) — aplica a todas las tarjetas
   accounts: AccountEntry[]
   cards: SelectedCard[]
 }
@@ -106,9 +107,8 @@ function isStandardSegment(name: string) {
   return STANDARD_SEGMENT_NAMES.some(s => n.includes(s))
 }
 
-function computeCardOptions(bank: EntityBank, bankSegs: BankSegment[]): CardOption[] {
+function computeCardOptions(bank: EntityBank): CardOption[] {
   const opts: CardOption[] = []
-  const mySegs = bankSegs.filter(s => s.bankId === bank.id)
   const isAmEx = (name: string) => name.toLowerCase().includes('amex') || name.toLowerCase().includes('american')
 
   for (const net of bank.cardNetworks.filter(n => isStandardBrand(n.name))) {
@@ -122,9 +122,7 @@ function computeCardOptions(bank: EntityBank, bankSegs: BankSegment[]): CardOpti
     for (const cs of creditCardSegs) {
       opts.push({ key: `${net.id}_CREDIT_cs${cs.id}`, networkId: net.id, networkName: net.name, cardType: 'CREDIT', cardSegmentId: cs.id, label: `${net.name} ${cs.name}` })
     }
-    for (const bs of mySegs.filter(s => isStandardSegment(s.name))) {
-      opts.push({ key: `${net.id}_CREDIT_bs${bs.id}`, networkId: net.id, networkName: net.name, cardType: 'CREDIT', segmentId: bs.id, label: `${net.name} Crédito ${bs.name}` })
-    }
+    // Bank segments (Eminent, Selecta) se muestran en el selector de paquete, NO como opciones de tarjeta
 
     // DÉBITO (sin AmEx)
     if (!amex) {
@@ -146,8 +144,7 @@ function computeCardOptions(bank: EntityBank, bankSegs: BankSegment[]): CardOpti
 function reconstructConfigs(
   cards: GuestCard[],
   banks: EntityBank[],
-  wallets: EntityWallet[],
-  allBankSegs: BankSegment[]
+  wallets: EntityWallet[]
 ): { bankIds: string[]; walletIds: string[]; configs: Record<string, BankConfig> } {
   const modoId = wallets.find(w => w.name.toLowerCase().includes('modo'))?.id
   const bankIdSet = new Set<string>()
@@ -162,7 +159,7 @@ function reconstructConfigs(
   for (const bankId of bankIdSet) {
     const bank = banks.find(b => b.id === bankId)
     const bankCards = cards.filter(c => c.bankId === bankId)
-    const opts = bank ? computeCardOptions(bank, allBankSegs) : []
+    const opts = bank ? computeCardOptions(bank) : []
 
     // Cuentas — incluir las que tienen walletId (MODO) como cuentas con inModo=true
     const pureAccounts = bankCards.filter(c => c.cardType === 'ACCOUNT' && !c.walletId)
@@ -198,8 +195,12 @@ function reconstructConfigs(
       }
     }
 
+    // Restaurar segmentId del paquete desde cualquier tarjeta que lo tenga
+    const restoredSegmentId = bankCards.find(c => c.segmentId && c.cardType !== 'ACCOUNT')?.segmentId
+
     configs[bankId] = {
       id: bankId, name: bank?.name ?? '', logoUrl: bank?.logoUrl,
+      segmentId: restoredSegmentId,
       accounts, cards: selectedCards,
     }
   }
@@ -217,7 +218,7 @@ function BankProductStep({
   allBankSegs: BankSegment[]
   onUpdate: (u: Partial<BankConfig>) => void
 }) {
-  const cardOptions = computeCardOptions(bank, allBankSegs)
+  const cardOptions = computeCardOptions(bank)
 
   function addAccount() {
     const newAcc: AccountEntry = {
@@ -257,8 +258,31 @@ function BankProductStep({
   const debitOpts   = cardOptions.filter(o => o.cardType === 'DEBIT')
   const prepaidOpts = cardOptions.filter(o => o.cardType === 'PREPAID')
 
+  // Segmentos de programa del banco (Eminent, Selecta, etc.)
+  const progSegs = allBankSegs.filter(s => s.bankId === bank.id && isStandardSegment(s.name))
+
   return (
     <div className="space-y-6">
+
+      {/* ── Paquete bancario ─────────────────────────────────────────────── */}
+      {progSegs.length > 0 && (
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5">¿Qué paquete tenés?</p>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => onUpdate({ segmentId: undefined })}
+              className={`px-4 py-2 rounded-2xl text-sm font-bold border-2 transition-all ${!config.segmentId ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-500 bg-white'}`}>
+              Clásica
+            </button>
+            {progSegs.map(seg => (
+              <button key={seg.id} onClick={() => onUpdate({ segmentId: seg.id })}
+                className={`px-4 py-2 rounded-2xl text-sm font-bold border-2 transition-all ${config.segmentId === seg.id ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-500 bg-white'}`}>
+                {seg.name}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1.5 ml-1">Aplica a todas las tarjetas de este banco.</p>
+        </div>
+      )}
 
       {/* ── Cuentas ─────────────────────────────────────────────────────── */}
       <div>
@@ -426,7 +450,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
 
         if (initialProfile?.cards?.length) {
           const { bankIds, walletIds, configs } = reconstructConfigs(
-            initialProfile.cards, fetchedBanks, fetchedWallets, data.segments || []
+            initialProfile.cards, fetchedBanks, fetchedWallets
           )
           setSelectedBankIds(bankIds)
           setBankConfigs(configs)
@@ -489,13 +513,13 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
         }
       }
 
-      // Tarjetas seleccionadas
+      // Tarjetas seleccionadas — heredan el segmentId del paquete del banco
       for (const card of cfg.cards) {
         cards.push({
           bankId,
           cardNetworkId: card.networkId,
           cardType: card.cardType,
-          segmentId: card.segmentId,
+          segmentId: cfg.segmentId ?? card.segmentId, // paquete del banco tiene prioridad
           cardSegmentId: card.cardSegmentId,
           firstSix: card.firstSix || undefined,
           lastFour: card.lastFour || undefined,
