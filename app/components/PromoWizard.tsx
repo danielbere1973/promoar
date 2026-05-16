@@ -99,6 +99,13 @@ function isStandardBrand(name: string) {
   return STANDARD_CARD_BRANDS.some(b => n.includes(b))
 }
 
+// Segmentos estándar que se muestran al usuario (los que aparecen en promos reales)
+const STANDARD_SEGMENT_NAMES = ['clasic', 'internacion', 'gold', 'oro', 'platinum', 'black', 'premium', 'signature', 'infinite', 'icon', 'macro', 'regional', 'nacional', 'selecta', 'eminent', 'the gold', 'the platinum', 'the green']
+function isStandardSegment(name: string) {
+  const n = name.toLowerCase()
+  return STANDARD_SEGMENT_NAMES.some(s => n.includes(s))
+}
+
 function computeCardOptions(bank: EntityBank, bankSegs: BankSegment[]): CardOption[] {
   const opts: CardOption[] = []
   const mySegs = bankSegs.filter(s => s.bankId === bank.id)
@@ -106,8 +113,8 @@ function computeCardOptions(bank: EntityBank, bankSegs: BankSegment[]): CardOpti
 
   for (const net of bank.cardNetworks.filter(n => isStandardBrand(n.name))) {
     const amex = isAmEx(net.name)
-    const creditCardSegs = bank.cardSegments.filter(s => s.cardNetworkId === net.id && s.cardType === 'CREDIT')
-    const debitCardSegs  = bank.cardSegments.filter(s => s.cardNetworkId === net.id && s.cardType === 'DEBIT')
+    const creditCardSegs = bank.cardSegments.filter(s => s.cardNetworkId === net.id && s.cardType === 'CREDIT' && isStandardSegment(s.name))
+    const debitCardSegs  = bank.cardSegments.filter(s => s.cardNetworkId === net.id && s.cardType === 'DEBIT' && isStandardSegment(s.name))
 
     // CRÉDITO: Clásica + cardSegments del banco + bankSegments (paquetes)
     const creditBase: CardOption = { key: `${net.id}_CREDIT`, networkId: net.id, networkName: net.name, cardType: 'CREDIT', label: `${net.name} Crédito Clásica` }
@@ -115,7 +122,7 @@ function computeCardOptions(bank: EntityBank, bankSegs: BankSegment[]): CardOpti
     for (const cs of creditCardSegs) {
       opts.push({ key: `${net.id}_CREDIT_cs${cs.id}`, networkId: net.id, networkName: net.name, cardType: 'CREDIT', cardSegmentId: cs.id, label: `${net.name} ${cs.name}` })
     }
-    for (const bs of mySegs) {
+    for (const bs of mySegs.filter(s => isStandardSegment(s.name))) {
       opts.push({ key: `${net.id}_CREDIT_bs${bs.id}`, networkId: net.id, networkName: net.name, cardType: 'CREDIT', segmentId: bs.id, label: `${net.name} Crédito ${bs.name}` })
     }
 
@@ -545,8 +552,8 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
               const totalItems = cfg.accounts.length + cfg.cards.length
               return (
                 <div key={bankId} className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-                  <button onClick={() => setExpandedBankIds(prev => { const n = new Set(prev); n.has(bankId) ? n.delete(bankId) : n.add(bankId); return n })}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 transition-colors">
+                  <div className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => setExpandedBankIds(prev => { const n = new Set(prev); n.has(bankId) ? n.delete(bankId) : n.add(bankId); return n })}>
                     <EntityLogo logoUrl={bank?.logoUrl} name={bank?.name || ''} sm />
                     <div className="flex-1 min-w-0 text-left">
                       <p className="font-black text-xs text-gray-900 truncate">{bank?.name}</p>
@@ -561,7 +568,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     </button>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`text-gray-300 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
-                  </button>
+                  </div>
 
                   {isExpanded && (
                     <div className="border-t border-gray-50 px-3 py-2 space-y-1.5">
