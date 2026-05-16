@@ -8,7 +8,7 @@ import { buildPromos, dedup, RawBankPromo, normStr, detectCategoria } from './ba
 
 const BASE_URL    = 'https://www.bancociudad.com.ar/beneficios/';
 const API_URL     = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios/busqueda';
-const DETAIL_URL  = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios';
+
 const BANK_NAME   = 'Banco Ciudad';
 const PAGE_SIZE   = 12;
 const MAX_PAGES   = 95;
@@ -78,8 +78,10 @@ const RUBRO_A_CATEGORIA: Record<string, string> = {
   'librerias':                 'Librerías',
   'shoppings':                 'Shoppings',
   'otros':                     'Otros',
-  'exclusivo buepp':           'Gastronomía',
-  'buepp':                     'Gastronomía',
+  'exclusivo buepp':           'Supermercados',
+  'buepp':                     'Supermercados',
+  'Desayuno':                   'Gastronomía',
+  
 };
 
 function mapRubro(rubroNombre: string): string {
@@ -298,18 +300,26 @@ export const BancoCiudadScraper: Scraper = {
         }
       }
 
-      // Fetch promos especiales dentro del contexto del browser (evita 403)
+      // Fetch promos especiales navegando la página de detalle (evita 403/500)
+      const detailPage = await context.newPage();
       for (const id of SPECIAL_IDS) {
         try {
-          console.log(`[BancoCiudad] Fetching promo especial ${id}...`);
-          const res = await context.request.get(`${DETAIL_URL}/${id}`, {
-            headers: { 'Accept': 'application/json' }
+          console.log(`[BancoCiudad] Navegando promo especial ${id}...`);
+          let capturedDetail: any = null;
+
+          detailPage.on('response', async (res) => {
+            if (res.url().includes(`beneficios/${id}`) || res.url().includes(`beneficios_rest/beneficios/${id}`)) {
+              try { capturedDetail = await res.json(); } catch {}
+            }
           });
-          console.log(`[BancoCiudad] Promo especial ${id} status: ${res.status()}`);
-          if (!res.ok()) continue;
-          const json = await res.json();
-          const ben = json?.retorno?.beneficio;
-          const com = json?.retorno?.comercio;
+
+          await detailPage.goto(`https://www.bancociudad.com.ar/beneficios/detalle/${id}`, {
+            waitUntil: 'networkidle', timeout: 20000
+          });
+          await detailPage.waitForTimeout(1000);
+
+          const ben = capturedDetail?.retorno?.beneficio;
+          const com = capturedDetail?.retorno?.comercio;
           console.log(`[BancoCiudad] Promo especial ${id}: ben=${!!ben} com=${com?.nombre}`);
           if (!ben || !com?.nombre) continue;
 
@@ -329,6 +339,7 @@ export const BancoCiudadScraper: Scraper = {
           console.error(`[BancoCiudad] Error promo especial ${id}:`, e);
         }
       }
+      await detailPage.close();
 
       await context.close();
     } finally {
