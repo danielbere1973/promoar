@@ -77,15 +77,18 @@ export const CuentaDNIScraper: Scraper = {
     const { data: html } = await axios.get(LIST_URL, { headers: HEADERS, timeout: 15000 });
     const $ = cheerio.load(html);
 
-    const ids: number[] = [];
+    const idSet = new Set<number>();
+    const rawIds: string[] = [];
     $('.callModalCDNI').each((_, el) => {
       const rawId = $(el).attr('id') ?? '';
-      // formato: "supermercadocoto-307"
+      rawIds.push(rawId);
       const match = rawId.match(/-(\d+)$/);
-      if (match) ids.push(Number(match[1]));
+      if (match) idSet.add(Number(match[1]));
     });
 
-    console.log(`[CuentaDNI] IDs encontrados: ${ids.length} → ${ids.join(', ')}`);
+    const ids = Array.from(idSet);
+    console.log(`[CuentaDNI] IDs en HTML: ${rawIds.join(' | ')}`);
+    console.log(`[CuentaDNI] IDs únicos: ${ids.length} → ${ids.join(', ')}`);
 
     if (ids.length === 0) {
       console.log('[CuentaDNI] No se encontraron IDs en el HTML');
@@ -137,9 +140,8 @@ export const CuentaDNIScraper: Scraper = {
           description: ben.bajada ?? title,
           sourceText: legal.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000),
           sourceUrl,
-          discount:     discount > 0 ? String(discount) : undefined,
+          discount:     discount > 0 ? String(discount) : String(cuotas),
           discountType: discount > 0 ? 'PERCENTAGE_REINTEGRO' as any : 'CUOTAS_SIN_INTERES' as any,
-          installments: cuotas > 0 ? String(cuotas) : undefined,
           storeName,
           categoria,
           validDays,
