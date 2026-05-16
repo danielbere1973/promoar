@@ -139,7 +139,7 @@ export const CuentaDNIScraper: Scraper = {
         promos.push({
           title,
           description: ben.bajada ?? title,
-          sourceText: legal.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000),
+          sourceText: legal.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 8000),
           sourceUrl,
           discount:     discount > 0 ? String(discount) : String(cuotas),
           discountType: discount > 0 ? 'PERCENTAGE_REINTEGRO' as any : 'CUOTAS_SIN_INTERES' as any,

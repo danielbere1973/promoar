@@ -194,7 +194,7 @@ function parseCard(card: RawCard, sourceUrl: string): ScrapedPromo[] {
   const base: Partial<ScrapedPromo> = {
     storeName,
     description:   text.slice(0, 500).replace(/\s+/g, ' ').trim(),
-    sourceText:    text.slice(0, 4000),
+    sourceText:    text.slice(0, 8000),
     sourceUrl,
     validFrom,
     validUntil,
