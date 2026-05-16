@@ -78,6 +78,8 @@ const RUBRO_A_CATEGORIA: Record<string, string> = {
   'librerias':                 'Librerías',
   'shoppings':                 'Shoppings',
   'otros':                     'Otros',
+  'exclusivo buepp':           'Gastronomía',
+  'buepp':                     'Gastronomía',
 };
 
 function mapRubro(rubroNombre: string): string {
