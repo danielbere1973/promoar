@@ -182,6 +182,7 @@ export const BancoCiudadScraper: Scraper = {
     });
     const allRaw: Array<RawBankPromo & { _categoria?: string }> = [];
     const rubroMap = new Map<number, string>(); // rubroId → nombre
+    let savedHeaders: Record<string, string> = {};
 
     try {
       const context = await browser.newContext({
@@ -200,6 +201,7 @@ export const BancoCiudadScraper: Scraper = {
       page.on('request', (req) => {
         if (req.url().includes('busqueda') && req.method() === 'POST') {
           capturedHeaders = req.headers();
+          savedHeaders = capturedHeaders;
           const raw = req.postData();
           if (raw) { try { capturedBody = JSON.parse(raw); } catch {} }
         }
@@ -328,13 +330,22 @@ export const BancoCiudadScraper: Scraper = {
     // Fetch promos especiales que no aparecen en busqueda general
     for (const id of SPECIAL_IDS) {
       try {
+        console.log(`[BancoCiudad] Fetching promo especial ${id}...`);
         const res = await fetch(`${DETAIL_URL}/${id}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Referer': BASE_URL,
+            'Origin': 'https://www.bancociudad.com.ar',
+            ...savedHeaders,
+          }
         });
-        if (!res.ok) continue;
+        console.log(`[BancoCiudad] Promo especial ${id} status: ${res.status}`);
+        if (!res.ok) { console.log(`[BancoCiudad] Promo especial ${id}: HTTP ${res.status}`); continue; }
         const json = await res.json();
         const ben = json?.retorno?.beneficio;
         const com = json?.retorno?.comercio;
+        console.log(`[BancoCiudad] Promo especial ${id}: ben=${!!ben} com=${com?.nombre}`);
         if (!ben || !com?.nombre) continue;
 
         // Armar item compatible con parseItem
