@@ -36,6 +36,28 @@ const MONTHS: Record<string, number> = {
   'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
 };
 
+function extractValidDays(text: string): number {
+  const t = text.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/TODOS LOS D[IÍ]AS|LUNES A DOMINGO/.test(t)) return 127;
+  if (/LUNES A VIERNES/.test(t))  return 0b0111110;
+  if (/LUNES A JUEVES/.test(t))   return 0b0011110;
+  if (/S[AÁ]BADOS Y DOMINGOS|FIN DE SEMANA/.test(t)) return 0b1000001;
+  if (/LUNES Y MARTES/.test(t))   return 0b0000110;
+  if (/MI[EÉ]RCOLES Y JUEVES/.test(t)) return 0b0011000;
+  if (/JUEVES Y VIERNES/.test(t)) return 0b0110000;
+  if (/VIERNES Y S[AÁ]BADOS/.test(t)) return 0b1100000;
+
+  let mask = 0;
+  if (t.includes('DOMINGO'))    mask |= 1 << 0;
+  if (t.includes('LUNES'))      mask |= 1 << 1;
+  if (t.includes('MARTES'))     mask |= 1 << 2;
+  if (t.includes('MI') && t.includes('RCOLES')) mask |= 1 << 3;
+  if (t.includes('JUEVES'))     mask |= 1 << 4;
+  if (t.includes('VIERNES'))    mask |= 1 << 5;
+  if (t.includes('S') && t.includes('BADO') && !t.includes('SABADOS Y')) mask |= 1 << 6;
+  return mask || 127;
+}
+
 function extractDates(text: string): { validFrom?: string; validUntil?: string } {
   const norm = text.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const y = new Date().getFullYear();
@@ -176,7 +198,7 @@ function parseCard(card: RawCard, sourceUrl: string): ScrapedPromo[] {
     sourceUrl,
     validFrom,
     validUntil,
-    validDays:     127,
+    validDays:     extractValidDays(text),
     cap:           cap ?? undefined,
     capPeriod:     cap ? 'MONTHLY' : undefined,
     minPurchase:   minPurchase ?? undefined,
