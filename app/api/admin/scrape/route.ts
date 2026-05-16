@@ -376,7 +376,7 @@ export async function POST(req: NextRequest) {
       processedCount++;
     };
 
-    const BATCH = 10;
+    const BATCH = 5;
     for (let i = 0; i < resolvedItems.length; i += BATCH) {
       await Promise.all(resolvedItems.slice(i, i + BATCH).map(savePromo));
       console.log(`[Scrape] Batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(resolvedItems.length / BATCH)} — ${Math.min(i + BATCH, resolvedItems.length)}/${resolvedItems.length}`);
