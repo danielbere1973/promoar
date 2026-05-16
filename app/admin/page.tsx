@@ -1789,9 +1789,12 @@ function EntityModal({ entity, setEntity, onSave, onCancel, saving, allEntities 
           <button onClick={onCancel} className="p-2 text-slate-300 hover:text-slate-600 transition-colors"><X size={20} /></button>
         </div>
         <div className="p-8 space-y-4 overflow-y-auto flex-1">
-          <Field label="Nombre / Etiqueta">
-            <Input value={entity.name} onChange={e => setEntity({ ...entity, name: e.target.value })} autoFocus />
-          </Field>
+          {/* Para cardSegment el nombre se genera automáticamente */}
+          {entity.type !== 'cardSegment' && (
+            <Field label="Nombre / Etiqueta">
+              <Input value={entity.name} onChange={e => setEntity({ ...entity, name: e.target.value })} autoFocus />
+            </Field>
+          )}
 
           {entity.type === 'category' && (
             <div className="grid grid-cols-2 gap-4">
@@ -1907,24 +1910,43 @@ function EntityModal({ entity, setEntity, onSave, onCancel, saving, allEntities 
             </Field>
           )}
 
-          {entity.type === 'cardSegment' && (
-            <>
-              <Field label="Red de Tarjeta">
-                <Select value={entity.cardNetworkId || ''} onChange={e => setEntity({ ...entity, cardNetworkId: e.target.value })}>
-                  <option value="">Selección...</option>
-                  {allEntities?.cardNetworks.map((n: any) => <option key={n.id} value={n.id}>{n.name}</option>)}
-                </Select>
-              </Field>
-              <Field label="Tipo">
-                <Select value={entity.cardType || ''} onChange={e => setEntity({ ...entity, cardType: e.target.value })}>
-                  <option value="">Selección...</option>
-                  <option value="CREDIT">Crédito</option>
-                  <option value="DEBIT">Débito</option>
-                  <option value="PREPAID">Prepaga</option>
-                </Select>
-              </Field>
-            </>
-          )}
+          {entity.type === 'cardSegment' && (() => {
+            const netName = allEntities?.cardNetworks.find((n: any) => n.id === entity.cardNetworkId)?.name || ''
+            const typeLabel = entity.cardType === 'CREDIT' ? 'Crédito' : entity.cardType === 'DEBIT' ? 'Débito' : entity.cardType === 'PREPAID' ? 'Prepaga' : ''
+            const generatedName = [netName, typeLabel, entity.name].filter(Boolean).join(' ')
+            return (
+              <>
+                <Field label="Red de Tarjeta">
+                  <Select value={entity.cardNetworkId || ''} onChange={e => setEntity({ ...entity, cardNetworkId: e.target.value })}>
+                    <option value="">Selección...</option>
+                    {allEntities?.cardNetworks.map((n: any) => <option key={n.id} value={n.id}>{n.name}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Tipo">
+                  <Select value={entity.cardType || ''} onChange={e => setEntity({ ...entity, cardType: e.target.value })}>
+                    <option value="">Selección...</option>
+                    <option value="CREDIT">Crédito</option>
+                    <option value="DEBIT">Débito</option>
+                    <option value="PREPAID">Prepaga</option>
+                  </Select>
+                </Field>
+                <Field label="Nivel / Segmento">
+                  <Input
+                    value={entity.name || ''}
+                    onChange={e => setEntity({ ...entity, name: e.target.value })}
+                    placeholder="Gold, Platinum, Black, Infinite..."
+                    autoFocus
+                  />
+                </Field>
+                {generatedName && (
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-0.5">Nombre generado</p>
+                    <p className="text-sm font-bold text-indigo-700">{generatedName}</p>
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
         <div className="px-8 py-6 bg-slate-50 flex gap-3">
           <button onClick={onCancel} className="flex-1 py-3 text-xs font-bold text-slate-400 bg-white border border-slate-200 rounded-2xl">Cancelar</button>
