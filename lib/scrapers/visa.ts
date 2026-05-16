@@ -36,6 +36,23 @@ const MONTHS: Record<string, number> = {
   'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
 };
 
+function extractCardTypes(text: string): { network: string; type: 'CREDIT' | 'DEBIT' | null }[] {
+  const t = text.toUpperCase();
+  const hasCredit = /\bCR[EÉ]DITO\b/.test(t);
+  const hasDebit  = /\bD[EÉ]BITO\b/.test(t);
+  const hasPrepaid = /\bPREPAG/.test(t);
+  const hasNFC    = /\bNFC\b|SIN CONTACTO/.test(t);
+
+  // NFC implica débito
+  if (hasNFC && !hasCredit) return [{ network: 'Visa', type: 'DEBIT' }];
+  if (hasDebit && !hasCredit) return [{ network: 'Visa', type: 'DEBIT' }];
+  if (hasCredit && !hasDebit) return [{ network: 'Visa', type: 'CREDIT' }];
+  if (hasCredit && hasDebit)  return [{ network: 'Visa', type: 'CREDIT' }, { network: 'Visa', type: 'DEBIT' }];
+  if (hasPrepaid) return [{ network: 'Visa', type: 'DEBIT' }];
+  // Default: crédito
+  return [{ network: 'Visa', type: 'CREDIT' }];
+}
+
 function extractValidDays(text: string): number {
   const t = text.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (/TODOS LOS D[IÍ]AS|LUNES A DOMINGO/.test(t)) return 127;
@@ -203,7 +220,7 @@ function parseCard(card: RawCard, sourceUrl: string): ScrapedPromo[] {
     capPeriod:     cap ? 'MONTHLY' : undefined,
     minPurchase:   minPurchase ?? undefined,
     stackable:     /NO\s+(?:ES\s+)?ACUMULABLE/i.test(text) ? false : undefined,
-    cardNetworks:  [{ network: 'VISA', type: 'CREDIT' }],
+    cardNetworks:  extractCardTypes(text),
     categoria,
   };
 
