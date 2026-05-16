@@ -92,12 +92,19 @@ function CheckBox({ checked }: { checked: boolean }) {
 }
 
 // ── Calcula TODAS las opciones de tarjeta para un banco ───────────────────────
+// Redes que son marcas reales de tarjetas de crédito/débito
+const STANDARD_CARD_BRANDS = ['visa', 'mastercard', 'master', 'amex', 'american express', 'cabal', 'diners', 'maestro', 'naranja']
+function isStandardBrand(name: string) {
+  const n = name.toLowerCase()
+  return STANDARD_CARD_BRANDS.some(b => n.includes(b))
+}
+
 function computeCardOptions(bank: EntityBank, bankSegs: BankSegment[]): CardOption[] {
   const opts: CardOption[] = []
   const mySegs = bankSegs.filter(s => s.bankId === bank.id)
   const isAmEx = (name: string) => name.toLowerCase().includes('amex') || name.toLowerCase().includes('american')
 
-  for (const net of bank.cardNetworks) {
+  for (const net of bank.cardNetworks.filter(n => isStandardBrand(n.name))) {
     const amex = isAmEx(net.name)
     const creditCardSegs = bank.cardSegments.filter(s => s.cardNetworkId === net.id && s.cardType === 'CREDIT')
     const debitCardSegs  = bank.cardSegments.filter(s => s.cardNetworkId === net.id && s.cardType === 'DEBIT')
@@ -531,7 +538,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
               + Agregar Producto Financiero
             </button>
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 pt-1">Bancos y Billeteras</p>
-            {selectedBankIds.map((bankId, idx) => {
+            {selectedBankIds.map((bankId) => {
               const bank = banks.find(b => b.id === bankId)
               const cfg = getConfig(bankId)
               const isExpanded = expandedBankIds.has(bankId)
@@ -545,7 +552,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
                       <p className="font-black text-xs text-gray-900 truncate">{bank?.name}</p>
                       <p className="text-[10px] text-gray-400">{totalItems} producto{totalItems !== 1 ? 's' : ''}</p>
                     </div>
-                    <button onClick={e => { e.stopPropagation(); setDone(false); setStep(2 + idx) }}
+                    <button onClick={e => { e.stopPropagation(); setDone(false); setStep(2 + selectedBanks.findIndex(b => b.id === bankId)) }}
                       className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-400 hover:text-indigo-600 transition-colors" title="Editar">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
