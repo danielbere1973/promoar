@@ -1255,7 +1255,9 @@ export default function AdminPage() {
                   )))}
 
                   {entities && subTab === 'commerces' && (entities.commerces?.length === 0 ? <EmptyState msg="No hay comercios cargados" /> : entities.commerces.map(c => (
-                    <EntityRow key={c.id} name={c.name} img={c.logoUrl} onEdit={() => { }} onDelete={() => { }} />
+                    <EntityRow key={c.id} name={c.name} img={c.logoUrl}
+                      onEdit={() => setEditingEntity({ type: 'commerce', id: c.id, name: c.name, logoUrl: c.logoUrl })}
+                      onDelete={() => handleDeleteEntity('commerce', c.id)} />
                   )))}
                 </div>
               </div>

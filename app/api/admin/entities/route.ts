@@ -116,6 +116,18 @@ export async function POST(req: Request) {
       return NextResponse.json(network)
     }
 
+    if (type === 'commerce') {
+      const commerce = await prisma.commerce.create({
+        data: {
+          name: data.name,
+          slug: toSlug(data.name),
+          logoUrl: data.logoUrl || null,
+          active: true,
+        }
+      })
+      return NextResponse.json(commerce)
+    }
+
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
   } catch (error) {
     return NextResponse.json({ error: 'Error creating entity' }, { status: 500 })
