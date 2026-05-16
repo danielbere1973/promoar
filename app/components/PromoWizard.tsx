@@ -150,8 +150,12 @@ function reconstructConfigs(
     const bankCards = cards.filter(c => c.bankId === bankId)
     const opts = bank ? computeCardOptions(bank, allBankSegs) : []
 
-    // Cuentas
-    const accountCards = bankCards.filter(c => c.cardType === 'ACCOUNT' && !c.walletId)
+    // Cuentas — incluir las que tienen walletId (MODO) como cuentas con inModo=true
+    const pureAccounts = bankCards.filter(c => c.cardType === 'ACCOUNT' && !c.walletId)
+    const modoAccounts = bankCards.filter(c => c.cardType === 'ACCOUNT' && c.walletId === modoId)
+    // Usar cuentas puras si existen, sino usar las MODO como base
+    const accountCards = pureAccounts.length > 0 ? pureAccounts : modoAccounts
+    const hasModo = modoAccounts.length > 0
     const accounts: AccountEntry[] = accountCards.map((c, i) => ({
       localId: `restored_${i}`,
       type: (c.bankAccountType as 'CA' | 'CC') ?? 'CA',
@@ -160,7 +164,7 @@ function reconstructConfigs(
       cbu: c.cbu ?? '',
       isPayroll: c.isPayroll ?? false,
       isPensioner: c.isPensioner ?? false,
-      inModo: bankCards.some(bc => bc.cardType === 'ACCOUNT' && bc.walletId === modoId),
+      inModo: hasModo,
     }))
 
     // Tarjetas seleccionadas
@@ -176,7 +180,7 @@ function reconstructConfigs(
         const modoLinked = bankCards.some(bc =>
           bc.walletId === modoId && bc.cardNetworkId === c.cardNetworkId && bc.cardType === c.cardType
         )
-        selectedCards.push({ ...opt, inModo: modoLinked })
+        selectedCards.push({ ...opt, inModo: modoLinked, firstSix: '', lastFour: '' })
       }
     }
 

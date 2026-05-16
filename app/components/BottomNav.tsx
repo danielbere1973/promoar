@@ -47,7 +47,7 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 z-30 pb-safe lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 z-30 pb-safe">
       <div className="flex w-full justify-around items-center px-1 pt-1.5 pb-1">
         {navItems.map((item) => {
           const active = item.href ? pathname === item.href : false
