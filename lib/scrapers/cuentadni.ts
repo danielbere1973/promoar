@@ -122,6 +122,7 @@ export const CuentaDNIScraper: Scraper = {
 
         const tituloFecha   = ben.titulo_fecha ?? '';
         const validDays     = parseTituloFecha(tituloFecha);
+        console.log(`[CuentaDNI] ID ${id} titulo_fecha="${tituloFecha}" validDays=${validDays}`);
 
         const legal         = ben.legal ?? '';
         const paymentChannel = parsePaymentChannel(legal);

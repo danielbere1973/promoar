@@ -29,7 +29,11 @@ function parseMsDate(val: any): Date | null {
 
 function parseDaysFromLegal(legal: string): number {
   const t = legal.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  if (/TODOS LOS DIAS|LUNES A DOMINGO|CUALQUIER DIA/.test(t)) return 127;
+  if (/LUNES A DOMINGO/.test(t)) return 127;
+  if (/LUNES A VIERNES/.test(t)) return 0b0111110;
+  if (/LUNES A JUEVES/.test(t))  return 0b0011110;
+  if (/SABADOS Y DOMINGOS|SABADO Y DOMINGO|FIN DE SEMANA/.test(t)) return 0b1000001;
+  // "todos los dias jueves" → solo jueves; "todos los dias" sin día → 127 al final
   const MAP: Record<string, number> = {
     LUNES: 1, MARTES: 2, MIERCOLES: 3, JUEVES: 4, VIERNES: 5, SABADO: 6, DOMINGO: 0,
   };
