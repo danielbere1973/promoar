@@ -11,7 +11,7 @@ const API_URL     = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios/b
 const DETAIL_URL  = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios';
 const BANK_NAME   = 'Banco Ciudad';
 const PAGE_SIZE   = 12;
-const MAX_PAGES   = 90;
+const MAX_PAGES   = 95;
 
 // Promos que no aparecen en busqueda general (rubros especiales como "Exclusivo Buepp")
 const SPECIAL_IDS = [13934, 14443, 14412];
@@ -182,7 +182,6 @@ export const BancoCiudadScraper: Scraper = {
     });
     const allRaw: Array<RawBankPromo & { _categoria?: string }> = [];
     const rubroMap = new Map<number, string>(); // rubroId → nombre
-    let savedHeaders: Record<string, string> = {};
 
     try {
       const context = await browser.newContext({
@@ -201,7 +200,6 @@ export const BancoCiudadScraper: Scraper = {
       page.on('request', (req) => {
         if (req.url().includes('busqueda') && req.method() === 'POST') {
           capturedHeaders = req.headers();
-          savedHeaders = capturedHeaders;
           const raw = req.postData();
           if (raw) { try { capturedBody = JSON.parse(raw); } catch {} }
         }
@@ -298,6 +296,38 @@ export const BancoCiudadScraper: Scraper = {
         }
       }
 
+      // Fetch promos especiales dentro del contexto del browser (evita 403)
+      for (const id of SPECIAL_IDS) {
+        try {
+          console.log(`[BancoCiudad] Fetching promo especial ${id}...`);
+          const res = await context.request.get(`${DETAIL_URL}/${id}`, {
+            headers: { 'Accept': 'application/json' }
+          });
+          console.log(`[BancoCiudad] Promo especial ${id} status: ${res.status()}`);
+          if (!res.ok()) continue;
+          const json = await res.json();
+          const ben = json?.retorno?.beneficio;
+          const com = json?.retorno?.comercio;
+          console.log(`[BancoCiudad] Promo especial ${id}: ben=${!!ben} com=${com?.nombre}`);
+          if (!ben || !com?.nombre) continue;
+
+          const item = {
+            ...ben,
+            comercio_nombre: com.nombre,
+            comercio: { logo: com.logo ?? '' },
+            rubroId: ben.idRubro ?? ben.rubroId,
+          };
+
+          const raw = parseItem(item, rubroMap);
+          if (raw) {
+            allRaw.push({ ...raw, _validDays: parseDiasMask(ben.dias ?? '') } as any);
+            console.log(`[BancoCiudad] Promo especial ${id}: ${com.nombre} OK`);
+          }
+        } catch (e) {
+          console.error(`[BancoCiudad] Error promo especial ${id}:`, e);
+        }
+      }
+
       await context.close();
     } finally {
       await browser.close();
@@ -324,59 +354,10 @@ export const BancoCiudadScraper: Scraper = {
       if ((raw as any)._sourceText) {
         for (const p of built) p.sourceText = (raw as any)._sourceText;
       }
-      promos.push(...built);
-    }
-
-    // Fetch promos especiales que no aparecen en busqueda general
-    for (const id of SPECIAL_IDS) {
-      try {
-        console.log(`[BancoCiudad] Fetching promo especial ${id}...`);
-        const res = await fetch(`${DETAIL_URL}/${id}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Referer': BASE_URL,
-            'Origin': 'https://www.bancociudad.com.ar',
-            ...savedHeaders,
-          }
-        });
-        console.log(`[BancoCiudad] Promo especial ${id} status: ${res.status}`);
-        if (!res.ok) { console.log(`[BancoCiudad] Promo especial ${id}: HTTP ${res.status}`); continue; }
-        const json = await res.json();
-        const ben = json?.retorno?.beneficio;
-        const com = json?.retorno?.comercio;
-        console.log(`[BancoCiudad] Promo especial ${id}: ben=${!!ben} com=${com?.nombre}`);
-        if (!ben || !com?.nombre) continue;
-
-        // Armar item compatible con parseItem
-        const item = {
-          ...ben,
-          comercio_nombre: com.nombre,
-          comercio: { logo: com.logo ?? '' },
-          rubroId: ben.idRubro ?? ben.rubroId,
-        };
-
-        const raw = parseItem(item, rubroMap);
-        if (!raw) continue;
-
-        const validDays = parseDiasMask(ben.dias ?? '');
-        const built = buildPromos(raw, BANK_NAME, BASE_URL, {
-          walletNames: (raw as any).walletNames,
-          cardNetworks: (raw as any).cardNetworks,
-          paymentChannel: (raw as any).paymentChannel,
-        });
-        for (const p of built) {
-          p.validDays = validDays;
-          if ((raw as any)._categoria) p.categoria = (raw as any)._categoria;
-          if ((raw as any)._storeLogoUrl) p.storeLogoUrl = (raw as any)._storeLogoUrl;
-          if ((raw as any)._sourceUrl) p.sourceUrl = (raw as any)._sourceUrl;
-          if ((raw as any)._sourceText) p.sourceText = (raw as any)._sourceText;
-        }
-        promos.push(...built);
-        console.log(`[BancoCiudad] Promo especial ${id}: ${com.nombre} OK`);
-      } catch (e) {
-        console.error(`[BancoCiudad] Error promo especial ${id}:`, e);
+      if ((raw as any)._validDays != null) {
+        for (const p of built) p.validDays = (raw as any)._validDays;
       }
+      promos.push(...built);
     }
 
     const result = dedup(promos);
