@@ -13,7 +13,7 @@ import { DIAScraper } from './dia';
 // ─── Billeteras digitales ──────────────────────────────────────────────────────
 import { ModoScraper } from './modo';
 import { MercadoPagoScraper } from './mercadopago';
-// CuentaDNI va por ProvinciaScraper (banco + billetera en uno)
+import { CuentaDNIScraper } from './cuentadni'; // V3: cheerio + GetBeneficioData2 (sin Playwright)
 
 // ─── Tarjetas de crédito ───────────────────────────────────────────────────────
 import { VisaScraper } from './visa';
@@ -31,7 +31,7 @@ import { BancoCiudadScraper } from './bancociudad';
 import { PatagoniaScraper } from './patagonia';
 import { SupervielleScraper } from './supervielle';
 import { BNAScraper } from './bna';
-import { ProvinciaScraper } from './provincia';
+// ProvinciaScraper reemplazado por CuentaDNIScraper V3 (cheerio, sin Playwright)
 
 export const SUPERMERCADO_SCRAPERS: Scraper[] = [
   CotoScraper,
@@ -47,6 +47,7 @@ export const SUPERMERCADO_SCRAPERS: Scraper[] = [
 export const WALLET_SCRAPERS: Scraper[] = [
   ModoScraper,
   MercadoPagoScraper,
+  CuentaDNIScraper,
 ];
 
 export const TARJETA_SCRAPERS: Scraper[] = [
@@ -62,7 +63,6 @@ export const BANCO_SCRAPERS: Scraper[] = [
   SantanderScraper,
   MacroScraper,
   BNAScraper,
-  ProvinciaScraper,
   BancoCiudadScraper,
   SupervielleScraper,
   PatagoniaScraper,
@@ -80,7 +80,6 @@ export const ALL_SCRAPERS: Scraper[] = [
   SantanderScraper,
   MacroScraper,
   BNAScraper,
-  ProvinciaScraper,
   BancoCiudadScraper,
   SupervielleScraper,
   PatagoniaScraper,
