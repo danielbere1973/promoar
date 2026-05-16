@@ -1,186 +1,166 @@
-// Cuenta DNI Scraper V2
+// Cuenta DNI Scraper V3
 // Fuente: https://www.bancoprovincia.com.ar/cuentadni/contenidos/cdniBeneficios
-// Técnica: axios + cheerio (HTML plano con tarjetas por comercio)
+// Técnica: cheerio para extraer IDs → GetBeneficioData2 para datos estructurados
 // Billetera: Cuenta DNI (Banco Provincia de Buenos Aires)
 
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { Scraper, ScrapedPromo } from './types';
 
-const SOURCE_URL = 'https://www.bancoprovincia.com.ar/cuentadni/contenidos/cdniBeneficios';
+const LIST_URL   = 'https://www.bancoprovincia.com.ar/cuentadni/contenidos/cdniBeneficios';
+const DETAIL_URL = 'https://www.bancoprovincia.com.ar/cuentadni/Home/GetBeneficioData2';
+const WALLET_NAME = 'Cuenta DNI';
+const BANK_NAME   = 'Banco Provincia';
 
-function normStr(s: string): string {
-  return (s ?? '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-// Mapeo de alt de imagen → { nombre, categoría, días }
-// validDays: bitmask donde bit 0=dom, 1=lun, 2=mar, 3=mie, 4=jue, 5=vie, 6=sab
-// paymentChannel: 'QR' | 'NFC' | 'ANY'
-// Coto y Transporte: NFC (lanzamiento marzo 2026 - sin contacto con Visa débito)
-// Resto: QR (pagar con app escaneando código)
-const IMG_MAP: Record<string, { name: string; categoria: string; validDays: number; paymentChannel: string }> = {
-  'dia 200 122':              { name: 'Supermercado Día',              categoria: 'Supermercados', validDays: 0b0000010, paymentChannel: 'QR'  },
-  'logo coto':                { name: 'Coto',                         categoria: 'Supermercados', validDays: 0b0010000, paymentChannel: 'NFC' }, // NFC - Visa débito sin contacto
-  'logo changomas':           { name: 'Changomás',                    categoria: 'Supermercados', validDays: 0b0010000, paymentChannel: 'QR'  },
-  'iconoc_carrefour_front':   { name: 'Carrefour',                    categoria: 'Supermercados', validDays: 127,       paymentChannel: 'QR'  },
-  'la anonima 200 122':       { name: 'La Anónima',                   categoria: 'Supermercados', validDays: 127,       paymentChannel: 'QR'  },
-  'supermercado verde':       { name: 'Supermercados adheridos',      categoria: 'Supermercados', validDays: 127,       paymentChannel: 'QR'  },
-  'nini_200x130':             { name: 'Nini Mayorista',               categoria: 'Supermercados', validDays: 0b0000100, paymentChannel: 'QR'  },
-  'icono comercios de barrio':{ name: 'Comercios de barrio',          categoria: 'Supermercados', validDays: 0b0111110, paymentChannel: 'QR'  },
-  'gastronomia_invierno2025': { name: 'Gastronomía adherida',         categoria: 'Gastronomía',   validDays: 0b1000001, paymentChannel: 'QR'  },
-  'perfumeria_pictograma':    { name: 'Farmacias y Perfumerías',      categoria: 'Farmacias',     validDays: 0b0011000, paymentChannel: 'QR'  },
-  'librerias_pictograma':     { name: 'Librerías adheridas',          categoria: 'Supermercados', validDays: 0b0000110, paymentChannel: 'QR'  },
-  'logo_josimar_130':         { name: 'Josimar',                      categoria: 'Supermercados', validDays: 0b0001000, paymentChannel: 'QR'  },
-  'toledo_cdni':              { name: 'Toledo',                       categoria: 'Supermercados', validDays: 127,       paymentChannel: 'QR'  },
-  '3arroyosespecial':         { name: 'Comercios de Tres Arroyos',    categoria: 'Supermercados', validDays: 0b0011110, paymentChannel: 'QR'  },
-  'logo_ypf_full':            { name: 'YPF',                          categoria: 'Combustible',   validDays: 0b1000001, paymentChannel: 'QR'  }, // sab-dom
-  'marcas_destacadas':        { name: 'Marcas destacadas',            categoria: 'Supermercados', validDays: 127,       paymentChannel: 'ANY' },
-  'provincia':                { name: 'Ferias y Mercados Bonaerenses',categoria: 'Supermercados', validDays: 127,       paymentChannel: 'QR'  },
-  'icono_universidades':      { name: 'Buffet Universidades',         categoria: 'Gastronomía',   validDays: 127,       paymentChannel: 'QR'  },
-  'recarga transporte':       { name: 'Transporte público',           categoria: 'Transporte',    validDays: 127,       paymentChannel: 'NFC' }, // NFC - transporte público
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/html, */*',
+  'Referer': 'https://www.bancoprovincia.com.ar/cuentadni/',
 };
 
-function extractValidDays(text: string): number {
-  const t = normStr(text);
+// Bitmask: bit 0=dom, 1=lun, 2=mar, 3=mie, 4=jue, 5=vie, 6=sab
+function parseTituloFecha(texto: string): number {
+  const t = (texto ?? '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (/TODOS LOS DIAS|LUNES A DOMINGO/.test(t)) return 127;
   if (/LUNES A VIERNES/.test(t)) return 0b0111110;
-  if (/LUNES A JUEVES/.test(t)) return 0b0011110;
+  if (/LUNES A JUEVES/.test(t))  return 0b0011110;
   if (/SABADOS Y DOMINGOS|FIN DE SEMANA/.test(t)) return 0b1000001;
-  if (/LUNES Y MARTES/.test(t)) return 0b0000110;
+  if (/LUNES Y MARTES/.test(t))  return 0b0000110;
   if (/MIERCOLES Y JUEVES/.test(t)) return 0b0011000;
+  if (/JUEVES Y VIERNES/.test(t)) return 0b0110000;
+  if (/VIERNES Y SABADOS/.test(t)) return 0b1100000;
 
   let mask = 0;
-  if (t.includes('DOMINGO')) mask |= 1 << 0;
-  if (t.includes('LUNES'))   mask |= 1 << 1;
-  if (t.includes('MARTES'))  mask |= 1 << 2;
+  if (t.includes('DOMINGO'))   mask |= 1 << 0;
+  if (t.includes('LUNES'))     mask |= 1 << 1;
+  if (t.includes('MARTES'))    mask |= 1 << 2;
   if (t.includes('MIERCOLES')) mask |= 1 << 3;
-  if (t.includes('JUEVES'))  mask |= 1 << 4;
-  if (t.includes('VIERNES')) mask |= 1 << 5;
-  if (t.includes('SABADO'))  mask |= 1 << 6;
+  if (t.includes('JUEVES'))    mask |= 1 << 4;
+  if (t.includes('VIERNES'))   mask |= 1 << 5;
+  if (t.includes('SABADO'))    mask |= 1 << 6;
   return mask || 127;
 }
 
-function inferCategoria(storeName: string, title: string): string {
-  const t = normStr(storeName + ' ' + title);
-  if (/COTO|JUMBO|DISCO|VEA|CARREFOUR|DIARCO|CHANGOMAS|DIA\b|SUPERMERCADO/.test(t)) return 'Supermercados';
-  if (/FARMACIA|PERFUMERIA|DROGUERIA/.test(t)) return 'Farmacias';
-  if (/GASTRONOMIA|RESTAURANT|CAFE|BUFFET|COMIDA|COMER/.test(t)) return 'Gastronomía';
-  if (/LIBRERIA|LIBRO/.test(t)) return 'Varios';
-  if (/TRANSPORTE|VIAJE|COLECTIVO|SUBTE/.test(t)) return 'Transporte';
-  if (/MASCOTA|PET/.test(t)) return 'Petshops';
-  return 'Varios';
+function parsePaymentChannel(legal: string): string {
+  const l = (legal ?? '').toUpperCase();
+  if (l.includes('NFC') || l.includes('SIN CONTACTO')) return 'NFC';
+  if (l.includes('QR') || l.includes('ESCANEANDO')) return 'QR';
+  return 'ANY';
+}
+
+function inferCategoria(rubro: string, titulo: string): string {
+  const t = (rubro + ' ' + titulo).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/SUPERMERCADO|COTO|JUMBO|DISCO|VEA|CARREFOUR|DIARCO|CHANGOMAS|\bDIA\b|ALMACEN|MAYORISTA/.test(t)) return 'Supermercados';
+  if (/FARMACIA|PERFUMERIA|DROGUERIA|OPTICA|SALUD/.test(t)) return 'Farmacias';
+  if (/GASTRONOM|RESTAURAN|CAFE|BUFFET|COMIDA|HELADERIA|PANADERIA|DESAYUNO/.test(t)) return 'Gastronomía';
+  if (/LIBRERIA|LIBRO/.test(t)) return 'Librerías';
+  if (/TRANSPORTE|COLECTIVO|SUBTE|SUBE/.test(t)) return 'Transporte';
+  if (/MASCOTA|PET|VETERINARIA/.test(t)) return 'Petshops';
+  if (/COMBUSTIBLE|YPF|SHELL|AXION|NAFTA/.test(t)) return 'Combustible';
+  if (/INDUMENTARIA|ROPA|MODA|CALZADO/.test(t)) return 'Indumentaria';
+  if (/TECNOLOGIA|ELECTRONICA|COMPUTACION|CELULAR/.test(t)) return 'Tecnología';
+  return 'Otros';
+}
+
+function msToDate(ms: number): string {
+  const d = new Date(ms);
+  return d.toISOString().split('T')[0];
 }
 
 export const CuentaDNIScraper: Scraper = {
   name: 'cuenta dni',
 
   async run(): Promise<ScrapedPromo[]> {
-    console.log('[CuentaDNI] Iniciando scraper V2...');
+    console.log('[CuentaDNI] Iniciando scraper V3...');
 
-    const { data: html } = await axios.get(SOURCE_URL, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PromoAR/1.0)' },
-      timeout: 15000,
-    });
-
+    // Paso 1: obtener IDs desde el HTML
+    const { data: html } = await axios.get(LIST_URL, { headers: HEADERS, timeout: 15000 });
     const $ = cheerio.load(html);
-    const promos: ScrapedPromo[] = [];
-    const currentYear = new Date().getFullYear();
 
-    // Cada bloque de promo tiene esta estructura:
-    // <p> título descriptivo </p>
-    // <p> Día(s) de la semana </p>
-    // <table> | imagen | | % | "de ahorro" | | "Con la aplicación Cuenta DNI" | </table>
-    // <button> Conocé más </button>
-
-    // Buscar todas las tablas con el patrón de % de ahorro
-    $('table').each((_, table) => {
-      const tableText = $(table).text().trim();
-      if (!tableText.includes('de ahorro') && !tableText.includes('%')) return;
-
-      // Extraer el porcentaje
-      const pctMatch = tableText.match(/(\d+)\s*%?\s*de ahorro/i);
-      if (!pctMatch) return;
-      const discountValue = parseInt(pctMatch[1]);
-      if (!discountValue || discountValue <= 0) return;
-
-      // Buscar el contexto antes de la tabla (título y día)
-      const parent = $(table).parent();
-      const prevText = parent.text();
-
-      // Día de la semana — está justo antes de la tabla
-      let dayText = '';
-      const prevEls = $(table).prevAll();
-      prevEls.each((_, el) => {
-        const t = $(el).text().trim();
-        if (/lunes|martes|miércoles|jueves|viernes|sábado|domingo|todos/i.test(t) && t.length < 80) {
-          dayText = t;
-          return false; // break
-        }
-      });
-
-      // Título descriptivo — el párrafo antes del día
-      let titleText = '';
-      let foundDay = false;
-      prevEls.each((_, el) => {
-        const t = $(el).text().trim();
-        if (/lunes|martes|miércoles|jueves|viernes|sábado|domingo|todos/i.test(t) && t.length < 80) {
-          foundDay = true;
-          return;
-        }
-        if (foundDay && t.length > 5 && t.length < 100) {
-          titleText = t;
-          return false;
-        }
-      });
-
-      // Nombre del comercio — usar mapa de alt de imagen
-      const imgAlt = ($(table).find('img').first().attr('alt') || '').trim();
-      const imgKey = imgAlt.toLowerCase();
-      const mapped = IMG_MAP[imgKey];
-      const storeName = mapped?.name || imgAlt || titleText || 'Comercios adheridos';
-      const categoria = mapped?.categoria || inferCategoria(storeName, titleText);
-      const validDays = mapped?.validDays ?? extractValidDays(dayText || prevText);
-
-      // Vigencia — mes actual hasta fin de mes
-      const now = new Date();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const validFrom = `${currentYear}-${mm}-01`;
-      const validUntil = `${currentYear}-${mm}-${lastDay}`;
-
-      const title = `Cuenta DNI — ${discountValue}% en ${storeName}`;
-
-      promos.push({
-        title,
-        description: titleText || `${discountValue}% de ahorro pagando con Cuenta DNI`,
-        sourceText: tableText.slice(0, 2000),
-        sourceUrl: SOURCE_URL,
-        discount: String(discountValue),
-        discountType: 'PERCENTAGE_DESCUENTO' as any,
-        cap: discountValue === 20 ? 5000 : undefined, // tope conocido de la promo principal
-        capPeriod: 'WEEKLY' as any,
-        capTarget: 'USER',
-        minPurchase: undefined,
-        stackable: false,
-        singleUse: undefined,
-        validFrom,
-        validUntil,
-        specificDates: undefined,
-        validDays,
-        bankNames: ['Banco Provincia'],
-        walletNames: ['Cuenta DNI'],
-        cardNetworks: undefined,
-        cardType: null,
-        paymentChannel: (mapped?.paymentChannel ?? 'QR') as any,
-        accountType: 'ANY' as any,
-        storeName,
-        categoria,
-      });
-
-      console.log(`[CuentaDNI] ✅ "${title}" → ${discountValue}% | días: ${validDays}`);
+    const ids: number[] = [];
+    $('.callModalCDNI').each((_, el) => {
+      const rawId = $(el).attr('id') ?? '';
+      // formato: "supermercadocoto-307"
+      const match = rawId.match(/-(\d+)$/);
+      if (match) ids.push(Number(match[1]));
     });
 
-    console.log(`[CuentaDNI Scraper V2] ${promos.length} promos encontradas`);
+    console.log(`[CuentaDNI] IDs encontrados: ${ids.length} → ${ids.join(', ')}`);
+
+    if (ids.length === 0) {
+      console.log('[CuentaDNI] No se encontraron IDs en el HTML');
+      return [];
+    }
+
+    // Paso 2: obtener detalle de cada beneficio
+    const promos: ScrapedPromo[] = [];
+
+    for (const id of ids) {
+      try {
+        const { data } = await axios.get(DETAIL_URL, {
+          params: { idBeneficio: id },
+          headers: HEADERS,
+          timeout: 10000,
+        });
+
+        const ben = data?.Entity?.Beneficio;
+        if (!ben) continue;
+
+        const storeName = ben.titulo ?? '';
+        if (!storeName) continue;
+
+        const discount    = Number(ben.porcentaje ?? 0);
+        const cuotas      = Number(ben.cuotas ?? 0);
+        if (discount <= 0 && cuotas <= 0) continue;
+
+        const rubros: any[] = data?.Entity?.Rubros ?? [];
+        const rubroNombre   = rubros[0]?.nombre ?? '';
+        const categoria     = inferCategoria(rubroNombre, storeName);
+
+        const tituloFecha   = ben.titulo_fecha ?? '';
+        const validDays     = parseTituloFecha(tituloFecha);
+
+        const legal         = ben.legal ?? '';
+        const paymentChannel = parsePaymentChannel(legal);
+
+        // Fechas en ms (formato /Date(ms)/)
+        const fechaDesde = ben.fecha_desde?.match(/\d+/)?.[0];
+        const fechaHasta = ben.fecha_hasta?.match(/\d+/)?.[0];
+        const validFrom  = fechaDesde ? msToDate(Number(fechaDesde)) : undefined;
+        const validUntil = fechaHasta ? msToDate(Number(fechaHasta)) : undefined;
+
+        const title = `Cuenta DNI — ${discount > 0 ? `${discount}%` : `${cuotas} CSI`} en ${storeName}`;
+        const sourceUrl = `https://www.bancoprovincia.com.ar/cuentadni/beneficios/${ben.url ?? id}`;
+
+        promos.push({
+          title,
+          description: ben.bajada ?? title,
+          sourceText: legal.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000),
+          sourceUrl,
+          discount:     discount > 0 ? String(discount) : undefined,
+          discountType: discount > 0 ? 'PERCENTAGE_REINTEGRO' as any : 'CUOTAS_SIN_INTERES' as any,
+          installments: cuotas > 0 ? String(cuotas) : undefined,
+          storeName,
+          categoria,
+          validDays,
+          validFrom,
+          validUntil,
+          bankNames: [BANK_NAME],
+          walletNames: [WALLET_NAME],
+          paymentChannel: paymentChannel as any,
+        });
+
+        console.log(`[CuentaDNI] ID ${id}: ${storeName} — ${discount}% — ${tituloFecha} (mask:${validDays})`);
+
+        // Pequeña pausa para no saturar
+        await new Promise(r => setTimeout(r, 300));
+
+      } catch (err) {
+        console.error(`[CuentaDNI] Error en ID ${id}:`, err);
+      }
+    }
+
+    console.log(`[CuentaDNI] Total: ${promos.length} promos`);
     return promos;
   },
 };

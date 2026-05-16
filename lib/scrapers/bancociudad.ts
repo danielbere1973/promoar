@@ -91,7 +91,7 @@ function parseDias(item: any): string {
 }
 
 function parseItem(item: any, rubroMap: Map<number, string>): RawBankPromo | null {
-  const storeName = item.comercio_nombre ?? item.nombreComercio ?? item.name ?? '';
+  const storeName = item.comercio_nombre ?? item.nombreComercio ?? item.comercio?.nombre ?? item.name ?? '';
   if (!storeName) return null;
 
   const descuento = Number(item.descuento ?? 0);
