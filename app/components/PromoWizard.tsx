@@ -464,11 +464,14 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
     else buildAndComplete()
   }
 
-  function buildAndComplete() {
+  function buildAndComplete(overrideBankIds?: string[], overrideConfigs?: Record<string, BankConfig>, overrideWalletIds?: string[]) {
     const cards: GuestCard[] = []
+    const bankIds = overrideBankIds ?? selectedBankIds
+    const configs = overrideConfigs ?? bankConfigs
+    const walletIds = overrideWalletIds ?? selectedWalletIds
 
-    for (const bankId of selectedBankIds) {
-      const cfg = getConfig(bankId)
+    for (const bankId of bankIds) {
+      const cfg = configs[bankId] ?? getConfig(bankId)
 
       // Cuentas
       for (const acc of cfg.accounts) {
@@ -504,7 +507,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
     }
 
     // Billeteras independientes
-    for (const walletId of selectedWalletIds) {
+    for (const walletId of walletIds) {
       cards.push({ walletId, cardType: 'CREDIT' })
     }
 
@@ -563,8 +566,14 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
                       className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-400 hover:text-indigo-600 transition-colors" title="Editar">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button onClick={e => { e.stopPropagation(); setSelectedBankIds(prev => prev.filter(id => id !== bankId)); setBankConfigs(prev => { const n = { ...prev }; delete n[bankId]; return n }) }}
-                      className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors" title="Eliminar">
+                    <button onClick={e => {
+                      e.stopPropagation()
+                      const newIds = selectedBankIds.filter(id => id !== bankId)
+                      const newCfgs = { ...bankConfigs }; delete newCfgs[bankId]
+                      setSelectedBankIds(newIds)
+                      setBankConfigs(newCfgs)
+                      if (inline) buildAndComplete(newIds, newCfgs, selectedWalletIds)
+                    }} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors" title="Eliminar">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     </button>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`text-gray-300 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
@@ -608,8 +617,11 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
                 <div key={wid} className="flex items-center gap-2.5 bg-white border border-gray-100 rounded-xl px-3 py-2">
                   <EntityLogo logoUrl={w.logoUrl} name={w.name} sm />
                   <span className="text-xs font-bold text-gray-700 flex-1">{w.name}</span>
-                  <button onClick={() => setSelectedWalletIds(prev => prev.filter(id => id !== wid))}
-                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors">
+                  <button onClick={() => {
+                    const newWids = selectedWalletIds.filter(id => id !== wid)
+                    setSelectedWalletIds(newWids)
+                    if (inline) buildAndComplete(selectedBankIds, bankConfigs, newWids)
+                  }} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>
                 </div>
