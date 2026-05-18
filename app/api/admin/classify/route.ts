@@ -62,7 +62,11 @@ ${lista}`;
     })
   });
 
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '')
+    console.error(`[Gemini] HTTP ${res.status}:`, errBody.slice(0, 300))
+    throw new Error(`Gemini HTTP ${res.status}: ${errBody.slice(0, 200)}`)
+  }
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   const match = text.match(/\[[\s\S]*\]/);
