@@ -106,8 +106,13 @@ export async function GET(req: NextRequest) {
     }
 
     if (commerceIds?.length) {
+      const searchMode = searchParams.get('searchMode') || 'startsWith' // startsWith | contains | exact
       where.commerce = {
-        OR: commerceIds.map(name => ({ name: { contains: name, mode: 'insensitive' } }))
+        OR: commerceIds.map(name => {
+          if (searchMode === 'exact')      return { name: { equals: name, mode: 'insensitive' as const } }
+          if (searchMode === 'contains')   return { name: { contains: name, mode: 'insensitive' as const } }
+          return { name: { startsWith: name, mode: 'insensitive' as const } }
+        })
       }
     }
 

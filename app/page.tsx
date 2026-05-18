@@ -342,6 +342,7 @@ function HomeContent() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const mobileSearchRef = useRef<HTMLInputElement>(null)
   const [searchText, setSearchText] = useState('')
+  const [searchMode, setSearchMode] = useState<'startsWith' | 'contains' | 'exact'>('startsWith')
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [province, setProvince] = useState<string | null>(null)
   const [showProvinceSelector, setShowProvinceSelector] = useState(false)
@@ -482,7 +483,10 @@ function HomeContent() {
         if (activeFilters.hasCap !== null) qParams.set('hasCap', String(activeFilters.hasCap))
         if (activeFilters.capMin !== null) qParams.set('capMin', String(activeFilters.capMin))
         if (activeFilters.capMax !== null) qParams.set('capMax', String(activeFilters.capMax))
-        if (activeFilters.commerces.length) qParams.set('commerces', activeFilters.commerces.join(','))
+        if (activeFilters.commerces.length) {
+          qParams.set('commerces', activeFilters.commerces.join(','))
+          qParams.set('searchMode', searchMode)
+        }
         if (activeFilters.discountRanges.length) qParams.set('discountRanges', activeFilters.discountRanges.join(','))
         if (activeFilters.hasInstallments !== null) qParams.set('hasInstallments', String(activeFilters.hasInstallments))
         // Guest profile
@@ -510,7 +514,7 @@ function HomeContent() {
     }
     load()
     return () => controller.abort()
-  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province])
+  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode])
 
   // Helper para mostrar los chips de "camino de migas"
   const getFilterChips = () => {
@@ -820,6 +824,16 @@ function HomeContent() {
                     }}
                     className="w-full pl-11 pr-4 py-3 bg-gray-100 border-none rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   />
+                  {searchText && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5">
+                      {(['startsWith', 'contains', 'exact'] as const).map(mode => (
+                        <button key={mode} onClick={() => setSearchMode(mode)}
+                          className={`px-2 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}>
+                          {mode === 'startsWith' ? 'Empieza' : mode === 'contains' ? 'Contiene' : 'Exacto'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -916,8 +930,16 @@ function HomeContent() {
                           setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
                         }, 400)
                       }}
-                      className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="w-full pl-9 pr-28 py-2 bg-gray-100 rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
                     />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5">
+                      {(['startsWith', 'contains', 'exact'] as const).map(mode => (
+                        <button key={mode} onClick={() => setSearchMode(mode)}
+                          className={`px-1.5 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                          {mode === 'startsWith' ? 'Empieza' : mode === 'contains' ? 'Contiene' : 'Exacto'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <button onClick={() => { setMobileSearchOpen(false); setActiveFilters(prev => ({ ...prev, commerces: [] })) }}
                     className="p-2 text-gray-400 hover:text-gray-600">
