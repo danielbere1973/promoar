@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
 import { prisma } from '@/lib/prisma';
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
@@ -74,12 +73,6 @@ ${lista}`;
 
 export async function POST(_req: NextRequest) {
   try {
-    const session = await getServerSession();
-    const role = (session?.user as any)?.role;
-    if (role !== 'ADMIN' && role !== 'MODERATOR') {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-    }
-
     const allCategories = await prisma.category.findMany();
     const sinCat = allCategories.find(c => c.slug === 'sin-categoria');
     if (!sinCat) return NextResponse.json({ error: 'sin-categoria no encontrada' }, { status: 400 });
