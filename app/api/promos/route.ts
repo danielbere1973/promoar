@@ -483,10 +483,11 @@ export async function GET(req: NextRequest) {
     })
 
     // 2. Separar Top 10 y Resto
-    // El "Top 10" se basa en el orden global inicial: Max % -> Popularidad -> Alfa
+    // Score combinado: descuento% + popularidad×2 (evita que promos locales de alto % dominen)
     const globalSorted = [...promoData].sort((a, b) => {
-      if (b.maxPct !== a.maxPct) return b.maxPct - a.maxPct
-      if (b.popularity !== a.popularity) return b.popularity - a.popularity
+      const scoreA = a.maxPct + (a.popularity * 2)
+      const scoreB = b.maxPct + (b.popularity * 2)
+      if (scoreB !== scoreA) return scoreB - scoreA
       return a.name.localeCompare(b.name, 'es')
     })
 
