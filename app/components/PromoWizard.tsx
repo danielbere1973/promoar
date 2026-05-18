@@ -92,50 +92,81 @@ function CheckBox({ checked }: { checked: boolean }) {
   )
 }
 
-// ── Calcula TODAS las opciones de tarjeta para un banco ───────────────────────
-// Redes que son marcas reales de tarjetas de crédito/débito
-const STANDARD_CARD_BRANDS = ['visa', 'mastercard', 'master', 'amex', 'american express', 'cabal', 'diners', 'maestro', 'naranja']
-function isStandardBrand(name: string) {
-  const n = name.toLowerCase()
-  return STANDARD_CARD_BRANDS.some(b => n.includes(b))
+// ── Mapa estático de opciones por red ────────────────────────────────────────
+// Independiente de lo que tenga el banco en la DB
+type NetOption = { cardType: 'CREDIT' | 'DEBIT' | 'PREPAID'; label: string }
+const NETWORK_CARD_OPTIONS: Record<string, NetOption[]> = {
+  'visa': [
+    { cardType: 'CREDIT',  label: 'Visa Crédito Clásica' },
+    { cardType: 'CREDIT',  label: 'Visa Crédito Gold' },
+    { cardType: 'CREDIT',  label: 'Visa Crédito Platinum' },
+    { cardType: 'CREDIT',  label: 'Visa Crédito Signature' },
+    { cardType: 'DEBIT',   label: 'Visa Débito Clásica' },
+    { cardType: 'PREPAID', label: 'Visa Prepaga Recargable' },
+    { cardType: 'PREPAID', label: 'Visa Prepaga Regalo' },
+  ],
+  'mastercard': [
+    { cardType: 'CREDIT',  label: 'Mastercard Crédito Estándar' },
+    { cardType: 'CREDIT',  label: 'Mastercard Crédito Gold' },
+    { cardType: 'CREDIT',  label: 'Mastercard Crédito Platinum' },
+    { cardType: 'CREDIT',  label: 'Mastercard Crédito Black' },
+    { cardType: 'DEBIT',   label: 'Mastercard Débito Estándar' },
+    { cardType: 'DEBIT',   label: 'Mastercard Débito Platinum' },
+    { cardType: 'DEBIT',   label: 'Mastercard Débito Black' },
+  ],
+  'american express banco': [
+    { cardType: 'CREDIT',  label: 'American Express Internacional' },
+    { cardType: 'CREDIT',  label: 'American Express Platinum' },
+    { cardType: 'CREDIT',  label: 'American Express Gold' },
+    { cardType: 'CREDIT',  label: 'American Express Icon' },
+  ],
+  'american express': [
+    { cardType: 'CREDIT',  label: 'The Platinum Card' },
+    { cardType: 'CREDIT',  label: 'The Platinum Credit Card Aerolíneas' },
+    { cardType: 'CREDIT',  label: 'The Gold Card' },
+    { cardType: 'CREDIT',  label: 'The Green Card' },
+  ],
+  'cabal': [
+    { cardType: 'CREDIT',  label: 'Cabal Crédito Internacional' },
+    { cardType: 'DEBIT',   label: 'Cabal Débito' },
+    { cardType: 'DEBIT',   label: 'Cabal Débito Internacional' },
+  ],
+  'naranja x': [
+    { cardType: 'CREDIT',  label: 'Naranja X Crédito' },
+  ],
+  'maestro': [
+    { cardType: 'DEBIT',   label: 'Maestro Débito' },
+  ],
+  'diners': [
+    { cardType: 'CREDIT',  label: 'Diners Club Crédito' },
+  ],
 }
 
-// Segmentos estándar que se muestran al usuario (los que aparecen en promos reales)
+// Segmentos estándar (para el banco package selector)
 const STANDARD_SEGMENT_NAMES = ['clasic', 'internacion', 'gold', 'oro', 'platinum', 'black', 'premium', 'signature', 'infinite', 'icon', 'macro', 'regional', 'nacional', 'selecta', 'eminent', 'the gold', 'the platinum', 'the green']
 function isStandardSegment(name: string) {
   const n = name.toLowerCase()
   return STANDARD_SEGMENT_NAMES.some(s => n.includes(s))
 }
 
-function computeCardOptions(bank: EntityBank): CardOption[] {
+// Usa el mapa estático — no depende de bank.cardNetworks para determinar opciones
+function computeCardOptions(_bank: EntityBank, allNetworks: { id: string; name: string }[]): CardOption[] {
   const opts: CardOption[] = []
-  const isAmEx = (name: string) => name.toLowerCase().includes('amex') || name.toLowerCase().includes('american')
 
-  for (const net of bank.cardNetworks.filter(n => isStandardBrand(n.name))) {
-    const amex = isAmEx(net.name)
-    const creditCardSegs = bank.cardSegments.filter(s => s.cardNetworkId === net.id && s.cardType === 'CREDIT' && isStandardSegment(s.name))
-    const debitCardSegs  = bank.cardSegments.filter(s => s.cardNetworkId === net.id && s.cardType === 'DEBIT' && isStandardSegment(s.name))
+  for (const net of allNetworks) {
+    const key = net.name.toLowerCase()
+    const staticOpts = Object.entries(NETWORK_CARD_OPTIONS).find(([k]) => key.includes(k))?.[1]
+    if (!staticOpts) continue
 
-    // CRÉDITO: Clásica + cardSegments del banco + bankSegments (paquetes)
-    const creditBase: CardOption = { key: `${net.id}_CREDIT`, networkId: net.id, networkName: net.name, cardType: 'CREDIT', label: `${net.name} Crédito Clásica` }
-    opts.push(creditBase)
-    for (const cs of creditCardSegs) {
-      opts.push({ key: `${net.id}_CREDIT_cs${cs.id}`, networkId: net.id, networkName: net.name, cardType: 'CREDIT', cardSegmentId: cs.id, label: `${net.name} ${cs.name}` })
-    }
-    // Bank segments (Eminent, Selecta) se muestran en el selector de paquete, NO como opciones de tarjeta
-
-    // DÉBITO (sin AmEx)
-    if (!amex) {
-      opts.push({ key: `${net.id}_DEBIT`, networkId: net.id, networkName: net.name, cardType: 'DEBIT', label: `${net.name} Débito` })
-      for (const cs of debitCardSegs) {
-        opts.push({ key: `${net.id}_DEBIT_cs${cs.id}`, networkId: net.id, networkName: net.name, cardType: 'DEBIT', cardSegmentId: cs.id, label: `${net.name} Débito ${cs.name}` })
-      }
-    }
-
-    // PREPAGA (solo Visa/Mastercard/Cabal, no AmEx)
-    if (!amex) {
-      opts.push({ key: `${net.id}_PREPAID`, networkId: net.id, networkName: net.name, cardType: 'PREPAID', label: `${net.name} Prepaga` })
-    }
+    staticOpts.forEach((o, i) => {
+      opts.push({
+        key:         `${net.id}_${o.cardType}_${i}`,
+        networkId:   net.id,
+        networkName: net.name,
+        cardType:    o.cardType,
+        label:       o.label,
+      })
+    })
   }
   return opts
 }
@@ -144,7 +175,8 @@ function computeCardOptions(bank: EntityBank): CardOption[] {
 function reconstructConfigs(
   cards: GuestCard[],
   banks: EntityBank[],
-  wallets: EntityWallet[]
+  wallets: EntityWallet[],
+  allNets: { id: string; name: string }[]
 ): { bankIds: string[]; walletIds: string[]; configs: Record<string, BankConfig> } {
   const modoId = wallets.find(w => w.name.toLowerCase().includes('modo'))?.id
   const bankIdSet = new Set<string>()
@@ -159,7 +191,7 @@ function reconstructConfigs(
   for (const bankId of bankIdSet) {
     const bank = banks.find(b => b.id === bankId)
     const bankCards = cards.filter(c => c.bankId === bankId)
-    const opts = bank ? computeCardOptions(bank) : []
+    const opts = bank ? computeCardOptions(bank, allNets) : []
 
     // Cuentas — incluir las que tienen walletId (MODO) como cuentas con inModo=true
     const pureAccounts = bankCards.filter(c => c.cardType === 'ACCOUNT' && !c.walletId)
@@ -210,15 +242,16 @@ function reconstructConfigs(
 
 // ── Paso: configuración de un banco ──────────────────────────────────────────
 function BankProductStep({
-  bank, config, modoWalletId, allBankSegs, onUpdate,
+  bank, config, modoWalletId, allBankSegs, allNets, onUpdate,
 }: {
   bank: EntityBank
   config: BankConfig
   modoWalletId: string | undefined
   allBankSegs: BankSegment[]
+  allNets: { id: string; name: string }[]
   onUpdate: (u: Partial<BankConfig>) => void
 }) {
-  const cardOptions = computeCardOptions(bank)
+  const cardOptions = computeCardOptions(bank, allNets)
 
   function addAccount() {
     const newAcc: AccountEntry = {
@@ -420,6 +453,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
   const [banks, setBanks] = useState<EntityBank[]>([])
   const [wallets, setWallets] = useState<EntityWallet[]>([])
   const [allBankSegs, setAllBankSegs] = useState<BankSegment[]>([])
+  const [allNetworks, setAllNetworks] = useState<{ id: string; name: string }[]>([])
   const [selectedBankIds, setSelectedBankIds] = useState<string[]>([])
   const [bankConfigs, setBankConfigs] = useState<Record<string, BankConfig>>({})
   const [selectedWalletIds, setSelectedWalletIds] = useState<string[]>([])
@@ -447,10 +481,11 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
         setBanks(fetchedBanks)
         setWallets(fetchedWallets)
         setAllBankSegs(data.segments || [])
+        setAllNetworks(data.cardNetworks || [])
 
         if (initialProfile?.cards?.length) {
           const { bankIds, walletIds, configs } = reconstructConfigs(
-            initialProfile.cards, fetchedBanks, fetchedWallets
+            initialProfile.cards, fetchedBanks, fetchedWallets, data.cardNetworks || []
           )
           setSelectedBankIds(bankIds)
           setBankConfigs(configs)
@@ -756,6 +791,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
             config={getConfig(currentBank.id)}
             modoWalletId={modoWalletId}
             allBankSegs={allBankSegs}
+            allNets={allNetworks}
             onUpdate={u => updateConfig(currentBank.id, u)}
           />
         )}

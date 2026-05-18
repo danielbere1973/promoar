@@ -952,8 +952,8 @@ function HomeContent() {
               <div className="mt-1 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
                 {categorias.sort((a,b) => (b.promoCount ?? 0) - (a.promoCount ?? 0)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
-                  const count = forMe ? (promos.filter(p => p.category.name === cat.name).length) : (cat.promoCount ?? 0)
-                  if (count === 0) return null
+                  const count = cat.promoCount ?? 0  // usar siempre el total DB, no el filtrado
+                  if (count === 0 && !isActive) return null
                   return (
                     <button
                       key={cat.slug}

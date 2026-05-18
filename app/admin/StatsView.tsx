@@ -46,6 +46,7 @@ export default function StatsView() {
   const [allScrapers, setAllScrapers] = useState<string[]>([])
 
   const [banks, setBanks] = useState<any[]>([])
+  const [wallets, setWallets] = useState<any[]>([])
   const [categories, setCategories] = useState<{id: string, name: string}[]>([])
   const [bankSegments, setBankSegments] = useState<any[]>([])
   const [cardNetworks, setCardNetworks] = useState<any[]>([])
@@ -58,6 +59,7 @@ export default function StatsView() {
         if (res.ok) {
           const json = await res.json()
           setBanks(json.banks || [])
+          setWallets(json.wallets || [])
           setCategories(json.categories || [])
           setBankSegments(json.segments || [])
           setCardNetworks(json.cardNetworks || [])
@@ -132,17 +134,19 @@ export default function StatsView() {
           Filtros de Analisis (Multiseleccion)
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <MultiSelect 
-            label="Bancos" 
-            selected={selectedBanks} 
+          <MultiSelect
+            label="Bancos y Billeteras"
+            selected={selectedBanks}
             onChange={(ids: string[]) => {
               setSelectedBanks(ids)
-              // Reset dependent filters if they are no longer valid
               setSelectedBankSegments([])
               setSelectedCardSegments([])
             }}
-            options={banks.map(b => ({ id: b.id, name: b.name }))}
-            placeholder="Todos los bancos"
+            options={[
+              ...banks.map(b => ({ id: b.id, name: b.name })),
+              ...wallets.map(w => ({ id: w.id, name: `💳 ${w.name}` }))
+            ].sort((a, b) => a.name.localeCompare(b.name, 'es'))}
+            placeholder="Todos los bancos y billeteras"
           />
           <MultiSelect 
             label="Segmentos Banco" 
