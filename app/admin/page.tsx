@@ -299,7 +299,7 @@ function PinGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -775,6 +775,9 @@ export default function AdminPage() {
         <TabButton active={tab === 'cleanup'} icon={Trash2} onClick={() => setTab('cleanup')}>
           Limpieza
         </TabButton>
+        <TabButton active={tab === 'reports'} icon={Tag} onClick={() => setTab('reports')}>
+          Reportes
+        </TabButton>
         {tab === 'form' && (
           <TabButton active={true} icon={Pencil} onClick={() => { }}>
             {editingId ? 'Editando Promo' : 'Nueva Promo'}
@@ -1006,6 +1009,34 @@ export default function AdminPage() {
 
         {tab === 'cleanup' && (
           <CleanupTab commerces={entities?.commerces ?? []} />
+        )}
+
+        {tab === 'reports' && (
+          <div className="max-w-2xl mx-auto py-10 px-4 space-y-4">
+            <h2 className="text-xl font-black text-slate-900 mb-6">Reportes CSV</h2>
+            {[
+              { type: 'sin-categoria', label: 'Promos sin categoría', desc: 'Todas las promos activas sin categoría asignada' },
+              { type: 'por-scraper',   label: 'Promos por scraper',   desc: 'Total de promos y comercios por banco/billetera' },
+              { type: 'sin-logo',      label: 'Comercios sin logo',   desc: 'Comercios activos sin imagen cargada' },
+              { type: 'vencidas',      label: 'Promos vencidas',      desc: 'Últimas 500 promos expiradas' },
+              { type: 'por-categoria', label: 'Promos por categoría', desc: 'Distribución de promos activas por categoría' },
+              { type: 'duplicadas',    label: 'Posibles duplicados',  desc: 'Promos con mismo título en el mismo comercio' },
+            ].map(r => (
+              <div key={r.type} className="bg-white border border-slate-100 rounded-2xl px-5 py-4 flex items-center justify-between shadow-sm">
+                <div>
+                  <p className="font-bold text-slate-900 text-sm">{r.label}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{r.desc}</p>
+                </div>
+                <a
+                  href={`/api/admin/reports?type=${r.type}`}
+                  download
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black hover:bg-indigo-700 transition-colors shrink-0 ml-4"
+                >
+                  ↓ CSV
+                </a>
+              </div>
+            ))}
+          </div>
         )}
 
 
