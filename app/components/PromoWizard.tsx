@@ -149,11 +149,14 @@ function isStandardSegment(name: string) {
   return STANDARD_SEGMENT_NAMES.some(s => n.includes(s))
 }
 
-// Usa el mapa estático — no depende de bank.cardNetworks para determinar opciones
-function computeCardOptions(_bank: EntityBank, allNetworks: { id: string; name: string }[]): CardOption[] {
+// Usa las redes del banco + mapa estático para las opciones por red
+function computeCardOptions(bank: EntityBank, allNetworks: { id: string; name: string }[]): CardOption[] {
   const opts: CardOption[] = []
 
-  for (const net of allNetworks) {
+  // Usar las redes del banco si tiene, si no usar todas las estándar como fallback
+  const nets = bank.cardNetworks.length > 0 ? bank.cardNetworks : allNetworks
+
+  for (const net of nets) {
     const key = net.name.toLowerCase()
     const staticOpts = Object.entries(NETWORK_CARD_OPTIONS).find(([k]) => key.includes(k))?.[1]
     if (!staticOpts) continue
