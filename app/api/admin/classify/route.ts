@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { detectCategoria } from '@/lib/scrapers/bank-helpers';
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 const BATCH_SIZE = 30;
@@ -32,11 +33,15 @@ function normStr(s: string): string {
 
 function classifyLocal(comercio: string, titulo: string, catMap: Record<string, string>): string | null {
   const text = normStr(`${comercio} ${titulo}`);
+  // 1. Keywords simples
   for (const rule of CATEGORY_RULES) {
     if (rule.kw.some(kw => text.includes(normStr(kw)))) {
       return catMap[rule.cat] ?? null;
     }
   }
+  // 2. detectCategoria (más completo)
+  const detected = detectCategoria(`${comercio} ${titulo}`);
+  if (detected && catMap[detected]) return catMap[detected];
   return null;
 }
 
