@@ -62,6 +62,7 @@ const SUPERMARKET_COLORS: Record<string, string> = {
   'Changomas': 'bg-orange-500 text-white',
   'Farmacity': 'bg-green-500 text-white',
   'Farmaplus': 'bg-teal-600 text-white',
+  'OpenFarma': 'bg-purple-600 text-white',
   'default': 'bg-gray-800 text-white'
 }
 
@@ -76,6 +77,7 @@ const SUPERMARKET_DOT: Record<string, string> = {
   'Changomas': 'bg-orange-500',
   'Farmacity': 'bg-green-500',
   'Farmaplus': 'bg-teal-600',
+  'OpenFarma': 'bg-purple-600',
   'default': 'bg-gray-500'
 }
 

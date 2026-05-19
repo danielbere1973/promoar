@@ -401,6 +401,81 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
   }
 }
 
+// ---------------------------------------------------------
+// OPENFARMA (Spree Commerce v1)
+// Taxones principales: 4098=Medicamentos, 1569=Dermocosmetica, 1740=Suplementos,
+//   1713=Cuidado Personal, 1604=Maquillaje, 1639=Bebes, 4073=Diabetes
+// ---------------------------------------------------------
+const OPENFARMA_TAXON_MAP: Record<string, string> = {
+  'analgesicos':           '4099',
+  'analgésicos':           '4099',
+  'digestivos':            '4101',
+  'antimicoticos':         '4162',
+  'antimicóticos':         '4162',
+  'medicamentos':          '4098',
+  'vitaminas-y-suplementos': '1740',
+  'suplementos':           '1740',
+  'dermocosmetica':        '1569',
+  'dermocosmética':        '1569',
+  'higiene-personal':      '1713',
+  'cuidado-personal':      '1713',
+  'bebe-y-embarazo':       '1639',
+  'bebes-y-maternidad':    '1639',
+  'maquillaje':            '1604',
+  'diabetes':              '4073',
+}
+
+async function searchOpenFarma(query: string, taxonSlug?: string): Promise<NormalizedProduct[]> {
+  try {
+    const BASE = 'https://www.openfarma.com.ar'
+    let url: string
+
+    if (taxonSlug) {
+      const taxonId = OPENFARMA_TAXON_MAP[taxonSlug.toLowerCase()] || OPENFARMA_TAXON_MAP[taxonSlug]
+      if (taxonId) {
+        url = `${BASE}/api/v1/products?q[taxons_id_in][]=${taxonId}&per_page=40&q[s]=name+asc`
+      } else {
+        url = `${BASE}/api/v1/products?q[name_cont]=${encodeURIComponent(query)}&per_page=40`
+      }
+    } else {
+      url = `${BASE}/api/v1/products?q[name_cont]=${encodeURIComponent(query)}&per_page=40`
+    }
+
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      redirect: 'follow',
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    const products: any[] = data.products ?? []
+
+    return products
+      .filter(p => p.master?.in_stock !== false || p.total_on_hand > 0)
+      .map(p => {
+        const price = parseFloat(p.price ?? '0')
+        const img = p.master?.images?.[0]?.small_url ?? ''
+        return {
+          ean: p.master?.sku ?? p.id.toString(),
+          id: p.id.toString(),
+          supermarket: 'OpenFarma',
+          name: p.name ?? '',
+          brand: '',
+          price,
+          finalPrice: price,
+          discountText: '',
+          imageUrl: img,
+          url: `${BASE}/${p.slug}/p`,
+        } as NormalizedProduct
+      })
+  } catch (e) {
+    console.error('[OpenFarma]', e)
+    return []
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q')
@@ -454,11 +529,13 @@ export async function GET(request: Request) {
     }
 
     if (isFarma) {
-      const [farmacity, farmaplus] = await Promise.all([
+      const openFarmaSlug = cat ? findCategoryNode(cat)?.farmaSlug : undefined
+      const [farmacity, farmaplus, openfarma] = await Promise.all([
         farmaQ ? searchVtexIS(farmaQ, false, 'Farmacity', 'https://www.farmacity.com', vtexMap) : Promise.resolve([]),
         farmaQ ? searchVtexIS(farmaQ, false, 'Farmaplus', 'https://www.farmaplus.com.ar', vtexMap) : Promise.resolve([]),
+        farmaQ ? searchOpenFarma(farmaQ, openFarmaSlug) : Promise.resolve([]),
       ])
-      allProducts = [...farmacity, ...farmaplus]
+      allProducts = [...farmacity, ...farmaplus, ...openfarma]
     }
       .filter(p => p.finalPrice > 0)
 
