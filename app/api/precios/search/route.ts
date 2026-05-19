@@ -404,47 +404,62 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q')
-  const cat = searchParams.get('cat') // Si viene cat, significa que es ID de categoría unificada
+  const cat = searchParams.get('cat')
+  const section = searchParams.get('section') || 'supermercados' // 'supermercados' | 'farmacias'
 
   if (!q && !cat) {
     return NextResponse.json({ error: 'Missing query or category' }, { status: 400 })
   }
 
+  const isSuper = section === 'supermercados'
+  const isFarma = section === 'farmacias'
+
   try {
-    let cotoQ = q || '', carrQ = q || '', cencoQ = q || '', diaQ = q || '', walmartQ = q || '', farmacityQ = q || ''
+    let cotoQ = q || '', carrQ = q || '', cencoQ = q || '', diaQ = q || '', walmartQ = q || '', farmaQ = q || ''
     let vtexMap = 'c'
     let isCategory = !!cat
 
-    // Si es búsqueda por categoría, traducir los IDs
     if (cat) {
       const node = findCategoryNode(cat)
       if (node) {
-         cotoQ = node.name
-         carrQ = node.carrefourId || ''
-         cencoQ = node.name
-         diaQ = node.name
-         walmartQ = node.name
-         farmacityQ = node.name
-         vtexMap = node.vtexMap || 'c'
+        if (isFarma) {
+          farmaQ = node.farmaSlug || node.name
+        } else {
+          cotoQ = node.name
+          carrQ = node.carrefourId || ''
+          cencoQ = node.name
+          diaQ = node.name
+          walmartQ = node.name
+          vtexMap = node.vtexMap || 'c'
+        }
       } else {
-         return NextResponse.json({ error: 'Category not mapped' }, { status: 404 })
+        return NextResponse.json({ error: 'Category not mapped' }, { status: 404 })
       }
     }
 
-    // Ejecutar todas en paralelo
-    const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas, farmacity] = await Promise.all([
-      cotoQ ? searchCoto(cotoQ, false) : Promise.resolve([]),
-      carrQ ? searchCarrefour(carrQ, isCategory) : Promise.resolve([]),
-      cencoQ ? searchVtexIS(cencoQ, false, 'Jumbo', 'https://www.jumbo.com.ar', vtexMap) : Promise.resolve([]),
-      cencoQ ? searchVtexIS(cencoQ, false, 'Disco', 'https://www.disco.com.ar', vtexMap) : Promise.resolve([]),
-      cencoQ ? searchVtexIS(cencoQ, false, 'Vea', 'https://www.vea.com.ar', vtexMap) : Promise.resolve([]),
-      diaQ ? searchVtexIS(diaQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', vtexMap) : Promise.resolve([]),
-      walmartQ ? searchVtexIS(walmartQ, false, 'Más Online', 'https://www.masonline.com.ar', vtexMap) : Promise.resolve([]),
-      walmartQ ? searchVtexIS(walmartQ, false, 'Changomas', 'https://www.changomas.com.ar', vtexMap) : Promise.resolve([]),
-      farmacityQ ? searchVtexIS(farmacityQ, false, 'Farmacity', 'https://www.farmacity.com', vtexMap) : Promise.resolve([]),
-    ])
+    let allProducts: NormalizedProduct[] = []
 
-    const allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas, ...farmacity]
+    if (isSuper) {
+      const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas] = await Promise.all([
+        cotoQ ? searchCoto(cotoQ, false) : Promise.resolve([]),
+        carrQ ? searchCarrefour(carrQ, isCategory) : Promise.resolve([]),
+        cencoQ ? searchVtexIS(cencoQ, false, 'Jumbo', 'https://www.jumbo.com.ar', vtexMap) : Promise.resolve([]),
+        cencoQ ? searchVtexIS(cencoQ, false, 'Disco', 'https://www.disco.com.ar', vtexMap) : Promise.resolve([]),
+        cencoQ ? searchVtexIS(cencoQ, false, 'Vea', 'https://www.vea.com.ar', vtexMap) : Promise.resolve([]),
+        diaQ ? searchVtexIS(diaQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', vtexMap) : Promise.resolve([]),
+        walmartQ ? searchVtexIS(walmartQ, false, 'Más Online', 'https://www.masonline.com.ar', vtexMap) : Promise.resolve([]),
+        walmartQ ? searchVtexIS(walmartQ, false, 'Changomas', 'https://www.changomas.com.ar', vtexMap) : Promise.resolve([]),
+      ])
+      allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas]
+    }
+
+    if (isFarma) {
+      const [farmacity, farmaplus] = await Promise.all([
+        farmaQ ? searchVtexIS(farmaQ, false, 'Farmacity', 'https://www.farmacity.com', vtexMap) : Promise.resolve([]),
+        farmaQ ? searchVtexIS(farmaQ, false, 'Farmaplus', 'https://www.farmaplus.com.ar', vtexMap) : Promise.resolve([]),
+      ])
+      allProducts = [...farmacity, ...farmaplus]
+    }
       .filter(p => p.finalPrice > 0)
 
     // Agrupamiento por EAN (Consolidación)

@@ -60,6 +60,8 @@ const SUPERMARKET_COLORS: Record<string, string> = {
   'Vea': 'bg-yellow-500 text-black',
   'Más Online': 'bg-blue-500 text-white',
   'Changomas': 'bg-orange-500 text-white',
+  'Farmacity': 'bg-green-500 text-white',
+  'Farmaplus': 'bg-teal-600 text-white',
   'default': 'bg-gray-800 text-white'
 }
 
@@ -72,6 +74,8 @@ const SUPERMARKET_DOT: Record<string, string> = {
   'Vea': 'bg-yellow-500',
   'Más Online': 'bg-blue-500',
   'Changomas': 'bg-orange-500',
+  'Farmacity': 'bg-green-500',
+  'Farmaplus': 'bg-teal-600',
   'default': 'bg-gray-500'
 }
 
@@ -89,6 +93,7 @@ function getBestPromo(markets: Record<string, MarketProduct>, minRegularPrice: n
 }
 
 export default function PreciosPage() {
+  const [section, setSection] = useState<'supermercados' | 'farmacias'>('supermercados')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<GroupedProduct[]>([])
@@ -111,8 +116,8 @@ export default function PreciosPage() {
     setHasSearched(true)
     try {
       const url = isCategory
-        ? `/api/precios/search?cat=${categoryId}`
-        : `/api/precios/search?q=${encodeURIComponent(query)}`
+        ? `/api/precios/search?cat=${categoryId}&section=${section}`
+        : `/api/precios/search?q=${encodeURIComponent(query)}&section=${section}`
       const res = await fetch(url)
       const data = await res.json()
       if (res.ok) setProducts(data.results || [])
@@ -121,6 +126,13 @@ export default function PreciosPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSectionChange = (newSection: 'supermercados' | 'farmacias') => {
+    setSection(newSection)
+    setProducts([])
+    setHasSearched(false)
+    setQuery('')
   }
 
   const addToCart = (product: GroupedProduct, marketName: string) => {
@@ -203,12 +215,34 @@ export default function PreciosPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-12">
-        <div className={`transition-all duration-700 ease-out flex flex-col items-center ${hasSearched ? 'mt-0 mb-12' : 'mt-[15vh]'}`}>
+        {/* Tabs de sección */}
+        <div className="flex justify-center mb-8">
+          <div className="flex bg-[#1A1A1A] border border-white/10 rounded-2xl p-1 gap-1">
+            <button
+              onClick={() => handleSectionChange('supermercados')}
+              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${section === 'supermercados' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+            >
+              🛒 Supermercados
+            </button>
+            <button
+              onClick={() => handleSectionChange('farmacias')}
+              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${section === 'farmacias' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+            >
+              💊 Farmacias
+            </button>
+          </div>
+        </div>
+
+        <div className={`transition-all duration-700 ease-out flex flex-col items-center ${hasSearched ? 'mt-0 mb-12' : 'mt-[5vh]'}`}>
           {!hasSearched && (
             <div className="text-center mb-10 space-y-4">
-              <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight">Consolidá el mercado</h2>
+              <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight">
+                {section === 'supermercados' ? 'Consolidá el mercado' : 'Compará farmacias'}
+              </h2>
               <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-                Buscá un producto y mirá su precio unificado en los principales supermercados gracias al cruce de Códigos de Barras (EAN).
+                {section === 'supermercados'
+                  ? 'Buscá un producto y mirá su precio en los principales supermercados cruzando por EAN.'
+                  : 'Buscá un medicamento o producto de farmacia y comparalo entre Farmacity y Farmaplus.'}
               </p>
             </div>
           )}
@@ -221,7 +255,7 @@ export default function PreciosPage() {
                   type="text"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder="Ej. Coca Cola Lata, Galletitas Oreo..."
+                  placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata, Galletitas Oreo...' : 'Ej. Ibuprofeno 400mg, Paracetamol...'}
                   className="flex-1 bg-transparent text-xl py-3 px-2 outline-none text-white placeholder:text-slate-500"
                 />
                 <button type="submit" disabled={loading || !query.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
@@ -230,7 +264,7 @@ export default function PreciosPage() {
               </div>
             </form>
             <div className="flex justify-center">
-              <CategorySelector onSelectCategory={(catId) => handleSearch(undefined, true, catId)} />
+              <CategorySelector section={section} onSelectCategory={(catId) => handleSearch(undefined, true, catId)} />
             </div>
           </div>
         </div>

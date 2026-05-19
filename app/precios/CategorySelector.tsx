@@ -6,15 +6,19 @@ import { CATEGORIES, CategoryNode } from './categories'
 
 interface Props {
   onSelectCategory: (categoryId: string) => void
+  section?: 'supermercados' | 'farmacias'
 }
 
-export default function CategorySelector({ onSelectCategory }: Props) {
+export default function CategorySelector({ onSelectCategory, section = 'supermercados' }: Props) {
   const [activePath, setActivePath] = useState<CategoryNode[]>([])
   const [isOpen, setIsOpen] = useState(false)
 
-  // Current level to display
-  const currentLevelNodes = activePath.length === 0 
-    ? CATEGORIES 
+  const rootCategories = CATEGORIES.filter(c =>
+    section === 'farmacias' ? c.section === 'farmacias' : !c.section || c.section === 'supermercados'
+  )
+
+  const currentLevelNodes = activePath.length === 0
+    ? rootCategories
     : activePath[activePath.length - 1].children || []
 
   const handleSelect = (node: CategoryNode) => {

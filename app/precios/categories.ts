@@ -1,11 +1,13 @@
 export interface CategoryNode {
   id: string
   name: string
+  section?: 'supermercados' | 'farmacias' // undefined = supermercados (default)
   cotoId?: string
   carrefourId?: string
   cencosudSlug?: string
   diaSlug?: string
-  vtexMap?: string // e.g. 'c', 'c,c', 'c,c,c'
+  vtexMap?: string
+  farmaSlug?: string // slug para búsqueda en farmacias VTEX
   children?: CategoryNode[]
 }
 
@@ -371,7 +373,69 @@ export const CATEGORIES: CategoryNode[] = [
     cencosudSlug: 'hogar-y-textil',
     diaSlug: 'aire-libre',
     vtexMap: 'c'
-  }
+  },
+
+  // ─── FARMACIAS ────────────────────────────────────────────────────────────
+  {
+    id: 'farma-analgesicos',
+    name: 'Analgésicos',
+    section: 'farmacias',
+    farmaSlug: 'analgesicos',
+  },
+  {
+    id: 'farma-digestivos',
+    name: 'Digestivos',
+    section: 'farmacias',
+    farmaSlug: 'digestivos',
+  },
+  {
+    id: 'farma-vitaminas',
+    name: 'Vitaminas y Suplementos',
+    section: 'farmacias',
+    farmaSlug: 'vitaminas-y-suplementos',
+  },
+  {
+    id: 'farma-dermocosmetica',
+    name: 'Dermocosmética',
+    section: 'farmacias',
+    farmaSlug: 'dermocosmetica',
+  },
+  {
+    id: 'farma-higiene',
+    name: 'Higiene Personal',
+    section: 'farmacias',
+    farmaSlug: 'higiene-personal',
+  },
+  {
+    id: 'farma-bebe',
+    name: 'Bebé y Embarazo',
+    section: 'farmacias',
+    farmaSlug: 'bebe-y-embarazo',
+  },
+  {
+    id: 'farma-optica',
+    name: 'Óptica y Contactología',
+    section: 'farmacias',
+    farmaSlug: 'optica-y-contactologia',
+  },
+  {
+    id: 'farma-primeros-auxilios',
+    name: 'Primeros Auxilios',
+    section: 'farmacias',
+    farmaSlug: 'primeros-auxilios',
+  },
+  {
+    id: 'farma-sueño',
+    name: 'Sueño',
+    section: 'farmacias',
+    farmaSlug: 'sueno',
+  },
+  {
+    id: 'farma-antimicoticos',
+    name: 'Antimicóticos',
+    section: 'farmacias',
+    farmaSlug: 'antimicoticos',
+  },
 ]
 
 export function findCategoryNode(id: string, nodes: CategoryNode[] = CATEGORIES): CategoryNode | null {
