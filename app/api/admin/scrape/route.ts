@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ALL_SCRAPERS } from '@/lib/scrapers';
 import { generatePromoSlug } from '@/lib/utils/promoSlug';
+import { detectCategoria } from '@/lib/scrapers/bank-helpers';
 
 function normalizeStr(s: string): string {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -92,11 +93,14 @@ export async function POST(req: NextRequest) {
         normalizeStr(c.name) === normalizeStr(p.categoria ?? '')
       );
       if (!catMatch) {
-        if (!sinCategoria) {
-          skippedNoCategory++;
-          continue;
+        // Fallback: detectCategoria con nombre del comercio + título
+        const detected = detectCategoria(`${p.storeName ?? ''} ${p.title ?? ''}`);
+        if (detected) {
+          catMatch = categories.find(c => normalizeStr(c.name) === normalizeStr(detected));
         }
-        // Guardar en "sin-categoria" para clasificar manualmente desde el admin
+      }
+      if (!catMatch) {
+        if (!sinCategoria) { skippedNoCategory++; continue; }
         catMatch = sinCategoria;
       }
 
