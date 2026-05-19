@@ -13,7 +13,7 @@ const CATEGORIAS = [
 
 // ─── REGLAS LOCALES (rápido, sin API) ─────────────────────────────────────────
 const CATEGORY_RULES = [
-  { cat: 'Supermercados',    kw: ['coto', 'jumbo', 'disco', 'vea', 'carrefour', 'changomas', 'diarco', 'makro', 'dia', 'vital', 'supermercado'] },
+  { cat: 'Supermercados',    kw: ['coto', 'jumbo', 'disco', 'vea', 'carrefour', 'changomas', 'diarco', 'makro', 'dia', 'vital', 'supermercado', 'la gallega', 'gallega', 'supercoop', 'supers del interior', 'cooperativa', 'bell', 'toledo', 'josimar', 'nini', 'anonima', 'yaguar'] },
   { cat: 'Combustible',      kw: ['ypf', 'axion', 'shell', 'puma', 'gulf', 'combustible', 'nafta', 'petro'] },
   { cat: 'Gastronomía',      kw: ['mcdonald', 'burger', 'mostaza', 'starbucks', 'cafe', 'havanna', 'restaurant', 'pizzeria', 'cerveceria', 'kfc', 'subway', 'sushi', 'cafeteria'] },
   { cat: 'Heladerías',       kw: ['grido', 'freddo', 'lucciano', 'persicco', 'volta', 'chungo', 'heladeria'] },
