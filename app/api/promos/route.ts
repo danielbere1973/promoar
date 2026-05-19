@@ -258,7 +258,7 @@ export async function GET(req: NextRequest) {
         const hasAccountConstraint = req.accountType && req.accountType !== 'ANY'
 
         if (!hasEntityConstraint && !hasCardConstraint && !hasAccountConstraint) {
-          return true
+          return false // Con perfil activo, requerir match explícito
         }
 
         // ═══════════════════════════════════════════════════════════════════════
