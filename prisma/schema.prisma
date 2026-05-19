@@ -236,25 +236,28 @@ model CardSegment {
 }
 
 model Category {
-  id     String  @id @default(cuid())
-  name   String  @unique
-  slug   String  @unique
-  icon   String
-  color  String
-  order  Int     @default(0)
-  promos Promo[]
+  id               String     @id @default(cuid())
+  name             String     @unique
+  slug             String     @unique
+  icon             String
+  color            String
+  order            Int        @default(0)
+  promos           Promo[]
+  defaultCommerce  Commerce[] @relation("CommerceDefaultCategory")
 
   @@map("categories")
 }
 
 model Commerce {
-  id      String  @id @default(cuid())
-  name    String  @unique
-  slug    String  @unique
-  logoUrl String?
-  website String?
-  active  Boolean @default(true)
-  promos  Promo[]
+  id                String    @id @default(cuid())
+  name              String    @unique
+  slug              String    @unique
+  logoUrl           String?
+  website           String?
+  active            Boolean   @default(true)
+  defaultCategoryId String?
+  defaultCategory   Category? @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
+  promos            Promo[]
 
   @@map("commerces")
 }

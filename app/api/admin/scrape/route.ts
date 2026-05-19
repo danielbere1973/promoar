@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     const sinCategoria = categories.find(c => c.slug === 'sin-categoria');
     const banks = await prisma.bank.findMany({ include: { cardNetworks: { select: { id: true } }, segments: true } });
     const wallets = await prisma.wallet.findMany();
-    let commerces = await prisma.commerce.findMany();
+    let commerces = await (prisma.commerce as any).findMany({ select: { id: true, name: true, slug: true, logoUrl: true, active: true, website: true, defaultCategoryId: true } });
     const cardNetworks = await prisma.cardNetwork.findMany();
     const cardSegments = await prisma.cardSegment.findMany({ include: { cardNetwork: true } });
 
@@ -89,11 +89,19 @@ export async function POST(req: NextRequest) {
       if (!hasDiscount) continue;
 
       // ── Categoría ─────────────────────────────────────────────────────────
+      // 1. Categoría del scraper
       let catMatch = categories.find(c =>
         normalizeStr(c.name) === normalizeStr(p.categoria ?? '')
       );
+      // 2. defaultCategoryId del comercio (aprendizaje)
+      if (!catMatch && p.storeName) {
+        const knownCom = (commerces as any[]).find((c: any) => normalizeStr(c.name) === normalizeStr(p.storeName ?? ''));
+        if (knownCom?.defaultCategoryId) {
+          catMatch = categories.find(c => c.id === knownCom.defaultCategoryId) ?? undefined;
+        }
+      }
+      // 3. detectCategoria como fallback
       if (!catMatch) {
-        // Fallback: detectCategoria con nombre del comercio + título
         const detected = detectCategoria(`${p.storeName ?? ''} ${p.title ?? ''}`);
         if (detected) {
           catMatch = categories.find(c => normalizeStr(c.name) === normalizeStr(detected));
