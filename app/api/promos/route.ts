@@ -234,8 +234,17 @@ export async function GET(req: NextRequest) {
     // Usar guest profile si no hay usuario logueado con perfil en DB
     const effectiveCards = userProfile?.cards ?? (guestCards && forMe ? guestCards : null)
 
-    if (effectiveCards && forMe && !isAdmin) {
-      const userCards = effectiveCards
+    // Tarjetas virtuales desde UserWallet (para matching cuando el usuario solo tiene wallets)
+    const walletVirtualCards = (userProfile?.wallets ?? []).map((w: any) => ({
+      walletId: w.walletId, bankId: null, cardNetworkId: null,
+      cardType: 'ACCOUNT', cardSegmentId: null, segmentId: null,
+      cardTier: null, isPayroll: false, isPensioner: false,
+    }))
+
+    const hasProfile = forMe && !isAdmin && (effectiveCards || walletVirtualCards.length > 0)
+
+    if (hasProfile) {
+      const userCards = [...(effectiveCards ?? []), ...walletVirtualCards]
       const savedSet = new Set(fetchedUser ? (fetchedUser as any).savedPromos.map((sp: any) => sp.promoId) : [])
 
       // Función estricta de matching: verifica que el perfil del usuario
@@ -387,8 +396,8 @@ export async function GET(req: NextRequest) {
       const globalMaxDiscount = allReqs.length > 0 ? allReqs.reduce((max, r) => (r.discountValue ?? 0) > (max?.discountValue ?? 0) ? r : max, allReqs[0]) : null
 
       let userBestDiscount = null
-      if (effectiveCards && !isAdmin) {
-        const uCards = effectiveCards
+      if (!isAdmin) {
+        const uCards = [...(effectiveCards ?? []), ...walletVirtualCards]
         // Reutilizar la misma lógica estricta de matchesProfile para calcular el mejor descuento
         const matching = allReqs.filter(req => {
           const hasEntityConstraint = req.bankId || req.walletId

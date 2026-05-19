@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import StatsView from './StatsView'
+import ClassifyButton from './ClassifyButton'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
@@ -1008,7 +1009,10 @@ export default function AdminPage() {
         })()}
 
         {tab === 'cleanup' && (
-          <CleanupTab commerces={entities?.commerces ?? []} />
+          <div className="max-w-xl space-y-6">
+            <ClassifyButton />
+            <CleanupTab commerces={entities?.commerces ?? []} />
+          </div>
         )}
 
         {tab === 'reports' && (
@@ -1036,6 +1040,33 @@ export default function AdminPage() {
                 </a>
               </div>
             ))}
+            <div className="bg-white border border-slate-100 rounded-2xl px-5 py-4 shadow-sm">
+              <p className="font-bold text-slate-900 text-sm mb-1">Promos por scraper</p>
+              <p className="text-xs text-slate-400 mb-3">Detalle completo de promos activas de una entidad</p>
+              <div className="flex gap-2">
+                <select
+                  id="report-banco-select"
+                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                >
+                  {[
+                    'Banco Nación', 'Banco Galicia', 'BBVA', 'Banco Santander',
+                    'Banco Macro', 'Banco Ciudad', 'Banco Supervielle', 'Banco Patagonia',
+                    'Banco Credicoop', 'ICBC', 'Banco Provincia',
+                    'Carrefour Banco', 'MODO', 'Mercado Pago', 'Cuenta DNI',
+                    'Visa', 'Mastercard', 'American Express', 'Naranja X', 'Cabal',
+                  ].map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <button
+                  onClick={() => {
+                    const val = (document.getElementById('report-banco-select') as HTMLSelectElement)?.value
+                    if (val) window.location.href = `/api/admin/reports?type=por-banco&banco=${encodeURIComponent(val)}`
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black hover:bg-indigo-700 transition-colors shrink-0"
+                >
+                  ↓ CSV
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

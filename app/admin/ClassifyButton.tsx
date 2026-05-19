@@ -34,12 +34,14 @@ export default function ClassifyButton() {
         totalProcesadas += (data.procesadas || 0);
 
         if (data.enviadas === 0) {
-          setStatus(`✅ Clasificación completada. Total promos actualizadas: ${totalProcesadas}`);
+          setStatus(`✅ Listo. No quedan promos sin categoría. Total actualizadas: ${totalProcesadas}`);
+          keepGoing = false;
+        } else if (data.procesadas === 0) {
+          setStatus(`✅ Listo. Clasificadas ${totalProcesadas} en total. Quedan ${data.enviadas} sin categoría que no matchean ninguna regla.`);
           keepGoing = false;
         } else {
-          setStatus(`⏳ Procesando... (Llevamos ${totalProcesadas} promos actualizadas). Buscando más...`);
-          // Pausa de 2 segundos entre lotes para no asfixiar el rate-limit de la API de Gemini
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          setStatus(`⏳ Procesando... ${totalProcesadas} actualizadas, quedan ${data.enviadas - data.procesadas} sin clasificar...`);
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
     } catch (error: any) {

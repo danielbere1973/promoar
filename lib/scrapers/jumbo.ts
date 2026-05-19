@@ -6,9 +6,8 @@
 import { chromium, Page } from 'playwright';
 import { Scraper, ScrapedPromo } from './types';
 
-// ─── Lista de bancos ──────────────────────────────────────────────────────────
-// Parámetros ?bank= verificados directamente desde los links de la página.
-const BANKS: { param: string; displayName: string }[] = [
+// ─── Lista de entidades ───────────────────────────────────────────────────────
+const BANKS: { param: string; displayName: string; type?: 'wallet' }[] = [
   { param: 'Santander',           displayName: 'Banco Santander' },
   { param: 'Galicia',             displayName: 'Banco Galicia' },
   { param: 'Banco Macro',         displayName: 'Banco Macro' },
@@ -20,10 +19,10 @@ const BANKS: { param: string; displayName: string }[] = [
   { param: ' Tarjeta Naranja X',  displayName: 'Naranja X' },
   { param: 'Amex',                displayName: 'American Express' },
   { param: 'Visa y Master',       displayName: 'Visa / Mastercard' },
-  { param: 'MODO',                displayName: 'MODO' },
+  { param: 'MODO',                displayName: 'MODO',        type: 'wallet' },
   { param: 'Jumbo Mas Clarin',    displayName: 'Clarín 365' },
   { param: 'Banco Patagonia 365', displayName: 'Banco Patagonia 365' },
-  { param: 'CencoPay',            displayName: 'CencoPay Crédito' },
+  { param: 'CencoPay',            displayName: 'Cencopay Mastercard',    type: 'wallet' },
   { param: 'Tarjeta Sol',         displayName: 'Tarjeta Sol' },
   { param: 'Medios de Pago',      displayName: 'Jubilados y Pensionados' },
 ];
@@ -262,6 +261,7 @@ function parsePageText(
   fullText: string,
   bankDisplayName: string,
   sourceUrl: string,
+  isWallet = false,
 ): ScrapedPromo[] {
   const promos: ScrapedPromo[] = [];
 
@@ -341,7 +341,8 @@ function parsePageText(
       validUntil,
       specificDates,
       validDays,
-      bankNames: [bankDisplayName],
+      bankNames:   isWallet ? undefined : [bankDisplayName],
+      walletNames: isWallet ? [bankDisplayName] : undefined,
       cardType,
       paymentChannel,
       accountType: accountType as any,
@@ -374,7 +375,7 @@ function parsePageText(
 // ─── scrapeBankPage ───────────────────────────────────────────────────────────
 async function scrapeBankPage(
   page: Page,
-  bank: { param: string; displayName: string },
+  bank: { param: string; displayName: string; type?: 'wallet' },
 ): Promise<ScrapedPromo[]> {
   const url = `${BASE_URL}&bank=${encodeURIComponent(bank.param)}`;
   console.log(`[Jumbo] Scrapeando ${bank.displayName}: ${url}`);
@@ -399,7 +400,7 @@ async function scrapeBankPage(
       return [];
     }
 
-    const promos = parsePageText(fullText, bank.displayName, url);
+    const promos = parsePageText(fullText, bank.displayName, url, bank.type === 'wallet');
     console.log(`[Jumbo] ${bank.displayName}: ${promos.length} promos`);
     return promos;
   } catch (err) {

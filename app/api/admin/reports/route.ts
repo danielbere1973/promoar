@@ -30,20 +30,32 @@ export async function GET(req: NextRequest) {
     if (type === 'sin-categoria') {
       const promos = await prisma.promo.findMany({
         where: { status: 'ACTIVE', category: { slug: 'sin-categoria' } },
-        include: { commerce: true, category: true },
+        include: {
+          commerce: true,
+          requirements: {
+            include: {
+              bank: { select: { name: true } },
+              wallet: { select: { name: true } },
+            },
+          },
+        },
         orderBy: [{ commerce: { name: 'asc' } }, { title: 'asc' }],
       })
-      const rows = promos.map(p => ({
-        id: p.id,
-        comercio: p.commerce.name,
-        titulo: p.title,
-        descripcion: p.description,
-        sourceUrl: p.sourceUrl || '',
-        validFrom: p.validFrom?.toISOString().slice(0, 10) || '',
-        validUntil: p.validUntil?.toISOString().slice(0, 10) || '',
-        creado: p.createdAt.toISOString().slice(0, 10),
-      }))
-      csv = toCSV(rows, ['id', 'comercio', 'titulo', 'descripcion', 'sourceUrl', 'validFrom', 'validUntil', 'creado'])
+      const rows = promos.map(p => {
+        const bancos = [...new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))].join(' / ')
+        const billeteras = [...new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))].join(' / ')
+        return {
+          id: p.id,
+          comercio: p.commerce.name,
+          titulo: p.title,
+          bancos,
+          billeteras,
+          fuente: p.sourceUrl || '',
+          validFrom: p.validFrom?.toISOString().slice(0, 10) || '',
+          validUntil: p.validUntil?.toISOString().slice(0, 10) || '',
+        }
+      })
+      csv = toCSV(rows, ['id', 'comercio', 'titulo', 'bancos', 'billeteras', 'fuente', 'validFrom', 'validUntil'])
       name = 'sin_categoria'
     }
 
@@ -131,6 +143,60 @@ export async function GET(req: NextRequest) {
       `
       csv = toCSV(result, ['comercio', 'title', 'cantidad', 'ids'])
       name = 'duplicadas'
+    }
+
+    else if (type === 'por-banco') {
+      const banco = new URL(req.url).searchParams.get('banco') || ''
+      if (!banco) return NextResponse.json({ error: 'Parámetro banco requerido' }, { status: 400 })
+
+      const promos = await prisma.promo.findMany({
+        where: {
+          status: 'ACTIVE',
+          requirements: {
+            some: {
+              OR: [
+                { bank: { name: { contains: banco, mode: 'insensitive' } } },
+                { wallet: { name: { contains: banco, mode: 'insensitive' } } },
+              ]
+            }
+          }
+        },
+        include: {
+          commerce: true,
+          category: true,
+          requirements: {
+            include: {
+              bank: { select: { name: true } },
+              wallet: { select: { name: true } },
+              cardNetwork: { select: { name: true } },
+            }
+          }
+        },
+        orderBy: [{ commerce: { name: 'asc' } }, { title: 'asc' }],
+      })
+
+      const rows = promos.map(p => {
+        const bancos = [...new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))].join(' / ')
+        const wallets = [...new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))].join(' / ')
+        const redes = [...new Set(p.requirements.map(r => r.cardNetwork?.name).filter(Boolean))].join(' / ')
+        const descuentos = p.requirements.map(r => `${r.discountValue}${r.discountType === 'CUOTAS_SIN_INTERES' ? ' CSI' : '%'}`).join(' / ')
+        return {
+          id: p.id,
+          comercio: p.commerce.name,
+          categoria: p.category.name,
+          titulo: p.title,
+          descripcion: p.description,
+          bancos,
+          wallets,
+          redes,
+          descuentos,
+          validFrom: p.validFrom?.toISOString().slice(0, 10) || '',
+          validUntil: p.validUntil?.toISOString().slice(0, 10) || '',
+          fuente: p.sourceUrl || '',
+        }
+      })
+      csv = toCSV(rows, ['id', 'comercio', 'categoria', 'titulo', 'descripcion', 'bancos', 'wallets', 'redes', 'descuentos', 'validFrom', 'validUntil', 'fuente'])
+      name = `banco_${banco.replace(/\s+/g, '_').toLowerCase()}`
     }
 
     else {

@@ -25,8 +25,8 @@ const CAT_MAP: Record<string, string> = {
   'tecnología':           'Tecnología',
   'indumentaria':         'Indumentaria',
   'moda':                 'Indumentaria',
-  'mascota':              'Petshops',
-  'petshop':              'Petshops',
+  'mascota':              'Mascotas',
+  'petshop':              'Mascotas',
   'transporte':           'Transporte',
   'turismo':              'Viajes y Turismo',
   'viaje':                'Viajes y Turismo',
@@ -197,10 +197,35 @@ export const BNAScraper: Scraper = {
       const validUntil = promo.endDate   ? String(promo.endDate).split('T')[0]   : undefined;
       const cardNetworks = parseCardNetworks(promo.promotionProducts ?? []);
 
+      // Cap period desde cashbackFrequency
+      const cashbackFreq = incentive.discount?.cashbackFrequency ?? '';
+      const capPeriod: 'DAILY' | 'WEEKLY' | 'MONTHLY' | undefined =
+        cashbackFreq === 'daily' ? 'DAILY' :
+        cashbackFreq === 'weekly' ? 'WEEKLY' :
+        cashbackFreq === 'monthly' ? 'MONTHLY' :
+        cashbackLimit ? 'MONTHLY' : undefined;
+
+      // Mínimo de compra desde custom.value
+      const customRaw = (incentive.custom?.value ?? '').replace(/<[^>]+>/g, ' ').trim();
+      let minPurchase: number | null = null;
+      const minMatch = customRaw.match(/m[íi]nimo[^$\d]*\$?\s*([\d.,]+)/i);
+      if (minMatch) minPurchase = parseFloat(minMatch[1].replace(/\./g, '').replace(',', '.'));
+
+      // Account type desde custom.value
+      const accountType =
+        /jubilad|pensionad/i.test(customRaw) ? 'JUBILADO' :
+        /haberes|plan\s+sueldo/i.test(customRaw) ? 'HABERES' :
+        /anses/i.test(customRaw) ? 'ANSES' : 'ANY';
+
+      // Payment channel desde channel y description
+      const promoDesc = (promo.description ?? '').toUpperCase();
+      const paymentChannel =
+        promo.channel === 'online' ? 'ANY' :
+        /QR/.test(promoDesc) ? 'QR' : 'ANY';
+
       // Categoría del array de categorías
       const catName  = promo.categories?.[0]?.name ?? promo.categories?.[0] ?? '';
       const catFromApi = mapCategoria(typeof catName === 'string' ? catName : '');
-      // fallback a detectCategoria por nombre de comercio (se aplica por brand)
 
       // Una promo puede tener múltiples brands (comercios)
       const brandIds_: string[] = (promo.brands ?? []).map((b: any) =>
@@ -215,11 +240,12 @@ export const BNAScraper: Scraper = {
         const description = [
           discount ? `${discount}% de reintegro` : '',
           installments ? `${installments} cuotas sin interés` : '',
-          catName,
+          minPurchase ? `Mínimo $${minPurchase.toLocaleString('es-AR')}` : '',
+          cashbackLimit ? `Tope $${cashbackLimit.toLocaleString('es-AR')}` : '',
         ].filter(Boolean).join(' | ');
 
-        const legalText = [promo.legal, promo.legalText, promo.terms, incentive.custom?.value]
-          .filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').trim();
+        const legalText = [promo.legal, promo.legalText, promo.terms, customRaw]
+          .filter(Boolean).join(' ').trim();
         const base: Partial<ScrapedPromo> = {
           storeName,
           description,
@@ -229,9 +255,12 @@ export const BNAScraper: Scraper = {
           validUntil,
           validDays,
           cap:          cashbackLimit ?? null,
-          bankNames:      [BANK_NAME],
-          cardNetworks:   cardNetworks.length > 0 ? cardNetworks : undefined,
-          paymentChannel: 'QR' as const,
+          capPeriod,
+          minPurchase,
+          accountType:  accountType as any,
+          bankNames:    [BANK_NAME],
+          cardNetworks: cardNetworks.length > 0 ? cardNetworks : undefined,
+          paymentChannel: paymentChannel as any,
           categoria,
         };
 
