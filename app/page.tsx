@@ -719,16 +719,16 @@ function HomeContent() {
               {/* ── MIS FAVORITOS ── */}
               <div>
                 <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">⭐ Mis Favoritos</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">⭐ Mis Favoritos</span>
                   <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('favorites') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('favorites') && (
                   <div className="mt-1 space-y-3 px-3">
                     {/* Categorías favoritas */}
                     <div>
-                      <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-1">Categorías <span className="text-gray-200">({favCategories.length}/3)</span></p>
+                      <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Categorías <span className="text-gray-400">({favCategories.length}/3)</span></p>
                       {favCategories.length === 0 && (
-                        <p className="text-[10px] text-gray-300 italic px-1">Marcá ★ en una categoría</p>
+                        <p className="text-[10px] text-gray-400 italic px-1">Marcá ★ en una categoría</p>
                       )}
                       {favCategories.map(slug => {
                         const cat = categorias.find(c => c.slug === slug)
@@ -747,9 +747,9 @@ function HomeContent() {
                     </div>
                     {/* Comercios favoritos */}
                     <div>
-                      <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-1">Comercios <span className="text-gray-200">({favCommerces.length}/5)</span></p>
+                      <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Comercios <span className="text-gray-400">({favCommerces.length}/5)</span></p>
                       {favCommerces.length === 0 && (
-                        <p className="text-[10px] text-gray-300 italic px-1">Marcá ★ en un comercio</p>
+                        <p className="text-[10px] text-gray-400 italic px-1">Marcá ★ en un comercio</p>
                       )}
                       {favCommerces.map(name => (
                         <div key={name} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50">
@@ -767,7 +767,7 @@ function HomeContent() {
               {/* ── MÁS POPULARES ── */}
               <div>
                 <button onClick={() => toggleSection('popular')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">Más Populares</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">Más Populares</span>
                   <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('popular') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('popular') && categorias.filter(c => (c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
@@ -794,7 +794,7 @@ function HomeContent() {
               {/* ── POR DESCUENTO ── */}
               <div>
                 <button onClick={() => toggleSection('discount')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">Por Descuento</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">Por Descuento</span>
                   <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('discount') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('discount') && [
@@ -820,7 +820,7 @@ function HomeContent() {
               {/* ── OTRAS CATEGORÍAS ── */}
               <div>
                 <button onClick={() => toggleSection('others')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">Otras Categorías</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">Otras Categorías</span>
                   <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('others') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('others') && categorias.filter(c => !(c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
