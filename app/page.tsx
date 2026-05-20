@@ -718,18 +718,15 @@ function HomeContent() {
 
               {/* ── MIS FAVORITOS ── */}
               <div>
-                <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">⭐ Mis Favoritos</span>
-                  <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('favorites') ? '−' : '+'}</span>
+                <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800">⭐ Mis Favoritos</span>
+                  <span className="text-gray-500 group-hover:text-gray-700 text-sm font-bold">{openSections.has('favorites') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('favorites') && (
                   <div className="mt-1 space-y-3 px-3">
-                    {/* Categorías favoritas */}
                     <div>
-                      <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Categorías <span className="text-gray-400">({favCategories.length}/3)</span></p>
-                      {favCategories.length === 0 && (
-                        <p className="text-[10px] text-gray-400 italic px-1">Marcá ★ en una categoría</p>
-                      )}
+                      <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Categorías <span className="text-gray-500">({favCategories.length}/3)</span></p>
+                      {favCategories.length === 0 && <p className="text-[10px] text-gray-500 italic px-1">Marcá ★ en una categoría</p>}
                       {favCategories.map(slug => {
                         const cat = categorias.find(c => c.slug === slug)
                         if (!cat) return null
@@ -738,23 +735,20 @@ function HomeContent() {
                           <div key={slug} className={`flex items-center justify-between px-2 py-1.5 rounded-lg ${isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
                             <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== slug) : [...prev, slug])} className="flex items-center gap-2 flex-1 min-w-0">
                               <span className="text-base">{cat.icon}</span>
-                              <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-600'}`}>{cat.name}</span>
+                              <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-700'}`}>{cat.name}</span>
                             </button>
-                            <button onClick={() => toggleFavCategory(slug)} className="text-yellow-400 hover:text-gray-300 ml-2 shrink-0" title="Quitar de favoritos">★</button>
+                            <button onClick={() => toggleFavCategory(slug)} className="text-yellow-400 hover:text-gray-400 ml-2 shrink-0" title="Quitar de favoritos">★</button>
                           </div>
                         )
                       })}
                     </div>
-                    {/* Comercios favoritos */}
                     <div>
-                      <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Comercios <span className="text-gray-400">({favCommerces.length}/5)</span></p>
-                      {favCommerces.length === 0 && (
-                        <p className="text-[10px] text-gray-400 italic px-1">Marcá ★ en un comercio</p>
-                      )}
+                      <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Comercios <span className="text-gray-500">({favCommerces.length}/5)</span></p>
+                      {favCommerces.length === 0 && <p className="text-[10px] text-gray-500 italic px-1">Marcá ★ en un comercio</p>}
                       {favCommerces.map(name => (
                         <div key={name} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50">
-                          <span className="text-xs font-bold text-gray-600 truncate flex-1">{name}</span>
-                          <button onClick={() => toggleFavCommerce(name)} className="text-yellow-400 hover:text-gray-300 ml-2 shrink-0" title="Quitar de favoritos">★</button>
+                          <span className="text-xs font-bold text-gray-700 truncate flex-1">{name}</span>
+                          <button onClick={() => toggleFavCommerce(name)} className="text-yellow-400 hover:text-gray-400 ml-2 shrink-0" title="Quitar de favoritos">★</button>
                         </div>
                       ))}
                     </div>
@@ -766,9 +760,9 @@ function HomeContent() {
 
               {/* ── MÁS POPULARES ── */}
               <div>
-                <button onClick={() => toggleSection('popular')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">Más Populares</span>
-                  <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('popular') ? '−' : '+'}</span>
+                <button onClick={() => toggleSection('popular')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800">Más Populares</span>
+                  <span className="text-gray-500 group-hover:text-gray-700 text-sm font-bold">{openSections.has('popular') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('popular') && categorias.filter(c => (c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
@@ -781,7 +775,7 @@ function HomeContent() {
                         <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-500'}`}>{cat.name}</span>
                       </button>
                       <div className="flex items-center gap-1 shrink-0">
-                        {count > 0 && <span className="text-[9px] text-gray-300 w-6 text-right">{count}</span>}
+                        {count > 0 && <span className="text-[9px] text-gray-500 w-6 text-right">{count}</span>}
                         <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
                     </div>
@@ -795,7 +789,7 @@ function HomeContent() {
               <div>
                 <button onClick={() => toggleSection('discount')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
                   <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">Por Descuento</span>
-                  <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('discount') ? '−' : '+'}</span>
+                  <span className="text-gray-500 group-hover:text-gray-500 text-sm">{openSections.has('discount') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('discount') && [
                   { label: '< 10%', val: '0-10' },
@@ -821,7 +815,7 @@ function HomeContent() {
               <div>
                 <button onClick={() => toggleSection('others')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
                   <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">Otras Categorías</span>
-                  <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('others') ? '−' : '+'}</span>
+                  <span className="text-gray-500 group-hover:text-gray-500 text-sm">{openSections.has('others') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('others') && categorias.filter(c => !(c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
@@ -834,7 +828,7 @@ function HomeContent() {
                         <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-500'}`}>{cat.name}</span>
                       </button>
                       <div className="flex items-center gap-1 shrink-0">
-                        {count > 0 && <span className="text-[9px] text-gray-300 w-6 text-right">{count}</span>}
+                        {count > 0 && <span className="text-[9px] text-gray-500 w-6 text-right">{count}</span>}
                         <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
                     </div>
@@ -1269,18 +1263,22 @@ function HomeContent() {
                   <button onClick={(e) => toggleSave(promo.id, e)} className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm">
                     <Heart size={14} className={promo.isSaved ? 'text-red-500 fill-red-500' : 'text-gray-400'} />
                   </button>
-                  {/* Estrella de comercio favorito */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
-                    className={`absolute top-2 left-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm text-sm transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                    title={favCommerces.includes(promo.commerce.name) ? 'Quitar de favoritos' : `Agregar ${promo.commerce.name} a favoritos`}
-                  >★</button>
-                  {/* Nombre cuando hay logo */}
+                  {/* Categoría cuando hay logo */}
                   {promo.commerce.logoUrl && (
                     <div className="absolute bottom-2 left-3">
                       <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md" style={{ background: promo.category.color + '20', color: promo.category.color }}>{promo.category.name}</span>
                     </div>
                   )}
+                </div>
+
+                {/* Comercio + estrella favorito */}
+                <div className="flex items-center justify-between px-3 pt-2">
+                  <span className="text-[11px] font-bold text-gray-600 truncate">{promo.commerce.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
+                    className={`text-lg transition-colors shrink-0 ml-2 ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                    title={favCommerces.includes(promo.commerce.name) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                  >★</button>
                 </div>
 
                 {/* Bloque descuento */}
