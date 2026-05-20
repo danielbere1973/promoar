@@ -47,7 +47,7 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 z-30 pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-slate-700 z-30 pb-safe">
       <div className="flex w-full justify-around items-center px-1 pt-1.5 pb-1">
         {navItems.map((item) => {
           const active = item.href ? pathname === item.href : false
@@ -57,15 +57,15 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
 
           const content = (
             <>
-              <div className={`flex items-center justify-center transition-all duration-200 ${active ? 'text-green-600' : 'text-gray-400'}`}>
+              <div className={`flex items-center justify-center transition-all duration-200 ${active ? 'text-green-600' : 'text-gray-400 dark:text-slate-500'}`}>
                 {isCategorias
                   ? <CategorySearchIcon active={active} />
                   : isPerfil && status === 'authenticated' && iniciales
-                  ? <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${active ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>{iniciales}</div>
+                  ? <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${active ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{iniciales}</div>
                   : Icon && <Icon size={22} strokeWidth={active ? 2.5 : 2} />
                 }
               </div>
-              <span className={`text-[9px] font-semibold mt-0.5 transition-colors ${active ? 'text-green-700' : 'text-gray-400'}`}>
+              <span className={`text-[9px] font-semibold mt-0.5 transition-colors ${active ? 'text-green-700' : 'text-gray-400 dark:text-slate-500'}`}>
                 {item.label}
               </span>
             </>
@@ -74,8 +74,9 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
           if (item.action || !item.href) {
             return (
               <button key={item.label}
+                type="button"
                 onClick={item.action}
-                className="flex flex-col items-center gap-0 py-1 px-1 min-w-0 flex-1">
+                className="flex flex-col items-center gap-0 py-1 px-1 min-w-0 flex-1 cursor-pointer">
                 {content}
               </button>
             )

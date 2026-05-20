@@ -17,19 +17,17 @@
   --ring: rgba(79, 70, 229, 0.2);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #020617;
-    --foreground: #f8fafc;
-    --card: #0f172a;
-    --card-foreground: #f8fafc;
-    --primary: #6366f1;
-    --primary-foreground: #ffffff;
-    --accent: #1e293b;
-    --accent-foreground: #f8fafc;
-    --border: #1e293b;
-    --ring: rgba(99, 102, 241, 0.4);
-  }
+html.dark {
+  --background: #020617;
+  --foreground: #f8fafc;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --border: #1e293b;
+  --ring: rgba(99, 102, 241, 0.4);
 }
 
 body {

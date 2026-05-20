@@ -12,6 +12,7 @@ import CategorySheet from './components/CategorySheet'
 import EntitiesSheet, { CARD_NETWORK_LOGOS } from './components/EntitiesSheet'
 import PromoWizard, { GuestProfile } from './components/PromoWizard'
 import ProvinceSelector from './components/ProvinceSelector'
+import ThemeToggle from './components/ThemeToggle'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -661,22 +662,22 @@ function HomeContent() {
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex">
       {/* ── Sidebar (Desktop) ── */}
-      <aside className="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r border-gray-200/50 bg-white/50 backdrop-blur-xl z-30">
+      <aside className="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-950 z-30">
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30">
               <Sparkles size={24} />
             </div>
-            <span className="text-xl font-black tracking-tighter text-gray-900">PromoAR</span>
+            <span className="text-xl font-black tracking-tighter text-gray-900 dark:text-white">PromoAR</span>
           </div>
 
           <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar pr-2">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-3">Explorar</p>
+            <p className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-4 px-3">Explorar</p>
             <div className="flex gap-1 px-3 mb-6">
               <button
                 onClick={() => setForMe(false)}
                 className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                  !forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                  !forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
                 Todas
@@ -693,7 +694,7 @@ function HomeContent() {
                   }
                 }}
                 className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                  forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                  forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
                 Para Mí
@@ -706,7 +707,7 @@ function HomeContent() {
                   key={f}
                   onClick={() => setTimeFilter(f)}
                   className={`flex-1 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider transition-all border ${
-                    timeFilter === f ? 'bg-gray-900 border-gray-900 text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                    timeFilter === f ? 'bg-indigo-600 border-indigo-600 text-white shadow-md dark:shadow-indigo-900/30' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   {f === 'today' ? 'Hoy' : 'Semana'}
@@ -718,37 +719,37 @@ function HomeContent() {
 
               {/* ── MIS FAVORITOS ── */}
               <div>
-                <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800">⭐ Mis Favoritos</span>
-                  <span className="text-gray-500 group-hover:text-gray-700 text-sm font-bold">{openSections.has('favorites') ? '−' : '+'}</span>
+                <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">⭐ Mis Favoritos</span>
+                  <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-300 text-sm font-bold">{openSections.has('favorites') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('favorites') && (
                   <div className="mt-1 space-y-3 px-3">
                     <div>
-                      <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Categorías <span className="text-gray-500">({favCategories.length}/3)</span></p>
-                      {favCategories.length === 0 && <p className="text-[10px] text-gray-500 italic px-1">Marcá ★ en una categoría</p>}
+                      <p className="text-[9px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-widest mb-1">Categorías <span className="text-gray-500 dark:text-slate-500">({favCategories.length}/3)</span></p>
+                      {favCategories.length === 0 && <p className="text-[10px] text-gray-500 dark:text-slate-500 italic px-1">Marcá ★ en una categoría</p>}
                       {favCategories.map(slug => {
                         const cat = categorias.find(c => c.slug === slug)
                         if (!cat) return null
                         const isActive = selectedCats.includes(slug)
                         return (
-                          <div key={slug} className={`flex items-center justify-between px-2 py-1.5 rounded-lg ${isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                          <div key={slug} className={`flex items-center justify-between px-2 py-1.5 rounded-lg ${isActive ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                             <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== slug) : [...prev, slug])} className="flex items-center gap-2 flex-1 min-w-0">
                               <span className="text-base">{cat.icon}</span>
-                              <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-700'}`}>{cat.name}</span>
+                              <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-slate-300'}`}>{cat.name}</span>
                             </button>
-                            <button onClick={() => toggleFavCategory(slug)} className="text-yellow-400 hover:text-gray-400 ml-2 shrink-0" title="Quitar de favoritos">★</button>
+                            <button onClick={() => toggleFavCategory(slug)} className="text-yellow-400 hover:text-gray-400 dark:hover:text-slate-600 ml-2 shrink-0" title="Quitar de favoritos">★</button>
                           </div>
                         )
                       })}
                     </div>
                     <div>
-                      <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Comercios <span className="text-gray-500">({favCommerces.length}/5)</span></p>
-                      {favCommerces.length === 0 && <p className="text-[10px] text-gray-500 italic px-1">Marcá ★ en un comercio</p>}
+                      <p className="text-[9px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-widest mb-1">Comercios <span className="text-gray-500 dark:text-slate-500">({favCommerces.length}/5)</span></p>
+                      {favCommerces.length === 0 && <p className="text-[10px] text-gray-500 dark:text-slate-500 italic px-1">Marcá ★ en un comercio</p>}
                       {favCommerces.map(name => (
-                        <div key={name} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50">
-                          <span className="text-xs font-bold text-gray-700 truncate flex-1">{name}</span>
-                          <button onClick={() => toggleFavCommerce(name)} className="text-yellow-400 hover:text-gray-400 ml-2 shrink-0" title="Quitar de favoritos">★</button>
+                        <div key={name} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800">
+                          <span className="text-xs font-bold text-gray-700 dark:text-slate-300 truncate flex-1">{name}</span>
+                          <button onClick={() => toggleFavCommerce(name)} className="text-yellow-400 hover:text-gray-400 dark:hover:text-slate-600 ml-2 shrink-0" title="Quitar de favoritos">★</button>
                         </div>
                       ))}
                     </div>
@@ -756,40 +757,40 @@ function HomeContent() {
                 )}
               </div>
 
-              <div className="h-px bg-gray-100 mx-3" />
+              <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
 
               {/* ── MÁS POPULARES ── */}
               <div>
-                <button onClick={() => toggleSection('popular')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800">Más Populares</span>
-                  <span className="text-gray-500 group-hover:text-gray-700 text-sm font-bold">{openSections.has('popular') ? '−' : '+'}</span>
+                <button onClick={() => toggleSection('popular')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Más Populares</span>
+                  <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-300 text-sm font-bold">{openSections.has('popular') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('popular') && categorias.filter(c => (c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
                   const isFav = favCategories.includes(cat.slug)
                   const count = forMe ? promos.filter(p => p.category.name === cat.name).length : (cat.promoCount ?? 0)
                   return (
-                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                       <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])} className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-base">{cat.icon}</span>
-                        <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-500'}`}>{cat.name}</span>
+                        <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-slate-400'}`}>{cat.name}</span>
                       </button>
                       <div className="flex items-center gap-2 shrink-0">
-                        {count > 0 && <span className="text-[10px] text-gray-400 tabular-nums">{count}</span>}
-                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-base leading-none transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
+                        {count > 0 && <span className="text-[10px] text-gray-400 dark:text-slate-500 tabular-nums">{count}</span>}
+                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-base leading-none transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 dark:text-slate-500 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
                     </div>
                   )
                 })}
               </div>
 
-              <div className="h-px bg-gray-100 mx-3" />
+              <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
 
               {/* ── POR DESCUENTO ── */}
               <div>
-                <button onClick={() => toggleSection('discount')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">Por Descuento</span>
-                  <span className="text-gray-500 group-hover:text-gray-500 text-sm">{openSections.has('discount') ? '−' : '+'}</span>
+                <button onClick={() => toggleSection('discount')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700 dark:text-slate-200">Por Descuento</span>
+                  <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-500 dark:group-hover:text-slate-300 text-sm">{openSections.has('discount') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('discount') && [
                   { label: '< 10%', val: '0-10' },
@@ -800,36 +801,36 @@ function HomeContent() {
                   return (
                     <button key={range.val}
                       onClick={() => setActiveFilters(prev => ({ ...prev, discountRanges: isActive ? prev.discountRanges.filter(r => r !== range.val) : [...prev.discountRanges, range.val] }))}
-                      className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isActive ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50'}`}
+                      className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isActive ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
                     >
-                      <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black ${isActive ? 'bg-indigo-100' : 'bg-gray-100'}`}>%</span>
+                      <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black ${isActive ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'bg-gray-100 dark:bg-slate-800'}`}>%</span>
                       {range.label}
                     </button>
                   )
                 })}
               </div>
 
-              <div className="h-px bg-gray-100 mx-3" />
+              <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
 
               {/* ── OTRAS CATEGORÍAS ── */}
               <div>
-                <button onClick={() => toggleSection('others')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700">Otras Categorías</span>
-                  <span className="text-gray-500 group-hover:text-gray-500 text-sm">{openSections.has('others') ? '−' : '+'}</span>
+                <button onClick={() => toggleSection('others')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700 dark:text-slate-200">Otras Categorías</span>
+                  <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-500 dark:group-hover:text-slate-300 text-sm">{openSections.has('others') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('others') && categorias.filter(c => !(c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
                   const isFav = favCategories.includes(cat.slug)
                   const count = forMe ? promos.filter(p => p.category.name === cat.name).length : (cat.promoCount ?? 0)
                   return (
-                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                       <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])} className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-base">{cat.icon}</span>
-                        <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-500'}`}>{cat.name}</span>
+                        <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-slate-400'}`}>{cat.name}</span>
                       </button>
                       <div className="flex items-center gap-2 shrink-0">
-                        {count > 0 && <span className="text-[10px] text-gray-400 tabular-nums">{count}</span>}
-                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-base leading-none transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
+                        {count > 0 && <span className="text-[10px] text-gray-400 dark:text-slate-500 tabular-nums">{count}</span>}
+                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-base leading-none transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 dark:text-slate-500 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
                     </div>
                   )
@@ -840,7 +841,7 @@ function HomeContent() {
           </nav>
         </div>
 
-        <div className="mt-auto pt-6 border-t border-gray-100/50 space-y-4 p-6">
+        <div className="mt-auto pt-6 border-t border-gray-100/50 dark:border-slate-800/50 space-y-4 p-6">
             {isAdmin && (
               <button
                 onClick={() => {
@@ -848,24 +849,24 @@ function HomeContent() {
                   if (alreadyUnlocked) window.location.href = '/admin'
                   else setShowPinModal(true)
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-50 text-gray-400 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-gray-100 hover:text-gray-900 transition-all border border-gray-200/50"
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-400 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-300 transition-all border border-gray-200/50 dark:border-slate-700/50"
               >
                 <Settings size={12} /> Admin
               </button>
             )}
 
             {status === 'authenticated' ? (
-              <Link href="/perfil" className="flex items-center gap-3 p-2 rounded-2xl hover:bg-gray-50 transition-colors">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shadow-inner">
+              <Link href="/perfil" className="flex items-center gap-3 p-2 rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shadow-inner">
                   {nombre[0]}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-gray-900 truncate">{nombre}</p>
-                  <p className="text-[10px] text-gray-500 truncate">Mi Perfil</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{nombre}</p>
+                  <p className="text-[10px] text-gray-500 dark:text-slate-400 truncate">Mi Perfil</p>
                 </div>
               </Link>
             ) : (
-              <Link href="/login" className="flex items-center justify-center gap-2 w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+              <Link href="/login" className="flex items-center justify-center gap-2 w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30 hover:bg-indigo-700 transition-all active:scale-95">
                 <LogIn size={14} /> Iniciar Sesión
               </Link>
             )}
@@ -899,8 +900,9 @@ function HomeContent() {
               </div>
 
               <div className="flex items-center gap-3 flex-1 justify-end">
+                <ThemeToggle />
                 <div className="relative max-w-xs w-full hidden md:block">
-                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                   <input
                     type="text"
                     placeholder="Buscar comercio..."
@@ -912,13 +914,13 @@ function HomeContent() {
                         setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
                       }, 400)
                     }}
-                    className="w-full pl-11 pr-4 py-3 bg-gray-100 border-none rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                    className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   />
                   {searchText && (
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5">
                       {(['startsWith', 'contains', 'exact'] as const).map(mode => (
                         <button key={mode} onClick={() => setSearchMode(mode)}
-                          className={`px-2 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}>
+                          className={`px-2 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400 hover:bg-gray-300 dark:hover:bg-slate-500'}`}>
                           {mode === 'startsWith' ? 'Empieza' : mode === 'contains' ? 'Contiene' : 'Exacto'}
                         </button>
                       ))}
@@ -928,14 +930,28 @@ function HomeContent() {
 
                 <button
                   onClick={() => setIsFilterOpen(true)}
-                  className={`hidden md:flex items-center gap-2 px-4 py-3 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all ${
+                  type="button"
+                  className={`hidden md:flex items-center gap-2 px-4 py-3 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer relative z-10 ${
                     getFilterChips().filter(c => c.type !== 'category').length > 0
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100'
-                      : 'bg-white border-gray-200 text-gray-700 hover:border-indigo-300'
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30 hover:shadow-lg hover:shadow-indigo-200 dark:hover:shadow-indigo-900/50'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600'
                   }`}
                 >
                   <SlidersHorizontal size={16} />
                   Filtros
+                </button>
+
+                {/* Mobile Filter Button */}
+                <button
+                  onClick={() => setIsFilterOpen(true)}
+                  type="button"
+                  className={`md:hidden p-2 rounded-lg border transition-all cursor-pointer relative z-10 ${
+                    getFilterChips().filter(c => c.type !== 'category').length > 0
+                      ? 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 dark:hover:bg-indigo-700'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <SlidersHorizontal size={18} />
                 </button>
 
                 <div className="hidden sm:flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm shrink-0">
@@ -1007,7 +1023,7 @@ function HomeContent() {
               {mobileSearchOpen && (
                 <div className="mt-2 flex items-center gap-2">
                   <div className="relative flex-1">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                     <input
                       ref={mobileSearchRef}
                       type="text"
@@ -1020,19 +1036,19 @@ function HomeContent() {
                           setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
                         }, 400)
                       }}
-                      className="w-full pl-9 pr-28 py-2 bg-gray-100 rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="w-full pl-9 pr-28 py-2 bg-gray-100 dark:bg-slate-700 dark:text-white rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
                     />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5">
                       {(['startsWith', 'contains', 'exact'] as const).map(mode => (
                         <button key={mode} onClick={() => setSearchMode(mode)}
-                          className={`px-1.5 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                          className={`px-1.5 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400'}`}>
                           {mode === 'startsWith' ? 'Empieza' : mode === 'contains' ? 'Contiene' : 'Exacto'}
                         </button>
                       ))}
                     </div>
                   </div>
                   <button onClick={() => { setMobileSearchOpen(false); setActiveFilters(prev => ({ ...prev, commerces: [] })) }}
-                    className="p-2 text-gray-400 hover:text-gray-600">
+                    className="p-2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400">
                     <X size={16} />
                   </button>
                 </div>

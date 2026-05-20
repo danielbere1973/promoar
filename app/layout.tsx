@@ -13,7 +13,15 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
+      <head>
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: `(function(){document.documentElement.classList.add('dark');})()`,
+          }}
+        />
+      </head>
       <body>
         <Providers>
           {children}

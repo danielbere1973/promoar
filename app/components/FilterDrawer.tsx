@@ -72,8 +72,8 @@ function Chip({ active, label, onClick }: { active: boolean; label: string; onCl
       onClick={onClick}
       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
         active
-          ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-200'
-          : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+          ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-200 dark:shadow-indigo-900/40'
+          : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:border-gray-300 dark:hover:border-slate-500'
       }`}
     >
       {active && <Check size={11} strokeWidth={3} />}
@@ -87,20 +87,20 @@ function Section({
 }: { title: string; count: number; defaultOpen?: boolean; children: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="border-b border-gray-50 last:border-0">
+    <div className="border-b border-gray-50 dark:border-slate-700 last:border-0">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between py-4 px-1 text-left"
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-gray-900">{title}</span>
+          <span className="text-sm font-bold text-gray-900 dark:text-white">{title}</span>
           {count > 0 && (
             <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
               {count}
             </span>
           )}
         </div>
-        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+        {open ? <ChevronUp size={16} className="text-gray-400 dark:text-slate-500 dark:text-slate-500" /> : <ChevronDown size={16} className="text-gray-400 dark:text-slate-500 dark:text-slate-500" />}
       </button>
       {open && <div className="pb-4 space-y-2">{children}</div>}
     </div>
@@ -166,19 +166,19 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
     <div className="fixed inset-0 z-[100] flex flex-col justify-end lg:justify-center lg:items-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-white rounded-t-[40px] lg:rounded-[32px] shadow-2xl w-full max-w-lg flex flex-col animate-in slide-in-from-bottom duration-300 max-h-[90vh]">
+      <div className="relative bg-white dark:bg-slate-800 rounded-t-[40px] lg:rounded-[32px] shadow-2xl w-full max-w-lg flex flex-col animate-in slide-in-from-bottom duration-300 max-h-[90vh]">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-gray-50 shrink-0">
+        <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-gray-50 dark:border-slate-700 shrink-0">
           <div>
-            <h2 className="text-xl font-black text-gray-900">Filtros</h2>
+            <h2 className="text-xl font-black text-gray-900 dark:text-white">Filtros</h2>
             {forMe && hasProfile && (
-              <p className="text-[11px] text-indigo-600 font-semibold mt-0.5">
+              <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mt-0.5">
                 ✦ Mostrando tus entidades primero
               </p>
             )}
           </div>
-          <button onClick={onClose} className="p-2 bg-gray-50 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={onClose} className="p-2 bg-gray-50 dark:bg-slate-700 rounded-full text-gray-400 dark:text-slate-500 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -203,7 +203,7 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
             )}
             {otherBanks.length > 0 && (
               <>
-                {myBanks.length > 0 && <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-3 mb-1">Más populares</p>}
+                {myBanks.length > 0 && <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 dark:text-slate-500 uppercase tracking-wider mt-3 mb-1">Más populares</p>}
                 <div className="flex flex-wrap gap-2">
                   {otherBanks.map(b => (
                     <Chip key={b.id} label={b.name} active={f.banks.includes(b.id)}
@@ -231,7 +231,7 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
             )}
             {otherWallets.length > 0 && (
               <>
-                {myWallets.length > 0 && <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-3 mb-1">Más populares</p>}
+                {myWallets.length > 0 && <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mt-3 mb-1">Más populares</p>}
                 <div className="flex flex-wrap gap-2">
                   {otherWallets.map(w => (
                     <Chip key={w.id} label={w.name} active={f.wallets.includes(w.id)}
@@ -259,7 +259,7 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
             )}
             {otherNetworks.length > 0 && (
               <>
-                {myNetworks.length > 0 && <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-3 mb-1">Más populares</p>}
+                {myNetworks.length > 0 && <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mt-3 mb-1">Más populares</p>}
                 <div className="flex flex-wrap gap-2">
                   {otherNetworks.map(n => (
                     <Chip key={n.id} label={n.name} active={f.networks.includes(n.id)}
@@ -272,14 +272,14 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
 
           {/* ── Descuento ── */}
           <Section title="Descuento" count={f.discountRanges.length + (f.hasInstallments !== null ? 1 : 0)} defaultOpen={false}>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Porcentaje de reintegro</p>
+            <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">Porcentaje de reintegro</p>
             <div className="flex flex-wrap gap-2">
               {DISCOUNT_RANGES.map(r => (
                 <Chip key={r.id} label={r.label} active={f.discountRanges.includes(r.id)}
                   onClick={() => setF(p => ({ ...p, discountRanges: toggle(p.discountRanges, r.id) }))} />
               ))}
             </div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-4 mb-2">Cuotas sin interés</p>
+            <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mt-4 mb-2">Cuotas sin interés</p>
             <div className="flex gap-2">
               <Chip label="Con CSI" active={f.hasInstallments === true}
                 onClick={() => setF(p => ({ ...p, hasInstallments: p.hasInstallments === true ? null : true }))} />
@@ -306,7 +306,7 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
                   className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all ${
                     f.days.includes(i)
                       ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                      : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-400 hover:border-gray-300 dark:hover:border-slate-500'
                   }`}>
                   {d}
                 </button>
@@ -317,18 +317,18 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
           {/* ── Comercios ── */}
           <Section title="Comercios" count={f.commerces.length} defaultOpen={false}>
             <div className="relative mb-3">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 ref={searchRef}
                 type="text"
                 placeholder="Buscar comercio..."
                 value={commerceSearch}
                 onChange={e => setCommerceSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:border-indigo-300 outline-none transition-all"
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:bg-white focus:border-indigo-300 outline-none transition-all"
               />
             </div>
             {!commerceSearch && (
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Top comercios</p>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">Top comercios</p>
             )}
             <div className="flex flex-wrap gap-2">
               {filteredCommerces.map(c => (
@@ -336,7 +336,7 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
                   onClick={() => setF(p => ({ ...p, commerces: toggle(p.commerces, c) }))} />
               ))}
               {commerceSearch && filteredCommerces.length === 0 && (
-                <p className="text-sm text-gray-400 py-2">Sin resultados para "{commerceSearch}"</p>
+                <p className="text-sm text-gray-400 dark:text-slate-500 py-2">Sin resultados para "{commerceSearch}"</p>
               )}
             </div>
           </Section>
@@ -351,18 +351,18 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1 block">Mínimo $</label>
+                <label className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase ml-1 mb-1 block">Mínimo $</label>
                 <input type="number" placeholder="0"
                   value={f.capMin ?? ''}
                   onChange={e => setF(p => ({ ...p, capMin: e.target.value ? parseFloat(e.target.value) : null }))}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-300 focus:bg-white transition-all" />
+                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-300 focus:bg-white dark:text-white dark:focus:bg-slate-600 transition-all" />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1 block">Máximo $</label>
+                <label className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase ml-1 mb-1 block">Máximo $</label>
                 <input type="number" placeholder="∞"
                   value={f.capMax ?? ''}
                   onChange={e => setF(p => ({ ...p, capMax: e.target.value ? parseFloat(e.target.value) : null }))}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-300 focus:bg-white transition-all" />
+                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-300 focus:bg-white dark:text-white dark:focus:bg-slate-600 transition-all" />
               </div>
             </div>
           </Section>
@@ -371,17 +371,17 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-5 border-t border-gray-50 bg-white flex gap-3 shrink-0">
+        <div className="px-6 py-5 border-t border-gray-50 dark:border-slate-700 bg-white dark:bg-slate-800 flex gap-3 shrink-0">
           <button
             onClick={() => setF({ ...defaultFilters })}
             disabled={activeCount === 0}
-            className="px-5 py-3.5 rounded-2xl border border-gray-200 text-gray-500 font-bold text-sm hover:bg-gray-50 transition-colors disabled:opacity-40"
+            className="px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-400 font-bold text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40"
           >
             Limpiar
           </button>
           <button
             onClick={() => onApply(f)}
-            className="flex-1 py-3.5 rounded-2xl bg-indigo-600 text-white font-bold text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+            className="flex-1 py-3.5 rounded-2xl bg-indigo-600 text-white font-bold text-sm shadow-lg shadow-indigo-100 dark:shadow-indigo-900/40 hover:bg-indigo-700 transition-all"
           >
             {activeCount > 0 ? `Aplicar (${activeCount} filtro${activeCount > 1 ? 's' : ''})` : 'Aplicar'}
           </button>
