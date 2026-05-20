@@ -217,11 +217,14 @@ export const BNAScraper: Scraper = {
         /haberes|plan\s+sueldo/i.test(customRaw) ? 'HABERES' :
         /anses/i.test(customRaw) ? 'ANSES' : 'ANY';
 
-      // Payment channel desde channel y description
+      // Payment channel y salesChannel desde campo channel
       const promoDesc = (promo.description ?? '').toUpperCase();
       const paymentChannel =
         promo.channel === 'online' ? 'ANY' :
         /QR/.test(promoDesc) ? 'QR' : 'ANY';
+      const salesChannel: 'ONLINE' | 'FISICA' | null =
+        promo.channel === 'online' ? 'ONLINE' :
+        promo.channel === 'physical' ? 'FISICA' : null;
 
       // Categoría del array de categorías
       const catName  = promo.categories?.[0]?.name ?? promo.categories?.[0] ?? '';
@@ -261,6 +264,7 @@ export const BNAScraper: Scraper = {
           bankNames:    [BANK_NAME],
           cardNetworks: cardNetworks.length > 0 ? cardNetworks : undefined,
           paymentChannel: paymentChannel as any,
+          salesChannel,
           categoria,
         };
 
