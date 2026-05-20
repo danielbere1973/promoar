@@ -117,7 +117,7 @@ export function extractCardNetworks(text: string): CardNetworkWithType[] {
   const networks: CardNetworkWithType[] = [];
   if (/VISA/.test(t)) networks.push({ network: 'Visa', type: cardType });
   if (/MASTER/.test(t)) networks.push({ network: 'Mastercard', type: cardType });
-  if (/AMEX|AMERICAN/.test(t)) networks.push({ network: 'American Express', type: cardType });
+  if (/AMEX|AMERICAN/.test(t)) networks.push({ network: 'American Express Banco', type: cardType });
   if (/NARANJA/.test(t)) networks.push({ network: 'Naranja', type: cardType });
   if (/CABAL/.test(t)) networks.push({ network: 'Cabal', type: cardType });
   if (/MAESTRO/.test(t)) networks.push({ network: 'Maestro', type: 'DEBIT' });

@@ -73,7 +73,7 @@ function parseMediosDePago(medios: any[]): CardNetworkWithType[] {
     let network = '';
     if (/visa/i.test(tarjeta))       network = 'VISA';
     else if (/master/i.test(tarjeta)) network = 'Mastercard';
-    else if (/amex|american/i.test(tarjeta)) network = 'American Express';
+    else if (/amex|american/i.test(tarjeta)) network = 'American Express Banco';
 
     if (!network) continue;
     const key = `${network}|${cardType}`;

@@ -18,7 +18,7 @@ const BANKS: { param: string; displayName: string; type?: string }[] = [
   { param: 'supervielle',         displayName: 'Banco Supervielle' },
   { param: 'Banco Comafi',        displayName: 'Banco Comafi' },
   { param: ' Tarjeta Naranja X',  displayName: 'Naranja X' },
-  { param: 'Amex',                displayName: 'American Express' },
+  { param: 'Amex',                displayName: 'American Express Banco' },
   { param: 'Visa y Master',       displayName: 'Visa / Mastercard' },
   { param: 'MODO',                displayName: 'MODO',        type: 'wallet' as const },
   { param: 'Jumbo Mas Clarin',    displayName: 'Clarín 365' },

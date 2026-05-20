@@ -222,7 +222,7 @@ function extractCardNetworks(text: string): Array<{ network: string; type: 'CRED
   if (/\bVISA\b/.test(t)) results.push({ network: 'Visa', type: cardType });
   if (/MASTERCARD/.test(t)) results.push({ network: 'Mastercard', type: cardType });
   if (/\bCABAL\b/.test(t)) results.push({ network: 'Cabal', type: cardType });
-  if (/AMERICAN\s+EXPRESS|\bAMEX\b/.test(t)) results.push({ network: 'American Express', type: 'CREDIT' });
+  if (/AMERICAN\s+EXPRESS|\bAMEX\b/.test(t)) results.push({ network: 'American Express Banco', type: 'CREDIT' });
   if (/NARANJA\s+X/.test(t)) results.push({ network: 'Naranja X', type: 'CREDIT' });
 
   return results;

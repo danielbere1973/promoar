@@ -175,7 +175,7 @@ function extractNetworks(card: ModoCard): Array<{ network: string; type: 'CREDIT
   const result: Array<{ network: string; type: 'CREDIT' | 'DEBIT' | null }> = [];
   const nameMap: Record<string, string> = {
     visa: 'Visa', master: 'Mastercard', mastercard: 'Mastercard',
-    amex: 'American Express', 'american express': 'American Express',
+    amex: 'American Express Banco', 'american express': 'American Express Banco',
     cabal: 'Cabal', maestro: 'Maestro', naranja: 'Naranja X',
   };
   for (const n of card.credit_list ?? []) {

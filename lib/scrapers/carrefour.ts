@@ -43,8 +43,8 @@ const IMG_NETWORK: Record<string, { network: string; type: 'CREDIT' | 'DEBIT' | 
   'mastercard.webp': { network: 'Mastercard', type: 'CREDIT' },
   'visa.webp':       { network: 'Visa', type: 'CREDIT' },
   'visa.png':        { network: 'Visa', type: 'CREDIT' },
-  'amex.webp':       { network: 'American Express', type: 'CREDIT' },
-  'amex.png':        { network: 'American Express', type: 'CREDIT' },
+  'amex.webp':       { network: 'American Express Banco', type: 'CREDIT' },
+  'amex.png':        { network: 'American Express Banco', type: 'CREDIT' },
 };
 
 function imgKey(filename: string | null | undefined): string {
@@ -196,7 +196,7 @@ export const CarrefourScraper: Scraper = {
       if (cardNetworks.length === 0) {
         if (/mastercard/i.test(title)) cardNetworks.push({ network: 'Mastercard', type: 'CREDIT' });
         if (/\bvisa\b/i.test(title)) cardNetworks.push({ network: 'Visa', type: 'CREDIT' });
-        if (/american\s+express|amex/i.test(title)) cardNetworks.push({ network: 'American Express', type: 'CREDIT' });
+        if (/american\s+express|amex/i.test(title)) cardNetworks.push({ network: 'American Express Banco', type: 'CREDIT' });
       }
 
       if (bankNames.length === 0 && walletNames.length === 0) {

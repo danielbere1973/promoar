@@ -69,7 +69,7 @@ function parseCards(blockHtml: string): Array<{ network: string; type: 'CREDIT' 
     else if (lower.includes('visa'))               nets.push({ network: 'Visa', type: 'CREDIT' });
     else if (lower.includes('mastercard') && lower.includes('déb')) nets.push({ network: 'Mastercard', type: 'DEBIT' });
     else if (lower.includes('mastercard'))         nets.push({ network: 'Mastercard', type: 'CREDIT' });
-    else if (lower.includes('amex') || lower.includes('american express')) nets.push({ network: 'American Express', type: 'CREDIT' });
+    else if (lower.includes('amex') || lower.includes('american express')) nets.push({ network: 'American Express Banco', type: 'CREDIT' });
     else if (lower.includes('cabal'))              nets.push({ network: 'Cabal', type: null });
   }
   return nets;
@@ -168,7 +168,7 @@ async function fetchPromoPage(slug: string, storeName: string): Promise<ScrapedP
     const destacNets: Array<{ network: string; type: 'CREDIT' | 'DEBIT' | null }> = [];
     if (/\bvisa\b/i.test(destacText)) destacNets.push({ network: 'Visa', type: /d[eé]b/i.test(destacText) ? 'DEBIT' : 'CREDIT' });
     if (/mastercard/i.test(destacText)) destacNets.push({ network: 'Mastercard', type: /d[eé]b/i.test(destacText) ? 'DEBIT' : 'CREDIT' });
-    if (/amex|american express/i.test(destacText)) destacNets.push({ network: 'American Express', type: 'CREDIT' });
+    if (/amex|american express/i.test(destacText)) destacNets.push({ network: 'American Express Banco', type: 'CREDIT' });
 
     // Logo de la promo
     const logoM = html.match(/class="gallery-placeholder__image"[^>]*src="([^"]+)"/i);
