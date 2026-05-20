@@ -1271,13 +1271,12 @@ function HomeContent() {
                   )}
                 </div>
 
-                {/* Comercio + estrella favorito */}
-                <div className="flex items-center justify-between px-3 pt-2">
-                  <span className="text-[11px] font-bold text-gray-600 truncate">{promo.commerce.name}</span>
+                {/* Estrella favorito comercio */}
+                <div className="flex justify-end px-3 pt-1">
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
-                    className={`text-lg transition-colors shrink-0 ml-2 ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                    title={favCommerces.includes(promo.commerce.name) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                    className={`text-2xl transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                    title={favCommerces.includes(promo.commerce.name) ? `Quitar ${promo.commerce.name} de favoritos` : `Favorito: ${promo.commerce.name}`}
                   >★</button>
                 </div>
 
