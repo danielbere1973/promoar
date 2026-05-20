@@ -774,9 +774,9 @@ function HomeContent() {
                         <span className="text-base">{cat.icon}</span>
                         <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-500'}`}>{cat.name}</span>
                       </button>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {count > 0 && <span className="text-[9px] text-gray-500 w-6 text-right">{count}</span>}
-                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {count > 0 && <span className="text-[10px] text-gray-400 tabular-nums">{count}</span>}
+                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-base leading-none transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
                     </div>
                   )
@@ -827,9 +827,9 @@ function HomeContent() {
                         <span className="text-base">{cat.icon}</span>
                         <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-500'}`}>{cat.name}</span>
                       </button>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {count > 0 && <span className="text-[9px] text-gray-500 w-6 text-right">{count}</span>}
-                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {count > 0 && <span className="text-[10px] text-gray-400 tabular-nums">{count}</span>}
+                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-base leading-none transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
                     </div>
                   )
