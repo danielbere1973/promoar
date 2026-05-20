@@ -782,7 +782,7 @@ function HomeContent() {
                       </button>
                       <div className="flex items-center gap-1 shrink-0">
                         {count > 0 && <span className="text-[9px] text-gray-300 w-6 text-right">{count}</span>}
-                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
+                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
                     </div>
                   )
@@ -835,7 +835,7 @@ function HomeContent() {
                       </button>
                       <div className="flex items-center gap-1 shrink-0">
                         {count > 0 && <span className="text-[9px] text-gray-300 w-6 text-right">{count}</span>}
-                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
+                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
                     </div>
                   )
@@ -1207,7 +1207,7 @@ function HomeContent() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[10px] font-bold text-gray-900 truncate uppercase">{promo.commerce.name}</span>
-                      <button onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }} className={`text-sm shrink-0 transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}>★</button>
+                      <button onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }} className={`text-sm shrink-0 transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`}>★</button>
                       <span className="w-1 h-1 bg-gray-300 rounded-full" />
                       <span className="text-[10px] text-gray-500 truncate">{getEntidades(promo.requirements)}</span>
                       {promo.salesChannel && (
@@ -1300,7 +1300,7 @@ function HomeContent() {
                       <p className="text-sm font-black text-gray-900 dark:text-white flex-1">{promo.commerce.name}</p>
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
-                        className={`text-base transition-colors shrink-0 ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}
+                        className={`text-base transition-colors shrink-0 ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`}
                         title={favCommerces.includes(promo.commerce.name) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
                       >★</button>
                     </div>
