@@ -433,30 +433,39 @@ async function searchOpenFarma(query: string, taxonSlug?: string): Promise<Norma
     if (taxonSlug) {
       const taxonId = OPENFARMA_TAXON_MAP[taxonSlug.toLowerCase()] || OPENFARMA_TAXON_MAP[taxonSlug]
       if (taxonId) {
-        url = `${BASE}/api/v1/products?q[taxons_id_in][]=${taxonId}&per_page=40&q[s]=name+asc`
+        url = `${BASE}/api/v1/products?q%5Btaxons_id_in%5D%5B%5D=${taxonId}&per_page=40&q%5Bs%5D=name+asc`
       } else {
-        url = `${BASE}/api/v1/products?q[name_cont]=${encodeURIComponent(query)}&per_page=40`
+        url = `${BASE}/api/v1/products?q%5Bname_cont%5D=${encodeURIComponent(query)}&per_page=40`
       }
     } else {
-      url = `${BASE}/api/v1/products?q[name_cont]=${encodeURIComponent(query)}&per_page=40`
+      url = `${BASE}/api/v1/products?q%5Bname_cont%5D=${encodeURIComponent(query)}&per_page=40`
     }
 
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
     const res = await fetch(url, {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
-      redirect: 'follow',
-    })
-    if (!res.ok) return []
+      cache: 'no-store',
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout))
+    if (!res.ok) {
+      console.error('[OpenFarma] HTTP', res.status, url)
+      return []
+    }
     const data = await res.json()
     const products: any[] = data.products ?? []
+    console.log(`[OpenFarma] ${products.length} productos para "${query}"`)
 
     return products
-      .filter(p => p.master?.in_stock !== false || p.total_on_hand > 0)
+      .filter(p => parseFloat(p.price ?? '0') > 0 && p.total_on_hand > 0)
       .map(p => {
-        const price = parseFloat(p.price ?? '0')
-        const img = p.master?.images?.[0]?.small_url ?? ''
+        const price = parseFloat(p.price)
+        // Imagen: buscar en master.images o images directo
+        const imgs = p.master?.images ?? p.images ?? []
+        const img = imgs[0]?.product_url ?? imgs[0]?.small_url ?? imgs[0]?.thumb_url ?? ''
         return {
           ean: p.master?.sku ?? p.id.toString(),
           id: p.id.toString(),
@@ -472,6 +481,146 @@ async function searchOpenFarma(query: string, taxonSlug?: string): Promise<Norma
       })
   } catch (e) {
     console.error('[OpenFarma]', e)
+    return []
+  }
+}
+
+// ---------------------------------------------------------
+// FARMATODO (Next.js RSC - initialData en la respuesta)
+// Endpoint: /buscar?product=QUERY con header RSC:1
+// ---------------------------------------------------------
+async function searchFarmatodo(query: string): Promise<NormalizedProduct[]> {
+  try {
+    const BASE = 'https://www.farmatodo.com.ar'
+    const url = `${BASE}/buscar?product=${encodeURIComponent(query)}`
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+
+    const res = await fetch(url, {
+      headers: {
+        'RSC': '1',
+        'Accept': 'text/x-component',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout))
+
+    if (!res.ok) return []
+    const txt = await res.text()
+
+    // Extraer initialData.results del RSC payload
+    const idx = txt.indexOf('"initialData":{')
+    if (idx < 0) return []
+    // Buscar el array results dentro de initialData
+    const resultsIdx = txt.indexOf('"results":[', idx)
+    if (resultsIdx < 0) return []
+
+    // Parsear el array manualmente extrayendo objetos individuales
+    const products: NormalizedProduct[] = []
+    let pos = resultsIdx + '"results":['.length
+
+    while (pos < txt.length && txt[pos] !== ']') {
+      if (txt[pos] !== '{') { pos++; continue }
+      // Encontrar el fin del objeto (balancear llaves)
+      let depth = 0, end = pos
+      for (; end < txt.length; end++) {
+        if (txt[end] === '{') depth++
+        else if (txt[end] === '}') { depth--; if (depth === 0) { end++; break } }
+      }
+      try {
+        const obj = JSON.parse(txt.slice(pos, end))
+        if (!obj.hasStock) { pos = end; continue }
+        const price = obj.fullPrice ?? 0
+        const finalPrice = obj.offerPrice > 0 ? obj.offerPrice : price
+        if (finalPrice <= 0) { pos = end; continue }
+        products.push({
+          ean: obj.barcode ?? obj.id,
+          id: obj.id,
+          supermarket: 'Farmatodo',
+          name: obj.mediaDescription ?? obj.grayDescription ?? '',
+          brand: obj.brand ?? '',
+          price,
+          finalPrice,
+          discountText: obj.offerPrice > 0 ? `${Math.round((1 - obj.offerPrice / price) * 100)}% OFF` : '',
+          imageUrl: obj.mediaImageUrl ?? '',
+          url: `${BASE}/producto/${obj.id}`,
+        } as NormalizedProduct)
+      } catch {}
+      pos = end
+    }
+
+    console.log(`[Farmatodo] ${products.length} productos para "${query}"`)
+    return products
+  } catch (err: any) {
+    if (err.name !== 'AbortError') console.error('[Farmatodo]', err.message)
+    return []
+  }
+}
+
+// ---------------------------------------------------------
+// CENTRAL OESTE (Magento 2 - HTML parsing)
+// EAN extraído del slug de URL cuando empieza con dígitos
+// ---------------------------------------------------------
+async function searchCentralOeste(query: string): Promise<NormalizedProduct[]> {
+  try {
+    const BASE = 'https://www.centraloeste.com.ar'
+    const url = `${BASE}/catalogsearch/result/?q=${encodeURIComponent(query)}`
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'text/html' },
+      cache: 'no-store',
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout))
+
+    if (!res.ok) return []
+    const html = await res.text()
+
+    // Extraer bloques de producto
+    const itemRegex = /<li[^>]*class="[^"]*product-item[^"]*"[^>]*>([\s\S]*?)<\/li>/g
+    const products: NormalizedProduct[] = []
+    let match: RegExpExecArray | null
+
+    while ((match = itemRegex.exec(html)) !== null) {
+      const block = match[1]
+
+      const nameMatch = block.match(/class="product-item-link"[^>]*>([^<]+)</)
+      const priceMatch = block.match(/data-price-amount="([\d.]+)"/)
+      const imgMatch = block.match(/class="product-image-photo"[^>]*src="([^"]+)"/)
+      const urlMatch = block.match(/class="product-item-link"[^>]*href="([^"]+)"/)
+
+      if (!nameMatch || !priceMatch || !urlMatch) continue
+
+      const price = parseFloat(priceMatch[1])
+      if (price <= 0) continue
+
+      // EAN desde el slug de la URL: 7796285297107-nombre-producto.html
+      const slug = urlMatch[1].split('/').pop() ?? ''
+      const eanMatch = slug.match(/^(\d{8,14})-/)
+      const ean = eanMatch ? eanMatch[1] : slug.replace('.html', '')
+
+      products.push({
+        ean,
+        id: ean,
+        supermarket: 'Central Oeste',
+        name: nameMatch[1].trim(),
+        brand: '',
+        price,
+        finalPrice: price,
+        discountText: '',
+        imageUrl: imgMatch?.[1] ?? '',
+        url: urlMatch[1],
+      } as NormalizedProduct)
+    }
+
+    console.log(`[CentralOeste] ${products.length} productos para "${query}"`)
+    return products
+  } catch (err: any) {
+    if (err.name !== 'AbortError') console.error('[CentralOeste]', err.message)
     return []
   }
 }
@@ -530,14 +679,21 @@ export async function GET(request: Request) {
 
     if (isFarma) {
       const openFarmaSlug = cat ? findCategoryNode(cat)?.farmaSlug : undefined
-      const [farmacity, farmaplus, openfarma] = await Promise.all([
-        farmaQ ? searchVtexIS(farmaQ, false, 'Farmacity', 'https://www.farmacity.com', vtexMap) : Promise.resolve([]),
-        farmaQ ? searchVtexIS(farmaQ, false, 'Farmaplus', 'https://www.farmaplus.com.ar', vtexMap) : Promise.resolve([]),
-        farmaQ ? searchOpenFarma(farmaQ, openFarmaSlug) : Promise.resolve([]),
+      const t0 = Date.now()
+      const timed = (name: string, p: Promise<NormalizedProduct[]>) =>
+        p.then(r => { console.log(`[Precios] ${name}: ${Date.now() - t0}ms → ${r.length} productos`); return r })
+          .catch(() => { console.log(`[Precios] ${name}: ERROR ${Date.now() - t0}ms`); return [] as NormalizedProduct[] })
+      const [farmacity, farmaplus, openfarma, farmatodo, centralOeste] = await Promise.all([
+        farmaQ ? timed('Farmacity', searchVtexIS(farmaQ, false, 'Farmacity', 'https://www.farmacity.com', vtexMap)) : Promise.resolve([]),
+        farmaQ ? timed('Farmaplus', searchVtexIS(farmaQ, false, 'Farmaplus', 'https://www.farmaplus.com.ar', vtexMap)) : Promise.resolve([]),
+        farmaQ ? timed('OpenFarma', searchOpenFarma(farmaQ, openFarmaSlug)) : Promise.resolve([]),
+        farmaQ ? timed('Farmatodo', searchFarmatodo(farmaQ)) : Promise.resolve([]),
+        farmaQ ? timed('Central Oeste', searchCentralOeste(farmaQ)) : Promise.resolve([]),
       ])
-      allProducts = [...farmacity, ...farmaplus, ...openfarma]
+      allProducts = [...farmacity, ...farmaplus, ...openfarma, ...farmatodo, ...centralOeste]
     }
-      .filter(p => p.finalPrice > 0)
+
+    allProducts = allProducts.filter(p => p.finalPrice > 0)
 
     // Agrupamiento por EAN (Consolidación)
     const grouped = new Map<string, any>()
@@ -585,11 +741,6 @@ export async function GET(request: Request) {
       query: q || cat,
       groupedCount: results.length,
       rawCount: allProducts.length,
-      debugLengths: { coto: coto.length, carrefour: carrefour.length, jumbo: jumbo.length, disco: disco.length, vea: vea.length, dia: dia.length },
-      debugData: {
-        coto0: coto[0],
-        disco0: disco[0]
-      },
       results
     })
   } catch (error: any) {
