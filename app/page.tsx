@@ -1272,7 +1272,7 @@ function HomeContent() {
                 </div>
 
                 {/* Estrella favorito comercio */}
-                <div className="flex justify-end px-3 pt-1">
+                <div className="flex justify-center px-3 pt-1">
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
                     className={`text-2xl transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
