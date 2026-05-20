@@ -60,7 +60,7 @@ type Promo = {
   sourceText?: string | null
   sourceUrl?: string | null
   salesChannel?: string | null
-  category: { name: string; color: string; icon?: string }
+  category: { name: string; slug?: string; color: string; icon?: string }
   commerce: { name: string; logoUrl?: string | null }
   requirements: Req[]
   validFrom: string
@@ -348,6 +348,9 @@ function HomeContent() {
   const [province, setProvince] = useState<string | null>(null)
   const [showProvinceSelector, setShowProvinceSelector] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [favCategories, setFavCategories] = useState<string[]>([]) // slugs, max 3
+  const [favCommerces, setFavCommerces] = useState<string[]>([])   // nombres, max 5
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(['favorites', 'popular']))
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -383,6 +386,14 @@ function HomeContent() {
       }
     }
 
+    // Cargar favoritos
+    try {
+      const fc = localStorage.getItem('favCategories')
+      if (fc) setFavCategories(JSON.parse(fc))
+      const fco = localStorage.getItem('favCommerces')
+      if (fco) setFavCommerces(JSON.parse(fco))
+    } catch {}
+
     // Cargar provincia guardada (aplica a todos)
     const savedProvince = localStorage.getItem('userProvince')
     if (savedProvince) {
@@ -398,6 +409,30 @@ function HomeContent() {
     const slugs = params.get('cats')?.split(',').filter(Boolean) ?? []
     if (slugs.length > 0) setSelectedCats(slugs)
   }, [])
+
+  const toggleFavCategory = (slug: string) => {
+    setFavCategories(prev => {
+      const next = prev.includes(slug) ? prev.filter(s => s !== slug) : prev.length < 3 ? [...prev, slug] : prev
+      localStorage.setItem('favCategories', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const toggleFavCommerce = (name: string) => {
+    setFavCommerces(prev => {
+      const next = prev.includes(name) ? prev.filter(n => n !== name) : prev.length < 5 ? [...prev, name] : prev
+      localStorage.setItem('favCommerces', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const toggleSection = (key: string) => {
+    setOpenSections(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
 
   useEffect(() => {
     async function fetchEntities() {
@@ -593,7 +628,16 @@ function HomeContent() {
       .slice(0, 3)
   }, [promos])
 
-  const promosFiltradas = promos // Ya vienen filtradas del backend por los useEffect dependencies
+  // Ordenar: favoritos primero (categoría o comercio en favoritos), luego el resto
+  const promosFiltradas = favCategories.length === 0 && favCommerces.length === 0
+    ? promos
+    : [...promos].sort((a, b) => {
+        const aFav = favCategories.includes(a.category.slug ?? '') || favCommerces.includes(a.commerce.name)
+        const bFav = favCategories.includes(b.category.slug ?? '') || favCommerces.includes(b.commerce.name)
+        if (aFav && !bFav) return -1
+        if (!aFav && bFav) return 1
+        return 0
+      })
 
   const toggleSave = async (id: string, e: React.MouseEvent) => {
     e.preventDefault()
@@ -670,83 +714,134 @@ function HomeContent() {
               ))}
             </div>
 
-            <div className="space-y-6">
-              {/* Más Populares */}
+            <div className="space-y-1">
+
+              {/* ── MIS FAVORITOS ── */}
               <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-3">Más Populares</p>
-                {categorias.filter(c => (c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
+                <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">⭐ Mis Favoritos</span>
+                  <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('favorites') ? '−' : '+'}</span>
+                </button>
+                {openSections.has('favorites') && (
+                  <div className="mt-1 space-y-3 px-3">
+                    {/* Categorías favoritas */}
+                    <div>
+                      <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-1">Categorías <span className="text-gray-200">({favCategories.length}/3)</span></p>
+                      {favCategories.length === 0 && (
+                        <p className="text-[10px] text-gray-300 italic px-1">Marcá ★ en una categoría</p>
+                      )}
+                      {favCategories.map(slug => {
+                        const cat = categorias.find(c => c.slug === slug)
+                        if (!cat) return null
+                        const isActive = selectedCats.includes(slug)
+                        return (
+                          <div key={slug} className={`flex items-center justify-between px-2 py-1.5 rounded-lg ${isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                            <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== slug) : [...prev, slug])} className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="text-base">{cat.icon}</span>
+                              <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-600'}`}>{cat.name}</span>
+                            </button>
+                            <button onClick={() => toggleFavCategory(slug)} className="text-yellow-400 hover:text-gray-300 ml-2 shrink-0" title="Quitar de favoritos">★</button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* Comercios favoritos */}
+                    <div>
+                      <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mb-1">Comercios <span className="text-gray-200">({favCommerces.length}/5)</span></p>
+                      {favCommerces.length === 0 && (
+                        <p className="text-[10px] text-gray-300 italic px-1">Marcá ★ en un comercio</p>
+                      )}
+                      {favCommerces.map(name => (
+                        <div key={name} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50">
+                          <span className="text-xs font-bold text-gray-600 truncate flex-1">{name}</span>
+                          <button onClick={() => toggleFavCommerce(name)} className="text-yellow-400 hover:text-gray-300 ml-2 shrink-0" title="Quitar de favoritos">★</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px bg-gray-100 mx-3" />
+
+              {/* ── MÁS POPULARES ── */}
+              <div>
+                <button onClick={() => toggleSection('popular')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">Más Populares</span>
+                  <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('popular') ? '−' : '+'}</span>
+                </button>
+                {openSections.has('popular') && categorias.filter(c => (c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
-                  const count = forMe ? (promos.filter(p => p.category.name === cat.name).length) : (cat.promoCount ?? 0)
+                  const isFav = favCategories.includes(cat.slug)
+                  const count = forMe ? promos.filter(p => p.category.name === cat.name).length : (cat.promoCount ?? 0)
                   return (
-                    <button
-                      key={cat.slug}
-                      onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-bold transition-all ${
-                        isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">{cat.icon}</span>
-                        <span className="flex items-center gap-1">{cat.name} 🔥</span>
+                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                      <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])} className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-base">{cat.icon}</span>
+                        <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-500'}`}>{cat.name}</span>
+                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {count > 0 && <span className="text-[9px] text-gray-300 w-6 text-right">{count}</span>}
+                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
-                      {count > 0 && <span className="text-[10px] opacity-60 bg-white/50 px-1.5 py-0.5 rounded-md">{count}</span>}
-                    </button>
+                    </div>
                   )
                 })}
               </div>
 
-              {/* Rangos de Descuento */}
+              <div className="h-px bg-gray-100 mx-3" />
+
+              {/* ── POR DESCUENTO ── */}
               <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-3">Por Descuento</p>
-                {[
+                <button onClick={() => toggleSection('discount')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">Por Descuento</span>
+                  <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('discount') ? '−' : '+'}</span>
+                </button>
+                {openSections.has('discount') && [
                   { label: '< 10%', val: '0-10' },
-                  { label: '10% - 30%', val: '10-30' },
+                  { label: '10% – 30%', val: '10-30' },
                   { label: '> 30%', val: '30+' }
                 ].map(range => {
                   const isActive = activeFilters.discountRanges.includes(range.val)
                   return (
-                    <button
-                      key={range.val}
-                      onClick={() => setActiveFilters(prev => ({
-                        ...prev,
-                        discountRanges: isActive ? prev.discountRanges.filter(r => r !== range.val) : [...prev.discountRanges, range.val]
-                      }))}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold transition-all ${
-                        isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
-                      }`}
+                    <button key={range.val}
+                      onClick={() => setActiveFilters(prev => ({ ...prev, discountRanges: isActive ? prev.discountRanges.filter(r => r !== range.val) : [...prev.discountRanges, range.val] }))}
+                      className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isActive ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? 'bg-indigo-100' : 'bg-gray-100'}`}>
-                        <span className="text-[10px] font-black">%</span>
-                      </div>
+                      <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black ${isActive ? 'bg-indigo-100' : 'bg-gray-100'}`}>%</span>
                       {range.label}
                     </button>
                   )
                 })}
               </div>
 
-              {/* Otras Categorías */}
+              <div className="h-px bg-gray-100 mx-3" />
+
+              {/* ── OTRAS CATEGORÍAS ── */}
               <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-3">Otras Categorías</p>
-                {categorias.filter(c => !(c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
+                <button onClick={() => toggleSection('others')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-500">Otras Categorías</span>
+                  <span className="text-gray-300 group-hover:text-gray-500 text-sm">{openSections.has('others') ? '−' : '+'}</span>
+                </button>
+                {openSections.has('others') && categorias.filter(c => !(c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
-                  const count = forMe ? (promos.filter(p => p.category.name === cat.name).length) : (cat.promoCount ?? 0)
+                  const isFav = favCategories.includes(cat.slug)
+                  const count = forMe ? promos.filter(p => p.category.name === cat.name).length : (cat.promoCount ?? 0)
                   return (
-                    <button
-                      key={cat.slug}
-                      onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-bold transition-all ${
-                        isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">{cat.icon}</span>
-                        <span>{cat.name}</span>
+                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                      <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])} className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-base">{cat.icon}</span>
+                        <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600' : 'text-gray-500'}`}>{cat.name}</span>
+                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {count > 0 && <span className="text-[9px] text-gray-300 w-6 text-right">{count}</span>}
+                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-sm transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
                       </div>
-                      {count > 0 && <span className="text-[10px] opacity-60">{count}</span>}
-                    </button>
+                    </div>
                   )
                 })}
               </div>
+
             </div>
           </nav>
         </div>
@@ -1112,6 +1207,7 @@ function HomeContent() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[10px] font-bold text-gray-900 truncate uppercase">{promo.commerce.name}</span>
+                      <button onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }} className={`text-sm shrink-0 transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}>★</button>
                       <span className="w-1 h-1 bg-gray-300 rounded-full" />
                       <span className="text-[10px] text-gray-500 truncate">{getEntidades(promo.requirements)}</span>
                       {promo.salesChannel && (
@@ -1200,7 +1296,14 @@ function HomeContent() {
                 {isExpanded && (
                   <div className="mx-3 mb-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl space-y-2.5">
                     {/* Nombre del comercio */}
-                    <p className="text-sm font-black text-gray-900 dark:text-white">{promo.commerce.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-black text-gray-900 dark:text-white flex-1">{promo.commerce.name}</p>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
+                        className={`text-base transition-colors shrink-0 ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}
+                        title={favCommerces.includes(promo.commerce.name) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                      >★</button>
+                    </div>
                     {/* Banco / Billetera */}
                     {uniqueEntities.length > 0 && (
                       <div>
