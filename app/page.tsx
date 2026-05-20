@@ -1269,6 +1269,12 @@ function HomeContent() {
                   <button onClick={(e) => toggleSave(promo.id, e)} className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm">
                     <Heart size={14} className={promo.isSaved ? 'text-red-500 fill-red-500' : 'text-gray-400'} />
                   </button>
+                  {/* Estrella de comercio favorito */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
+                    className={`absolute top-2 left-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm text-sm transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                    title={favCommerces.includes(promo.commerce.name) ? 'Quitar de favoritos' : `Agregar ${promo.commerce.name} a favoritos`}
+                  >★</button>
                   {/* Nombre cuando hay logo */}
                   {promo.commerce.logoUrl && (
                     <div className="absolute bottom-2 left-3">
