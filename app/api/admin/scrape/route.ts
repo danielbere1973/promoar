@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ALL_SCRAPERS } from '@/lib/scrapers';
 import { generatePromoSlug } from '@/lib/utils/promoSlug';
-import { detectCategoria } from '@/lib/scrapers/bank-helpers';
+import { detectCategoria, detectSalesChannel } from '@/lib/scrapers/bank-helpers';
 
 function normalizeStr(s: string): string {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -113,12 +113,12 @@ export async function POST(req: NextRequest) {
       }
 
       // ── Comercio ──────────────────────────────────────────────────────────
-      let comMatch = commerces.find(c =>
+      let comMatch = commerces.find((c: any) =>
         normalizeStr(c.name) === normalizeStr(p.storeName ?? '')
       );
       if (!comMatch && p.storeName) {
         const normStore = normalizeStr(p.storeName);
-        comMatch = commerces.find(c => {
+        comMatch = commerces.find((c: any) => {
           const normC = normalizeStr(c.name);
           // Requiere mínimo 4 chars y word boundary para evitar falsos positivos ("vea" en "alvear")
           if (normC.length >= 4 && normStore.includes(normC) && new RegExp(`\\b${normC}\\b`).test(normStore)) return true;
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
           data: { logoUrl: p.storeLogoUrl }
         });
         // Actualizar en la lista local para siguientes promos del mismo scrape
-        const idx = commerces.findIndex(c => c.id === comMatch!.id);
+        const idx = commerces.findIndex((c: any) => c.id === comMatch!.id);
         if (idx !== -1) commerces[idx] = comMatch;
       }
 
@@ -323,6 +323,9 @@ export async function POST(req: NextRequest) {
         title: p.title,
       })
 
+      const salesChannel = p.salesChannel
+        ?? detectSalesChannel(`${p.title} ${p.description} ${p.sourceText ?? ''}`)
+
       const promoData = {
         title: p.title,
         description: p.description || '',
@@ -336,6 +339,7 @@ export async function POST(req: NextRequest) {
         status: 'ACTIVE' as const,
         sourceUrl: p.sourceUrl ?? null,
         sourceText: p.sourceText ?? null,
+        salesChannel: salesChannel ?? null,
       };
 
       // ── Upsert de la promo ────────────────────────────────────────────────

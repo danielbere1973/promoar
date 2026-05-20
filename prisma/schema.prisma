@@ -286,6 +286,7 @@ model Promo {
   updatedAt          DateTime           @updatedAt
   sourceText         String?
   specificDates      String?
+  salesChannel       String?
   provinces          String[]           @default([])
   slug               String?            @unique
   userReports        PromoReport[]

@@ -35,6 +35,7 @@ export interface ScrapedPromo {
   storeName?: string;
   storeLogoUrl?: string;
   categoria?: string;
+  salesChannel?: 'ONLINE' | 'FISICA' | null;
   segment?: string;
   note?: string;
 }

@@ -397,6 +397,9 @@ export const ModoScraper: Scraper = {
       const cardTier = extractCardTier(card);
       const storeName = extractStoreName(card);
       const detectedCategoria = categoria ?? detectModoCategory(card);
+      const salesChannel: 'ONLINE' | 'FISICA' | null =
+        card.payment_flow === 'online' ? 'ONLINE' :
+        card.payment_flow === 'instore' || card.payment_flow === 'trip' ? 'FISICA' : null;
 
       // Descripción desde content rows
       let description = card.content?.row?.map(r => r.text).filter(Boolean).join(' · ') || card.title;
@@ -446,6 +449,7 @@ export const ModoScraper: Scraper = {
           accountType: 'ANY',
           storeName,
           categoria: detectedCategoria,
+          salesChannel,
         });
       }
     }

@@ -191,7 +191,7 @@ function reconstructConfigs(
   }
 
   const configs: Record<string, BankConfig> = {}
-  for (const bankId of bankIdSet) {
+  for (const bankId of Array.from(bankIdSet)) {
     const bank = banks.find(b => b.id === bankId)
     const bankCards = cards.filter(c => c.bankId === bankId)
     const opts = bank ? computeCardOptions(bank, allNets) : []

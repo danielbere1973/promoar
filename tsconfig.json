@@ -22,7 +22,18 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"],
+  "exclude": [
+    "node_modules",
+    "**/*Viejo*/**",
+    "**/*Viejos*/**",
+    "**/route_no_funca.ts",
+    "**/route-old.ts",
+    "**/page-*.tsx",
+    "**/app/api/debug-auth/**",
+    "classify_local.ts",
+    "classify_promos.ts",
+    "route.ts"
+  ],
   "ts-node": {
     "compilerOptions": {
       "module": "CommonJS"

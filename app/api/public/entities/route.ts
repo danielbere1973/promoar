@@ -24,7 +24,7 @@ function groupByPopularity<T extends { name: string }>(
   threshold: number
 ): (T & { popular: boolean })[] {
   const withFlag = items.map(({ _count, ...item }) => ({
-    ...(item as T),
+    ...(item as unknown as T),
     popular: _count.promoRequirements >= threshold,
   }))
   const pop  = withFlag.filter(i => i.popular).sort((a, b) => a.name.localeCompare(b.name, 'es'))

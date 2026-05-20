@@ -208,8 +208,11 @@ export const CarrefourScraper: Scraper = {
       let paymentChannel: 'QR' | 'ANY' = 'ANY';
       if (/\bMODO\b/i.test(title + subTitle) || walletNames.includes('MODO')) paymentChannel = 'QR';
 
-      // Nota de sucursal (hyper, market, ecommerce, etc.)
-      const storeNote = buildStoreNote(f);
+      // Nota de sucursal y canal de venta
+      const storeNote = buildStoreNote(f)
+      const isOnlineOnly = f['ecommerce'] === 'true' && f['hyper'] !== 'true' && f['market'] !== 'true' && f['express'] !== 'true' && f['maxi'] !== 'true'
+      const isFisicaOnly = f['ecommerce'] !== 'true' && (f['hyper'] === 'true' || f['market'] === 'true' || f['express'] === 'true' || f['maxi'] === 'true')
+      const salesChannel: 'ONLINE' | 'FISICA' | null = isOnlineOnly ? 'ONLINE' : isFisicaOnly ? 'FISICA' : null
 
       const description = [title, subTitle, storeNote].filter(Boolean).join(' | ');
 
@@ -237,6 +240,7 @@ export const CarrefourScraper: Scraper = {
         paymentChannel,
         accountType: 'ANY',
         storeName: 'Carrefour',
+        salesChannel,
         categoria: 'Supermercados',
       });
 

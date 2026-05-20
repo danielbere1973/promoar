@@ -59,6 +59,7 @@ type Promo = {
   specificDates?: string | null
   sourceText?: string | null
   sourceUrl?: string | null
+  salesChannel?: string | null
   category: { name: string; color: string; icon?: string }
   commerce: { name: string; logoUrl?: string | null }
   requirements: Req[]
@@ -1113,6 +1114,11 @@ function HomeContent() {
                       <span className="text-[10px] font-bold text-gray-900 truncate uppercase">{promo.commerce.name}</span>
                       <span className="w-1 h-1 bg-gray-300 rounded-full" />
                       <span className="text-[10px] text-gray-500 truncate">{getEntidades(promo.requirements)}</span>
+                      {promo.salesChannel && (
+                        <span className="bg-yellow-400 text-red-600 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0">
+                          {promo.salesChannel === 'ONLINE' ? 'Online' : 'Físico'}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-extrabold text-indigo-600">{discountLabel(promo)}</span>
@@ -1148,6 +1154,11 @@ function HomeContent() {
 
                 {/* Header: logo grande O icono+nombre */}
                 <div className="relative cursor-pointer" onClick={() => setSelectedPromo(promo)}>
+                  {promo.salesChannel && (
+                    <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-br-lg">
+                      {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
+                    </div>
+                  )}
                   {promo.commerce.logoUrl ? (
                     <div className="h-28 flex items-center justify-center p-5 bg-white">
                       <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-full max-w-full object-contain" />

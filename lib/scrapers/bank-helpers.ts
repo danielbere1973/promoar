@@ -272,3 +272,39 @@ export async function extractCardsFromDOM(page: import('playwright').Page): Prom
     return found;
   }, CARD_SELECTORS);
 }
+
+// Detecta si una promo es exclusivamente online o exclusivamente física
+// Retorna 'ONLINE', 'FISICA', o null (no se puede determinar)
+export function detectSalesChannel(text: string): 'ONLINE' | 'FISICA' | null {
+  const t = text.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+  // Señales claras de ONLINE
+  const onlineSignals = [
+    'EXCLUSIVO ONLINE', 'SOLO ONLINE', 'UNICO ONLINE', 'SOLO EN WEB',
+    'SOLO EN TIENDA ONLINE', 'COMPRAS ONLINE', 'COMPRA ONLINE',
+    'VALIDO ONLINE', 'VALIDO SOLO ONLINE', 'SOLO PARA COMPRAS ONLINE',
+    'EN CARREFOUR.COM', 'EN LA APP', 'SOLO APP', 'EXCLUSIVO APP',
+    'NO VALIDO EN SUCURSALES', 'NO VALIDO EN TIENDAS', 'NO VALIDO EN LOCALES',
+    'NO APLICA EN TIENDA', 'NO APLICA EN LOCAL', 'NO APLICA EN SUCURSAL',
+  ]
+
+  // Señales claras de FÍSICA
+  const fisicaSignals = [
+    'EXCLUSIVO EN LOCAL', 'SOLO EN LOCAL', 'SOLO EN TIENDA',
+    'EXCLUSIVO EN TIENDA', 'SOLO EN SUCURSAL', 'EXCLUSIVO EN SUCURSAL',
+    'SOLO PRESENCIAL', 'EXCLUSIVO PRESENCIAL',
+    'VALIDO EN LOCALES ADHERIDOS', 'EN LOCALES ADHERIDOS',
+    'NO VALIDO ONLINE', 'NO VALIDO EN COMPRAS ONLINE',
+    'NO APLICA ONLINE', 'NO APLICA EN COMPRAS ONLINE',
+    'NO VALIDO EN LA WEB', 'NO VALIDO EN TIENDA ONLINE',
+    'NO APLICA EN ECOMMERCE', 'NO VALIDO EN ECOMMERCE',
+  ]
+
+  for (const s of onlineSignals) {
+    if (t.includes(s)) return 'ONLINE'
+  }
+  for (const s of fisicaSignals) {
+    if (t.includes(s)) return 'FISICA'
+  }
+  return null
+}

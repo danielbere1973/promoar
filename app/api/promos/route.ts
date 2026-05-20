@@ -249,7 +249,7 @@ export async function GET(req: NextRequest) {
 
       // Función estricta de matching: verifica que el perfil del usuario
       // satisface los criterios del requirement.
-      function matchesProfile(req: any): boolean {
+      const matchesProfile = (req: any): boolean => {
         // ═══════════════════════════════════════════════════════════════════════
         // REGLA 1: Requisito sin restricciones → aplica para TODOS
         // ═══════════════════════════════════════════════════════════════════════

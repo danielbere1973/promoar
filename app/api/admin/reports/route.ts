@@ -42,8 +42,8 @@ export async function GET(req: NextRequest) {
         orderBy: [{ commerce: { name: 'asc' } }, { title: 'asc' }],
       })
       const rows = promos.map(p => {
-        const bancos = [...new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))].join(' / ')
-        const billeteras = [...new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))].join(' / ')
+        const bancos = Array.from(new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))).join(' / ')
+        const billeteras = Array.from(new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))).join(' / ')
         return {
           id: p.id,
           comercio: p.commerce.name,
@@ -176,9 +176,9 @@ export async function GET(req: NextRequest) {
       })
 
       const rows = promos.map(p => {
-        const bancos = [...new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))].join(' / ')
-        const wallets = [...new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))].join(' / ')
-        const redes = [...new Set(p.requirements.map(r => r.cardNetwork?.name).filter(Boolean))].join(' / ')
+        const bancos = Array.from(new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))).join(' / ')
+        const wallets = Array.from(new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))).join(' / ')
+        const redes = Array.from(new Set(p.requirements.map(r => r.cardNetwork?.name).filter(Boolean))).join(' / ')
         const descuentos = p.requirements.map(r => `${r.discountValue}${r.discountType === 'CUOTAS_SIN_INTERES' ? ' CSI' : '%'}`).join(' / ')
         return {
           id: p.id,

@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest) {
       where: { id: { in: ids } },
       select: { commerceId: true },
     })
-    const commerceIds = [...new Set(promos.map(p => p.commerceId))]
+    const commerceIds = Array.from(new Set(promos.map(p => p.commerceId)))
     if (commerceIds.length > 0) {
       await (prisma.commerce as any).updateMany({
         where: { id: { in: commerceIds } },
