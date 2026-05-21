@@ -295,7 +295,22 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
     if (!res.ok) return []
 
     const data = await res.json()
-    const products = data.products || []
+    let products = data.products || []
+
+    // Fallback al Catalog Search si IS no devuelve resultados
+    if (products.length === 0 && !isCategory) {
+      try {
+        const catUrl = `${baseUrl}/api/catalog_system/pub/products/search?ft=${encoded}&_from=0&_to=14`
+        const catRes = await fetch(catUrl, { headers })
+        if (catRes.ok) {
+          const catData = await catRes.json()
+          if (Array.isArray(catData) && catData.length > 0) {
+            products = catData
+            console.log(`[${supermarket}] IS vacío, catalog devolvió ${products.length} productos`)
+          }
+        }
+      } catch {}
+    }
 
     const initial = products.map((p: any) => {
       const item = p.items?.[0] || {}
