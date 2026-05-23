@@ -183,6 +183,7 @@ export async function GET(request: Request) {
       { name: 'Supervielle',    patterns: ['supervielle.com.ar'] },
       { name: 'Patagonia',      patterns: ['bancopatagonia.com.ar'] },
       { name: 'ICBC',           patterns: ['icbc.com.ar'] },
+      { name: 'Personal Pay',   patterns: ['personal.com.ar/pay'] },
     ];
 
     const scraperMap: Record<string, number> = {};

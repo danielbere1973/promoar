@@ -223,6 +223,7 @@ const SCRAPERS_CONFIG: ScraperConfig[] = [
   { id: 'openpay',         name: 'Openpay',         group: 'billetera',    description: 'Posnet BBVA — fetch directo' },
   { id: 'club la nacion',  name: 'Club La Nacion',  group: 'billetera',    description: '575 beneficios — cheerio' },
   { id: 'clarín 365',     name: 'Clarín 365',      group: 'billetera',    description: '835 beneficios — API directa' },
+  { id: 'personal pay',   name: 'Personal Pay',    group: 'billetera',    description: '~213 beneficios — API directa' },
   // Tarjetas
   { id: 'visa',            name: 'VISA',            group: 'tarjeta',      description: 'Playwright — tiers Signature/Platinum/Gold/Classic' },
   { id: 'amex',            name: 'AmEx',            group: 'tarjeta',      description: 'Playwright — 7 categorías' },

@@ -17,6 +17,7 @@ import { CuentaDNIScraper } from './cuentadni'; // V3: cheerio + GetBeneficioDat
 import { OpenpayScraper } from './openpay'; // Posnet de BBVA
 import { ClubLaNacionScraper } from './clublanacion';
 import { Clarin365Scraper } from './clarin365';
+import { PersonalPayScraper } from './personalpay';
 
 // ─── Tarjetas de crédito ───────────────────────────────────────────────────────
 import { VisaScraper } from './visa';
@@ -55,6 +56,7 @@ export const WALLET_SCRAPERS: Scraper[] = [
   OpenpayScraper,
   ClubLaNacionScraper,
   Clarin365Scraper,
+  PersonalPayScraper,
 ];
 
 export const TARJETA_SCRAPERS: Scraper[] = [
@@ -80,7 +82,7 @@ export const BANCO_SCRAPERS: Scraper[] = [
 
 export const ALL_SCRAPERS: Scraper[] = [
   ...SUPERMERCADO_SCRAPERS,  // incluye DIAScraper
-  ...WALLET_SCRAPERS,
+  ...WALLET_SCRAPERS,  // incluye PersonalPayScraper
   ...TARJETA_SCRAPERS,
   // Bancos — excluimos CabalScraper para no duplicarlo (ya está en TARJETA_SCRAPERS)
   BrubankScraper,
