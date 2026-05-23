@@ -229,6 +229,7 @@ const SCRAPERS_CONFIG: ScraperConfig[] = [
   { id: 'naranjax',        name: 'Naranja X',       group: 'tarjeta',      description: 'Playwright — anti-Cloudflare' },
   { id: 'cabal',           name: 'Cabal / Credicoop', group: 'tarjeta',    description: 'Playwright — días por clases CSS' },
   // Bancos
+  { id: 'brubank',         name: 'Brubank',         group: 'banco',        description: 'Webflow — cheerio · 3 planes' },
   { id: 'banco galicia',   name: 'Galicia',         group: 'banco',        description: 'React SPA — intercepción API' },
   { id: 'bbva',            name: 'BBVA',            group: 'banco',        description: 'Next.js — intercepción API' },
   { id: 'banco santander', name: 'Santander',       group: 'banco',        description: 'Playwright — intercepción API' },

@@ -26,6 +26,7 @@ import { CabalScraper } from './cabal';   // también incluye Banco Credicoop
 
 // ─── Bancos ────────────────────────────────────────────────────────────────────
 import { GaliciaScraper } from './galicia';
+import { BrubankScraper } from './brubank';
 import { BBVAScraper } from './bbva';
 import { SantanderScraper } from './santander';
 import { MacroScraper } from './macro';
@@ -64,6 +65,7 @@ export const TARJETA_SCRAPERS: Scraper[] = [
 ];
 
 export const BANCO_SCRAPERS: Scraper[] = [
+  BrubankScraper,
   GaliciaScraper,
   BBVAScraper,
   SantanderScraper,
@@ -81,6 +83,7 @@ export const ALL_SCRAPERS: Scraper[] = [
   ...WALLET_SCRAPERS,
   ...TARJETA_SCRAPERS,
   // Bancos — excluimos CabalScraper para no duplicarlo (ya está en TARJETA_SCRAPERS)
+  BrubankScraper,
   GaliciaScraper,
   BBVAScraper,
   SantanderScraper,
