@@ -550,7 +550,7 @@ export async function POST(req: NextRequest) {
       validFrom, validUntil, validDays, validDaysNote,
       validFromHour, validToHour,
       categoryId, commerceId, requirements,
-      status, sourceUrl, sourceNote, provinces,
+      status, sourceUrl, sourceNote, commerceNote, provinces,
     } = body
 
     const promo = await prisma.promo.create({
@@ -572,6 +572,7 @@ export async function POST(req: NextRequest) {
         status: status ?? 'ACTIVE',
         sourceUrl: sourceUrl || null,
         sourceNote: sourceNote || null,
+        commerceNote: commerceNote || null,
         provinces: Array.isArray(provinces) ? provinces : [],
         requirements: requirements?.length
           ? {

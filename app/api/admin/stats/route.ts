@@ -36,9 +36,24 @@ export async function GET(request: Request) {
       }
     }
 
+    // Separar bankIds de walletIds (el combo Bancos y Billeteras mezcla ambos)
+    const allWallets = await prisma.wallet.findMany({ select: { id: true } });
+    const walletIdSet = new Set(allWallets.map(w => w.id));
+    const realBankIds = bankIds.filter(id => !walletIdSet.has(id));
+    const realWalletIds = bankIds.filter(id => walletIdSet.has(id));
+
     // Filtro por Requerimientos (Banco, Segmento, Tarjeta, Tipo Cuenta)
     const reqFilter: any = {};
-    if (bankIds.length > 0) reqFilter.bankId = { in: bankIds };
+    if (realBankIds.length > 0 && realWalletIds.length > 0) {
+      reqFilter.OR = [
+        { bankId: { in: realBankIds } },
+        { walletId: { in: realWalletIds } },
+      ];
+    } else if (realBankIds.length > 0) {
+      reqFilter.bankId = { in: realBankIds };
+    } else if (realWalletIds.length > 0) {
+      reqFilter.walletId = { in: realWalletIds };
+    }
     if (cardNetworkIds.length > 0) reqFilter.cardNetworkId = { in: cardNetworkIds };
     if (cardSegmentIds.length > 0) reqFilter.cardSegmentId = { in: cardSegmentIds };
     if (accountTypes.length > 0) reqFilter.accountType = { in: accountTypes };
@@ -110,7 +125,7 @@ export async function GET(request: Request) {
 
     // 3. Por Banco
     const bankFilterForReq: any = { bankId: { not: null } };
-    if (bankIds.length > 0) bankFilterForReq.bankId = { in: bankIds };
+    if (realBankIds.length > 0) bankFilterForReq.bankId = { in: realBankIds };
 
     const promosConBanco = await prisma.promo.findMany({
       where: { ...promoWhere, requirements: { some: bankFilterForReq } },
@@ -140,18 +155,43 @@ export async function GET(request: Request) {
       where: promoWhere,
       select: { sourceUrl: true }
     });
+    const SCRAPER_DOMAINS: Array<{ name: string; patterns: string[] }> = [
+      { name: 'Coto',           patterns: ['coto.com.ar'] },
+      { name: 'Diarco',         patterns: ['diarco.com.ar'] },
+      { name: 'Jumbo',          patterns: ['jumbo.com.ar'] },
+      { name: 'Disco',          patterns: ['disco.com.ar'] },
+      { name: 'Vea',            patterns: ['vea.com.ar'] },
+      { name: 'ChangoMas',      patterns: ['changomas.com', 'walmartargentina'] },
+      { name: 'Carrefour',      patterns: ['carrefour.com.ar'] },
+      { name: 'DIA',            patterns: ['dia.com.ar'] },
+      { name: 'MODO',           patterns: ['modo.com.ar'] },
+      { name: 'Mercado Pago',   patterns: ['mercadopago.com'] },
+      { name: 'Cuenta DNI',     patterns: ['cuentadni', 'bna.com.ar'] },
+      { name: 'Openpay',        patterns: ['openpayargentina.com'] },
+      { name: 'Club La Nacion', patterns: ['club.lanacion.com.ar'] },
+      { name: 'Clarín 365',     patterns: ['365.clarin.com'] },
+      { name: 'VISA',           patterns: ['visa.com.ar'] },
+      { name: 'AmEx',           patterns: ['americanexpress.com'] },
+      { name: 'Naranja X',      patterns: ['naranjax.com'] },
+      { name: 'Cabal',          patterns: ['cabal.coop', 'credicoop.com.ar'] },
+      { name: 'Galicia',        patterns: ['galicia.ar'] },
+      { name: 'BBVA',           patterns: ['bbva.com.ar'] },
+      { name: 'Santander',      patterns: ['santander.com.ar'] },
+      { name: 'Macro',          patterns: ['macro.com.ar'] },
+      { name: 'Nación',         patterns: ['bna.com.ar', 'banconacion'] },
+      { name: 'Ciudad',         patterns: ['bancociudad.com.ar'] },
+      { name: 'Supervielle',    patterns: ['supervielle.com.ar'] },
+      { name: 'Patagonia',      patterns: ['bancopatagonia.com.ar'] },
+      { name: 'ICBC',           patterns: ['icbc.com.ar'] },
+    ];
+
     const scraperMap: Record<string, number> = {};
     allSources.forEach(p => {
-      let sName = 'Manual / Otro';
       const url = p.sourceUrl?.toLowerCase() || '';
-      if (url.includes('galicia.ar')) sName = 'Galicia';
-      else if (url.includes('coto.com.ar')) sName = 'Coto';
-      else if (url.includes('jumbo.com.ar')) sName = 'Jumbo';
-      else if (url.includes('disco.com.ar')) sName = 'Disco';
-      else if (url.includes('vea.com.ar')) sName = 'Vea';
-      else if (url.includes('carrefour.com.ar')) sName = 'Carrefour';
-      else if (url.includes('modo.com.ar')) sName = 'MODO';
-      
+      let sName = 'Manual / Otro';
+      for (const { name, patterns } of SCRAPER_DOMAINS) {
+        if (patterns.some(pat => url.includes(pat))) { sName = name; break; }
+      }
       scraperMap[sName] = (scraperMap[sName] || 0) + 1;
     });
 

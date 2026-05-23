@@ -61,6 +61,7 @@ type Promo = {
   sourceText?: string | null
   sourceUrl?: string | null
   salesChannel?: string | null
+  commerceNote?: string | null
   category: { name: string; slug?: string; color: string; icon?: string }
   commerce: { name: string; logoUrl?: string | null }
   requirements: Req[]
@@ -1300,6 +1301,7 @@ function HomeContent() {
                 <div className={`mx-3 mt-3 mb-2 rounded-2xl py-3 px-4 text-center cursor-pointer ${promo.userBestDiscount ? 'bg-indigo-700' : 'bg-gray-900'}`} onClick={() => setSelectedPromo(promo)}>
                   {seg && <p className="text-[9px] font-black uppercase tracking-[3px] text-indigo-300 mb-0.5">✦ {seg}</p>}
                   {getSpecialBadge(promo) && <div className={`${getSpecialBadge(promo)!.color} text-white text-[8px] font-black px-2 py-0.5 rounded-lg w-fit mx-auto mb-1`}>{getSpecialBadge(promo)!.text}</div>}
+                  {promo.commerceNote && <p className="text-[9px] font-bold uppercase tracking-widest text-yellow-300 mb-1">{promo.commerceNote}</p>}
                   <p className="text-3xl sm:text-5xl font-black leading-none" style={{ color: '#c6f135' }}>{discountLabel(promo)}</p>
                   {csiLabel(promo) && <p className="text-[10px] text-gray-400 mt-0.5">{csiLabel(promo)}</p>}
                 </div>

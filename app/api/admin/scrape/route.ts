@@ -340,6 +340,7 @@ export async function POST(req: NextRequest) {
         sourceUrl: p.sourceUrl ?? null,
         sourceText: p.sourceText ?? null,
         salesChannel: salesChannel ?? null,
+        commerceNote: p.note ?? null,
       };
 
       // ── Upsert de la promo ────────────────────────────────────────────────

@@ -57,3 +57,26 @@ Si una categoría tiene 0 promos para el perfil del usuario:
 
 ---
 
+## Geolocalización (Extracción de Provincias)
+
+### Estado Actual
+* **Backend (`route.ts`)**: La lógica es robusta. Si una promo no trae provincias en la DB (el array está vacío), asume por defecto que aplica a **todo el país**. Si trae `["Todas"]` o coincide con la provincia del usuario, hace match correctamente.
+* **Scrapers**: Actualmente **solo Coto** extrae provincias usando la función local `extractProvinces()`. El resto de los scrapers omiten este dato, enviando null/undefined. Al llegar vacío a la DB, el sistema asume cobertura nacional para todas, lo que genera falsos positivos en promociones regionales (ej. "Sólo válido en Mendoza").
+
+### Plan de Acción (A implementar)
+
+1. **Migrar y Mejorar el Helper**:
+   - Sacar la función `extractProvinces` de `coto.ts` y moverla a un archivo compartido (`bank-helpers.ts` o un nuevo `location-helpers.ts`).
+   - Agregar soporte para *exclusiones* mediante expresiones regulares (ej. si lee "Mendoza", asegurarse de que no esté precedido por "EXCEPTO", "NO VÁLIDO EN" o "EXCLUYE").
+
+2. **Actualizar Scrapers basados en Texto Legal**:
+   - Integrar la nueva función `extractProvinces(textoLegal)` en el armado del objeto `ScrapedPromo` para los scrapers del Grupo 2: `jumbo.ts`, `disco.ts`, `vea.ts`, `carrefour.ts`, `changomas.ts`, `diarco.ts` y `dia.ts`.
+
+3. **Actualizar Cuenta DNI (Quick Win)**:
+   - En `cuentadni.ts`, por la naturaleza regional del Banco Provincia, inyectar directamente por defecto `provinces: ['Buenos Aires', 'CABA']` al objeto de la promoción, a menos que el texto especifique lo contrario.
+
+4. **Revisar APIs de Bancos**:
+   - Scrapers como `galicia.ts`, `bbva.ts` y `modo.ts` consumen APIs que devuelven JSON. 
+   - Tarea: Inspeccionar si dentro de esos payloads (ej. el nodo de detalles o de comercios adheridos) viaja información estructurada de "sucursales" o "coordenadas" para mapear la provincia directamente sin depender de parsear texto con Regex.
+
+---

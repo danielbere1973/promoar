@@ -347,6 +347,7 @@ export default function PerfilPage() {
   }
 
   async function handleAddProduct() {
+    console.log('[handleAddProduct] productType:', np.productType, 'selectedCards:', JSON.stringify(np.selectedCards), 'bankId:', np.bankId, 'segmentId:', np.segmentId)
     if (np.productType === 'CARD') {
       // Creación de múltiples tarjetas (una por cada combinación de red + tipo)
       await Promise.all(np.selectedCards.map(async (card) => {
@@ -410,6 +411,7 @@ export default function PerfilPage() {
   } : null
 
   async function handleSaveProfile(guestProfile: GuestProfile) {
+    console.log('[handleSaveProfile] cards:', JSON.stringify(guestProfile.cards))
     setSavingProfile(true)
     try {
       const res = await fetch('/api/perfil/sync', {

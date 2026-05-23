@@ -220,6 +220,9 @@ const SCRAPERS_CONFIG: ScraperConfig[] = [
   { id: 'modo',            name: 'MODO',            group: 'billetera',    description: 'Billetera digital — API pública' },
   { id: 'mercadopago',     name: 'Mercado Pago',    group: 'billetera',    description: 'Promos online — CSI y % OFF' },
   { id: 'cuenta dni',      name: 'Cuenta DNI',      group: 'billetera',    description: 'BNA — HTML plano' },
+  { id: 'openpay',         name: 'Openpay',         group: 'billetera',    description: 'Posnet BBVA — fetch directo' },
+  { id: 'club la nacion',  name: 'Club La Nacion',  group: 'billetera',    description: '575 beneficios — cheerio' },
+  { id: 'clarín 365',     name: 'Clarín 365',      group: 'billetera',    description: '835 beneficios — API directa' },
   // Tarjetas
   { id: 'visa',            name: 'VISA',            group: 'tarjeta',      description: 'Playwright — tiers Signature/Platinum/Gold/Classic' },
   { id: 'amex',            name: 'AmEx',            group: 'tarjeta',      description: 'Playwright — 7 categorías' },
@@ -844,13 +847,13 @@ export default function AdminPage() {
                   placeholder="Buscar en todas las promos (mín. 3 letras)..."
                   value={filterText}
                   onChange={e => setFilterText(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100"
+                  className="w-full pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 placeholder:font-normal placeholder:text-slate-400"
                 />
               </div>
               <select
                 value={filterCommerce}
                 onChange={e => setFilterCommerce(e.target.value)}
-                className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-400 text-slate-600"
+                className="text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-400"
               >
                 <option value="">Todos los comercios</option>
                 {Array.from(new Set(filteredPromos.map(p => p.commerce?.name).filter(Boolean))).sort().map(name => (
@@ -1046,7 +1049,7 @@ export default function AdminPage() {
               <div className="flex gap-2">
                 <select
                   id="report-banco-select"
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 >
                   {[
                     'Banco Nación', 'Banco Galicia', 'BBVA', 'Banco Santander',
@@ -1117,7 +1120,7 @@ export default function AdminPage() {
               <h3 className="text-sm font-bold text-slate-700">Gestión de Usuarios</h3>
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" placeholder="Buscar por email..." className="pl-9 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-100" />
+                <input type="text" placeholder="Buscar por email..." className="pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-100 placeholder:font-normal placeholder:text-slate-400" />
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -2036,7 +2039,7 @@ function EntitySubTab({ active, icon: Icon, onClick, children }: any) {
 }
 
 // ─── Helpers Components ───
-const inputClass = 'w-full text-xs font-medium px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400 outline-none transition-all placeholder:text-slate-300'
+const inputClass = 'w-full text-xs font-semibold text-slate-800 px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400 outline-none transition-all placeholder:font-normal placeholder:text-slate-400'
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={inputClass} />
@@ -2106,12 +2109,12 @@ function ScraperModal({ onClose, onRun, scraping }: {
   const scraper = SCRAPERS_CONFIG.find(s => s.id === selected)
   const groupScrapers = SCRAPERS_CONFIG.filter(s => s.group === activeGroup)
 
-  const needsCategoria = scraper?.group === 'billetera'
+  const needsCategoria = scraper?.id === 'modo' || scraper?.id === 'club la nacion'
   const canRun = !!selected && (!needsCategoria || !!categoria)
 
   function handleRun() {
     if (!selected || !scraper) return
-    if (scraper.group === 'billetera') {
+    if (scraper.id === 'modo' || scraper.id === 'club la nacion') {
       if (!categoria) return
       onRun(selected, categoria === 'TODOS' ? undefined : categoria)
     } else {
@@ -2164,27 +2167,37 @@ function ScraperModal({ onClose, onRun, scraping }: {
             ))}
           </div>
 
-          {/* Selector de categoría (solo billeteras) */}
-          {needsCategoria && (
+          {/* Selector de categoría (MODO y Club La Nacion) */}
+          {needsCategoria && scraper?.id === 'modo' && (
             <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 block">Rubro a importar</label>
               <div className="grid grid-cols-2 gap-2">
                 {MODO_CATEGORIAS.map(cat => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setCategoria(cat)}
-                    className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all ${categoria === cat ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}
-                  >
+                  <button key={cat} type="button" onClick={() => setCategoria(cat)}
+                    className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all ${categoria === cat ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}>
                     {cat}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => setCategoria('TODOS')}
-                  className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all col-span-2 ${categoria === 'TODOS' ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}
-                >
+                <button type="button" onClick={() => setCategoria('TODOS')}
+                  className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all col-span-2 ${categoria === 'TODOS' ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}>
                   ⚠️ Todos los rubros (proceso lento)
+                </button>
+              </div>
+            </div>
+          )}
+          {needsCategoria && scraper?.id === 'club la nacion' && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 block">Categoría a importar</label>
+              <div className="grid grid-cols-2 gap-2">
+                {['gastronomia','salidas','viajes','moda','hogar','mercados','bienestar','automovil','educacion','otros'].map(cat => (
+                  <button key={cat} type="button" onClick={() => setCategoria(cat)}
+                    className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all capitalize ${categoria === cat ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}>
+                    {cat}
+                  </button>
+                ))}
+                <button type="button" onClick={() => setCategoria('TEST')}
+                  className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all col-span-2 ${categoria === 'TEST' ? 'border-green-400 bg-green-50 text-green-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}>
+                  🧪 TEST — solo 5 beneficios
                 </button>
               </div>
             </div>

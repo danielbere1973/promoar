@@ -14,6 +14,9 @@ import { DIAScraper } from './dia';
 import { ModoScraper } from './modo';
 import { MercadoPagoScraper } from './mercadopago';
 import { CuentaDNIScraper } from './cuentadni'; // V3: cheerio + GetBeneficioData2 (sin Playwright)
+import { OpenpayScraper } from './openpay'; // Posnet de BBVA
+import { ClubLaNacionScraper } from './clublanacion';
+import { Clarin365Scraper } from './clarin365';
 
 // ─── Tarjetas de crédito ───────────────────────────────────────────────────────
 import { VisaScraper } from './visa';
@@ -48,6 +51,9 @@ export const WALLET_SCRAPERS: Scraper[] = [
   ModoScraper,
   MercadoPagoScraper,
   CuentaDNIScraper,
+  OpenpayScraper,
+  ClubLaNacionScraper,
+  Clarin365Scraper,
 ];
 
 export const TARJETA_SCRAPERS: Scraper[] = [
