@@ -360,15 +360,17 @@ export async function POST(req: NextRequest) {
       },
       select: { id: true, title: true, commerceId: true, sourceUrl: true, slug: true }
     });
-    const byUrl = new Map(existingPromos.filter(p => p.sourceUrl?.includes('#')).map(p => [p.sourceUrl!, p]));
+    // Una URL es clave única si tiene # (fragmento) O si contiene /detalle/ con un ID numérico
+    const isUniqueUrl = (url?: string | null) =>
+      !!url && (url.includes('#') || /\/detalle\/\d+/.test(url));
+    const byUrl = new Map(existingPromos.filter(p => isUniqueUrl(p.sourceUrl)).map(p => [p.sourceUrl!, p]));
     const byKey = new Map(existingPromos.map(p => [`${p.title}|${p.commerceId}`, p]));
     const existingSlugs = new Set((await prisma.promo.findMany({ select: { slug: true } })).map(p => p.slug).filter(Boolean));
 
     // ── FASE 3: Guardar en batches paralelos de 10 ────────────────────────────
     const savePromo = async (item: ResolvedItem) => {
       const { promoData, reqData, baseSlug, sourceUrl, title, commerceId } = item;
-      const hasUniqueUrl = sourceUrl?.includes('#');
-      const existing = hasUniqueUrl
+      const existing = isUniqueUrl(sourceUrl)
         ? byUrl.get(sourceUrl!)
         : byKey.get(`${title}|${commerceId}`);
 
