@@ -630,6 +630,31 @@ function HomeContent() {
       .slice(0, 3)
   }, [promos])
 
+  const todayDashboard = useMemo(() => {
+    if (promos.length === 0) return null
+    const todayIdx = new Date().getDay() // 0=Dom...6=Sáb
+    const todayBit = 1 << todayIdx
+    const todayPromos = promos.filter(p => !p.validDays || p.validDays === 127 || (p.validDays & todayBit) !== 0)
+    const maxDiscount = todayPromos.reduce((max, p) => Math.max(max, bestPercentageReq(p)?.discountValue ?? 0), 0)
+    const DAYS_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+    const dayCounts = Array.from({ length: 7 }, (_, d) => ({
+      label: DAYS_LABELS[d],
+      count: promos.filter(p => !p.validDays || p.validDays === 127 || (p.validDays & (1 << d)) !== 0).length,
+      isToday: d === todayIdx,
+      dayIdx: d,
+    }))
+    const catMap = new Map<string, { name: string; icon: string; slug: string; bestDiscount: number }>()
+    for (const p of todayPromos) {
+      const k = p.category.slug ?? p.category.name
+      if (!catMap.has(k)) catMap.set(k, { name: p.category.name, icon: p.category.icon || '🏷️', slug: p.category.slug ?? '', bestDiscount: 0 })
+      const entry = catMap.get(k)!
+      const v = bestPercentageReq(p)?.discountValue ?? 0
+      if (v > entry.bestDiscount) entry.bestDiscount = v
+    }
+    const catList = Array.from(catMap.values()).filter(c => c.bestDiscount > 0).sort((a, b) => b.bestDiscount - a.bestDiscount).slice(0, 8)
+    return { todayPromos, maxDiscount, dayCounts, catList }
+  }, [promos])
+
   // Ordenar: favoritos primero (categoría o comercio en favoritos), luego el resto
   const promosFiltradas = favCategories.length === 0 && favCommerces.length === 0
     ? promos
@@ -1173,6 +1198,69 @@ function HomeContent() {
             </div>
           </div>
         )}
+
+      {/* ── Dashboard de resumen ── */}
+      {!loading && todayDashboard && (
+        <div className="mb-6 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl p-5 text-white shadow-lg shadow-indigo-200/40 dark:shadow-indigo-900/30">
+          {/* Hero */}
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">Hoy podés ahorrar</p>
+              <p className="text-4xl sm:text-5xl font-black leading-none mt-1" style={{ color: '#c6f135' }}>
+                {todayDashboard.maxDiscount > 0 ? `Hasta ${todayDashboard.maxDiscount}%` : `${todayDashboard.todayPromos.length} promos`}
+              </p>
+              <p className="text-indigo-200 text-xs font-bold mt-1">{todayDashboard.todayPromos.length} promociones activas hoy</p>
+            </div>
+            <Sparkles size={32} className="text-white/20 mt-1 shrink-0" />
+          </div>
+
+          {/* Semana L M X J V S D */}
+          <div className="grid grid-cols-7 gap-1 mb-4">
+            {todayDashboard.dayCounts.map(({ label, count, isToday, dayIdx }) => {
+              const isActive = activeFilters.days.includes(dayIdx)
+              return (
+                <button
+                  key={label + dayIdx}
+                  onClick={() => setActiveFilters(prev => ({
+                    ...prev,
+                    days: isActive ? prev.days.filter(d => d !== dayIdx) : [...prev.days, dayIdx],
+                  }))}
+                  className={`flex flex-col items-center py-2 rounded-xl transition-all ${
+                    isActive ? 'bg-white/30 ring-1 ring-white/60' : isToday ? 'bg-white/15 ring-1 ring-white/30' : 'hover:bg-white/10'
+                  }`}
+                >
+                  <span className={`text-[10px] font-black leading-none ${isToday ? 'text-white' : 'text-indigo-300'}`}>{label}</span>
+                  <span className={`text-[12px] font-black tabular-nums mt-0.5 ${count > 0 ? 'text-white' : 'text-indigo-500'}`}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Grid de categorías con mejor descuento */}
+          {todayDashboard.catList.length > 0 && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {todayDashboard.catList.map(cat => {
+                const isActive = selectedCats.includes(cat.slug)
+                return (
+                  <button
+                    key={cat.slug}
+                    onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
+                    className={`flex items-center justify-between rounded-xl px-3 py-2 transition-all text-left ${
+                      isActive ? 'bg-white/25 ring-1 ring-white/60' : 'bg-white/10 hover:bg-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm shrink-0">{cat.icon}</span>
+                      <span className="text-[11px] font-bold text-white/90 truncate">{cat.name}</span>
+                    </div>
+                    <span className="text-[13px] font-black shrink-0 ml-1" style={{ color: '#c6f135' }}>{cat.bestDiscount}%</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
         {/* Skeletons Loading */}
         {loading && (
