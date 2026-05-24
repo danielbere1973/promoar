@@ -472,67 +472,48 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── Ordenamiento Complejo ──────────────────────────────────────────────
-    // 1. Calculamos métricas para cada promo
+    // ── Ordenamiento ──────────────────────────────────────────────────────
+    // 1. Métricas por promo
     const promoData = dedupedPromos.map(p => {
       const maxPct = (p as any).requirements.reduce((max: number, r: any) => {
         if (r.discountType === 'CUOTAS_SIN_INTERES') return max
         return Math.max(max, r.discountValue ?? 0)
       }, 0)
-
       const maxCsi = (p as any).requirements.reduce((max: number, r: any) => {
         if (r.discountType !== 'CUOTAS_SIN_INTERES') return max
         return Math.max(max, r.discountValue ?? 0)
       }, 0)
-
-      const popularity = (p as any).commerce?._count?.promos ?? 0
-      const name = (p as any).commerce?.name ?? ''
-
-      // Tipo para el ordenamiento del resto (según el plan)
-      let type = 3 // default: solo CSI
-      if (maxPct > 0 && maxCsi > 0) type = 2 // % + CSI
-      else if (maxPct > 0) type = 1 // solo %
-
-      return { p, maxPct, maxCsi, popularity, name, type }
+      const catSlug: string = (p as any).category?.slug ?? ''
+      const commercePopularity: number = (p as any).commerce?._count?.promos ?? 0
+      const name: string = (p as any).commerce?.name ?? ''
+      // Tipo: 1 = solo %, 2 = % + CSI, 3 = solo CSI
+      const type = maxPct > 0 && maxCsi > 0 ? 2 : maxPct > 0 ? 1 : 3
+      return { p, maxPct, maxCsi, catSlug, commercePopularity, name, type }
     })
 
-    // 2. Separar Top 10 y Resto
-    // Score combinado: descuento% + popularidad×2 (evita que promos locales de alto % dominen)
-    const globalSorted = [...promoData].sort((a, b) => {
-      const scoreA = a.maxPct + (a.popularity * 2)
-      const scoreB = b.maxPct + (b.popularity * 2)
-      if (scoreB !== scoreA) return scoreB - scoreA
-      return a.name.localeCompare(b.name, 'es')
-    })
+    // 2. Popularidad de categoría = nº de promos de esa categoría en el set actual
+    const catCounts: Record<string, number> = {}
+    for (const d of promoData) catCounts[d.catSlug] = (catCounts[d.catSlug] ?? 0) + 1
 
-    const top10 = globalSorted.slice(0, 10).map(d => d.p)
-    const restData = globalSorted.slice(10)
+    // 3. Ordenar: catPopularity DESC → commercePopularity DESC → type ASC → valor DESC → alfabético
+    const orderedPromos = [...promoData].sort((a, b) => {
+      const catDiff = (catCounts[b.catSlug] ?? 0) - (catCounts[a.catSlug] ?? 0)
+      if (catDiff !== 0) return catDiff
 
-    // 3. Ordenar el Resto según criterios específicos
-    const restSorted = restData.sort((a, b) => {
-      // Primero por Tipo (1: solo %, 2: % + CSI, 3: solo CSI)
+      if (b.commercePopularity !== a.commercePopularity) return b.commercePopularity - a.commercePopularity
+
       if (a.type !== b.type) return a.type - b.type
 
-      if (a.type === 1) { // Solo %
-        if (b.maxPct !== a.maxPct) return b.maxPct - a.maxPct
-        return a.name.localeCompare(b.name, 'es')
-      }
-      
-      if (a.type === 2) { // % + CSI
-        if (b.maxPct !== a.maxPct) return b.maxPct - a.maxPct
+      // Dentro del mismo tipo: mayor valor primero
+      if (a.type === 3) {
         if (b.maxCsi !== a.maxCsi) return b.maxCsi - a.maxCsi
-        return a.name.localeCompare(b.name, 'es')
+      } else {
+        if (b.maxPct !== a.maxPct) return b.maxPct - a.maxPct
+        if (a.type === 2 && b.maxCsi !== a.maxCsi) return b.maxCsi - a.maxCsi
       }
 
-      if (a.type === 3) { // Solo CSI
-        if (b.maxCsi !== a.maxCsi) return b.maxCsi - a.maxCsi
-        return a.name.localeCompare(b.name, 'es')
-      }
-
-      return 0
+      return a.name.localeCompare(b.name, 'es')
     }).map(d => d.p)
-
-    const orderedPromos = [...top10, ...restSorted]
 
     return NextResponse.json({ promos: orderedPromos })
   } catch (error) {

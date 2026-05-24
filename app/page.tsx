@@ -634,17 +634,19 @@ function HomeContent() {
     if (promos.length === 0) return null
     const todayIdx = new Date().getDay() // 0=Dom...6=Sáb
     const todayBit = 1 << todayIdx
-    const todayPromos = promos.filter(p => !p.validDays || p.validDays === 127 || (p.validDays & todayBit) !== 0)
-    const maxDiscount = todayPromos.reduce((max, p) => Math.max(max, bestPercentageReq(p)?.discountValue ?? 0), 0)
+    // Los promos ya vienen filtrados por el día de hoy desde la API (view=today).
+    // Para el hero usamos todos los promos del set cargado.
+    const maxDiscount = promos.reduce((max, p) => Math.max(max, bestPercentageReq(p)?.discountValue ?? 0), 0)
     const DAYS_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+    // El conteo por día muestra cuántas promos del set cargado tienen ese día habilitado
     const dayCounts = Array.from({ length: 7 }, (_, d) => ({
       label: DAYS_LABELS[d],
-      count: promos.filter(p => !p.validDays || p.validDays === 127 || (p.validDays & (1 << d)) !== 0).length,
+      count: promos.filter(p => (p.validDays & (1 << d)) !== 0).length,
       isToday: d === todayIdx,
       dayIdx: d,
     }))
     const catMap = new Map<string, { name: string; icon: string; slug: string; bestDiscount: number }>()
-    for (const p of todayPromos) {
+    for (const p of promos) {
       const k = p.category.slug ?? p.category.name
       if (!catMap.has(k)) catMap.set(k, { name: p.category.name, icon: p.category.icon || '🏷️', slug: p.category.slug ?? '', bestDiscount: 0 })
       const entry = catMap.get(k)!
@@ -652,7 +654,7 @@ function HomeContent() {
       if (v > entry.bestDiscount) entry.bestDiscount = v
     }
     const catList = Array.from(catMap.values()).filter(c => c.bestDiscount > 0).sort((a, b) => b.bestDiscount - a.bestDiscount).slice(0, 8)
-    return { todayPromos, maxDiscount, dayCounts, catList }
+    return { totalPromos: promos.length, maxDiscount, dayCounts, catList, todayIdx }
   }, [promos])
 
   // Ordenar: favoritos primero (categoría o comercio en favoritos), luego el resto
@@ -1207,9 +1209,9 @@ function HomeContent() {
             <div>
               <p className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">Hoy podés ahorrar</p>
               <p className="text-4xl sm:text-5xl font-black leading-none mt-1" style={{ color: '#c6f135' }}>
-                {todayDashboard.maxDiscount > 0 ? `Hasta ${todayDashboard.maxDiscount}%` : `${todayDashboard.todayPromos.length} promos`}
+                {todayDashboard.maxDiscount > 0 ? `Hasta ${todayDashboard.maxDiscount}%` : `${todayDashboard.totalPromos} promos`}
               </p>
-              <p className="text-indigo-200 text-xs font-bold mt-1">{todayDashboard.todayPromos.length} promociones activas hoy</p>
+              <p className="text-indigo-200 text-xs font-bold mt-1">{todayDashboard.totalPromos} promociones{forMe ? ' para tu perfil' : ' disponibles'} hoy</p>
             </div>
             <Sparkles size={32} className="text-white/20 mt-1 shrink-0" />
           </div>
