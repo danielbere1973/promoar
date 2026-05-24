@@ -4,6 +4,7 @@
 // No requiere Playwright. Cada entrada tiene: active, daysToShow, associatedBanks, terms.
 
 import { Scraper, ScrapedPromo } from './types';
+import { extractProvinces } from './bank-helpers';
 import {
   extractDates,
   extractCap,
@@ -273,6 +274,7 @@ function parseEntry(entry: PromoEntry): ScrapedPromo[] {
     accountType:  'ANY' as any,
     storeName:    STORE_NAME,
     categoria:    'Supermercados',
+    provinces:    extractProvinces(terms),
   };
 
   // Promos de descuento/reintegro

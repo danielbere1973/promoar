@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { Scraper, ScrapedPromo } from './types';
+import { extractProvinces } from './bank-helpers';
 
 const SOURCE_URL = 'https://coto.com.ar/legales/';
 
@@ -458,35 +459,7 @@ function extractCardNetwork(text: string): string | null {
   return null;
 }
 
-// ─── extractProvinces ─────────────────────────────────────────────────────────
-function extractProvinces(text: string): string[] {
-  const t = text.toUpperCase()
-    .replace(/BS\.?\s?AS\.?/g, 'BUENOS AIRES')
-    .replace(/C\.?A\.?B\.?A\.?/g, 'CABA');
 
-  if (
-    /TODA\s+LA\s+REP[UÚ]BLICA\s+ARGENTINA|TODAS\s+LAS\s+SUCURSALES|[AÁ]MBITO\s+NACIONAL|TODO\s+EL\s+PA[ÍI]S/.test(t)
-  ) {
-    return ['Todas'];
-  }
-
-  const allProvinces = [
-    'Buenos Aires', 'CABA', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba', 'Corrientes',
-    'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones',
-    'Neuquén', 'Río Negro', 'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe',
-    'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
-  ];
-
-  const found = allProvinces.filter(p => {
-    const norm = p
-      .toUpperCase()
-      .replace(/[Á]/g, 'A').replace(/[É]/g, 'E').replace(/[Í]/g, 'I')
-      .replace(/[Ó]/g, 'O').replace(/[Ú]/g, 'U');
-    return t.includes(norm);
-  });
-
-  return found.length > 0 ? found : ['Todas'];
-}
 
 // ─── Main Scraper ─────────────────────────────────────────────────────────────
 

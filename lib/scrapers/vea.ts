@@ -5,6 +5,7 @@
 
 import { chromium, Page } from 'playwright';
 import { Scraper, ScrapedPromo } from './types';
+import { extractProvinces } from './bank-helpers';
 
 // ─── Lista de bancos ──────────────────────────────────────────────────────────
 // Parámetros ?bank= verificados directamente desde los links de la página.
@@ -346,6 +347,7 @@ function parsePageText(
       accountType: accountType as any,
       storeName: STORE_NAME,
       categoria: 'Supermercados',
+      provinces: extractProvinces(block),
     };
 
     if (installment && discounts.length === 0) {

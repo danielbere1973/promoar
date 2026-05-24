@@ -3,6 +3,7 @@
 // Sin Playwright — JSON estructurado con campos exactos
 
 import { Scraper, ScrapedPromo } from './types';
+import { extractProvinces } from './bank-helpers';
 
 const SOURCE_URL = 'https://www.carrefour.com.ar/descuentos-bancarios';
 const GRAPHQL_URL = 'https://www.carrefour.com.ar/_v/public/graphql/v1';
@@ -242,6 +243,7 @@ export const CarrefourScraper: Scraper = {
         storeName: 'Carrefour',
         salesChannel,
         categoria: 'Supermercados',
+        provinces: extractProvinces(f['legal'] ?? ''),
       });
 
       console.log(`[Carrefour] ✅ "${title.slice(0, 55)}" → ${discountValue}${isCsi ? ' CSI' : '%'} | ${[...bankNames, ...walletNames].join(', ')} | días: ${validDays}`);

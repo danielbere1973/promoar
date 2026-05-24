@@ -7,6 +7,7 @@
 
 import { chromium } from 'playwright';
 import { Scraper, ScrapedPromo } from './types';
+import { extractProvinces } from './bank-helpers';
 
 const SOURCE_URL = 'https://www.masonline.com.ar/promociones-bancarias';
 
@@ -259,6 +260,7 @@ function processBlock(bodyText: string, seenTitles: Set<string>): ScrapedPromo[]
     accountType: /ANSES|AUH/i.test(bodyText) ? 'ANSES' : /JUBILAD|PENSIONAD/i.test(bodyText) ? 'JUBILADO' : 'ANY' as any,
     storeName: 'ChangoMas',
     categoria: 'Supermercados',
+    provinces: extractProvinces(bodyText),
   }));
 }
 

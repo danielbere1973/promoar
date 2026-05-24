@@ -159,6 +159,33 @@ export function detectCategoria(text: string): string {
   return '';
 }
 
+export const ALL_PROVINCES = [
+  'Buenos Aires', 'CABA', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba', 'Corrientes',
+  'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones',
+  'Neuquén', 'Río Negro', 'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe',
+  'Santiago del Estero', 'Tierra del Fuego', 'Tucumán',
+];
+
+export function extractProvinces(text: string): string[] {
+  const t = (text || '').toUpperCase()
+    .replace(/BS\.?\s?AS\.?/g, 'BUENOS AIRES')
+    .replace(/C\.?A\.?B\.?A\.?/g, 'CABA')
+    .replace(/GBA|GRAN\s+BUENOS\s+AIRES/g, 'BUENOS AIRES');
+
+  if (/TODA\s+LA\s+REP[UÚ]BLICA|TODAS?\s+LAS?\s+SUCURSAL|[AÁ]MBITO\s+NACIONAL|TODO\s+EL\s+PA[ÍI]S|A\s+NIVEL\s+NACIONAL|EN\s+TODO\s+EL\s+PAIS/.test(t)) {
+    return ['Todas'];
+  }
+
+  const found = ALL_PROVINCES.filter(p => {
+    const norm = p.toUpperCase()
+      .replace(/[Á]/g, 'A').replace(/[É]/g, 'E').replace(/[Í]/g, 'I')
+      .replace(/[Ó]/g, 'O').replace(/[Ú]/g, 'U');
+    return t.includes(norm);
+  });
+
+  return found.length > 0 ? found : ['Todas'];
+}
+
 export interface RawBankPromo {
   storeName: string;
   text: string;

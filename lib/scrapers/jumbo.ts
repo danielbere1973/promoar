@@ -5,6 +5,7 @@
 
 import { chromium, Page } from 'playwright';
 import { Scraper, ScrapedPromo } from './types';
+import { extractProvinces } from './bank-helpers';
 
 // ─── Lista de entidades ───────────────────────────────────────────────────────
 const BANKS: { param: string; displayName: string; type?: 'wallet' }[] = [
@@ -348,6 +349,7 @@ function parsePageText(
       accountType: accountType as any,
       storeName: STORE_NAME,
       categoria: 'Supermercados',
+      provinces: extractProvinces(block),
     };
 
     if (installment && discounts.length === 0) {

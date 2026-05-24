@@ -6,6 +6,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { Scraper, ScrapedPromo } from './types';
+import { extractProvinces } from './bank-helpers';
 
 const SOURCE_URL = 'https://www.diarco.com.ar/promociones/';
 
@@ -338,6 +339,7 @@ export const DiarcoScraper: Scraper = {
             accountType: accountType as any,
             storeName,
             categoria: 'Supermercados',
+            provinces: extractProvinces(legalesText),
           };
 
           promos.push(promo);
