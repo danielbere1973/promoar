@@ -10,17 +10,22 @@ const CATEGORIAS = [
 ];
 
 const CATEGORY_RULES = [
-  { cat: 'Supermercados',    kw: ['coto', 'jumbo', 'disco', 'vea', 'carrefour', 'changomas', 'diarco', 'makro', 'dia', 'vital', 'supermercado', 'la gallega', 'gallega', 'supercoop', 'supers del interior', 'cooperativa', 'bell', 'toledo', 'josimar', 'nini', 'anonima', 'yaguar'] },
-  { cat: 'Combustible',      kw: ['ypf', 'axion', 'shell', 'puma', 'gulf', 'combustible', 'nafta', 'petro'] },
-  { cat: 'Gastronomía',      kw: ['mcdonald', 'burger', 'mostaza', 'starbucks', 'cafe', 'havanna', 'restaurant', 'pizzeria', 'cerveceria', 'kfc', 'subway', 'sushi', 'cafeteria'] },
-  { cat: 'Heladerías',       kw: ['grido', 'freddo', 'lucciano', 'persicco', 'volta', 'chungo', 'heladeria'] },
-  { cat: 'Farmacias',        kw: ['farmacity', 'farmacia', 'farma', 'vantage', 'dr ahorro', 'simplicity'] },
-  { cat: 'Indumentaria',     kw: ['zara', 'nike', 'adidas', 'dafiti', 'macowens', 'indumentaria', 'ropa', 'zapatillas', 'grimoldi', 'tucci', 'equus'] },
-  { cat: 'Tecnología',       kw: ['fravega', 'musimundo', 'cetrogar', 'megatone', 'samsung', 'apple', 'tecnologia', 'electro', 'garbarino'] },
-  { cat: 'Hogar',            kw: ['easy', 'sodimac', 'blaisten', 'colchon', 'mueble', 'pintureria', 'ferreteria', 'bazar'] },
-  { cat: 'Mascotas',         kw: ['puppis', 'petshop', 'veterinaria', 'mascota', 'purina'] },
-  { cat: 'Entretenimiento',  kw: ['cine', 'hoyts', 'cinemark', 'showcase', 'teatro', 'entrada', 'multiplex'] },
-  { cat: 'Viajes y Turismo', kw: ['aerolineas', 'despegar', 'almundo', 'turismo', 'viaje', 'hotel', 'vuelo', 'flybondi', 'jetsmart'] },
+  { cat: 'Supermercados',    kw: ['coto', 'jumbo', 'disco', 'vea', 'carrefour', 'changomas', 'diarco', 'makro', 'dia online', 'supermercado', 'la gallega', 'gallega', 'supercoop', 'supers del interior', 'bell\'s', 'bells', 'toledo', 'josimar', 'nini', 'anonima', 'yaguar', 'hipermaxi', 'almacen', 'despensa'] },
+  // Combustible: solo estaciones de servicio — NO incluir 'puma' solo (es ropa), 'petro' solo, 'nafta' sola
+  { cat: 'Combustible',      kw: ['ypf', 'axion', 'shell combustible', 'puma energy', 'gulf energy', 'wico', 'estacion de servicio', 'surtidor', 'petrobras', 'petro rio', 'combustible', 'nafta premium'] },
+  { cat: 'Gastronomía',      kw: ['mcdonald', 'burger king', 'mostaza', 'starbucks', 'havanna', 'restaurant', 'pizzeria', 'cerveceria', 'kfc', 'subway', 'sushi', 'cafeteria', 'parrilla', 'rotiseria', 'comida', 'delivery', 'rappi', 'pedidosya', 'menuclass', 'wendy'] },
+  { cat: 'Heladerías',       kw: ['grido', 'freddo', 'lucciano', 'persicco', 'volta', 'chungo', 'heladeria', 'cremolatti', 'amorino'] },
+  { cat: 'Farmacias',        kw: ['farmacity', 'farmacia', 'dr ahorro', 'vantage', 'farmared', 'drogueria', 'botica'] },
+  { cat: 'Indumentaria',     kw: ['zara', 'nike', 'adidas', 'puma', 'dafiti', 'macowens', 'ropa', 'zapatillas', 'grimoldi', 'tucci', 'equus', 'portsaid', 'wanama', 'kosiuko', 'vitamina', 'rapsodia', 'bensimon', 'mimo', 'cheeky', 'grisino', 'off corss', 'cardón', 'lacoste', 'fila', 'topper', 'umbro', 'levi', 'legacy', 'save my bag', 'louise louise', 'batistella', 'etiqueta negra', 'hering', 'importados'] },
+  { cat: 'Deportes',         kw: ['decathlon', 'arsenal', 'dexter', 'montagne', 'lippi', 'oxbow', 'sportline', 'sport', 'padel', 'fitness', 'gym', 'bicicleta', 'running', 'camping', 'trekking', 'natacion', 'columbia', 'timberland', 'quechua'] },
+  { cat: 'Tecnología',       kw: ['fravega', 'musimundo', 'cetrogar', 'megatone', 'samsung', 'apple', 'electro', 'garbarino', 'compumundo', 'digitaltek', 'movistar tienda', 'personal shop', 'claro shop', 'pc factory', 'notebook', 'celular', 'iphone', 'tablet', 'tv led'] },
+  { cat: 'Hogar',            kw: ['easy', 'sodimac', 'blaisten', 'colchon', 'mueble', 'pintureria', 'ferreteria', 'bazar', 'el hogar', 'cardon hogar', 'falabella', 'paris', 'ikea', 'linio hogar', 'frávega hogar'] },
+  { cat: 'Mascotas',         kw: ['puppis', 'petshop', 'veterinaria', 'mascota', 'purina', 'barf', 'agropecuaria'] },
+  { cat: 'Entretenimiento',  kw: ['cine', 'hoyts', 'cinemark', 'showcase', 'teatro', 'entrada', 'multiplex', 'ticket', 'disney', 'netflix', 'spotify', 'xbox', 'playstation', 'steam', 'gaming'] },
+  { cat: 'Salud y Belleza',  kw: ['perfumeria', 'natura', 'avon', 'l\'oreal', 'loreal', 'estetica', 'peluqueria', 'spa', 'clinica', 'optica', 'dental', 'salud', 'arcos', 'aromaterapia', 'derma', 'cosmetica'] },
+  { cat: 'Viajes y Turismo', kw: ['aerolineas', 'despegar', 'almundo', 'turismo', 'viaje', 'hotel', 'vuelo', 'flybondi', 'jetsmart', 'booking', 'airbnb', 'lan', 'latam', 'aeropuerto', 'hostel', 'crucero'] },
+  { cat: 'Automotores',      kw: ['concesionaria', '0km', 'cero km', 'repuesto', 'taller mecanico', 'peugeot', 'volkswagen', 'toyota', 'chevrolet', 'renault', 'fiat', 'honda', 'ford dealer', 'nissan', 'jeep dealer', 'hyundai', 'volvo', 'bmw', 'audi', 'patentamiento'] },
+  { cat: 'Transporte',       kw: ['uber', 'cabify', 'taxi', 'sube', 'peaje', 'autopista', 'estacionamiento', 'parking', 'pedido ya moto', 'rappi moto', 'moto', 'bicicleta electrica', 'scooter'] },
 ];
 
 function normStr(s: string): string {
@@ -42,9 +47,29 @@ async function classifyWithGroq(batch: { id: string; comercio: string }[]): Prom
   if (!apiKey) throw new Error('GROQ_API_KEY no configurada');
 
   const lista = batch.map(p => `${p.id}|${p.comercio}`).join('\n');
-  const prompt = `Clasificá estos comercios argentinos. Respondé SOLO con JSON array: [{"id":"...","categoria":"..."},...]
-Categorías: ${CATEGORIAS.join(', ')}
-Datos (id|comercio):
+  const prompt = `Sos un experto en comercios argentinos. Clasificá cada comercio en UNA de las categorías de la lista.
+
+CATEGORÍAS DISPONIBLES: ${CATEGORIAS.join(', ')}
+
+REGLAS IMPORTANTES — leé con atención antes de clasificar:
+- "Combustible" = SOLO estaciones de servicio (YPF, Shell, Axion, Puma Energy, Gulf). NUNCA clasificar como Combustible marcas de ropa o calzado aunque contengan palabras similares.
+- "Indumentaria" = ropa, zapatillas, accesorios (Puma, Nike, Adidas, Zara, etc.)
+- "Tecnología" = electrónica, celulares, computadoras, electrodomésticos
+- "Hogar" = muebles, decoración, ferretería, pinturería
+- "Gastronomía" = restaurantes, cafés, delivery, fast food
+- "Salud y Belleza" = peluquerías, farmacias no incluidas en Farmacias, cosméticos, ópticas
+- "Otros" = si no encaja en ninguna categoría específica, NO en Combustible
+
+ERRORES COMUNES A EVITAR:
+- Puma → Indumentaria (NO Combustible)
+- Fravega, Garbarino, Megatone → Tecnología (NO Hogar)
+- Rappi, PedidosYa → Gastronomía (NO Transporte)
+- Booking, Airbnb → Viajes y Turismo (NO Hogar)
+
+Respondé SOLO con un JSON array sin texto adicional:
+[{"id":"...","categoria":"..."},...]
+
+Datos a clasificar (id|comercio):
 ${lista}`;
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -54,10 +79,10 @@ ${lista}`;
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
+      model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1,
-      max_tokens: 1024,
+      temperature: 0.0,
+      max_tokens: 2048,
     }),
   });
 
