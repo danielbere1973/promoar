@@ -481,6 +481,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
   const [existingBankIds, setExistingBankIds] = useState<string[]>([])
   const [confirmEditBankId, setConfirmEditBankId] = useState<string | null>(null)
   const [expandedBankIds, setExpandedBankIds] = useState<Set<string>>(new Set())
+  const [confirmModoRemoval, setConfirmModoRemoval] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -519,6 +520,43 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
 
   const modoWalletId = wallets.find(w => w.name.toLowerCase().includes('modo'))?.id
   const selectedBanks = banks.filter(b => selectedBankIds.includes(b.id))
+
+  // MODO auto-seleccionado si cualquier producto bancario tiene inModo=true
+  const hasAnyProductInModo = Object.values(bankConfigs).some(
+    cfg => cfg.accounts.some(a => a.inModo) || cfg.cards.some(c => c.inModo)
+  )
+  const modoEffectivelySelected = !!modoWalletId && (
+    selectedWalletIds.includes(modoWalletId) || hasAnyProductInModo
+  )
+
+  function handleModoWalletClick() {
+    if (!modoWalletId) return
+    if (modoEffectivelySelected) {
+      if (hasAnyProductInModo) {
+        setConfirmModoRemoval(true)
+      } else {
+        setSelectedWalletIds(prev => prev.filter(id => id !== modoWalletId))
+      }
+    } else {
+      setSelectedWalletIds(prev => [...prev, modoWalletId])
+    }
+  }
+
+  function confirmRemoveModo() {
+    setBankConfigs(prev => {
+      const next = { ...prev }
+      for (const bankId of Object.keys(next)) {
+        next[bankId] = {
+          ...next[bankId],
+          accounts: next[bankId].accounts.map(a => ({ ...a, inModo: false })),
+          cards: next[bankId].cards.map(c => ({ ...c, inModo: false })),
+        }
+      }
+      return next
+    })
+    setSelectedWalletIds(prev => prev.filter(id => id !== modoWalletId))
+    setConfirmModoRemoval(false)
+  }
   const totalSteps = 1 + selectedBanks.length + 1
   const isBankConfigStep = step >= 2 && step < 2 + selectedBanks.length
   const bankConfigIdx = step - 2
@@ -850,15 +888,25 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
         {!done && !loading && isWalletStep && (
           <div>
             <p className="text-sm text-gray-500 mb-1">Tocá las que usás o saltá si no usás ninguna.</p>
-            <p className="text-xs text-gray-400 mb-4">Si ya marcaste MODO en tus tarjetas, igual podés seleccionarlo acá para promos exclusivas de la app.</p>
+            {hasAnyProductInModo && (
+              <p className="text-xs text-sky-600 bg-sky-50 border border-sky-100 rounded-xl px-3 py-2 mb-3">
+                📱 MODO se activó automáticamente porque vinculaste productos bancarios a MODO.
+              </p>
+            )}
             <div className="grid grid-cols-3 gap-2.5">
               {wallets.map(wallet => {
-                const sel = selectedWalletIds.includes(wallet.id)
+                const isModo = wallet.id === modoWalletId
+                const sel = isModo ? modoEffectivelySelected : selectedWalletIds.includes(wallet.id)
+                const autoModo = isModo && hasAnyProductInModo && !selectedWalletIds.includes(wallet.id)
                 return (
                   <button key={wallet.id}
-                    onClick={() => setSelectedWalletIds(prev => sel ? prev.filter(x => x !== wallet.id) : [...prev, wallet.id])}
+                    onClick={() => isModo
+                      ? handleModoWalletClick()
+                      : setSelectedWalletIds(prev => sel ? prev.filter(x => x !== wallet.id) : [...prev, wallet.id])
+                    }
                     className={`relative flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${sel ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
                     {sel && <div className="absolute top-2 right-2 w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={10} className="text-white" /></div>}
+                    {autoModo && <div className="absolute top-1.5 left-1.5 text-[8px] font-black text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-full">Auto</div>}
                     <EntityLogo logoUrl={wallet.logoUrl} name={wallet.name} />
                     <span className="text-[10px] font-bold text-gray-700 text-center leading-tight line-clamp-2">{wallet.name}</span>
                   </button>
@@ -889,13 +937,37 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
     </div>
   )
 
-  if (inline) return <>{inner}{confirmPopup}</>
+  const modoRemovalModal = confirmModoRemoval ? (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-6">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmModoRemoval(false)} />
+      <div className="relative bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl">
+        <div className="text-3xl mb-3 text-center">📱</div>
+        <h3 className="font-black text-sm text-gray-900 text-center mb-2">¿Desvinculás MODO?</h3>
+        <p className="text-xs text-gray-500 text-center mb-5">
+          Tenés productos bancarios vinculados a MODO. Si confirmás, se eliminarán todos esos vínculos de tus tarjetas y cuentas.
+        </p>
+        <div className="flex gap-2">
+          <button onClick={() => setConfirmModoRemoval(false)}
+            className="flex-1 py-2.5 rounded-2xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button onClick={confirmRemoveModo}
+            className="flex-1 py-2.5 rounded-2xl bg-red-500 text-white text-sm font-black hover:bg-red-600">
+            Desvincular
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
+  if (inline) return <>{inner}{confirmPopup}{modoRemovalModal}</>
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       {inner}
       {confirmPopup}
+      {modoRemovalModal}
     </div>
   )
 }
