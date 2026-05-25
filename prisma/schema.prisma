@@ -3,9 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider  = "cockroachdb"
   url       = env("DATABASE_URL")
- }
+  directUrl = env("DIRECTURL")
+}
 
 model TrustedDevice {
   id        String   @id @default(cuid())
@@ -180,8 +181,8 @@ model Bank {
   slug              String             @unique
   logoUrl           String?
   active            Boolean            @default(true)
-  bcraCode          String?            @unique @db.VarChar(5)
-  codigoModo        String?            @db.VarChar(5)
+  bcraCode          String?            @unique
+  codigoModo        String?
   bank_modo_codes   bank_modo_codes[]
   segments          BankSegment[]
   promoRequirements PromoRequirement[]
@@ -438,9 +439,9 @@ model FinancialAccountType {
 }
 
 model bank_modo_codes {
-  id         Int       @id @default(autoincrement())
+  id         BigInt    @id @default(autoincrement())
   bankId     String
-  modoCode   String    @unique @db.VarChar(5)
+  modoCode   String    @unique
   created_at DateTime? @default(now()) @db.Timestamp(6)
   banks      Bank      @relation(fields: [bankId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
