@@ -11,21 +11,25 @@ const CATEGORIAS = [
 
 const CATEGORY_RULES = [
   { cat: 'Supermercados',    kw: ['coto', 'jumbo', 'disco', 'vea', 'carrefour', 'changomas', 'diarco', 'makro', 'dia online', 'supermercado', 'la gallega', 'gallega', 'supercoop', 'supers del interior', 'bell\'s', 'bells', 'toledo', 'josimar', 'nini', 'anonima', 'yaguar', 'hipermaxi', 'almacen', 'despensa'] },
-  // Combustible: solo estaciones de servicio — NO incluir 'puma' solo (es ropa), 'petro' solo, 'nafta' sola
-  { cat: 'Combustible',      kw: ['ypf', 'axion', 'shell combustible', 'puma energy', 'gulf energy', 'wico', 'estacion de servicio', 'surtidor', 'petrobras', 'petro rio', 'combustible', 'nafta premium'] },
+  // Combustible: SOLO estaciones de servicio — marcas de autos (honda, ford) NO van aquí
+  { cat: 'Combustible',      kw: ['ypf', 'axion', 'shell', 'puma energy', 'gulf energy', 'wico', 'estacion de servicio', 'surtidor', 'petrobras', 'petro rio', 'combustible', 'nafta premium', 'serviclub'] },
   { cat: 'Gastronomía',      kw: ['mcdonald', 'burger king', 'mostaza', 'starbucks', 'havanna', 'restaurant', 'pizzeria', 'cerveceria', 'kfc', 'subway', 'sushi', 'cafeteria', 'parrilla', 'rotiseria', 'comida', 'delivery', 'rappi', 'pedidosya', 'menuclass', 'wendy'] },
   { cat: 'Heladerías',       kw: ['grido', 'freddo', 'lucciano', 'persicco', 'volta', 'chungo', 'heladeria', 'cremolatti', 'amorino'] },
   { cat: 'Farmacias',        kw: ['farmacity', 'farmacia', 'dr ahorro', 'vantage', 'farmared', 'drogueria', 'botica'] },
-  { cat: 'Indumentaria',     kw: ['zara', 'nike', 'adidas', 'puma', 'dafiti', 'macowens', 'ropa', 'zapatillas', 'grimoldi', 'tucci', 'equus', 'portsaid', 'wanama', 'kosiuko', 'vitamina', 'rapsodia', 'bensimon', 'mimo', 'cheeky', 'grisino', 'off corss', 'cardón', 'lacoste', 'fila', 'topper', 'umbro', 'levi', 'legacy', 'save my bag', 'louise louise', 'batistella', 'etiqueta negra', 'hering', 'importados'] },
-  { cat: 'Deportes',         kw: ['decathlon', 'arsenal', 'dexter', 'montagne', 'lippi', 'oxbow', 'sportline', 'sport', 'padel', 'fitness', 'gym', 'bicicleta', 'running', 'camping', 'trekking', 'natacion', 'columbia', 'timberland', 'quechua'] },
+  { cat: 'Indumentaria',     kw: ['zara', 'nike', 'adidas', 'puma', 'dafiti', 'macowens', 'ropa', 'zapatillas', 'grimoldi', 'tucci', 'equus', 'portsaid', 'wanama', 'kosiuko', 'vitamina', 'rapsodia', 'bensimon', 'mimo', 'cheeky', 'grisino', 'off corss', 'cardon', 'lacoste', 'topper', 'umbro', 'levi', 'legacy', 'save my bag', 'louise louise', 'batistella', 'etiqueta negra', 'hering', 'importados'] },
+  // Deportes: sin 'sport' solo (demasiado amplio) y sin 'bicicleta' solo (conflicto con bicicleta electrica en Transporte)
+  { cat: 'Deportes',         kw: ['decathlon', 'arsenal', 'dexter', 'montagne', 'lippi', 'oxbow', 'sportline', 'padel', 'fitness', 'gimnasio', 'running', 'camping', 'trekking', 'natacion', 'columbia', 'timberland', 'quechua', 'ciclismo', 'alpinismo'] },
   { cat: 'Tecnología',       kw: ['fravega', 'musimundo', 'cetrogar', 'megatone', 'samsung', 'apple', 'electro', 'garbarino', 'compumundo', 'digitaltek', 'movistar tienda', 'personal shop', 'claro shop', 'pc factory', 'notebook', 'celular', 'iphone', 'tablet', 'tv led'] },
-  { cat: 'Hogar',            kw: ['easy', 'sodimac', 'blaisten', 'colchon', 'mueble', 'pintureria', 'ferreteria', 'bazar', 'el hogar', 'cardon hogar', 'falabella', 'paris', 'ikea', 'linio hogar', 'frávega hogar'] },
+  { cat: 'Hogar',            kw: ['easy', 'sodimac', 'blaisten', 'colchon', 'mueble', 'pintureria', 'ferreteria', 'bazar', 'el hogar', 'falabella', 'ikea', 'linio hogar'] },
   { cat: 'Mascotas',         kw: ['puppis', 'petshop', 'veterinaria', 'mascota', 'purina', 'barf', 'agropecuaria'] },
   { cat: 'Entretenimiento',  kw: ['cine', 'hoyts', 'cinemark', 'showcase', 'teatro', 'entrada', 'multiplex', 'ticket', 'disney', 'netflix', 'spotify', 'xbox', 'playstation', 'steam', 'gaming'] },
-  { cat: 'Salud y Belleza',  kw: ['perfumeria', 'natura', 'avon', 'l\'oreal', 'loreal', 'estetica', 'peluqueria', 'spa', 'clinica', 'optica', 'dental', 'salud', 'arcos', 'aromaterapia', 'derma', 'cosmetica'] },
-  { cat: 'Viajes y Turismo', kw: ['aerolineas', 'despegar', 'almundo', 'turismo', 'viaje', 'hotel', 'vuelo', 'flybondi', 'jetsmart', 'booking', 'airbnb', 'lan', 'latam', 'aeropuerto', 'hostel', 'crucero'] },
-  { cat: 'Automotores',      kw: ['concesionaria', '0km', 'cero km', 'repuesto', 'taller mecanico', 'peugeot', 'volkswagen', 'toyota', 'chevrolet', 'renault', 'fiat', 'honda', 'ford dealer', 'nissan', 'jeep dealer', 'hyundai', 'volvo', 'bmw', 'audi', 'patentamiento'] },
-  { cat: 'Transporte',       kw: ['uber', 'cabify', 'taxi', 'sube', 'peaje', 'autopista', 'estacionamiento', 'parking', 'pedido ya moto', 'rappi moto', 'moto', 'bicicleta electrica', 'scooter'] },
+  { cat: 'Salud y Belleza',  kw: ['perfumeria', 'natura', 'avon', 'loreal', 'estetica', 'peluqueria', 'spa', 'clinica', 'optica', 'dental', 'arcos', 'derma', 'cosmetica'] },
+  { cat: 'Viajes y Turismo', kw: ['aerolineas', 'despegar', 'almundo', 'turismo', 'hotel', 'vuelo', 'flybondi', 'jetsmart', 'booking', 'airbnb', 'latam', 'aeropuerto', 'hostel', 'crucero'] },
+  // Automotores: solo términos inequívocamente automotrices (concesionarias, repuestos, 0km)
+  // Las marcas de autos sin calificador se omiten para evitar falsos positivos
+  { cat: 'Automotores',      kw: ['concesionaria', '0km', 'cero km', 'repuesto automotor', 'taller mecanico', 'gomeria', 'patentamiento', 'volkswagen', 'ford dealer', 'nissan dealer', 'jeep dealer', 'hyundai dealer', 'peugeot 0km', 'renault 0km', 'toyota 0km', 'chevrolet 0km', 'fiat 0km', 'honda 0km', 'audi dealer', 'bmw dealer', 'volvo dealer'] },
+  // Transporte: movilidad urbana — 'moto' solo es demasiado amplio (Motorola, etc.), usar solo compuestos
+  { cat: 'Transporte',       kw: ['uber', 'cabify', 'taxi', 'sube', 'peaje', 'autopista', 'estacionamiento', 'parking', 'pedido ya moto', 'rappi moto', 'bicicleta electrica', 'scooter electrico', 'patineta'] },
 ];
 
 function normStr(s: string): string {
@@ -52,19 +56,23 @@ async function classifyWithGroq(batch: { id: string; comercio: string }[]): Prom
 CATEGORÍAS DISPONIBLES: ${CATEGORIAS.join(', ')}
 
 REGLAS IMPORTANTES — leé con atención antes de clasificar:
-- "Combustible" = SOLO estaciones de servicio (YPF, Shell, Axion, Puma Energy, Gulf). NUNCA clasificar como Combustible marcas de ropa o calzado aunque contengan palabras similares.
-- "Indumentaria" = ropa, zapatillas, accesorios (Puma, Nike, Adidas, Zara, etc.)
+- "Combustible" = EXCLUSIVAMENTE estaciones de servicio que venden nafta/diesel: YPF, Shell, Axion, Puma Energy, Gulf. NADA MÁS va a Combustible.
+- "Automotores" = concesionarias, compraventa de vehículos 0km, repuestos de autos, talleres mecánicos, gomería, patentamiento.
+- "Transporte" = movilidad urbana: Uber, Cabify, taxi, SUBE, peajes, estacionamiento. NO incluye autos ni motos de venta.
+- "Indumentaria" = ropa, zapatillas, accesorios de moda (Puma, Nike, Adidas, Zara, etc.)
 - "Tecnología" = electrónica, celulares, computadoras, electrodomésticos
 - "Hogar" = muebles, decoración, ferretería, pinturería
 - "Gastronomía" = restaurantes, cafés, delivery, fast food
-- "Salud y Belleza" = peluquerías, farmacias no incluidas en Farmacias, cosméticos, ópticas
-- "Otros" = si no encaja en ninguna categoría específica, NO en Combustible
+- "Salud y Belleza" = peluquerías, cosméticos, ópticas, spa
+- "Otros" = si genuinamente no encaja en ninguna categoría
 
-ERRORES COMUNES A EVITAR:
-- Puma → Indumentaria (NO Combustible)
+ERRORES COMUNES A EVITAR — estos son los más frecuentes:
+- Puma (ropa deportiva) → Indumentaria, NO Combustible
+- Ford, Toyota, Honda, Renault, Fiat sin contexto de venta → Otros o Automotores (NO Combustible)
 - Fravega, Garbarino, Megatone → Tecnología (NO Hogar)
 - Rappi, PedidosYa → Gastronomía (NO Transporte)
 - Booking, Airbnb → Viajes y Turismo (NO Hogar)
+- Movistar, Personal, Claro → Tecnología (NO Entretenimiento)
 
 Respondé SOLO con un JSON array sin texto adicional:
 [{"id":"...","categoria":"..."},...]
