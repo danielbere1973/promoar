@@ -142,6 +142,21 @@ const NETWORK_CARD_OPTIONS: Record<string, NetOption[]> = {
   ],
 }
 
+// Bancos que participan de la red MODO
+const MODO_BANK_KEYWORDS = [
+  'galicia', 'bbva', 'francés', 'frances', 'santander', 'macro', 'hsbc',
+  'ciudad', 'provincia', 'nación', 'nacion', 'patagonia', 'hipotecario',
+  'supervielle', 'icbc', 'comafi', 'credicoop', 'itaú', 'itau',
+  'del sol', 'standard bank', 'openbank', 'bancor', 'córdoba', 'cordoba',
+  'santa fe', 'entre ríos', 'entre rios', 'la pampa', 'chubut', 'formosa',
+  'san juan', 'tierra del fuego', 'tucumán', 'tucuman', 'meridian',
+  'del neuquén', 'del neuquen', 'santa cruz', 'del chaco',
+]
+function isModoBank(bankName: string): boolean {
+  const n = bankName.toLowerCase()
+  return MODO_BANK_KEYWORDS.some(k => n.includes(k))
+}
+
 // Segmentos estándar (para el banco package selector)
 const STANDARD_SEGMENT_NAMES = ['clasic', 'internacion', 'gold', 'oro', 'platinum', 'black', 'premium', 'signature', 'infinite', 'icon', 'macro', 'regional', 'nacional', 'selecta', 'eminent', 'the gold', 'the platinum', 'the green']
 function isStandardSegment(name: string) {
@@ -532,8 +547,14 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
     const configs = overrideConfigs ?? bankConfigs
     const walletIds = overrideWalletIds ?? selectedWalletIds
 
+    // Si MODO está seleccionado en billeteras, aplicar a todos los productos de bancos MODO-compatibles
+    const modoInWallets = modoWalletId ? walletIds.includes(modoWalletId) : false
+    const modoApplied = new Set<string>() // evitar duplicados: "bankId|type|networkId"
+
     for (const bankId of bankIds) {
       const cfg = configs[bankId] ?? getConfig(bankId)
+      const bank = banks.find(b => b.id === bankId)
+      const bankSupportsModo = modoWalletId && bank && isModoBank(bank.name)
 
       // Cuentas
       for (const acc of cfg.accounts) {
@@ -546,7 +567,10 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
           isPayroll: acc.isPayroll,
           isPensioner: acc.isPensioner,
         })
-        if (acc.inModo && modoWalletId) {
+        const shouldModo = acc.inModo || (modoInWallets && bankSupportsModo)
+        const modoKey = `${bankId}|ACCOUNT|`
+        if (shouldModo && modoWalletId && !modoApplied.has(modoKey)) {
+          modoApplied.add(modoKey)
           cards.push({ bankId, walletId: modoWalletId, cardType: 'ACCOUNT' })
         }
       }
@@ -557,19 +581,23 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
           bankId,
           cardNetworkId: card.networkId,
           cardType: card.cardType,
-          segmentId: cfg.segmentId ?? card.segmentId, // paquete del banco tiene prioridad
+          segmentId: cfg.segmentId ?? card.segmentId,
           cardSegmentId: card.cardSegmentId,
           firstSix: card.firstSix || undefined,
           lastFour: card.lastFour || undefined,
         })
-        if (card.inModo && modoWalletId) {
+        const shouldModo = card.inModo || (modoInWallets && bankSupportsModo)
+        const modoKey = `${bankId}|${card.cardType}|${card.networkId}`
+        if (shouldModo && modoWalletId && !modoApplied.has(modoKey)) {
+          modoApplied.add(modoKey)
           cards.push({ bankId, walletId: modoWalletId, cardNetworkId: card.networkId, cardType: card.cardType })
         }
       }
     }
 
-    // Billeteras independientes
+    // Billeteras independientes (MODO como independiente si no fue aplicado a ningún banco)
     for (const walletId of walletIds) {
+      if (walletId === modoWalletId && modoApplied.size > 0) continue // ya aplicado a bancos
       cards.push({ walletId, cardType: 'CREDIT' })
     }
 
@@ -773,7 +801,26 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
                   <button key={bank.id}
                     onClick={() => {
                       if (alreadyExists) { setConfirmEditBankId(bank.id) }
-                      else setSelectedBankIds(prev => sel ? prev.filter(x => x !== bank.id) : [...prev, bank.id])
+                      else if (!sel) {
+                        setSelectedBankIds(prev => [...prev, bank.id])
+                        if (!bankConfigs[bank.id]) {
+                          setBankConfigs(prev => ({
+                            ...prev,
+                            [bank.id]: {
+                              id: bank.id, name: bank.name, logoUrl: bank.logoUrl,
+                              accounts: [{
+                                localId: `default_${Date.now()}`,
+                                type: 'CA' as const, currency: 'ARS' as const,
+                                lastFive: '', cbu: '',
+                                isPayroll: false, isPensioner: false, inModo: false,
+                              }],
+                              cards: [],
+                            }
+                          }))
+                        }
+                      } else {
+                        setSelectedBankIds(prev => prev.filter(x => x !== bank.id))
+                      }
                     }}
                     className={`relative flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${alreadyExists ? 'border-amber-200 bg-amber-50' : sel ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
                     {sel && !alreadyExists && <div className="absolute top-2 right-2 w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={10} className="text-white" /></div>}
@@ -792,7 +839,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
           <BankProductStep
             bank={currentBank}
             config={getConfig(currentBank.id)}
-            modoWalletId={modoWalletId}
+            modoWalletId={isModoBank(currentBank.name) ? modoWalletId : undefined}
             allBankSegs={allBankSegs}
             allNets={allNetworks}
             onUpdate={u => updateConfig(currentBank.id, u)}

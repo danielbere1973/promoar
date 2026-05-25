@@ -632,19 +632,17 @@ function HomeContent() {
 
   const todayDashboard = useMemo(() => {
     if (promos.length === 0) return null
-    const todayIdx = new Date().getDay() // 0=Dom...6=Sáb
-    const todayBit = 1 << todayIdx
-    // Los promos ya vienen filtrados por el día de hoy desde la API (view=today).
-    // Para el hero usamos todos los promos del set cargado.
+    const todayIdx = new Date().getDay()
     const maxDiscount = promos.reduce((max, p) => Math.max(max, bestPercentageReq(p)?.discountValue ?? 0), 0)
     const DAYS_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
-    // El conteo por día muestra cuántas promos del set cargado tienen ese día habilitado
     const dayCounts = Array.from({ length: 7 }, (_, d) => ({
       label: DAYS_LABELS[d],
       count: promos.filter(p => (p.validDays & (1 << d)) !== 0).length,
       isToday: d === todayIdx,
       dayIdx: d,
     }))
+
+    // Categorías
     const catMap = new Map<string, { name: string; icon: string; slug: string; bestDiscount: number }>()
     for (const p of promos) {
       const k = p.category.slug ?? p.category.name
@@ -653,9 +651,44 @@ function HomeContent() {
       const v = bestPercentageReq(p)?.discountValue ?? 0
       if (v > entry.bestDiscount) entry.bestDiscount = v
     }
-    const catList = Array.from(catMap.values()).filter(c => c.bestDiscount > 0).sort((a, b) => b.bestDiscount - a.bestDiscount).slice(0, 8)
-    return { totalPromos: promos.length, maxDiscount, dayCounts, catList, todayIdx }
-  }, [promos])
+    const catList = Array.from(catMap.values())
+      .filter(c => c.bestDiscount > 0)
+      .sort((a, b) => {
+        // Seleccionadas primero, luego favoritas, luego por descuento
+        const aScore = (selectedCats.includes(a.slug) ? 0 : 2) + (favCategories.includes(a.slug) ? 0 : 1)
+        const bScore = (selectedCats.includes(b.slug) ? 0 : 2) + (favCategories.includes(b.slug) ? 0 : 1)
+        if (aScore !== bScore) return aScore - bScore
+        return b.bestDiscount - a.bestDiscount
+      })
+      .slice(0, 5)
+
+    // Comercios
+    const commMap = new Map<string, { name: string; logoUrl?: string | null; bestDiscount: number; count: number }>()
+    for (const p of promos) {
+      const k = p.commerce.name
+      if (!commMap.has(k)) commMap.set(k, { name: k, logoUrl: p.commerce.logoUrl, bestDiscount: 0, count: 0 })
+      const entry = commMap.get(k)!
+      entry.count++
+      const v = bestPercentageReq(p)?.discountValue ?? 0
+      if (v > entry.bestDiscount) entry.bestDiscount = v
+    }
+    const activeCommerce = activeFilters.commerces[0]
+    const commList = Array.from(commMap.values())
+      .filter(c => c.bestDiscount > 0)
+      .sort((a, b) => {
+        const aFiltered = activeCommerce && a.name.toLowerCase().includes(activeCommerce.toLowerCase()) ? 0 : 1
+        const bFiltered = activeCommerce && b.name.toLowerCase().includes(activeCommerce.toLowerCase()) ? 0 : 1
+        if (aFiltered !== bFiltered) return aFiltered - bFiltered
+        const aFav = favCommerces.includes(a.name) ? 0 : 1
+        const bFav = favCommerces.includes(b.name) ? 0 : 1
+        if (aFav !== bFav) return aFav - bFav
+        if (b.count !== a.count) return b.count - a.count
+        return b.bestDiscount - a.bestDiscount
+      })
+      .slice(0, 5)
+
+    return { totalPromos: promos.length, maxDiscount, dayCounts, catList, commList }
+  }, [promos, selectedCats, favCategories, favCommerces, activeFilters.commerces])
 
   // Ordenar: favoritos primero (categoría o comercio en favoritos), luego el resto
   const promosFiltradas = favCategories.length === 0 && favCommerces.length === 0
@@ -1238,27 +1271,72 @@ function HomeContent() {
             })}
           </div>
 
-          {/* Grid de categorías con mejor descuento */}
+          {/* Top 5 Categorías */}
           {todayDashboard.catList.length > 0 && (
-            <div className="grid grid-cols-2 gap-1.5">
-              {todayDashboard.catList.map(cat => {
-                const isActive = selectedCats.includes(cat.slug)
-                return (
-                  <button
-                    key={cat.slug}
-                    onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
-                    className={`flex items-center justify-between rounded-xl px-3 py-2 transition-all text-left ${
-                      isActive ? 'bg-white/25 ring-1 ring-white/60' : 'bg-white/10 hover:bg-white/20'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-sm shrink-0">{cat.icon}</span>
-                      <span className="text-[11px] font-bold text-white/90 truncate">{cat.name}</span>
-                    </div>
-                    <span className="text-[13px] font-black shrink-0 ml-1" style={{ color: '#c6f135' }}>{cat.bestDiscount}%</span>
-                  </button>
-                )
-              })}
+            <div className="mb-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300 mb-1.5">Top categorías</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {todayDashboard.catList.map(cat => {
+                  const isActive = selectedCats.includes(cat.slug)
+                  const isFav = favCategories.includes(cat.slug)
+                  return (
+                    <button
+                      key={cat.slug}
+                      onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
+                      className={`flex items-center justify-between rounded-xl px-3 py-2 transition-all text-left ${
+                        isActive ? 'bg-white/25 ring-1 ring-white/60' : 'bg-white/10 hover:bg-white/20'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm shrink-0">{cat.icon}</span>
+                        <span className="text-[11px] font-bold text-white/90 truncate">{cat.name}</span>
+                        {isFav && <span className="text-yellow-300 text-[9px] shrink-0">★</span>}
+                      </div>
+                      <span className="text-[13px] font-black shrink-0 ml-1" style={{ color: '#c6f135' }}>{cat.bestDiscount}%</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Top 5 Comercios */}
+          {todayDashboard.commList.length > 0 && (
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300 mb-1.5">Top comercios</p>
+              <div className="space-y-1">
+                {todayDashboard.commList.map(c => {
+                  const isFav = favCommerces.includes(c.name)
+                  const isFiltered = activeFilters.commerces[0]?.toLowerCase() === c.name.toLowerCase()
+                  return (
+                    <button
+                      key={c.name}
+                      onClick={() => {
+                        if (isFiltered) {
+                          setActiveFilters(prev => ({ ...prev, commerces: [] }))
+                          setSearchText('')
+                        } else {
+                          setSearchMode('exact')
+                          setActiveFilters(prev => ({ ...prev, commerces: [c.name] }))
+                          setSearchText(c.name)
+                        }
+                      }}
+                      className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all text-left ${
+                        isFiltered ? 'bg-white/25 ring-1 ring-white/60' : 'bg-white/10 hover:bg-white/20'
+                      }`}
+                    >
+                      {c.logoUrl ? (
+                        <img src={c.logoUrl} alt={c.name} className="h-6 w-6 object-contain rounded shrink-0 bg-white/90 p-0.5" />
+                      ) : (
+                        <span className="h-6 w-6 flex items-center justify-center bg-white/20 rounded text-[10px] font-black shrink-0">{c.name.slice(0,2).toUpperCase()}</span>
+                      )}
+                      <span className="text-[11px] font-bold text-white/90 flex-1 truncate">{c.name}</span>
+                      {isFav && <span className="text-yellow-300 text-[9px] shrink-0">★</span>}
+                      <span className="text-[12px] font-black shrink-0" style={{ color: '#c6f135' }}>{c.bestDiscount}%</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
