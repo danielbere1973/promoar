@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { findCategoryNode } from '../../../precios/categories'
+import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 interface MultiUnitPromo {
@@ -54,11 +55,12 @@ function parseMultiUnitPromo(text: string, price: number): MultiUnitPromo | unde
     return { label: `2do al ${100 - pct}%`, effectivePrice, requiredQty: 2 }
   }
 
-  // "2do al XX%" o "segundo al XX%"
+  // "2do al XX%" o "segundo al XX%" — XX% es el descuento en la segunda unidad
+  // "2do al 80%" = 2da unidad con 80% de descuento = paga 20% → efectivo (price + 0.20*price)/2 = 0.60*price
   const segundo = t.match(/(?:2do|segundo)\s+al\s+(\d+)\s*%/)
   if (segundo) {
     const pct = parseInt(segundo[1])
-    const effectivePrice = Math.round((price + price * pct / 100) / 2)
+    const effectivePrice = Math.round((price + price * (100 - pct) / 100) / 2)
     return { label: `2do al ${pct}%`, effectivePrice, requiredQty: 2 }
   }
 
@@ -66,7 +68,7 @@ function parseMultiUnitPromo(text: string, price: number): MultiUnitPromo | unde
   const tercer = t.match(/(?:3er|tercer)\s+al\s+(\d+)\s*%/)
   if (tercer) {
     const pct = parseInt(tercer[1])
-    const effectivePrice = Math.round((price * 2 + price * pct / 100) / 3)
+    const effectivePrice = Math.round((price * 2 + price * (100 - pct) / 100) / 3)
     return { label: `3er al ${pct}%`, effectivePrice, requiredQty: 3 }
   }
 
@@ -76,6 +78,20 @@ function parseMultiUnitPromo(text: string, price: number): MultiUnitPromo | unde
 const HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   "Accept": "application/json"
+}
+
+// Filtra productos cuyo nombre no contiene al menos la palabra principal de la búsqueda.
+// Evita falsos positivos cuando VTEX IS devuelve top-sellers sin relación con la query.
+function isRelevantForQuery(productName: string, query: string): boolean {
+  const normalize = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const words = normalize(query)
+    .split(/\s+/)
+    .filter(w => w.length >= 4 && !/^\d+$/.test(w))
+  if (!words.length) return true
+  const name = normalize(productName)
+  const mainWord = words.sort((a, b) => b.length - a.length)[0]
+  return name.includes(mainWord)
 }
 
 // ---------------------------------------------------------
@@ -199,73 +215,66 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
 
 // ---------------------------------------------------------
 // VTEX INTELLIGENT SEARCH (Jumbo, Vea, Disco, Dia)
-// Cache de sesiones por supermarket (dura 10 minutos)
-const sessionCache: Record<string, { cookies: string; ts: number }> = {}
+// Cache en memoria de promos Cencosud (leídas de DB, pobladas por GitHub Actions cada 4 horas)
+const promoCacheMemory: Record<string, { data: Record<string, { promoCode: string; effectiveDiscount: number }>; ts: number }> = {}
 
-async function getVtexSession(baseUrl: string, headers: any): Promise<string> {
-  const cached = sessionCache[baseUrl]
-  if (cached && Date.now() - cached.ts < 10 * 60 * 1000) return cached.cookies
+async function getCencosudPromos(host: string, skuIds: string[]): Promise<Record<string, { promoCode: string; effectiveDiscount: number }>> {
+  if (!skuIds.length) return {}
 
-  try {
-    const res = await fetch(baseUrl + '/', { headers, redirect: 'follow', cache: 'no-store' })
-    const setCookies = res.headers.getSetCookie?.() || []
-    const cookies = setCookies.map(c => c.split(';')[0]).join('; ')
-    sessionCache[baseUrl] = { cookies, ts: Date.now() }
-    return cookies
-  } catch {
-    return ''
+  const cached = promoCacheMemory[host]
+  // Cache en memoria de 30 minutos para no martillar la DB en cada request
+  if (!cached || Date.now() - cached.ts > 30 * 60 * 1000) {
+    try {
+      const rows = await prisma.vtexPromoCache.findMany({ where: { site: host } })
+      const data: Record<string, { promoCode: string; effectiveDiscount: number }> = {}
+      for (const row of rows) data[row.skuId] = { promoCode: row.promoCode, effectiveDiscount: row.effectiveDiscount }
+      promoCacheMemory[host] = { data, ts: Date.now() }
+      console.log(`[${host}] promo cache cargado: ${rows.length} SKUs`)
+    } catch (e: any) {
+      console.log(`[${host}] promo cache DB error: ${e.message}`)
+      return {}
+    }
   }
+
+  const result: Record<string, { promoCode: string; effectiveDiscount: number }> = {}
+  for (const skuId of skuIds) {
+    if (promoCacheMemory[host]?.data[skuId]) result[skuId] = promoCacheMemory[host].data[skuId]
+  }
+  return result
 }
 
-// ---------------------------------------------------------
-async function fetchCencosudProductPromo(baseUrl: string, itemId: string, price: number, headers: any): Promise<MultiUnitPromo | undefined> {
+
+
+
+async function fetchVtexPromotions(baseUrl: string, itemIds: string[], headers: any): Promise<Record<string, any>> {
+  if (!itemIds.length) return {}
   try {
-    const sessionCookies = await getVtexSession(baseUrl, headers)
-    const url = `${baseUrl}/api/catalog_system/pub/products/search?fq=skuId:${itemId}`
-    const res = await fetch(url, {
-      headers: { ...headers, 'Referer': baseUrl + '/', 'Cookie': sessionCookies },
-      cache: 'no-store'
+    const h = {
+      ...headers,
+      'Referer': baseUrl + '/',
+      'Origin': baseUrl,
+      'Content-Type': 'application/json',
+    }
+    const host = baseUrl.split('//')[1]
+    const res = await fetch(`${baseUrl}/_v/search-promotions`, {
+      method: 'POST', headers: h,
+      body: JSON.stringify({ seller: '1', skus: itemIds }),
     })
-    if (!res.ok) return undefined
-    const data = await res.json()
-    const product = Array.isArray(data) ? data[0] : null
-    if (!product) return undefined
-
-    const item = product.items?.find((i: any) => String(i.itemId) === String(itemId)) || product.items?.[0]
-    const offer = item?.sellers?.[0]?.commertialOffer
-    if (!offer) return undefined
-
-    const teasers: string[] = (offer.Teasers || offer.teasers || []).map((t: any) => t.Name || t.name).filter(Boolean)
-    const spot = offer.spotPrice || 0
-
-    // Clusters del catalog (más completos que el IS search)
-    const catalogClusters: string[] = Object.values(product.clusterHighlights || {})
-      .map((v: any) => String(v))
-      .filter(n => n && !n.startsWith('V_T:') && !/^hasta\s/i.test(n))
-
-    // Solo teasers — los catalogClusters son labels de categoría, no promos por producto
-    for (const t of teasers) {
-      const promo = parseMultiUnitPromo(t, price)
-      if (promo && promo.effectivePrice < price) return promo
+    if (!res.ok) {
+      console.log(`[${host}] search-promotions HTTP ${res.status}`)
+      return {}
     }
-    if (spot > 0 && spot < price) {
-      return { label: `${Math.round((1 - spot / price) * 100)}% OFF`, effectivePrice: Math.round(spot), requiredQty: 1 }
-    }
-  } catch {
-    // silencioso
-  }
-  return undefined
-}
-
-// ---------------------------------------------------------
-async function fetchVtexPromotions(baseUrl: string, headers: any): Promise<Record<string, any>> {
-  try {
-    const h = { ...headers, 'Referer': baseUrl + '/', 'Origin': baseUrl, 'Content-Type': 'application/json' }
-    const res = await fetch(`${baseUrl}/_v/search-promotions`, { method: 'POST', headers: h, body: '{}' })
-    if (!res.ok) return {}
     const data = await res.json()
-    return data?.promotions?.generic?.promotions || {}
-  } catch {
+    const allBuckets = data?.promotions || {}
+    const promos: Record<string, any> = {}
+    for (const bucket of Object.values(allBuckets) as any[]) {
+      Object.assign(promos, bucket?.promotions || {})
+    }
+    console.log(`[${host}] search-promotions: ${Object.keys(promos).length} promos para ${itemIds.length} skus`)
+    if (Object.keys(promos).length > 0) console.log(`[${host}] primera promo:`, JSON.stringify(Object.values(promos)[0]).slice(0, 200))
+    return promos
+  } catch (e: any) {
+    console.log(`[${baseUrl.split('//')[1]}] search-promotions exception: ${e.message}`)
     return {}
   }
 }
@@ -279,20 +288,16 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
        url = `${baseUrl}/_v/api/intelligent-search/product_search/?query=${encoded}&map=${vtexMap}&page=1&count=15&sort=orders:desc&hideUnavailableItems=true`
     }
     
-    const VTEX_SEGMENT = supermarket === 'Jumbo' 
+    const VTEX_SEGMENT = supermarket === 'Jumbo'
       ? "eyJjYW1wYWlnbnMiOm51bGwsImNoYW5uZWwiOiIzMiIsInByaWNlVGFibGVzIjpudWxsLCJyZWdpb25JZCI6bnVsbCwidXRtX2NhbXBhaWduIjpudWxsLCJ1dG1fc291cmNlIjpudWxsLCJ1dG1pX2NhbXBhaWduIjpudWxsLCJjdXJyZW5jeUNvZGUiOiJBUlMiLCJjdXJyZW5jeVN5bWJvbCI6IiQiLCJjb3VudHJ5Q29kZSI6IkFSRyIsImN1bHR1cmVJbmZvIjoiZXMtQVIiLCJjaGFubmVsUHJpdmFjeSI6InB1YmxpYyJ9"
       : ""
-      
+
     const headers: any = { ...HEADERS }
     if (VTEX_SEGMENT) {
       headers['Cookie'] = `vtex_segment=${VTEX_SEGMENT}; VtexWorkspace=master%3A-`
     }
     
-    const [res, promotionsMap] = await Promise.all([
-      fetch(url, { headers }),
-      fetchVtexPromotions(baseUrl, headers)
-    ])
-
+    const res = await fetch(url, { headers })
     if (!res.ok) return []
 
     const data = await res.json()
@@ -313,16 +318,40 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
       } catch {}
     }
 
+    const itemIds = products
+      .flatMap((p: any) => p.items || [])
+      .map((item: any) => String(item.itemId || ''))
+      .filter(Boolean)
+
+    const isCencosudSite = ['Jumbo', 'Disco', 'Vea'].includes(supermarket)
+    const host = baseUrl.split('//')[1]
+
+    let promotionsMap: Record<string, any> = {}
+    if (itemIds.length > 0) {
+      if (isCencosudSite) {
+        // Promos de Cencosud vienen del cache en DB (poblado por GitHub Actions via Playwright)
+        const cached = await getCencosudPromos(host, itemIds)
+        for (const [skuId, promo] of Object.entries(cached)) {
+          promotionsMap[skuId] = { effectiveDiscount: String(promo.effectiveDiscount), code: promo.promoCode }
+        }
+      } else {
+        promotionsMap = await fetchVtexPromotions(baseUrl, itemIds, headers)
+      }
+    }
+
     const initial = products.map((p: any) => {
       const item = p.items?.[0] || {}
       const offer = item.sellers?.[0]?.commertialOffer || {}
 
       const rawListPrice = offer.ListPrice || 0
       const salePrice = offer.Price || 0
-      // ListPrice válido solo si es razonable (no más de 3x el precio de venta)
-      const listPrice = (rawListPrice > 0 && rawListPrice <= salePrice * 3)
-        ? rawListPrice
-        : (offer.PriceWithoutDiscount || salePrice || 0)
+      // Cencosud tiene ListPrice corrupto (~82x el precio real) en todas sus APIs — ignorarlo siempre.
+      // Para otros: usar ListPrice si es razonable (no más de 3x el precio de venta).
+      const listPrice = isCencosudSite
+        ? salePrice
+        : (rawListPrice > 0 && rawListPrice <= salePrice * 3)
+          ? rawListPrice
+          : (offer.PriceWithoutDiscount || salePrice || 0)
       const spot = offer.spotPrice || 0
       const available = (offer.AvailableQuantity || 0) > 0
 
@@ -346,7 +375,17 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         }
       })
 
-      // Buscar promo: 1) itemId en search-promotions 2) teasers 3) clusters sin "Hasta"
+      // Del cluster, preferir el que parezca una promo real (%, NxM, 2do, 3er, off)
+      const promoCluster = clusterTexts.find(c =>
+        /\d+\s*%|\d+\s*[xX]\s*\d+|2do|3er|segundo|tercer|\boff\b/i.test(c)
+      ) || ''
+
+      // Fallback: mejor cluster "Hasta X%" — strip del prefijo "Hasta "
+      const hastaCluster = clusterFallbackTexts
+        .map(c => c.replace(/^hasta\s+/i, '').trim())
+        .find(c => /\d+\s*%|\d+\s*[xX]\s*\d+|2do|3er|segundo|tercer|\boff\b/i.test(c)) || ''
+
+      // Buscar promo: 1) itemId en search-promotions 2) teasers 3) mejor cluster
       const vtexPromo = promotionsMap[item.itemId]
       let multiUnitPromo: MultiUnitPromo | undefined
       if (vtexPromo?.effectiveDiscount) {
@@ -373,11 +412,13 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         }
       }
 
-      // Clusters ignorados para promoText: son labels de categoría en Cencosud ("50% en Papeles | Cyber Monday")
-      // que no reflejan el descuento real del producto. Solo mostrar si hay precio real diferente.
-      let promoText = multiUnitPromo?.label || teaserTexts[0] || '-'
-      if (promoText === '-' && spot > 0 && spot < salePrice) {
-        promoText = `${Math.round((1 - spot / salePrice) * 100)}% OFF`
+      let promoText = multiUnitPromo?.label || teaserTexts[0] || promoCluster || hastaCluster || '-'
+      if (promoText === '-') {
+        if (spot > 0 && spot < salePrice) {
+          promoText = `${Math.round((1 - spot / salePrice) * 100)}% OFF`
+        } else if (priceList > finalPrice * 1.04) {
+          promoText = `${Math.round((1 - finalPrice / priceList) * 100)}% OFF`
+        }
       }
       const productUrl = p.linkText ? `${baseUrl}/${p.linkText}/p` : ''
       return {
@@ -392,26 +433,10 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         imageUrl: item.images?.[0]?.imageUrl || '',
         url: productUrl || baseUrl,
         multiUnitPromo,
-        _productUrl: productUrl,
-        _itemId: String(item.itemId || ''),
       }
-    }).filter(Boolean) as any[]
+    }).filter(Boolean) as NormalizedProduct[]
 
-    // Segundo paso: para productos sin promo, fetchear página del producto en paralelo
-    const withoutPromo = initial.filter((p: any) => !p.multiUnitPromo && p._productUrl)
-    if (withoutPromo.length > 0) {
-      const fetched = await Promise.all(
-        withoutPromo.map((p: any) => fetchCencosudProductPromo(baseUrl, p._itemId, p.price, headers))
-      )
-      fetched.forEach((promo: any, i: number) => {
-        if (promo) {
-          withoutPromo[i].multiUnitPromo = promo
-          withoutPromo[i].discountText = promo.label
-        }
-      })
-    }
-
-    return initial.map(({ _productUrl, _itemId, ...p }: any) => p) as NormalizedProduct[]
+    return initial
   } catch (error) {
     console.error(`Error ${supermarket} completo:`, error)
     return []
@@ -711,6 +736,15 @@ export async function GET(request: Request) {
     }
 
     allProducts = allProducts.filter(p => p.finalPrice > 0)
+
+    // Para búsquedas de texto libre: descartar productos irrelevantes.
+    // VTEX IS a veces devuelve top-sellers sin relación con la query ("tostador 2 panes" → lavandina).
+    if (q && !cat) {
+      const before = allProducts.length
+      allProducts = allProducts.filter(p => isRelevantForQuery(p.name, q))
+      const after = allProducts.length
+      if (before !== after) console.log(`[Relevance] ${before} → ${after} (filtró ${before - after} irrelevantes para "${q}")`)
+    }
 
     // Agrupamiento por EAN (Consolidación)
     const grouped = new Map<string, any>()

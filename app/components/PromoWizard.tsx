@@ -234,7 +234,6 @@ function reconstructConfigs(
       const opt = opts.find(o =>
         o.networkId === c.cardNetworkId &&
         o.cardType === (c.cardType as any) &&
-        (o.segmentId ?? null) === (c.segmentId ?? null) &&
         (o.cardSegmentId ?? null) === (c.cardSegmentId ?? null)
       )
       if (opt) {

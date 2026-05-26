@@ -438,6 +438,17 @@ model FinancialAccountType {
   @@map("financial_account_types")
 }
 
+model VtexPromoCache {
+  site              String
+  skuId             String
+  promoCode         String
+  effectiveDiscount Float
+  updatedAt         DateTime @updatedAt
+
+  @@id([site, skuId])
+  @@map("vtex_promo_cache")
+}
+
 model bank_modo_codes {
   id         BigInt    @id @default(autoincrement())
   bankId     String

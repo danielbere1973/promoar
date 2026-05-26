@@ -407,6 +407,9 @@ export default function PerfilPage() {
       cardSegmentId: c.cardSegmentId ?? undefined,
       isPayroll: c.isPayroll ?? false,
       isPensioner: c.isPensioner ?? false,
+      bankAccountType: c.bankAccountType ?? undefined,
+      currency: c.currency ?? undefined,
+      accountNumber: c.accountNumber ?? undefined,
     }))
   } : null
 
@@ -419,16 +422,20 @@ export default function PerfilPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cards: guestProfile.cards }),
       })
-      if (res.ok) {
-        // Recargar el perfil desde DB
-        const r = await fetch('/api/perfil')
-        if (r.ok) {
-          const data = await r.json()
-          if (data.profile) setProfile(data.profile)
-        }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('Error al guardar el perfil: ' + (err.error ?? res.status))
+        return
+      }
+      // Recargar el perfil desde DB
+      const r = await fetch('/api/perfil')
+      if (r.ok) {
+        const data = await r.json()
+        if (data.profile) setProfile(data.profile)
       }
     } catch (e) {
       console.error('Error guardando perfil:', e)
+      alert('Error al guardar el perfil. Revisá la consola para más detalles.')
     } finally {
       setSavingProfile(false)
     }
