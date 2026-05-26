@@ -373,9 +373,11 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         }
       }
 
-      let promoText = multiUnitPromo?.label || teaserTexts[0] || clusterTexts[0] || '-'
-      if (promoText === '-' && priceList > finalPrice) {
-        promoText = `${Math.round((1 - finalPrice / priceList) * 100)}% OFF`
+      // Clusters ignorados para promoText: son labels de categoría en Cencosud ("50% en Papeles | Cyber Monday")
+      // que no reflejan el descuento real del producto. Solo mostrar si hay precio real diferente.
+      let promoText = multiUnitPromo?.label || teaserTexts[0] || '-'
+      if (promoText === '-' && spot > 0 && spot < salePrice) {
+        promoText = `${Math.round((1 - spot / salePrice) * 100)}% OFF`
       }
       const productUrl = p.linkText ? `${baseUrl}/${p.linkText}/p` : ''
       return {
