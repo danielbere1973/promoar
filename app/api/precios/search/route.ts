@@ -245,7 +245,8 @@ async function fetchCencosudProductPromo(baseUrl: string, itemId: string, price:
 
     for (const t of [...teasers, ...catalogClusters]) {
       const promo = parseMultiUnitPromo(t, price)
-      if (promo) return promo
+      // Verificar que la promo realmente sea un ahorro respecto al precio de venta actual
+      if (promo && promo.effectivePrice < price) return promo
     }
     if (spot > 0 && spot < price) {
       return { label: `${Math.round((1 - spot / price) * 100)}% OFF`, effectivePrice: Math.round(spot), requiredQty: 1 }
@@ -360,16 +361,15 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         }
       }
       if (!multiUnitPromo) {
+        // Teasers primero (son por producto), luego clusters específicos (sin "Hasta")
+        // Los clusterFallbackTexts ("Hasta X%") son labels de categoría, muy poco confiables — se ignoran
         for (const pt of [...teaserTexts, ...clusterTexts]) {
-          multiUnitPromo = parseMultiUnitPromo(pt, priceList)
-          if (multiUnitPromo) break
-        }
-      }
-      // Fallback: clusters con "Hasta" (genéricos de categoría)
-      if (!multiUnitPromo) {
-        for (const pt of clusterFallbackTexts) {
-          multiUnitPromo = parseMultiUnitPromo(pt, priceList)
-          if (multiUnitPromo) break
+          const candidate = parseMultiUnitPromo(pt, priceList)
+          // Sanity check: la promo debe ser efectivamente más barata que el precio de venta actual
+          if (candidate && candidate.effectivePrice < finalPrice) {
+            multiUnitPromo = candidate
+            break
+          }
         }
       }
 
