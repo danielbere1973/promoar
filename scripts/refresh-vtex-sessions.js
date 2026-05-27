@@ -1,9 +1,9 @@
 /**
- * Abre Jumbo, Disco y Vea con Playwright, busca términos comunes,
+ * Abre Jumbo, Disco y Vea con Playwright, navega por categorías y subcategorías,
  * intercepta las respuestas de search-promotions y guarda el cache en DB.
  *
  * Uso local:  node scripts/refresh-vtex-sessions.js
- * En CI:      se ejecuta automáticamente via GitHub Actions cada 4 horas.
+ * En CI:      se ejecuta automáticamente via GitHub Actions día por medio.
  */
 
 const { chromium } = require('playwright')
@@ -22,15 +22,68 @@ const SITES = [
   { host: 'www.vea.com.ar',    baseUrl: 'https://www.vea.com.ar' },
 ]
 
-// Términos que cubren los productos más buscados en supermercados
-const SEARCH_TERMS = [
-  'agua', 'soda', 'gaseosa', 'jugo', 'cerveza', 'vino', 'leche',
-  'yogur', 'queso', 'manteca', 'crema', 'huevos',
-  'yerba', 'cafe', 'aceite', 'arroz', 'azucar', 'fideos', 'harina',
-  'galletitas', 'chocolate', 'helado', 'mermelada',
-  'jamon', 'salchicha', 'pan', 'facturas',
-  'detergente', 'lavandina', 'suavizante', 'papel higienico',
-  'shampoo', 'jabon', 'desodorante',
+// Categorías y subcategorías de Cencosud (Jumbo/Disco/Vea comparten estructura VTEX)
+const CATEGORIES = [
+  // Bebidas
+  'bebidas/aguas-sin-gas',
+  'bebidas/aguas-con-gas-y-saborizadas',
+  'bebidas/gaseosas',
+  'bebidas/jugos-y-aguas-saborizadas',
+  'bebidas/cervezas',
+  'bebidas/vinos',
+  'bebidas/espumantes-y-champagnes',
+  'bebidas/bebidas-energizantes-e-isotonicas',
+  'bebidas/sodas',
+  // Almacén
+  'almacen/aceites-y-vinagres',
+  'almacen/arroces-y-legumbres',
+  'almacen/pastas-y-fideos',
+  'almacen/salsas-y-conservas',
+  'almacen/azucar-y-edulcorantes',
+  'almacen/cafe-te-e-infusiones',
+  'almacen/yerba-mate',
+  'almacen/galletitas-y-bizcochos',
+  'almacen/chocolates-y-golosinas',
+  'almacen/harinas-y-premezclas',
+  'almacen/condimentos-y-aderezos',
+  'almacen/snacks-y-papas-fritas',
+  'almacen/sopas-caldos-y-pure',
+  // Lácteos y frescos
+  'lacteos-y-frescos/leches',
+  'lacteos-y-frescos/yogures',
+  'lacteos-y-frescos/quesos',
+  'lacteos-y-frescos/mantecas-y-margarinas',
+  'lacteos-y-frescos/cremas',
+  'lacteos-y-frescos/huevos',
+  'lacteos-y-frescos/fiambres',
+  // Carnes
+  'carnes-y-pescados/carnes-rojas',
+  'carnes-y-pescados/pollo-y-aves',
+  'carnes-y-pescados/embutidos-y-salchichas',
+  'carnes-y-pescados/pescados-y-mariscos',
+  // Panadería y congelados
+  'panaderia-y-reposteria',
+  'congelados/comidas-listas',
+  'congelados/helados',
+  'congelados/papas-y-vegetales',
+  // Limpieza
+  'limpieza/limpieza-del-hogar',
+  'limpieza/lavandinas-y-desinfectantes',
+  'limpieza/detergentes-y-jabon-en-polvo',
+  'limpieza/suavizantes',
+  'limpieza/papeles-y-descartables',
+  'limpieza/bolsas-de-residuos',
+  // Higiene personal
+  'perfumeria-e-higiene/higiene-personal',
+  'perfumeria-e-higiene/shampoo-y-acondicionador',
+  'perfumeria-e-higiene/desodorantes',
+  'perfumeria-e-higiene/jabones',
+  'perfumeria-e-higiene/cremas-y-humectantes',
+  // Bebés y mascotas
+  'bebes/panales-y-toallitas',
+  'bebes/alimentacion',
+  'mascotas/perros',
+  'mascotas/gatos',
 ]
 
 async function collectPromosForSite({ host, baseUrl }) {
@@ -74,10 +127,10 @@ async function collectPromosForSite({ host, baseUrl }) {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
     await page.waitForTimeout(2000)
 
-    // Buscar cada término y esperar que el JS cargue las promos
-    for (const term of SEARCH_TERMS) {
+    // Navegar por cada categoría/subcategoría
+    for (const cat of CATEGORIES) {
       try {
-        await page.goto(`${baseUrl}/${encodeURIComponent(term)}`, {
+        await page.goto(`${baseUrl}/${cat}`, {
           waitUntil: 'domcontentloaded',
           timeout: 20000,
         })
@@ -85,7 +138,7 @@ async function collectPromosForSite({ host, baseUrl }) {
         // Esperar que todos los handlers async terminen antes de navegar
         await Promise.all(pending.splice(0))
       } catch {
-        // Timeout o error en un término — continuar con el siguiente
+        // Timeout o error en una categoría — continuar con la siguiente
       }
     }
 

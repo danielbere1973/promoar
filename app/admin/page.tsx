@@ -320,6 +320,7 @@ export default function AdminPage() {
   const [scraping, setScraping] = useState(false)
   const [scrapingCurrent, setScrapingCurrent] = useState<string>('')
   const [scraperModal, setScraperModal] = useState(false)
+  const [triggeringVtex, setTriggeringVtex] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [filterText, setFilterText] = useState('')
   const [filterCommerce, setFilterCommerce] = useState('')
@@ -772,6 +773,23 @@ export default function AdminPage() {
           >
             <Bot size={15} />
             {scraping ? `Ejecutando${scrapingCurrent ? `: ${scrapingCurrent}` : '...'}` : 'Auto-Sync Scraper'}
+          </button>
+          <button
+            onClick={async () => {
+              setTriggeringVtex(true)
+              try {
+                const res = await fetch('/api/admin/trigger-vtex-refresh', { method: 'POST' })
+                const data = await res.json()
+                if (res.ok) setSuccess('🤖 Workflow Cencosud disparado en GitHub Actions')
+                else setError('Error: ' + (data.error ?? res.status))
+              } catch { setError('Error al disparar el workflow') }
+              finally { setTriggeringVtex(false) }
+            }}
+            disabled={triggeringVtex}
+            className="flex items-center gap-2 text-xs px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold transition-all disabled:opacity-50"
+          >
+            <RefreshCw size={15} className={triggeringVtex ? 'animate-spin' : ''} />
+            {triggeringVtex ? 'Disparando...' : 'Refresh Cencosud'}
           </button>
           <div className="h-8 w-[1px] bg-slate-100 mx-2" />
           <button onClick={startNew} className="p-2.5 bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors">
