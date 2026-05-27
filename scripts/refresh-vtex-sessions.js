@@ -266,11 +266,13 @@ async function collectPromosForSite({ host, baseUrl }) {
           await page.waitForTimeout(5000)
           await Promise.all(pending.splice(0))
 
-          // Si VTEX redirigió a otra URL (no tiene esa página), paramos
-          if (page_num > 1) {
-            const currentUrl = page.url()
-            if (!currentUrl.includes(`page=${page_num}`)) break
-          }
+          // Leer total de páginas del paginador (ej: "Página 1 de 4")
+          const totalPages = await page.evaluate(() => {
+            const text = document.body.innerText
+            const match = text.match(/[Pp][áa]gina\s+\d+\s+de\s+(\d+)/)
+            return match ? parseInt(match[1]) : null
+          })
+          if (totalPages !== null && page_num >= totalPages) break
         } catch {
           break
         }
