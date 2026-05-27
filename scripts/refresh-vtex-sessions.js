@@ -255,9 +255,8 @@ async function collectPromosForSite({ host, baseUrl }) {
     await page.waitForTimeout(2000)
 
     // Navegar por cada categoría/subcategoría con paginación
-    const MAX_PAGES = 50
     for (const cat of CATEGORIES) {
-      for (let page_num = 1; page_num <= MAX_PAGES; page_num++) {
+      for (let page_num = 1; ; page_num++) {
         try {
           const url = page_num === 1
             ? `${baseUrl}/${cat}`
