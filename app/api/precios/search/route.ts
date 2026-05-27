@@ -388,22 +388,28 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
       // Buscar promo: 1) itemId en search-promotions 2) teasers 3) mejor cluster
       const vtexPromo = promotionsMap[item.itemId]
       let multiUnitPromo: MultiUnitPromo | undefined
-      if (vtexPromo?.effectiveDiscount) {
-        const discount = parseFloat(vtexPromo.effectiveDiscount)
+      if (vtexPromo?.code) {
         const code = (vtexPromo.code || '').trim()
-        const nxm = code.match(/(\d+)[xX](\d+)/)
-        const requiredQty = nxm ? parseInt(nxm[1]) : 2
-        multiUnitPromo = {
-          label: code || vtexPromo.name?.split('|')[0].trim() || 'Promo',
-          effectivePrice: Math.round(priceList * (1 - discount)),
-          requiredQty,
+        // Intentar parsear el texto de la promo directamente (más confiable que effectiveDiscount)
+        const parsed = parseMultiUnitPromo(code, priceList)
+        if (parsed && parsed.effectivePrice < finalPrice) {
+          multiUnitPromo = parsed
+        } else if (vtexPromo.effectiveDiscount) {
+          const discount = parseFloat(String(vtexPromo.effectiveDiscount))
+          const nxm = code.match(/(\d+)[xX](\d+)/)
+          const requiredQty = nxm ? parseInt(nxm[1]) : 2
+          if (discount > 0 && discount < 1) {
+            multiUnitPromo = {
+              label: code || 'Promo',
+              effectivePrice: Math.round(priceList * (1 - discount)),
+              requiredQty,
+            }
+          }
         }
       }
       if (!multiUnitPromo) {
-        // SOLO teasers para multiUnitPromo — son por-producto, generados por el motor de promos de VTEX.
-        // clusterHighlights son labels de categoría ("2x1 en Café") que pueden no aplicar al producto,
-        // por eso los ignoramos para cálculos de precio efectivo.
-        for (const pt of teaserTexts) {
+        // Primero teasers (por-producto), luego cluster como fallback
+        for (const pt of [...teaserTexts, promoCluster, hastaCluster].filter(Boolean)) {
           const candidate = parseMultiUnitPromo(pt, priceList)
           if (candidate && candidate.effectivePrice < finalPrice) {
             multiUnitPromo = candidate

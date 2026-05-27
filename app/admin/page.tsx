@@ -318,6 +318,7 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [newReq, setNewReq] = useState<Requirement>({})
   const [scraping, setScraping] = useState(false)
+  const [scrapingCurrent, setScrapingCurrent] = useState<string>('')
   const [scraperModal, setScraperModal] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [filterText, setFilterText] = useState('')
@@ -594,27 +595,45 @@ export default function AdminPage() {
   }
 
   async function handleScrape(scraper?: string, categoria?: string) {
+    await handleScrapeQueue([{ id: scraper ?? '', categoria }])
+  }
+
+  async function handleScrapeQueue(queue: Array<{ id: string; categoria?: string }>) {
     setScraping(true)
+    setScraperModal(false)
     setError('')
     setSuccess('')
-    setScraperModal(false)
-    try {
-      const res = await fetch('/api/admin/scrape', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scraper, categoria })
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setSuccess(`🤖 Scraping finalizado. Leídas: ${data.totalFound} | Procesadas: ${data.processed}`)
-        fetchPromos()
-      } else {
-        setError(data.error)
+    let totalFound = 0, totalProcessed = 0, errors = 0
+    for (const item of queue) {
+      const name = SCRAPERS_CONFIG.find(s => s.id === item.id)?.name ?? item.id
+      setScrapingCurrent(name)
+      try {
+        const res = await fetch('/api/admin/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scraper: item.id, categoria: item.categoria })
+        })
+        const data = await res.json()
+        if (res.ok) {
+          totalFound += data.totalFound ?? 0
+          totalProcessed += data.processed ?? 0
+        } else {
+          errors++
+          console.error(`[${name}] ${data.error}`)
+        }
+      } catch {
+        errors++
+        console.error(`[${name}] Error de conexión`)
       }
-    } catch {
-      setError('Error conectando al scraper')
     }
     setScraping(false)
+    setScrapingCurrent('')
+    fetchPromos()
+    if (errors === 0) {
+      setSuccess(`🤖 Scraping finalizado (${queue.length} fuente${queue.length !== 1 ? 's' : ''}). Leídas: ${totalFound} | Procesadas: ${totalProcessed}`)
+    } else {
+      setSuccess(`🤖 Finalizado con ${errors} error${errors !== 1 ? 'es' : ''}. Leídas: ${totalFound} | Procesadas: ${totalProcessed}`)
+    }
   }
 
   // --- Usuarios ---
@@ -752,7 +771,7 @@ export default function AdminPage() {
             className="flex items-center gap-2 text-xs px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all disabled:opacity-50"
           >
             <Bot size={15} />
-            {scraping ? 'Actualizando...' : 'Auto-Sync Scraper'}
+            {scraping ? `Ejecutando${scrapingCurrent ? `: ${scrapingCurrent}` : '...'}` : 'Auto-Sync Scraper'}
           </button>
           <div className="h-8 w-[1px] bg-slate-100 mx-2" />
           <button onClick={startNew} className="p-2.5 bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors">
@@ -1563,7 +1582,7 @@ export default function AdminPage() {
       {scraperModal && (
         <ScraperModal
           onClose={() => setScraperModal(false)}
-          onRun={handleScrape}
+          onRunQueue={handleScrapeQueue}
           scraping={scraping}
         />
       )}
@@ -2099,133 +2118,208 @@ function DateHint({ value }: { value: string }) {
 // ─── ScraperModal ─────────────────────────────────────────────
 const GROUPS_ORDER: ScraperGroup[] = ['supermercado', 'billetera', 'tarjeta', 'banco']
 
-function ScraperModal({ onClose, onRun, scraping }: {
+type QueueItem = { id: string; categoria?: string }
+
+function ScraperModal({ onClose, onRunQueue, scraping }: {
   onClose: () => void
-  onRun: (scraper: string, categoria?: string) => void
+  onRunQueue: (queue: QueueItem[]) => void
   scraping: boolean
 }) {
-  const [selected, setSelected] = useState<string | null>(null)
+  const [queue, setQueue] = useState<QueueItem[]>([])
+  const [activeGroup, setActiveGroup] = useState<ScraperGroup>('supermercado')
+  // Para scrapers que necesitan categoría: almacenamos la selección pendiente
+  const [pendingCat, setPendingCat] = useState<{ id: string; tipo: 'modo' | 'club la nacion' } | null>(null)
   const [categoria, setCategoria] = useState<string>('')
-  const [activeGroup, setActiveGroup] = useState<ScraperGroup>('banco')
 
-  const scraper = SCRAPERS_CONFIG.find(s => s.id === selected)
   const groupScrapers = SCRAPERS_CONFIG.filter(s => s.group === activeGroup)
 
-  const needsCategoria = scraper?.id === 'modo' || scraper?.id === 'club la nacion'
-  const canRun = !!selected && (!needsCategoria || !!categoria)
+  function queueIndex(id: string) {
+    return queue.findIndex(q => q.id === id)
+  }
 
-  function handleRun() {
-    if (!selected || !scraper) return
-    if (scraper.id === 'modo' || scraper.id === 'club la nacion') {
-      if (!categoria) return
-      onRun(selected, categoria === 'TODOS' ? undefined : categoria)
+  function toggleScraper(s: ScraperConfig) {
+    const idx = queueIndex(s.id)
+    if (idx >= 0) {
+      // Ya está en la cola → remover
+      setQueue(q => q.filter(item => item.id !== s.id))
+      if (pendingCat?.id === s.id) setPendingCat(null)
+    } else if (s.id === 'modo' || s.id === 'club la nacion') {
+      // Necesita categoría → mostrar picker
+      setPendingCat({ id: s.id, tipo: s.id as 'modo' | 'club la nacion' })
+      setCategoria('')
     } else {
-      onRun(selected, scraper.categoria)
+      setQueue(q => [...q, { id: s.id, categoria: s.categoria }])
     }
+  }
+
+  function confirmCat() {
+    if (!pendingCat) return
+    setQueue(q => [...q, { id: pendingCat.id, categoria: categoria === 'TODOS' ? undefined : categoria || undefined }])
+    setPendingCat(null)
+    setCategoria('')
+  }
+
+  function selectAll() {
+    const all: QueueItem[] = SCRAPERS_CONFIG
+      .filter(s => s.id !== 'modo' && s.id !== 'club la nacion')
+      .map(s => ({ id: s.id, categoria: s.categoria }))
+    // MODO y Club La Nacion se agregan sin categoría (= todos)
+    all.push({ id: 'modo', categoria: undefined })
+    all.push({ id: 'club la nacion', categoria: undefined })
+    setQueue(all)
+    setPendingCat(null)
   }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
 
-        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+        {/* Header */}
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-50 rounded-xl"><Bot size={18} className="text-indigo-600" /></div>
             <div>
               <h3 className="font-bold text-slate-900">Auto-Sync Scraper</h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">Seleccioná fuente a importar</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Armá la cola de scrapers a ejecutar</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 text-slate-300 hover:text-slate-600 transition-colors"><X size={20} /></button>
         </div>
 
-        <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+        {/* Cola actual */}
+        {queue.length > 0 && (
+          <div className="px-6 py-3 bg-indigo-50 border-b border-indigo-100 shrink-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mr-1">Cola:</span>
+              {queue.map((item, i) => {
+                const name = SCRAPERS_CONFIG.find(s => s.id === item.id)?.name ?? item.id
+                return (
+                  <span key={item.id} className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="bg-indigo-600 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px]">{i + 1}</span>
+                    {name}
+                    <button onClick={() => setQueue(q => q.filter(x => x.id !== item.id))} className="ml-0.5 text-indigo-400 hover:text-indigo-700">×</button>
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Ejecutar todos / ninguno */}
+          <div className="flex gap-2">
+            <button type="button" onClick={selectAll}
+              className="flex-1 py-2 text-[11px] font-bold rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all">
+              Ejecutar todos
+            </button>
+            <button type="button" onClick={() => { setQueue([]); setPendingCat(null) }}
+              className="flex-1 py-2 text-[11px] font-bold rounded-xl border-2 border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-all">
+              Ejecutar ninguno
+            </button>
+          </div>
+
           {/* Tabs de grupo */}
           <div className="flex gap-1 p-1 bg-slate-100 rounded-2xl">
-            {GROUPS_ORDER.map(g => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => { setActiveGroup(g); setSelected(null); setCategoria('') }}
-                className={`flex-1 py-2 text-[10px] font-bold rounded-xl transition-all ${activeGroup === g ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                {GRUPO_LABEL[g]}
-              </button>
-            ))}
+            {GROUPS_ORDER.map(g => {
+              const groupCount = SCRAPERS_CONFIG.filter(s => s.group === g && queueIndex(s.id) >= 0).length
+              return (
+                <button key={g} type="button" onClick={() => { setActiveGroup(g); setPendingCat(null) }}
+                  className={`flex-1 py-2 text-[10px] font-bold rounded-xl transition-all relative ${activeGroup === g ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                  {GRUPO_LABEL[g]}
+                  {groupCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">{groupCount}</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
           {/* Lista de scrapers del grupo */}
           <div className="grid grid-cols-2 gap-2">
-            {groupScrapers.map(s => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => { setSelected(s.id); setCategoria('') }}
-                className={`p-3 rounded-2xl border-2 text-left transition-all ${selected === s.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
-              >
-                <p className="text-xs font-black text-slate-900">{s.name}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{s.description}</p>
-              </button>
-            ))}
+            {groupScrapers.map(s => {
+              const idx = queueIndex(s.id)
+              const inQueue = idx >= 0
+              const isPending = pendingCat?.id === s.id
+              return (
+                <button key={s.id} type="button" onClick={() => toggleScraper(s)}
+                  className={`p-3 rounded-2xl border-2 text-left transition-all relative ${inQueue ? 'border-indigo-500 bg-indigo-50' : isPending ? 'border-amber-400 bg-amber-50' : 'border-slate-100 hover:border-slate-200 bg-white'}`}>
+                  {inQueue && (
+                    <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center">{idx + 1}</span>
+                  )}
+                  <p className="text-xs font-black text-slate-900 pr-5">{s.name}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{s.description}</p>
+                </button>
+              )
+            })}
           </div>
 
-          {/* Selector de categoría (MODO y Club La Nacion) */}
-          {needsCategoria && scraper?.id === 'modo' && (
-            <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 block">Rubro a importar</label>
+          {/* Picker de categoría inline (MODO) */}
+          {pendingCat?.tipo === 'modo' && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4">
+              <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Rubro MODO a importar</p>
               <div className="grid grid-cols-2 gap-2">
                 {MODO_CATEGORIAS.map(cat => (
                   <button key={cat} type="button" onClick={() => setCategoria(cat)}
-                    className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all ${categoria === cat ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}>
+                    className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all ${categoria === cat ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'}`}>
                     {cat}
                   </button>
                 ))}
                 <button type="button" onClick={() => setCategoria('TODOS')}
-                  className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all col-span-2 ${categoria === 'TODOS' ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}>
-                  ⚠️ Todos los rubros (proceso lento)
+                  className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all col-span-2 ${categoria === 'TODOS' ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'}`}>
+                  ⚠️ Todos los rubros
+                </button>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={confirmCat} disabled={!categoria}
+                  className="flex-1 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl disabled:opacity-40">
+                  Agregar a la cola
+                </button>
+                <button onClick={() => setPendingCat(null)} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 text-xs font-bold rounded-xl">
+                  Cancelar
                 </button>
               </div>
             </div>
           )}
-          {needsCategoria && scraper?.id === 'club la nacion' && (
-            <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 block">Categoría a importar</label>
+
+          {/* Picker de categoría inline (Club La Nacion) */}
+          {pendingCat?.tipo === 'club la nacion' && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4">
+              <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Categoría Club La Nación</p>
               <div className="grid grid-cols-2 gap-2">
                 {['gastronomia','salidas','viajes','moda','hogar','mercados','bienestar','automovil','educacion','otros'].map(cat => (
                   <button key={cat} type="button" onClick={() => setCategoria(cat)}
-                    className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all capitalize ${categoria === cat ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}>
+                    className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all capitalize ${categoria === cat ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'}`}>
                     {cat}
                   </button>
                 ))}
                 <button type="button" onClick={() => setCategoria('TEST')}
-                  className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all col-span-2 ${categoria === 'TEST' ? 'border-green-400 bg-green-50 text-green-700' : 'border-slate-100 text-slate-500 hover:border-slate-200'}`}>
+                  className={`py-2 px-3 rounded-xl text-[11px] font-bold border-2 transition-all col-span-2 ${categoria === 'TEST' ? 'border-green-400 bg-green-50 text-green-700' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'}`}>
                   🧪 TEST — solo 5 beneficios
+                </button>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={confirmCat} disabled={!categoria}
+                  className="flex-1 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl disabled:opacity-40">
+                  Agregar a la cola
+                </button>
+                <button onClick={() => setPendingCat(null)} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 text-xs font-bold rounded-xl">
+                  Cancelar
                 </button>
               </div>
             </div>
           )}
-
-          {/* Info del scraper seleccionado */}
-          {scraper && !needsCategoria && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 animate-in fade-in">
-              <p className="text-[11px] text-indigo-700 font-medium">
-                ✅ <strong>{scraper.name}</strong> listo para ejecutar.
-                {scraper.categoria ? ` Categoría: ${scraper.categoria}.` : ''}
-              </p>
-            </div>
-          )}
         </div>
 
-        <div className="px-8 py-5 bg-slate-50 border-t border-slate-100 flex gap-3">
+        <div className="px-8 py-5 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0">
           <button onClick={onClose} className="flex-1 py-3 text-xs font-bold text-slate-400 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-colors">
             Cancelar
           </button>
           <button
-            onClick={handleRun}
-            disabled={!canRun || scraping}
+            onClick={() => onRunQueue(queue)}
+            disabled={queue.length === 0 || scraping}
             className="flex-1 py-3 bg-indigo-600 text-white text-xs font-bold rounded-2xl shadow-lg shadow-indigo-100 disabled:opacity-40 hover:bg-indigo-700 transition-colors"
           >
-            {scraping ? 'Ejecutando...' : '🚀 Ejecutar'}
+            {scraping ? 'Ejecutando...' : `🚀 Ejecutar${queue.length > 0 ? ` (${queue.length})` : ''}`}
           </button>
         </div>
       </div>

@@ -51,10 +51,10 @@ async function collectPromosForSite({ host, baseUrl }) {
     const page = await context.newPage()
 
     // Interceptar todas las respuestas de search-promotions
-    page.on('response', async (response) => {
+    const pending = []
+    page.on('response', (response) => {
       if (!response.url().includes('search-promotions')) return
-      try {
-        const data = await response.json()
+      const p = response.json().then(data => {
         const allBuckets = data?.promotions || {}
         for (const bucket of Object.values(allBuckets)) {
           for (const [skuId, promo] of Object.entries(bucket?.promotions || {})) {
@@ -66,7 +66,8 @@ async function collectPromosForSite({ host, baseUrl }) {
             }
           }
         }
-      } catch {}
+      }).catch(() => {})
+      pending.push(p)
     })
 
     // Visitar la home primero para establecer la sesión
@@ -81,6 +82,8 @@ async function collectPromosForSite({ host, baseUrl }) {
           timeout: 20000,
         })
         await page.waitForTimeout(6000)
+        // Esperar que todos los handlers async terminen antes de navegar
+        await Promise.all(pending.splice(0))
       } catch {
         // Timeout o error en un término — continuar con el siguiente
       }
