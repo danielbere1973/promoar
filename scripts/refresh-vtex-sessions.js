@@ -173,7 +173,7 @@ async function savePromos(site, promos) {
 }
 
 async function main() {
-  console.log(`Recolectando promos de ${SITES.length} sitios (${SEARCH_TERMS.length} términos cada uno)...`)
+  console.log(`Recolectando promos de ${SITES.length} sitios (${CATEGORIES.length} categorías cada uno)...`)
   console.log('Esto puede tardar ~10 minutos.\n')
 
   for (const site of SITES) {
