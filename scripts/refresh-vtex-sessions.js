@@ -231,9 +231,11 @@ async function collectPromosForSite({ host, baseUrl }) {
     const page = await context.newPage()
 
     // Interceptar todas las respuestas de search-promotions
+    let currentCat = ''
     const pending = []
     page.on('response', (response) => {
       if (!response.url().includes('search-promotions')) return
+      const cat = currentCat
       const p = response.json().then(data => {
         const allBuckets = data?.promotions || {}
         for (const bucket of Object.values(allBuckets)) {
@@ -242,6 +244,7 @@ async function collectPromosForSite({ host, baseUrl }) {
               promos[skuId] = {
                 promoCode: promo.code.trim(),
                 effectiveDiscount: parseFloat(promo.effectiveDiscount),
+                category: cat,
               }
             }
           }
@@ -256,6 +259,7 @@ async function collectPromosForSite({ host, baseUrl }) {
 
     // Navegar por cada categoría/subcategoría con paginación
     for (const cat of CATEGORIES) {
+      currentCat = cat
       for (let page_num = 1; ; page_num++) {
         try {
           const url = page_num === 1

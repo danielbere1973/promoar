@@ -443,6 +443,7 @@ model VtexPromoCache {
   skuId             String
   promoCode         String
   effectiveDiscount Float
+  category          String?
   updatedAt         DateTime @updatedAt
 
   @@id([site, skuId])
