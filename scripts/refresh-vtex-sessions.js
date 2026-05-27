@@ -262,13 +262,15 @@ async function collectPromosForSite({ host, baseUrl }) {
           const url = page_num === 1
             ? `${baseUrl}/${cat}`
             : `${baseUrl}/${cat}?page=${page_num}`
-          const countBefore = Object.keys(promos).length
           await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
           await page.waitForTimeout(5000)
           await Promise.all(pending.splice(0))
 
-          // Si no llegaron promos nuevas en esta página, no hay más
-          if (page_num > 1 && Object.keys(promos).length === countBefore) break
+          // Si VTEX redirigió a otra URL (no tiene esa página), paramos
+          if (page_num > 1) {
+            const currentUrl = page.url()
+            if (!currentUrl.includes(`page=${page_num}`)) break
+          }
         } catch {
           break
         }
