@@ -262,15 +262,13 @@ async function collectPromosForSite({ host, baseUrl }) {
           const url = page_num === 1
             ? `${baseUrl}/${cat}`
             : `${baseUrl}/${cat}?page=${page_num}`
+          const countBefore = Object.keys(promos).length
           await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
           await page.waitForTimeout(5000)
           await Promise.all(pending.splice(0))
 
-          // Si no hay productos, no seguir paginando esta categoría
-          const hasProducts = await page.evaluate(() =>
-            document.querySelectorAll('[class*="productCard"], [class*="product-summary"], article').length > 0
-          )
-          if (!hasProducts) break
+          // Si no llegaron promos nuevas en esta página, no hay más
+          if (page_num > 1 && Object.keys(promos).length === countBefore) break
         } catch {
           break
         }
