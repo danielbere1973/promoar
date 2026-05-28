@@ -213,6 +213,35 @@ const CATEGORIES = [
   'mascotas/gatos/humedos',
 ]
 
+const DEBUG_LIMIT = parseInt(process.env.DEBUG_LIMIT || '0') // 0 = sin límite
+const DEBUG_SITE = process.env.DEBUG_SITE || '' // ej: 'www.jumbo.com.ar'
+
+async function enrichWithCatalog(baseUrl, promos) {
+  const skuIds = Object.keys(promos)
+  const BATCH = 10
+  for (let i = 0; i < skuIds.length; i += BATCH) {
+    const batch = skuIds.slice(i, i + BATCH)
+    try {
+      const qs = batch.map(id => `fq=skuId:${id}`).join('&')
+      const res = await fetch(`${baseUrl}/api/catalog_system/pub/products/search?${qs}&_from=0&_to=${BATCH - 1}`, {
+        headers: { 'Accept': 'application/json', 'Accept-Language': 'es-AR,es;q=0.9' }
+      })
+      if (!res.ok) continue
+      const products = await res.json()
+      for (const p of products) {
+        for (const item of p.items || []) {
+          if (promos[item.itemId]) {
+            promos[item.itemId].productId = p.productId
+            promos[item.itemId].productName = p.productName
+          }
+        }
+      }
+    } catch {}
+    await new Promise(r => setTimeout(r, 500))
+  }
+  return promos
+}
+
 async function collectPromosForSite({ host, baseUrl }) {
   const promos = {}
   const browser = await chromium.launch({
@@ -258,7 +287,7 @@ async function collectPromosForSite({ host, baseUrl }) {
     await page.waitForTimeout(2000)
 
     // Navegar por cada categoría/subcategoría con paginación
-    for (const cat of CATEGORIES) {
+    outer: for (const cat of CATEGORIES) {
       currentCat = cat
       for (let page_num = 1; ; page_num++) {
         try {
@@ -268,6 +297,8 @@ async function collectPromosForSite({ host, baseUrl }) {
           await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
           await page.waitForTimeout(5000)
           await Promise.all(pending.splice(0))
+
+          if (DEBUG_LIMIT > 0 && Object.keys(promos).length >= DEBUG_LIMIT) break outer
 
           // Leer total de páginas del paginador (ej: "Página 1 de 4")
           const totalPages = await page.evaluate(() => {
@@ -283,6 +314,8 @@ async function collectPromosForSite({ host, baseUrl }) {
     }
 
     console.log(`[${host}] ${Object.keys(promos).length} promos recolectadas`)
+    console.log(`[${host}] Enriqueciendo con catálogo...`)
+    await enrichWithCatalog(baseUrl, promos)
   } finally {
     await browser.close()
   }
@@ -316,7 +349,8 @@ async function main() {
   console.log(`Recolectando promos de ${SITES.length} sitios (${CATEGORIES.length} categorías cada uno)...`)
   console.log('Esto puede tardar ~10 minutos.\n')
 
-  for (const site of SITES) {
+  const sitesToRun = DEBUG_SITE ? SITES.filter(s => s.host === DEBUG_SITE) : SITES
+  for (const site of sitesToRun) {
     console.log(`\n--- ${site.host} ---`)
     const promos = await collectPromosForSite(site)
     await savePromos(site.host, promos)

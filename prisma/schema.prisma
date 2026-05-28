@@ -441,6 +441,8 @@ model FinancialAccountType {
 model VtexPromoCache {
   site              String
   skuId             String
+  productId         String?
+  productName       String?
   promoCode         String
   effectiveDiscount Float
   category          String?
