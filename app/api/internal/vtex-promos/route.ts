@@ -14,30 +14,49 @@ export async function POST(request: Request) {
   const body = await request.json()
   const { site, promos } = body as {
     site?: string
-    promos?: Record<string, { promoCode: string; effectiveDiscount: number; category?: string; productId?: string; productName?: string; ean?: string; listPrice?: number; salePrice?: number }>
+    promos?: Record<string, {
+      skuId: string
+      segment: string
+      promoCode: string
+      effectiveDiscount: number
+      category?: string
+      productId?: string
+      productName?: string
+      ean?: string
+      salePrice?: number
+    }>
   }
 
   if (!site || !promos) {
     return NextResponse.json({ error: 'Missing site or promos' }, { status: 400 })
   }
 
-  const entries = Object.entries(promos)
+  // Borrar promos anteriores del site antes de insertar las nuevas
+  await prisma.vtexPromoCache.deleteMany({ where: { site } })
+
+  const entries = Object.values(promos)
   if (entries.length === 0) return NextResponse.json({ saved: 0 })
 
-  // Upsert en batches de 100
+  // Insert en batches de 100
   let saved = 0
   const BATCH = 100
   for (let i = 0; i < entries.length; i += BATCH) {
     const batch = entries.slice(i, i + BATCH)
-    await prisma.$transaction(
-      batch.map(([skuId, promo]) =>
-        prisma.vtexPromoCache.upsert({
-          where: { site_skuId: { site, skuId } },
-          update: { promoCode: promo.promoCode, effectiveDiscount: promo.effectiveDiscount, category: promo.category ?? null, productId: promo.productId ?? null, productName: promo.productName ?? null, ean: promo.ean ?? null, listPrice: promo.listPrice ?? null, salePrice: promo.salePrice ?? null },
-          create: { site, skuId, promoCode: promo.promoCode, effectiveDiscount: promo.effectiveDiscount, category: promo.category ?? null, productId: promo.productId ?? null, productName: promo.productName ?? null, ean: promo.ean ?? null, listPrice: promo.listPrice ?? null, salePrice: promo.salePrice ?? null },
-        })
-      )
-    )
+    await prisma.vtexPromoCache.createMany({
+      data: batch.map(promo => ({
+        site,
+        skuId: promo.skuId,
+        segment: promo.segment,
+        promoCode: promo.promoCode,
+        effectiveDiscount: promo.effectiveDiscount,
+        category: promo.category ?? null,
+        productId: promo.productId ?? null,
+        productName: promo.productName ?? null,
+        ean: promo.ean ?? null,
+        salePrice: promo.salePrice ?? null,
+      })),
+      skipDuplicates: true,
+    })
     saved += batch.length
   }
 

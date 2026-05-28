@@ -441,6 +441,7 @@ model FinancialAccountType {
 model VtexPromoCache {
   site              String
   skuId             String
+  segment           String   @default("generic")
   productId         String?
   productName       String?
   ean               String?
@@ -451,7 +452,7 @@ model VtexPromoCache {
   category          String?
   updatedAt         DateTime @updatedAt
 
-  @@id([site, skuId])
+  @@id([site, skuId, segment])
   @@map("vtex_promo_cache")
 }
 

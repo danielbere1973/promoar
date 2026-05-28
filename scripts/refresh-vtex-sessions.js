@@ -217,7 +217,8 @@ const DEBUG_LIMIT = parseInt(process.env.DEBUG_LIMIT || '0') // 0 = sin límite
 const DEBUG_SITE = process.env.DEBUG_SITE || '' // ej: 'www.jumbo.com.ar'
 
 async function enrichWithCatalog(baseUrl, promos) {
-  const skuIds = Object.keys(promos)
+  // Obtener skuIds únicos (sin el sufijo __segment)
+  const skuIds = [...new Set(Object.values(promos).map(p => p.skuId))]
   const BATCH = 10
   for (let i = 0; i < skuIds.length; i += BATCH) {
     const batch = skuIds.slice(i, i + BATCH)
@@ -230,13 +231,15 @@ async function enrichWithCatalog(baseUrl, promos) {
       const products = await res.json()
       for (const p of products) {
         for (const item of p.items || []) {
-          if (promos[item.itemId]) {
-            const offer = item.sellers?.[0]?.commertialOffer
-            promos[item.itemId].productId = p.productId
-            promos[item.itemId].productName = p.productName
-            promos[item.itemId].ean = item.ean ? String(item.ean) : undefined
-            promos[item.itemId].listPrice = offer?.ListPrice ?? undefined
-            promos[item.itemId].salePrice = offer?.Price ?? undefined
+          const offer = item.sellers?.[0]?.commertialOffer
+          // Enriquecer todas las entradas que tengan este skuId (generic y prime)
+          for (const entry of Object.values(promos)) {
+            if (entry.skuId === String(item.itemId)) {
+              entry.productId = p.productId
+              entry.productName = p.productName
+              entry.ean = item.ean ? String(item.ean) : undefined
+              entry.salePrice = offer?.Price ?? undefined
+            }
           }
         }
       }
@@ -270,14 +273,19 @@ async function collectPromosForSite({ host, baseUrl }) {
       if (!response.url().includes('search-promotions')) return
       const cat = currentCat
       const p = response.json().then(data => {
-        // Solo usar el bucket "generic" — ignora prime, sgc y otros segmentos
-        const genericBucket = data?.promotions?.generic || {}
-        for (const [skuId, promo] of Object.entries(genericBucket?.promotions || {})) {
-          if (promo?.effectiveDiscount && promo?.code) {
-            promos[skuId] = {
-              promoCode: promo.code.trim(),
-              effectiveDiscount: parseFloat(promo.effectiveDiscount),
-              category: cat,
+        // Guardar generic y jumbo_prime por separado
+        const segments = { generic: data?.promotions?.generic, jumbo_prime: data?.promotions?.jumbo_prime }
+        for (const [segment, bucket] of Object.entries(segments)) {
+          for (const [skuId, promo] of Object.entries(bucket?.promotions || {})) {
+            if (promo?.effectiveDiscount && promo?.code) {
+              const key = `${skuId}__${segment}`
+              promos[key] = {
+                skuId,
+                segment,
+                promoCode: promo.code.trim(),
+                effectiveDiscount: parseFloat(promo.effectiveDiscount),
+                category: cat,
+              }
             }
           }
         }

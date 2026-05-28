@@ -215,10 +215,11 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
 
 // ---------------------------------------------------------
 // VTEX INTELLIGENT SEARCH (Jumbo, Vea, Disco, Dia)
-// Cache en memoria de promos Cencosud (leídas de DB, pobladas por GitHub Actions cada 4 horas)
-const promoCacheMemory: Record<string, { data: Record<string, { promoCode: string; effectiveDiscount: number }>; ts: number }> = {}
+type PromoEntry = { promoCode: string; effectiveDiscount: number; primePromoCode?: string; primeEffectiveDiscount?: number }
+// Cache en memoria de promos Cencosud (leídas de DB, pobladas por GitHub Actions día por medio)
+const promoCacheMemory: Record<string, { data: Record<string, PromoEntry>; ts: number }> = {}
 
-async function getCencosudPromos(host: string, skuIds: string[]): Promise<Record<string, { promoCode: string; effectiveDiscount: number }>> {
+async function getCencosudPromos(host: string, skuIds: string[]): Promise<Record<string, PromoEntry>> {
   if (!skuIds.length) return {}
 
   const cached = promoCacheMemory[host]
@@ -226,17 +227,25 @@ async function getCencosudPromos(host: string, skuIds: string[]): Promise<Record
   if (!cached || Date.now() - cached.ts > 30 * 60 * 1000) {
     try {
       const rows = await prisma.vtexPromoCache.findMany({ where: { site: host } })
-      const data: Record<string, { promoCode: string; effectiveDiscount: number }> = {}
-      for (const row of rows) data[row.skuId] = { promoCode: row.promoCode, effectiveDiscount: row.effectiveDiscount }
+      const data: Record<string, PromoEntry> = {}
+      for (const row of rows) {
+        if (row.segment === 'generic') {
+          if (!data[row.skuId]) data[row.skuId] = { promoCode: row.promoCode, effectiveDiscount: row.effectiveDiscount }
+          else { data[row.skuId].promoCode = row.promoCode; data[row.skuId].effectiveDiscount = row.effectiveDiscount }
+        } else if (row.segment === 'jumbo_prime') {
+          if (!data[row.skuId]) data[row.skuId] = { promoCode: '', effectiveDiscount: 0, primePromoCode: row.promoCode, primeEffectiveDiscount: row.effectiveDiscount }
+          else { data[row.skuId].primePromoCode = row.promoCode; data[row.skuId].primeEffectiveDiscount = row.effectiveDiscount }
+        }
+      }
       promoCacheMemory[host] = { data, ts: Date.now() }
-      console.log(`[${host}] promo cache cargado: ${rows.length} SKUs`)
+      console.log(`[${host}] promo cache cargado: ${rows.length} entradas`)
     } catch (e: any) {
       console.log(`[${host}] promo cache DB error: ${e.message}`)
       return {}
     }
   }
 
-  const result: Record<string, { promoCode: string; effectiveDiscount: number }> = {}
+  const result: Record<string, PromoEntry> = {}
   for (const skuId of skuIds) {
     if (promoCacheMemory[host]?.data[skuId]) result[skuId] = promoCacheMemory[host].data[skuId]
   }
@@ -332,7 +341,12 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         // Promos de Cencosud vienen del cache en DB (poblado por GitHub Actions via Playwright)
         const cached = await getCencosudPromos(host, itemIds)
         for (const [skuId, promo] of Object.entries(cached)) {
-          promotionsMap[skuId] = { effectiveDiscount: String(promo.effectiveDiscount), code: promo.promoCode }
+          promotionsMap[skuId] = {
+            effectiveDiscount: String(promo.effectiveDiscount),
+            code: promo.promoCode,
+            primeCode: promo.primePromoCode,
+            primeEffectiveDiscount: promo.primeEffectiveDiscount != null ? String(promo.primeEffectiveDiscount) : undefined,
+          }
         }
       } else {
         promotionsMap = await fetchVtexPromotions(baseUrl, itemIds, headers)
@@ -385,30 +399,28 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         .map(c => c.replace(/^hasta\s+/i, '').trim())
         .find(c => /\d+\s*%|\d+\s*[xX]\s*\d+|2do|3er|segundo|tercer|\boff\b/i.test(c)) || ''
 
-      // Buscar promo: 1) itemId en search-promotions 2) teasers 3) mejor cluster
+      // Buscar promo genérica
       const vtexPromo = promotionsMap[item.itemId]
       let multiUnitPromo: MultiUnitPromo | undefined
-      if (vtexPromo?.code) {
-        const code = (vtexPromo.code || '').trim()
-        // Intentar parsear el texto de la promo directamente (más confiable que effectiveDiscount)
+
+      const parsePromoEntry = (code: string, effectiveDiscount: string) => {
         const parsed = parseMultiUnitPromo(code, priceList)
-        if (parsed && parsed.effectivePrice < finalPrice) {
-          multiUnitPromo = parsed
-        } else if (vtexPromo.effectiveDiscount) {
-          const discount = parseFloat(String(vtexPromo.effectiveDiscount))
-          const nxm = code.match(/(\d+)[xX](\d+)/)
-          const requiredQty = nxm ? parseInt(nxm[1]) : 2
-          if (discount > 0 && discount < 1) {
-            multiUnitPromo = {
-              label: code || 'Promo',
-              effectivePrice: Math.round(priceList * (1 - discount)),
-              requiredQty,
-            }
-          }
+        if (parsed && parsed.effectivePrice < finalPrice) return parsed
+        const discount = parseFloat(effectiveDiscount)
+        const nxm = code.match(/(\d+)[xX](\d+)/)
+        const requiredQty = nxm ? parseInt(nxm[1]) : 2
+        if (discount > 0 && discount < 1) {
+          return { label: code || 'Promo', effectivePrice: Math.round(priceList * (1 - discount)), requiredQty }
         }
+        return undefined
       }
-      if (!multiUnitPromo) {
-        // Primero teasers (por-producto), luego cluster como fallback
+
+      if (vtexPromo?.code) {
+        multiUnitPromo = parsePromoEntry(vtexPromo.code.trim(), vtexPromo.effectiveDiscount)
+      }
+
+      // Para Cencosud sin dato en cache, no usar fallback de clusters (evita datos incorrectos)
+      if (!multiUnitPromo && !isCencosudSite) {
         for (const pt of [...teaserTexts, promoCluster, hastaCluster].filter(Boolean)) {
           const candidate = parseMultiUnitPromo(pt, priceList)
           if (candidate && candidate.effectivePrice < finalPrice) {
@@ -416,6 +428,12 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
             break
           }
         }
+      }
+
+      // Promo Prime (solo Cencosud)
+      let primePromo: MultiUnitPromo | undefined
+      if (isCencosudSite && vtexPromo?.primeCode) {
+        primePromo = parsePromoEntry(vtexPromo.primeCode.trim(), vtexPromo.primeEffectiveDiscount || '0')
       }
 
       let promoText = multiUnitPromo?.label || teaserTexts[0] || promoCluster || hastaCluster || '-'
@@ -439,6 +457,7 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         imageUrl: item.images?.[0]?.imageUrl || '',
         url: productUrl || baseUrl,
         multiUnitPromo,
+        primePromo,
       }
     }).filter(Boolean) as NormalizedProduct[]
 
