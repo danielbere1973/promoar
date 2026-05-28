@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const body = await request.json()
   const { site, promos } = body as {
     site?: string
-    promos?: Record<string, { promoCode: string; effectiveDiscount: number; category?: string; productId?: string; productName?: string }>
+    promos?: Record<string, { promoCode: string; effectiveDiscount: number; category?: string; productId?: string; productName?: string; ean?: string; listPrice?: number; salePrice?: number }>
   }
 
   if (!site || !promos) {
@@ -33,8 +33,8 @@ export async function POST(request: Request) {
       batch.map(([skuId, promo]) =>
         prisma.vtexPromoCache.upsert({
           where: { site_skuId: { site, skuId } },
-          update: { promoCode: promo.promoCode, effectiveDiscount: promo.effectiveDiscount, category: promo.category ?? null, productId: promo.productId ?? null, productName: promo.productName ?? null },
-          create: { site, skuId, promoCode: promo.promoCode, effectiveDiscount: promo.effectiveDiscount, category: promo.category ?? null, productId: promo.productId ?? null, productName: promo.productName ?? null },
+          update: { promoCode: promo.promoCode, effectiveDiscount: promo.effectiveDiscount, category: promo.category ?? null, productId: promo.productId ?? null, productName: promo.productName ?? null, ean: promo.ean ?? null, listPrice: promo.listPrice ?? null, salePrice: promo.salePrice ?? null },
+          create: { site, skuId, promoCode: promo.promoCode, effectiveDiscount: promo.effectiveDiscount, category: promo.category ?? null, productId: promo.productId ?? null, productName: promo.productName ?? null, ean: promo.ean ?? null, listPrice: promo.listPrice ?? null, salePrice: promo.salePrice ?? null },
         })
       )
     )

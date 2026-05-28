@@ -443,6 +443,9 @@ model VtexPromoCache {
   skuId             String
   productId         String?
   productName       String?
+  ean               String?
+  listPrice         Float?
+  salePrice         Float?
   promoCode         String
   effectiveDiscount Float
   category          String?

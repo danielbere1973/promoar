@@ -231,8 +231,12 @@ async function enrichWithCatalog(baseUrl, promos) {
       for (const p of products) {
         for (const item of p.items || []) {
           if (promos[item.itemId]) {
+            const offer = item.sellers?.[0]?.commertialOffer
             promos[item.itemId].productId = p.productId
             promos[item.itemId].productName = p.productName
+            promos[item.itemId].ean = item.ean ? String(item.ean) : undefined
+            promos[item.itemId].listPrice = offer?.ListPrice ?? undefined
+            promos[item.itemId].salePrice = offer?.Price ?? undefined
           }
         }
       }
