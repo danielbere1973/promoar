@@ -436,7 +436,10 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         primePromo = parsePromoEntry(vtexPromo.primeCode.trim(), vtexPromo.primeEffectiveDiscount || '0')
       }
 
-      let promoText = multiUnitPromo?.label || teaserTexts[0] || promoCluster || hastaCluster || '-'
+      // Para Cencosud: solo mostrar texto si hay dato en cache (evita clusters incorrectos)
+      let promoText = isCencosudSite
+        ? (multiUnitPromo?.label || (primePromo ? 'Solo Prime' : '-'))
+        : (multiUnitPromo?.label || teaserTexts[0] || promoCluster || hastaCluster || '-')
       if (promoText === '-') {
         if (spot > 0 && spot < salePrice) {
           promoText = `${Math.round((1 - spot / salePrice) * 100)}% OFF`
