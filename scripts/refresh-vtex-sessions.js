@@ -276,7 +276,9 @@ async function collectPromosForSite({ host, baseUrl }) {
         // Guardar generic y jumbo_prime por separado
         const segments = { generic: data?.promotions?.generic, jumbo_prime: data?.promotions?.jumbo_prime }
         for (const [segment, bucket] of Object.entries(segments)) {
-          for (const [skuId, promo] of Object.entries(bucket?.promotions || {})) {
+          const entries = Object.entries(bucket?.promotions || {})
+          if (entries.length > 0) console.log(`  [search-promotions] ${segment}: ${entries.length} SKUs (${entries.slice(0,3).map(([id])=>id).join(',')})`)
+          for (const [skuId, promo] of entries) {
             if (promo?.effectiveDiscount && promo?.code) {
               const key = `${skuId}__${segment}`
               promos[key] = {
