@@ -270,15 +270,14 @@ async function collectPromosForSite({ host, baseUrl }) {
       if (!response.url().includes('search-promotions')) return
       const cat = currentCat
       const p = response.json().then(data => {
-        const allBuckets = data?.promotions || {}
-        for (const bucket of Object.values(allBuckets)) {
-          for (const [skuId, promo] of Object.entries(bucket?.promotions || {})) {
-            if (promo?.effectiveDiscount && promo?.code) {
-              promos[skuId] = {
-                promoCode: promo.code.trim(),
-                effectiveDiscount: parseFloat(promo.effectiveDiscount),
-                category: cat,
-              }
+        // Solo usar el bucket "generic" — ignora prime, sgc y otros segmentos
+        const genericBucket = data?.promotions?.generic || {}
+        for (const [skuId, promo] of Object.entries(genericBucket?.promotions || {})) {
+          if (promo?.effectiveDiscount && promo?.code) {
+            promos[skuId] = {
+              promoCode: promo.code.trim(),
+              effectiveDiscount: parseFloat(promo.effectiveDiscount),
+              category: cat,
             }
           }
         }
