@@ -326,6 +326,7 @@ export default function AdminPage() {
   const [filterCommerce, setFilterCommerce] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [filterSource, setFilterSource] = useState('')
+  const [showLogoSuggestions, setShowLogoSuggestions] = useState(false)
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkCategory, setBulkCategory] = useState('')
@@ -1295,6 +1296,14 @@ export default function AdminPage() {
                 >
                   <Plus size={12} /> AGREGAR
                 </button>
+                {subTab === 'commerces' && (
+                  <button
+                    onClick={() => setShowLogoSuggestions(true)}
+                    className="flex items-center gap-1.5 text-[10px] font-bold bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600 transition-all"
+                  >
+                    <Bot size={12} /> Completar logos
+                  </button>
+                )}
               </div>
 
               <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm min-h-[200px]">
@@ -1645,8 +1654,132 @@ export default function AdminPage() {
           allEntities={entities}
         />
       )}
+
+      {/* Modal de sugerencias de logos */}
+      {showLogoSuggestions && (
+        <LogoSuggestionsModal
+          onClose={() => setShowLogoSuggestions(false)}
+          onSaved={() => { setShowLogoSuggestions(false); fetchEntities() }}
+        />
+      )}
     </div>
     </PinGuard>
+  )
+}
+
+// ─── LogoSuggestionsModal ───────────────────────────────────────────────
+
+type LogoSuggestion = { id: string; name: string; slug: string; logoUrl: string; allLogoUrls: string[] }
+
+function LogoSuggestionsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [suggestions, setSuggestions] = useState<LogoSuggestion[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<Record<string, string>>({}) // id → logoUrl elegida
+  const [saving, setSaving] = useState(false)
+  const [logoErrors, setLogoErrors] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    fetch('/api/admin/logo-suggestions')
+      .then(r => r.json())
+      .then(data => {
+        setSuggestions(data.suggestions || [])
+        // Pre-seleccionar todos
+        const initial: Record<string, string> = {}
+        for (const s of data.suggestions || []) initial[s.id] = s.logoUrl
+        setSelected(initial)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleSave() {
+    setSaving(true)
+    const updates = Object.entries(selected)
+      .filter(([id, url]) => url && !logoErrors.has(id))
+      .map(([id, logoUrl]) => ({ id, logoUrl }))
+
+    const res = await fetch('/api/admin/logo-suggestions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    })
+    if (res.ok) onSaved()
+    else setSaving(false)
+  }
+
+  const validCount = Object.entries(selected).filter(([id, url]) => url && !logoErrors.has(id)).length
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+      <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div>
+            <h3 className="font-bold text-slate-900">Completar logos faltantes</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">Logos sugeridos via Clearbit — tildá los que querés guardar</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-300 hover:text-slate-600"><X size={20} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" /></div>
+          ) : suggestions.length === 0 ? (
+            <p className="text-center text-slate-400 py-10">No hay comercios sin logo con promos activas</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {suggestions.map(s => {
+                const isSelected = !!selected[s.id] && !logoErrors.has(s.id)
+                const hasError = logoErrors.has(s.id)
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      if (hasError) return
+                      setSelected(prev => ({ ...prev, [s.id]: isSelected ? '' : s.logoUrl }))
+                    }}
+                    className={`relative rounded-2xl border-2 p-3 cursor-pointer transition-all ${
+                      isSelected ? 'border-indigo-500 bg-indigo-50' : hasError ? 'border-slate-100 bg-slate-50 opacity-40' : 'border-slate-100 hover:border-slate-300'
+                    }`}
+                  >
+                    {isSelected && (
+                      <div className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center">
+                        <Check size={11} className="text-white" />
+                      </div>
+                    )}
+                    <div className="h-16 flex items-center justify-center mb-2 bg-white rounded-xl p-2">
+                      {hasError ? (
+                        <span className="text-2xl">🏷️</span>
+                      ) : (
+                        <img
+                          src={s.logoUrl}
+                          alt={s.name}
+                          className="max-h-full max-w-full object-contain"
+                          onError={() => setLogoErrors(prev => new Set([...prev, s.id]))}
+                        />
+                      )}
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-700 text-center truncate">{s.name}</p>
+                    {hasError && <p className="text-[10px] text-slate-400 text-center">Sin logo</p>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between shrink-0">
+          <p className="text-xs text-slate-400">{validCount} logos para guardar</p>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="px-5 py-2.5 text-xs font-bold text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200">
+              Cancelar
+            </button>
+            <button onClick={handleSave} disabled={saving || validCount === 0}
+              className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+              {saving ? 'Guardando...' : `Guardar ${validCount} logos`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
