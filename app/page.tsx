@@ -646,23 +646,18 @@ function HomeContent() {
     }))
 
     // Categorías
-    const catMap = new Map<string, { name: string; icon: string; slug: string; bestDiscount: number }>()
+    const catMap = new Map<string, { name: string; icon: string; slug: string; bestDiscount: number; count: number }>()
     for (const p of promos) {
       const k = p.category.slug ?? p.category.name
-      if (!catMap.has(k)) catMap.set(k, { name: p.category.name, icon: p.category.icon || '🏷️', slug: p.category.slug ?? '', bestDiscount: 0 })
+      if (!catMap.has(k)) catMap.set(k, { name: p.category.name, icon: p.category.icon || '🏷️', slug: p.category.slug ?? '', bestDiscount: 0, count: 0 })
       const entry = catMap.get(k)!
+      entry.count++
       const v = bestPercentageReq(p)?.discountValue ?? 0
       if (v > entry.bestDiscount) entry.bestDiscount = v
     }
     const catList = Array.from(catMap.values())
       .filter(c => c.bestDiscount > 0)
-      .sort((a, b) => {
-        // Seleccionadas primero, luego favoritas, luego por descuento
-        const aScore = (selectedCats.includes(a.slug) ? 0 : 2) + (favCategories.includes(a.slug) ? 0 : 1)
-        const bScore = (selectedCats.includes(b.slug) ? 0 : 2) + (favCategories.includes(b.slug) ? 0 : 1)
-        if (aScore !== bScore) return aScore - bScore
-        return b.bestDiscount - a.bestDiscount
-      })
+      .sort((a, b) => b.count !== a.count ? b.count - a.count : b.bestDiscount - a.bestDiscount)
       .slice(0, 5)
 
     // Comercios
@@ -678,16 +673,7 @@ function HomeContent() {
     const activeCommerce = activeFilters.commerces[0]
     const commList = Array.from(commMap.values())
       .filter(c => c.bestDiscount > 0)
-      .sort((a, b) => {
-        const aFiltered = activeCommerce && a.name.toLowerCase().includes(activeCommerce.toLowerCase()) ? 0 : 1
-        const bFiltered = activeCommerce && b.name.toLowerCase().includes(activeCommerce.toLowerCase()) ? 0 : 1
-        if (aFiltered !== bFiltered) return aFiltered - bFiltered
-        const aFav = favCommerces.includes(a.name) ? 0 : 1
-        const bFav = favCommerces.includes(b.name) ? 0 : 1
-        if (aFav !== bFav) return aFav - bFav
-        if (b.count !== a.count) return b.count - a.count
-        return b.bestDiscount - a.bestDiscount
-      })
+      .sort((a, b) => b.count !== a.count ? b.count - a.count : b.bestDiscount - a.bestDiscount)
       .slice(0, 5)
 
     return { totalPromos: promos.length, maxDiscount, dayCounts, catList, commList }
