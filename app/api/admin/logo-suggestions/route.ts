@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -24,9 +23,9 @@ function guessDomain(name: string, slug: string): string[] {
   ]
 }
 
-export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session || (session.user as any).role !== 'ADMIN') {
+export async function GET(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  if (!token || token.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -60,13 +59,13 @@ export async function GET() {
   return NextResponse.json({ suggestions })
 }
 
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session || (session.user as any).role !== 'ADMIN') {
+export async function POST(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  if (!token || token.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { updates } = await request.json() as { updates: { id: string; logoUrl: string }[] }
+  const { updates } = await req.json() as { updates: { id: string; logoUrl: string }[] }
 
   let saved = 0
   for (const { id, logoUrl } of updates) {
