@@ -1260,11 +1260,12 @@ function HomeContent() {
             })}
           </div>
 
-          {/* Top 5 Categorías */}
+          {/* Top Categorías y Comercios en 2 columnas */}
+          <div className="grid grid-cols-2 gap-3">
           {todayDashboard.catList.length > 0 && (
-            <div className="mb-3">
+            <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300 mb-1.5">Top categorías</p>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 {todayDashboard.catList.map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
                   const isFav = favCategories.includes(cat.slug)
@@ -1296,7 +1297,7 @@ function HomeContent() {
           {todayDashboard.commList.length > 0 && (
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300 mb-1.5">Top comercios</p>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 {todayDashboard.commList.map(c => {
                   const isFav = favCommerces.includes(c.name)
                   const isFiltered = activeFilters.commerces[0]?.toLowerCase() === c.name.toLowerCase()
@@ -1336,6 +1337,7 @@ function HomeContent() {
               </div>
             </div>
           )}
+          </div>{/* fin grid 2 columnas */}
         </div>
       )}
 
