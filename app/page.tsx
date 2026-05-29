@@ -710,7 +710,8 @@ function HomeContent() {
 
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex flex-col">
+    <div className="flex flex-1">
       {/* ── Sidebar (Desktop) ── */}
       <aside className="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-950 z-30">
         <div className="p-6">
@@ -1631,6 +1632,8 @@ function HomeContent() {
         )}
       </div>
     </main>
+
+    </div>{/* fin flex row sidebar+content */}
 
     {/* ══════════ FOOTER ══════════ */}
     <footer className="bg-slate-900 text-slate-400 mt-12 pb-24">
