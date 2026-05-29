@@ -421,23 +421,8 @@ export default function PreciosPage() {
                           </div>
                         </div>
 
-                        {m.multiUnitPromo && (
-                          <div className={`mx-3 mb-2 rounded-xl px-3 py-2.5 flex items-center justify-between border ${isWinner ? 'bg-gradient-to-r from-orange-500/30 to-amber-500/30 border-orange-500/60' : 'bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-500/30'}`}>
-                            <div>
-                              <p className="text-xs font-black uppercase tracking-widest text-orange-400">🔥 {m.multiUnitPromo.label}</p>
-                              <p className="text-[11px] text-amber-300/70 mt-0.5">comprando {m.multiUnitPromo.requiredQty} unidades</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[10px] text-orange-400/70">c/u efectivo</p>
-                              <p className={`font-black text-orange-300 ${isWinner ? 'text-xl' : 'text-base'}`}>
-                                {formatPrice(Math.min(m.finalPrice, m.multiUnitPromo.effectivePrice))}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
                         {m.primePromo && (
-                          <div className="mx-3 mb-3 rounded-xl px-3 py-2.5 flex items-center justify-between border bg-gradient-to-r from-violet-500/20 to-purple-500/20 border-violet-500/40">
+                          <div className="mx-3 mb-2 rounded-xl px-3 py-2.5 flex items-center justify-between border bg-gradient-to-r from-violet-500/20 to-purple-500/20 border-violet-500/40">
                             <div>
                               <p className="text-xs font-black uppercase tracking-widest text-violet-300">⭐ Prime: {m.primePromo.label}</p>
                               <p className="text-[11px] text-violet-300/60 mt-0.5">comprando {m.primePromo.requiredQty} unidades</p>
@@ -446,6 +431,21 @@ export default function PreciosPage() {
                               <p className="text-[10px] text-violet-400/70">c/u con Prime</p>
                               <p className="font-black text-violet-300 text-base">
                                 {formatPrice(Math.min(m.finalPrice, m.primePromo.effectivePrice))}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {m.multiUnitPromo && (
+                          <div className={`mx-3 mb-3 rounded-xl px-3 py-2.5 flex items-center justify-between border ${isWinner ? 'bg-gradient-to-r from-orange-500/30 to-amber-500/30 border-orange-500/60' : 'bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-500/30'}`}>
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-orange-400">🔥 {m.multiUnitPromo.label}</p>
+                              <p className="text-[11px] text-amber-300/70 mt-0.5">comprando {m.multiUnitPromo.requiredQty} unidades</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] text-orange-400/70">c/u efectivo</p>
+                              <p className={`font-black text-orange-300 ${isWinner ? 'text-xl' : 'text-base'}`}>
+                                {formatPrice(Math.min(m.finalPrice, m.multiUnitPromo.effectivePrice))}
                               </p>
                             </div>
                           </div>
