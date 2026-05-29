@@ -1,10 +1,10 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { 
-  TrendingUp, AlertCircle, 
+import {
+  TrendingUp, AlertCircle,
   ChevronDown, Search, LayoutGrid,
-  Building2, Bot, X, Check
+  Building2, Bot, X, Check, MousePointer
 } from 'lucide-react'
 
 type StatItem = {
@@ -308,6 +308,87 @@ export default function StatsView() {
           </div>
         </>
       )}
+
+      <ClicksSection />
+    </div>
+  )
+}
+
+function ClicksSection() {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/admin/clicks')
+      .then(r => r.json())
+      .then(setData)
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return null
+  if (!data) return null
+
+  const SOURCE_LABELS: Record<string, string> = { promos: 'Promos', detalle: 'Detalle', precios: 'Precios' }
+
+  return (
+    <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-indigo-50 rounded-xl"><MousePointer size={20} className="text-indigo-600" /></div>
+        <div>
+          <h2 className="text-xl font-black text-slate-900">Clicks externos</h2>
+          <p className="text-xs text-slate-400">Total: {data.total.toLocaleString()} clicks registrados</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Por fuente */}
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Por sección</p>
+          <div className="space-y-2">
+            {data.bySource.map((s: any) => (
+              <div key={s.source} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <span className="text-xs font-bold text-slate-700">{SOURCE_LABELS[s.source] || s.source}</span>
+                <span className="text-xs font-black text-indigo-600">{s.count.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Top promos */}
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Top promos clickeadas</p>
+          <div className="space-y-2">
+            {data.topPromos.length === 0 ? (
+              <p className="text-xs text-slate-400">Sin datos aún</p>
+            ) : data.topPromos.map((p: any) => (
+              <div key={p.promoId} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-slate-700 truncate">{p.commerce}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{p.title}</p>
+                </div>
+                <span className="text-xs font-black text-indigo-600 shrink-0">{p.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Top URLs */}
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Top destinos</p>
+          <div className="space-y-2">
+            {data.topUrls.map((u: any) => {
+              let domain = u.url
+              try { domain = new URL(u.url).hostname.replace('www.', '') } catch {}
+              return (
+                <div key={u.url} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl gap-2">
+                  <span className="text-[11px] font-bold text-slate-700 truncate">{domain}</span>
+                  <span className="text-xs font-black text-indigo-600 shrink-0">{u.count}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
