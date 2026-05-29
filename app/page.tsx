@@ -1436,7 +1436,15 @@ function HomeContent() {
                   )}
                   {promo.commerce.logoUrl ? (
                     <div className="h-28 flex flex-col items-center justify-center p-4 bg-white gap-1">
-                      <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-16 max-w-full object-contain" />
+                      <img
+                        src={promo.commerce.logoUrl}
+                        alt={promo.commerce.name}
+                        className="max-h-16 max-w-full object-contain"
+                        onError={(e) => {
+                          const parent = (e.target as HTMLImageElement).parentElement!
+                          parent.innerHTML = `<span class="text-4xl">${promo.category.icon || '🏷️'}</span><p class="text-sm font-black text-gray-700 px-4 text-center line-clamp-2">${promo.commerce.name}</p>`
+                        }}
+                      />
                       <p className="text-[10px] font-bold text-gray-500 text-center line-clamp-1 px-2">{promo.commerce.name}</p>
                     </div>
                   ) : (
