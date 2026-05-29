@@ -403,9 +403,14 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
       const vtexPromo = promotionsMap[item.itemId]
       let multiUnitPromo: MultiUnitPromo | undefined
 
+      const isMultiUnitCode = (code: string) =>
+        /2do|3er|segundo|tercer|\d+[xX]\d+/i.test(code)
+
       const parsePromoEntry = (code: string, effectiveDiscount: string) => {
         const parsed = parseMultiUnitPromo(code, priceList)
         if (parsed && parsed.effectivePrice < finalPrice) return parsed
+        // Solo crear multiUnitPromo si el código indica multi-unidad — no para descuentos simples (25%, 35%, etc.)
+        if (!isMultiUnitCode(code)) return undefined
         const discount = parseFloat(effectiveDiscount)
         const nxm = code.match(/(\d+)[xX](\d+)/)
         const requiredQty = nxm ? parseInt(nxm[1]) : 2
