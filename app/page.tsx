@@ -310,6 +310,8 @@ function HomeContent() {
 
   const [promos, setPromos] = useState<Promo[]>([])
   const [loading, setLoading] = useState(true)
+  const [visibleCount, setVisibleCount] = useState(20)
+  const [loadingAll, setLoadingAll] = useState(false)
   const [showAccessDenied, setShowAccessDenied] = useState(
     searchParams.get('error') === 'no-autorizado'
   )
@@ -543,6 +545,7 @@ function HomeContent() {
         if (res.ok) {
           const data = await res.json()
           setPromos(data.promos)
+          setVisibleCount(20)
         }
       } catch (e: any) {
         if (e?.name !== 'AbortError') console.error(e)
@@ -1375,10 +1378,15 @@ function HomeContent() {
         )}
 
         {/* Promos */}
-        <div className={viewMode === 'grid' 
+        {!loading && promosFiltradas.length > 0 && (
+          <p className="text-[11px] text-gray-400 text-center mb-2">
+            Mostrando {Math.min(visibleCount, promosFiltradas.length)} de {promosFiltradas.length} promos
+          </p>
+        )}
+        <div className={viewMode === 'grid'
           ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5'
           : 'space-y-4'}>
-          {promosFiltradas.map(promo => {
+          {promosFiltradas.slice(0, visibleCount).map(promo => {
             if (viewMode === 'list') {
               return (
                 <div key={promo.id}
@@ -1598,6 +1606,33 @@ function HomeContent() {
             )
           })}
         </div>
+
+        {/* Paginación */}
+        {!loading && visibleCount < promosFiltradas.length && (
+          <div className="flex flex-col items-center gap-3 pt-6 pb-4">
+            <button
+              onClick={() => setVisibleCount(v => v + 20)}
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-colors"
+            >
+              Mostrar más ({Math.min(20, promosFiltradas.length - visibleCount)} más)
+            </button>
+            <button
+              onClick={async () => {
+                setLoadingAll(true)
+                await new Promise(r => setTimeout(r, 50))
+                setVisibleCount(promosFiltradas.length)
+                setLoadingAll(false)
+              }}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1"
+            >
+              {loadingAll ? (
+                <>Cargando {promosFiltradas.length} promos...</>
+              ) : (
+                <>Mostrar todas ({promosFiltradas.length})</>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </main>
 
