@@ -1272,16 +1272,19 @@ function HomeContent() {
                     <button
                       key={cat.slug}
                       onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
-                      className={`flex items-center justify-between rounded-xl px-3 py-2 transition-all text-left ${
+                      className={`flex flex-col rounded-xl px-3 py-2 transition-all text-left ${
                         isActive ? 'bg-white/25 ring-1 ring-white/60' : 'bg-white/10 hover:bg-white/20'
                       }`}
                     >
-                      <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0 mb-0.5">
                         <span className="text-sm shrink-0">{cat.icon}</span>
                         <span className="text-[11px] font-bold text-white/90 truncate">{cat.name}</span>
                         {isFav && <span className="text-yellow-300 text-[9px] shrink-0">★</span>}
                       </div>
-                      <span className="text-[13px] font-black shrink-0 ml-1" style={{ color: '#c6f135' }}>{cat.bestDiscount}%</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-white/50">{cat.count} promos</span>
+                        <span className="text-[13px] font-black" style={{ color: '#c6f135' }}>hasta {cat.bestDiscount}%</span>
+                      </div>
                     </button>
                   )
                 })}
@@ -1293,7 +1296,7 @@ function HomeContent() {
           {todayDashboard.commList.length > 0 && (
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300 mb-1.5">Top comercios</p>
-              <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-1.5">
                 {todayDashboard.commList.map(c => {
                   const isFav = favCommerces.includes(c.name)
                   const isFiltered = activeFilters.commerces[0]?.toLowerCase() === c.name.toLowerCase()
@@ -1310,18 +1313,23 @@ function HomeContent() {
                           setSearchText(c.name)
                         }
                       }}
-                      className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all text-left ${
+                      className={`flex flex-col rounded-xl px-3 py-2 transition-all text-left ${
                         isFiltered ? 'bg-white/25 ring-1 ring-white/60' : 'bg-white/10 hover:bg-white/20'
                       }`}
                     >
-                      {c.logoUrl ? (
-                        <img src={c.logoUrl} alt={c.name} className="h-6 w-6 object-contain rounded shrink-0 bg-white/90 p-0.5" />
-                      ) : (
-                        <span className="h-6 w-6 flex items-center justify-center bg-white/20 rounded text-[10px] font-black shrink-0">{c.name.slice(0,2).toUpperCase()}</span>
-                      )}
-                      <span className="text-[11px] font-bold text-white/90 flex-1 truncate">{c.name}</span>
-                      {isFav && <span className="text-yellow-300 text-[9px] shrink-0">★</span>}
-                      <span className="text-[12px] font-black shrink-0" style={{ color: '#c6f135' }}>{c.bestDiscount}%</span>
+                      <div className="flex items-center gap-2 mb-0.5 min-w-0">
+                        {c.logoUrl ? (
+                          <img src={c.logoUrl} alt={c.name} className="h-5 w-5 object-contain rounded shrink-0 bg-white/90 p-0.5" />
+                        ) : (
+                          <span className="h-5 w-5 flex items-center justify-center bg-white/20 rounded text-[9px] font-black shrink-0">{c.name.slice(0,2).toUpperCase()}</span>
+                        )}
+                        <span className="text-[11px] font-bold text-white/90 truncate">{c.name}</span>
+                        {isFav && <span className="text-yellow-300 text-[9px] shrink-0">★</span>}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-white/50">{c.count} promos</span>
+                        <span className="text-[12px] font-black" style={{ color: '#c6f135' }}>hasta {c.bestDiscount}%</span>
+                      </div>
                     </button>
                   )
                 })}
