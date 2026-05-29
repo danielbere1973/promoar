@@ -1632,6 +1632,47 @@ function HomeContent() {
       </div>
     </main>
 
+    {/* ══════════ FOOTER ══════════ */}
+    <footer className="bg-slate-900 text-slate-400 mt-12 pb-24">
+      <div className="max-w-5xl mx-auto px-6 py-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
+          <div>
+            <p className="text-white font-black text-sm mb-3">PromoAR</p>
+            <ul className="space-y-2 text-xs">
+              <li><a href="/como-funciona" className="hover:text-white transition-colors">Cómo funciona</a></li>
+              <li><a href="/faq" className="hover:text-white transition-colors">Preguntas frecuentes</a></li>
+              <li><a href="/quienes-somos" className="hover:text-white transition-colors">Quiénes somos</a></li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-white font-black text-sm mb-3">Legal</p>
+            <ul className="space-y-2 text-xs">
+              <li><a href="/privacidad" className="hover:text-white transition-colors">Política de privacidad</a></li>
+              <li><a href="/terminos" className="hover:text-white transition-colors">Términos y condiciones</a></li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-white font-black text-sm mb-3">Contacto</p>
+            <ul className="space-y-2 text-xs">
+              <li><a href="/contacto" className="hover:text-white transition-colors">Contactanos</a></li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-white font-black text-sm mb-3">Seguinos</p>
+            <ul className="space-y-2 text-xs">
+              <li><a href="https://facebook.com/promoar" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Facebook</a></li>
+              <li><a href="https://instagram.com/promoar" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Instagram</a></li>
+              <li><a href="https://x.com/promoar" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">X (Twitter)</a></li>
+              <li><a href="https://tiktok.com/@promoar" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">TikTok</a></li>
+            </ul>
+          </div>
+        </div>
+        <div className="border-t border-slate-800 pt-6 text-center text-xs">
+          <p>© 2026 PromoAR. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    </footer>
+
       {/* ══════════ PROMO DETAIL MODAL / DRAWER ══════════ */}
       {selectedPromo && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end animate-in fade-in duration-200">
