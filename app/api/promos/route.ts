@@ -491,26 +491,34 @@ export async function GET(req: NextRequest) {
       return { p, maxPct, maxCsi, catSlug, commercePopularity, name, type }
     })
 
-    // 2. Popularidad de categoría = nº de promos de esa categoría en el set actual
+    // 2. Popularidad de categoría = nº de promos tipo 1 y 2 (con %) de esa categoría
     const catCounts: Record<string, number> = {}
-    for (const d of promoData) catCounts[d.catSlug] = (catCounts[d.catSlug] ?? 0) + 1
+    for (const d of promoData) {
+      if (d.type !== 3) catCounts[d.catSlug] = (catCounts[d.catSlug] ?? 0) + 1
+    }
 
-    // 3. Ordenar: catPopularity DESC → commercePopularity DESC → type ASC → valor DESC → alfabético
+    // 3. Ordenar:
+    //    Grupos 1 y 2 (con %): catPopularity DESC → commercePopularity DESC → mayor descuento DESC → alfabético
+    //    Grupo 3 (solo CSI): al final, ordenado por más cuotas DESC
     const orderedPromos = [...promoData].sort((a, b) => {
+      // CSI solo siempre va al final
+      if (a.type === 3 && b.type !== 3) return 1
+      if (b.type === 3 && a.type !== 3) return -1
+
+      // Dentro del grupo CSI: más cuotas primero
+      if (a.type === 3 && b.type === 3) {
+        return b.maxCsi - a.maxCsi
+      }
+
+      // Grupos 1 y 2: popularidad de categoría primero
       const catDiff = (catCounts[b.catSlug] ?? 0) - (catCounts[a.catSlug] ?? 0)
       if (catDiff !== 0) return catDiff
 
+      // Luego popularidad de comercio
       if (b.commercePopularity !== a.commercePopularity) return b.commercePopularity - a.commercePopularity
 
-      if (a.type !== b.type) return a.type - b.type
-
-      // Dentro del mismo tipo: mayor valor primero
-      if (a.type === 3) {
-        if (b.maxCsi !== a.maxCsi) return b.maxCsi - a.maxCsi
-      } else {
-        if (b.maxPct !== a.maxPct) return b.maxPct - a.maxPct
-        if (a.type === 2 && b.maxCsi !== a.maxCsi) return b.maxCsi - a.maxCsi
-      }
+      // Luego mayor descuento %
+      if (b.maxPct !== a.maxPct) return b.maxPct - a.maxPct
 
       return a.name.localeCompare(b.name, 'es')
     }).map(d => d.p)
