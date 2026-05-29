@@ -1686,23 +1686,27 @@ function LogoSuggestionsModal({ onClose, onSaved }: { onClose: () => void; onSav
       .finally(() => setLoading(false))
   }, [])
 
+  function buildLogoUrl(value: string): string {
+    const v = value.trim()
+    if (!v) return ''
+    if (v.startsWith('http')) return v
+    const domain = v.replace(/^www\./, '')
+    return `https://logo.clearbit.com/${domain}`
+  }
+
   function handleInput(id: string, value: string) {
     setInputs(prev => ({ ...prev, [id]: value }))
-    // Construir URL de preview
-    let previewUrl = value.trim()
-    if (!previewUrl) { setPreviews(prev => { const n = {...prev}; delete n[id]; return n }); return }
-    if (!previewUrl.startsWith('http')) {
-      const domain = previewUrl.replace(/^www\./, '')
-      previewUrl = `https://logo.clearbit.com/${domain}`
-    }
-    setPreviews(prev => ({ ...prev, [id]: previewUrl }))
+    const url = buildLogoUrl(value)
+    if (url) setPreviews(prev => ({ ...prev, [id]: url }))
+    else setPreviews(prev => { const n = {...prev}; delete n[id]; return n })
   }
 
   async function handleSave() {
     setSaving(true)
-    const updates = Object.entries(previews)
-      .filter(([, url]) => !!url)
-      .map(([id, logoUrl]) => ({ id, logoUrl }))
+    // Guardar usando el input como fuente de verdad (no el preview)
+    const updates = Object.entries(inputs)
+      .filter(([, v]) => v.trim())
+      .map(([id, v]) => ({ id, logoUrl: buildLogoUrl(v) }))
 
     const res = await fetch('/api/admin/logo-suggestions', {
       method: 'POST',
@@ -1714,7 +1718,7 @@ function LogoSuggestionsModal({ onClose, onSaved }: { onClose: () => void; onSav
   }
 
   const filtered = commerces.filter(c => !filter || c.name.toLowerCase().includes(filter.toLowerCase()))
-  const readyCount = Object.values(previews).filter(Boolean).length
+  const readyCount = Object.values(inputs).filter(v => v.trim()).length
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -1750,8 +1754,7 @@ function LogoSuggestionsModal({ onClose, onSaved }: { onClose: () => void; onSav
                 {/* Preview logo */}
                 <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-slate-100">
                   {previews[c.id] ? (
-                    <img src={previews[c.id]} alt={c.name} className="max-w-full max-h-full object-contain p-1"
-                      onError={() => setPreviews(prev => { const n = {...prev}; delete n[c.id]; return n })} />
+                    <img src={previews[c.id]} alt={c.name} className="max-w-full max-h-full object-contain p-1" />
                   ) : (
                     <span className="text-xl">🏷️</span>
                   )}
