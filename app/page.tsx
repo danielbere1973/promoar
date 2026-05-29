@@ -1565,7 +1565,7 @@ function HomeContent() {
                         const hasSpecificPath = u.pathname.length > 1 || u.hash.length > 1
                         if (!hasSpecificPath) return null
                         return (
-                          <a href={promo.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] text-indigo-500 hover:underline flex items-center gap-1 pt-1 border-t border-gray-200 dark:border-slate-600">
+                          <a href={`/api/r?url=${encodeURIComponent(promo.sourceUrl)}&promo=${promo.id}&src=promos`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] text-indigo-500 hover:underline flex items-center gap-1 pt-1 border-t border-gray-200 dark:border-slate-600">
                             <Globe size={10} /> Ver promo oficial
                           </a>
                         )
@@ -1918,7 +1918,7 @@ function HomeContent() {
                     </p>
                   </div>
                   {selectedPromo.sourceUrl && (
-                    <a href={selectedPromo.sourceUrl} target="_blank" rel="noreferrer" className="text-[11px] text-indigo-500 hover:underline mt-2 inline-block font-bold">Ver términos legales originales ↗</a>
+                    <a href={`/api/r?url=${encodeURIComponent(selectedPromo.sourceUrl!)}&promo=${selectedPromo.id}&src=detalle`} target="_blank" rel="noreferrer" className="text-[11px] text-indigo-500 hover:underline mt-2 inline-block font-bold">Ver términos legales originales ↗</a>
                   )}
                 </div>
               )}

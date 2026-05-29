@@ -452,7 +452,7 @@ export default function PreciosPage() {
                         )}
 
                         {m.url && (
-                          <a href={m.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-4 pb-3 text-[10px] text-slate-500 hover:text-slate-300 transition-colors">
+                          <a href={`/api/r?url=${encodeURIComponent(m.url)}&src=precios`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-4 pb-3 text-[10px] text-slate-500 hover:text-slate-300 transition-colors">
                             <ExternalLink className="w-3 h-3" /> Ver en {marketName}
                           </a>
                         )}

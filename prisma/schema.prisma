@@ -456,6 +456,19 @@ model VtexPromoCache {
   @@map("vtex_promo_cache")
 }
 
+model PromoClick {
+  id        String   @id @default(cuid())
+  promoId   String?
+  url       String
+  source    String   // promos | precios | detalle
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([promoId])
+  @@index([createdAt])
+  @@map("promo_clicks")
+}
+
 model ScraperSchedule {
   id          String    @id @default(cuid())
   scraperId   String    @unique
