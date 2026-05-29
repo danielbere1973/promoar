@@ -89,7 +89,7 @@ export default function StatsView() {
         setData(json)
         // Cargar lista de scrapers activos solo en la carga inicial (sin filtros)
         if (selectedScrapers.length === 0 && json.byScraper?.length > 0) {
-          setAllScrapers(prev => prev.length > 0 ? prev : json.byScraper.map((s: any) => s.name))
+          setAllScrapers(prev => prev.length > 0 ? prev : json.byScraper.map((s: any) => s.name).sort((a: string, b: string) => a.localeCompare(b, 'es')))
         }
       } catch (err: any) {
         setError(err.message)

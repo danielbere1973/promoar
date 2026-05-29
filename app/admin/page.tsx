@@ -325,6 +325,7 @@ export default function AdminPage() {
   const [filterText, setFilterText] = useState('')
   const [filterCommerce, setFilterCommerce] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
+  const [filterSource, setFilterSource] = useState('')
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkCategory, setBulkCategory] = useState('')
@@ -800,11 +801,8 @@ export default function AdminPage() {
 
       {/* ── Main Nav ── */}
       <nav className="bg-white border-b border-slate-200 px-6 flex items-center gap-1 shadow-sm">
-        <TabButton active={tab === 'stats'} icon={TrendingUp} onClick={() => setTab('stats')}>
-          Estadísticas
-        </TabButton>
-        <TabButton active={tab === 'promos'} icon={Layers} onClick={() => { setTab('promos'); setSubTab('all') }}>
-          Promociones
+        <TabButton active={tab === 'stats' || tab === 'promos'} icon={TrendingUp} onClick={() => setTab('stats')}>
+          Estadísticas y Promos
         </TabButton>
         <TabButton active={tab === 'users'} icon={Users} onClick={() => setTab('users')}>
           Usuarios
@@ -829,7 +827,23 @@ export default function AdminPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* ── STATS TAB ── */}
+        {/* ── STATS / PROMOS TAB ── */}
+        {(tab === 'stats' || tab === 'promos') && (
+          <div className="flex gap-2 bg-slate-100 rounded-2xl p-1 w-fit">
+            <button
+              onClick={() => setTab('stats')}
+              className={`px-4 py-2 text-sm font-bold rounded-xl transition-all ${tab === 'stats' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Estadísticas
+            </button>
+            <button
+              onClick={() => { setTab('promos'); setSubTab('all') }}
+              className={`px-4 py-2 text-sm font-bold rounded-xl transition-all ${tab === 'promos' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Promociones
+            </button>
+          </div>
+        )}
         {tab === 'stats' && <StatsView />}
 
         {/* Alerts */}
@@ -856,6 +870,7 @@ export default function AdminPage() {
               if (p.categoryId !== subTab) return false
             }
             if (filterCommerce && p.commerce?.name !== filterCommerce) return false
+            if (filterSource && !(p.sourceUrl || '').includes(filterSource)) return false
             if (isSearching) {
               const q = filterText.toLowerCase()
               return p.title.toLowerCase().includes(q) || p.commerce?.name?.toLowerCase().includes(q)
@@ -899,8 +914,18 @@ export default function AdminPage() {
                   <option key={name} value={name}>{name}</option>
                 ))}
               </select>
-              {(filterText || filterCommerce || filterCategories.length > 0) && (
-                <button onClick={() => { setFilterText(''); setFilterCommerce(''); setFilterCategories([]) }} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+              <select
+                value={filterSource}
+                onChange={e => setFilterSource(e.target.value)}
+                className="text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-400"
+              >
+                <option value="">Todas las fuentes</option>
+                {[...SOURCE_LABELS].sort((a, b) => a.label.localeCompare(b.label, 'es')).map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+              {(filterText || filterCommerce || filterCategories.length > 0 || filterSource) && (
+                <button onClick={() => { setFilterText(''); setFilterCommerce(''); setFilterCategories([]); setFilterSource('') }} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
                   <X size={12} /> Limpiar
                 </button>
               )}
