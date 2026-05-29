@@ -456,6 +456,36 @@ model VtexPromoCache {
   @@map("vtex_promo_cache")
 }
 
+model ScraperSchedule {
+  id          String    @id @default(cuid())
+  scraperId   String    @unique
+  frequency   String    @default("manual") // manual | daily | weekly | monthly
+  dayOfWeek   Int?      // 0-6 (para weekly)
+  dayOfMonth  Int?      // 1-31 (para monthly)
+  hour        Int       @default(6) // hora UTC
+  active      Boolean   @default(true)
+  nextRunAt   DateTime?
+  updatedAt   DateTime  @updatedAt
+  runs        ScraperRun[]
+
+  @@map("scraper_schedules")
+}
+
+model ScraperRun {
+  id          String    @id @default(cuid())
+  scraperId   String
+  schedule    ScraperSchedule? @relation(fields: [scraperId], references: [scraperId])
+  status      String    // running | success | error
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  found       Int?
+  processed   Int?
+  message     String?
+
+  @@index([scraperId, startedAt])
+  @@map("scraper_runs")
+}
+
 model bank_modo_codes {
   id         BigInt    @id @default(autoincrement())
   bankId     String

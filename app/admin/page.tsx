@@ -5,7 +5,7 @@ import ClassifyButton from './ClassifyButton'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
-  Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp
+  Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -305,7 +305,7 @@ function PinGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -819,6 +819,9 @@ export default function AdminPage() {
         <TabButton active={tab === 'reports'} icon={Tag} onClick={() => setTab('reports')}>
           Reportes
         </TabButton>
+        <TabButton active={tab === 'scheduler'} icon={CalendarClock} onClick={() => setTab('scheduler')}>
+          Scrapers
+        </TabButton>
         {tab === 'form' && (
           <TabButton active={true} icon={Pencil} onClick={() => { }}>
             {editingId ? 'Editando Promo' : 'Nueva Promo'}
@@ -845,6 +848,7 @@ export default function AdminPage() {
           </div>
         )}
         {tab === 'stats' && <StatsView />}
+        {tab === 'scheduler' && <ScraperSchedulerTab />}
 
         {/* Alerts */}
         {(success || error) && (
@@ -1643,6 +1647,213 @@ export default function AdminPage() {
       )}
     </div>
     </PinGuard>
+  )
+}
+
+// ─── ScraperSchedulerTab ───────────────────────────────────────────────
+
+type ScheduleRow = {
+  scraperId: string
+  frequency: string
+  dayOfWeek?: number | null
+  dayOfMonth?: number | null
+  hour: number
+  active: boolean
+  nextRunAt?: string | null
+  runs?: { status: string; startedAt: string; found?: number | null; processed?: number | null; message?: string | null }[]
+}
+
+const FREQ_OPTIONS = [
+  { value: 'manual', label: 'Manual' },
+  { value: 'daily', label: 'Diario' },
+  { value: 'weekly', label: 'Semanal' },
+  { value: 'monthly', label: 'Mensual' },
+]
+
+const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+function ScraperSchedulerTab() {
+  const [schedules, setSchedules] = useState<Record<string, ScheduleRow>>({})
+  const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState<string | null>(null)
+  const [saving, setSaving] = useState<string | null>(null)
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const res = await fetch('/api/admin/scraper-schedules')
+    if (res.ok) {
+      const data = await res.json()
+      const map: Record<string, ScheduleRow> = {}
+      for (const s of data.schedules) map[s.scraperId] = s
+      // Rellenar scrapers sin schedule configurado
+      for (const s of SCRAPERS_CONFIG) {
+        if (!map[s.id]) map[s.id] = { scraperId: s.id, frequency: 'manual', hour: 6, active: true, runs: [] }
+      }
+      setSchedules(map)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function save(scraperId: string) {
+    const s = schedules[scraperId]
+    if (!s) return
+    setSaving(scraperId)
+    const res = await fetch('/api/admin/scraper-schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(s),
+    })
+    if (res.ok) setMsg({ type: 'success', text: `${scraperId} guardado` })
+    else setMsg({ type: 'error', text: 'Error al guardar' })
+    setSaving(null)
+    setTimeout(() => setMsg(null), 3000)
+  }
+
+  async function runNow(scraperId: string) {
+    setRunning(scraperId)
+    const res = await fetch('/api/admin/run-scraper', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scraperId }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setMsg({ type: 'success', text: `${scraperId}: ${data.found} encontradas, ${data.processed} procesadas` })
+    } else {
+      setMsg({ type: 'error', text: `Error al ejecutar ${scraperId}` })
+    }
+    setRunning(null)
+    setTimeout(() => setMsg(null), 5000)
+    load()
+  }
+
+  function update(scraperId: string, field: string, value: any) {
+    setSchedules(prev => ({ ...prev, [scraperId]: { ...prev[scraperId], [field]: value } }))
+  }
+
+  const lastRun = (s: ScheduleRow) => s.runs?.[0]
+  const statusIcon = (status?: string) => {
+    if (!status) return <Clock size={13} className="text-slate-300" />
+    if (status === 'success') return <CheckCircle size={13} className="text-emerald-500" />
+    if (status === 'error') return <AlertCircle size={13} className="text-red-500" />
+    return <RefreshCw size={13} className="text-blue-400 animate-spin" />
+  }
+
+  if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" /></div>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-black text-slate-800">Administración de Scrapers</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Configurá la frecuencia de ejecución de cada scraper</p>
+        </div>
+      </div>
+
+      {msg && (
+        <div className={`px-4 py-3 rounded-2xl text-sm font-medium ${msg.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+          {msg.text}
+        </div>
+      )}
+
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50">
+              <th className="px-5 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Scraper</th>
+              <th className="px-3 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Frecuencia</th>
+              <th className="px-3 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Hora UTC</th>
+              <th className="px-3 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Próximo run</th>
+              <th className="px-3 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Último run</th>
+              <th className="px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Activo</th>
+              <th className="px-3 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SCRAPERS_CONFIG.map(cfg => {
+              const s = schedules[cfg.id] ?? { scraperId: cfg.id, frequency: 'manual', hour: 6, active: true }
+              const last = lastRun(s)
+              return (
+                <tr key={cfg.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                  <td className="px-5 py-3">
+                    <div>
+                      <p className="font-bold text-slate-800 text-xs">{cfg.name}</p>
+                      <p className="text-[10px] text-slate-400">{cfg.group}</p>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-col gap-1">
+                      <select
+                        value={s.frequency}
+                        onChange={e => update(cfg.id, 'frequency', e.target.value)}
+                        className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none"
+                      >
+                        {FREQ_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                      </select>
+                      {s.frequency === 'weekly' && (
+                        <select value={s.dayOfWeek ?? 1} onChange={e => update(cfg.id, 'dayOfWeek', parseInt(e.target.value))}
+                          className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none">
+                          {DAYS_ES.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                        </select>
+                      )}
+                      {s.frequency === 'monthly' && (
+                        <input type="number" min={1} max={31} value={s.dayOfMonth ?? 1}
+                          onChange={e => update(cfg.id, 'dayOfMonth', parseInt(e.target.value))}
+                          className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none w-16" />
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <input type="number" min={0} max={23} value={s.hour}
+                      onChange={e => update(cfg.id, 'hour', parseInt(e.target.value))}
+                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none w-14" />
+                  </td>
+                  <td className="px-3 py-3 text-[11px] text-slate-500">
+                    {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1.5">
+                      {statusIcon(last?.status)}
+                      <div>
+                        {last ? (
+                          <>
+                            <p className="text-[10px] text-slate-500">{new Date(last.startedAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</p>
+                            {last.found != null && <p className="text-[10px] text-slate-400">{last.found} enc. / {last.processed} proc.</p>}
+                            {last.message && <p className="text-[10px] text-red-400 truncate max-w-[120px]" title={last.message}>{last.message}</p>}
+                          </>
+                        ) : <p className="text-[10px] text-slate-300">Sin runs</p>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    <button onClick={() => update(cfg.id, 'active', !s.active)}
+                      className={`p-1.5 rounded-lg transition-colors ${s.active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                      {s.active ? <Play size={12} /> : <Pause size={12} />}
+                    </button>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => save(cfg.id)} disabled={saving === cfg.id}
+                        className="text-[10px] font-bold px-2.5 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50">
+                        {saving === cfg.id ? '...' : 'Guardar'}
+                      </button>
+                      <button onClick={() => runNow(cfg.id)} disabled={running === cfg.id}
+                        className="text-[10px] font-bold px-2.5 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1">
+                        {running === cfg.id ? <RefreshCw size={10} className="animate-spin" /> : <Play size={10} />}
+                        {running === cfg.id ? 'Corriendo...' : 'Ahora'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 

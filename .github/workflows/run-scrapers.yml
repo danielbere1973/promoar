@@ -1,0 +1,39 @@
+name: Run Scheduled Scrapers
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # cada hora
+  workflow_dispatch:
+    inputs:
+      scraper_id:
+        description: 'ID del scraper a ejecutar (vacío = todos los programados)'
+        required: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener scrapers a ejecutar
+        id: get-scrapers
+        run: |
+          if [ -n "${{ github.event.inputs.scraper_id }}" ]; then
+            echo "scrapers=${{ github.event.inputs.scraper_id }}" >> $GITHUB_OUTPUT
+          else
+            RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" "${{ secrets.API_URL }}/api/internal/scrapers-due")
+            SCRAPERS=$(echo $RESPONSE | python3 -c "import sys,json; print(','.join(json.load(sys.stdin)['scrapers']))")
+            echo "scrapers=$SCRAPERS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Ejecutar scrapers
+        if: steps.get-scrapers.outputs.scrapers != ''
+        run: |
+          IFS=',' read -ra SCRAPER_LIST <<< "${{ steps.get-scrapers.outputs.scrapers }}"
+          for SCRAPER in "${SCRAPER_LIST[@]}"; do
+            echo "Ejecutando: $SCRAPER"
+            curl -s -X POST \
+              -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"scraperId\":\"$SCRAPER\"}" \
+              "${{ secrets.API_URL }}/api/internal/run-scraper"
+            echo ""
+          done
