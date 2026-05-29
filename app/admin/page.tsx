@@ -2193,9 +2193,8 @@ function ScraperModal({ onClose, onRunQueue, scraping }: {
       setQueue(q => q.filter(item => item.id !== s.id))
       if (pendingCat?.id === s.id) setPendingCat(null)
     } else if (s.id === 'modo' || s.id === 'club la nacion') {
-      // Necesita categoría → mostrar picker
-      setPendingCat({ id: s.id, tipo: s.id as 'modo' | 'club la nacion' })
-      setCategoria('')
+      // Agregar directo con todas las categorías
+      setQueue(q => [...q, { id: s.id, categoria: undefined }])
     } else {
       setQueue(q => [...q, { id: s.id, categoria: s.categoria }])
     }
