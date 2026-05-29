@@ -1669,32 +1669,39 @@ export default function AdminPage() {
 
 // ─── LogoSuggestionsModal ───────────────────────────────────────────────
 
-type LogoSuggestion = { id: string; name: string; slug: string; logoUrl: string; allLogoUrls: string[] }
+type CommerceNoLogo = { id: string; name: string; slug: string; website?: string | null }
 
 function LogoSuggestionsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [suggestions, setSuggestions] = useState<LogoSuggestion[]>([])
+  const [commerces, setCommerces] = useState<CommerceNoLogo[]>([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<Record<string, string>>({}) // id → logoUrl elegida
+  const [inputs, setInputs] = useState<Record<string, string>>({}) // id → url/dominio ingresado
+  const [previews, setPreviews] = useState<Record<string, string>>({}) // id → url del logo a mostrar
   const [saving, setSaving] = useState(false)
-  const [logoErrors, setLogoErrors] = useState<Set<string>>(new Set())
+  const [filter, setFilter] = useState('')
 
   useEffect(() => {
     fetch('/api/admin/logo-suggestions')
       .then(r => r.json())
-      .then(data => {
-        setSuggestions(data.suggestions || [])
-        // Pre-seleccionar todos
-        const initial: Record<string, string> = {}
-        for (const s of data.suggestions || []) initial[s.id] = s.logoUrl
-        setSelected(initial)
-      })
+      .then(data => setCommerces(data.commerces || []))
       .finally(() => setLoading(false))
   }, [])
 
+  function handleInput(id: string, value: string) {
+    setInputs(prev => ({ ...prev, [id]: value }))
+    // Construir URL de preview
+    let previewUrl = value.trim()
+    if (!previewUrl) { setPreviews(prev => { const n = {...prev}; delete n[id]; return n }); return }
+    if (!previewUrl.startsWith('http')) {
+      const domain = previewUrl.replace(/^www\./, '')
+      previewUrl = `https://logo.clearbit.com/${domain}`
+    }
+    setPreviews(prev => ({ ...prev, [id]: previewUrl }))
+  }
+
   async function handleSave() {
     setSaving(true)
-    const updates = Object.entries(selected)
-      .filter(([id, url]) => url && !logoErrors.has(id))
+    const updates = Object.entries(previews)
+      .filter(([, url]) => !!url)
       .map(([id, logoUrl]) => ({ id, logoUrl }))
 
     const res = await fetch('/api/admin/logo-suggestions', {
@@ -1706,75 +1713,76 @@ function LogoSuggestionsModal({ onClose, onSaved }: { onClose: () => void; onSav
     else setSaving(false)
   }
 
-  const validCount = Object.entries(selected).filter(([id, url]) => url && !logoErrors.has(id)).length
+  const filtered = commerces.filter(c => !filter || c.name.toLowerCase().includes(filter.toLowerCase()))
+  const readyCount = Object.values(previews).filter(Boolean).length
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh]">
         <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div>
             <h3 className="font-bold text-slate-900">Completar logos faltantes</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Logos sugeridos via Clearbit — tildá los que querés guardar</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{commerces.length} comercios sin logo — pegá el dominio o URL del logo y guardá</p>
           </div>
           <button onClick={onClose} className="p-2 text-slate-300 hover:text-slate-600"><X size={20} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="px-6 pt-4 shrink-0">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              placeholder="Buscar comercio..."
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:border-indigo-400"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-2">
           {loading ? (
             <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" /></div>
-          ) : suggestions.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <p className="text-center text-slate-400 py-10">No hay comercios sin logo con promos activas</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {suggestions.map(s => {
-                const isSelected = !!selected[s.id] && !logoErrors.has(s.id)
-                const hasError = logoErrors.has(s.id)
-                return (
-                  <div
-                    key={s.id}
-                    onClick={() => {
-                      if (hasError) return
-                      setSelected(prev => ({ ...prev, [s.id]: isSelected ? '' : s.logoUrl }))
-                    }}
-                    className={`relative rounded-2xl border-2 p-3 cursor-pointer transition-all ${
-                      isSelected ? 'border-indigo-500 bg-indigo-50' : hasError ? 'border-slate-100 bg-slate-50 opacity-40' : 'border-slate-100 hover:border-slate-300'
-                    }`}
-                  >
-                    {isSelected && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center">
-                        <Check size={11} className="text-white" />
-                      </div>
-                    )}
-                    <div className="h-16 flex items-center justify-center mb-2 bg-white rounded-xl p-2">
-                      {hasError ? (
-                        <span className="text-2xl">🏷️</span>
-                      ) : (
-                        <img
-                          src={s.logoUrl}
-                          alt={s.name}
-                          className="max-h-full max-w-full object-contain"
-                          onError={() => setLogoErrors(prev => new Set([...prev, s.id]))}
-                        />
-                      )}
-                    </div>
-                    <p className="text-[11px] font-bold text-slate-700 text-center truncate">{s.name}</p>
-                    {hasError && <p className="text-[10px] text-slate-400 text-center">Sin logo</p>}
-                  </div>
-                )
-              })}
-            </div>
+            filtered.map(c => (
+              <div key={c.id} className="flex items-center gap-3 p-3 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
+                {/* Preview logo */}
+                <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-slate-100">
+                  {previews[c.id] ? (
+                    <img src={previews[c.id]} alt={c.name} className="max-w-full max-h-full object-contain p-1"
+                      onError={() => setPreviews(prev => { const n = {...prev}; delete n[c.id]; return n })} />
+                  ) : (
+                    <span className="text-xl">🏷️</span>
+                  )}
+                </div>
+                {/* Nombre */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-800 truncate">{c.name}</p>
+                  {c.website && <p className="text-[10px] text-slate-400 truncate">{c.website}</p>}
+                </div>
+                {/* Input */}
+                <input
+                  type="text"
+                  placeholder="dominio.com.ar o URL del logo"
+                  value={inputs[c.id] || ''}
+                  onChange={e => handleInput(c.id, e.target.value)}
+                  className="text-[11px] border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-400 w-56"
+                />
+              </div>
+            ))
           )}
         </div>
 
         <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between shrink-0">
-          <p className="text-xs text-slate-400">{validCount} logos para guardar</p>
+          <p className="text-xs text-slate-400">{readyCount} logos listos para guardar</p>
           <div className="flex gap-3">
             <button onClick={onClose} className="px-5 py-2.5 text-xs font-bold text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200">
               Cancelar
             </button>
-            <button onClick={handleSave} disabled={saving || validCount === 0}
+            <button onClick={handleSave} disabled={saving || readyCount === 0}
               className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50">
-              {saving ? 'Guardando...' : `Guardar ${validCount} logos`}
+              {saving ? 'Guardando...' : `Guardar ${readyCount} logos`}
             </button>
           </div>
         </div>
