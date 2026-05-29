@@ -1435,8 +1435,9 @@ function HomeContent() {
                     </div>
                   )}
                   {promo.commerce.logoUrl ? (
-                    <div className="h-28 flex items-center justify-center p-5 bg-white">
-                      <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-full max-w-full object-contain" />
+                    <div className="h-28 flex flex-col items-center justify-center p-4 bg-white gap-1">
+                      <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-16 max-w-full object-contain" />
+                      <p className="text-[10px] font-bold text-gray-500 text-center line-clamp-1 px-2">{promo.commerce.name}</p>
                     </div>
                   ) : (
                     <div className="h-28 flex flex-col items-center justify-center gap-2 bg-gray-50 dark:bg-slate-800">
