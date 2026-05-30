@@ -62,6 +62,7 @@ jobs:
     steps:
       - name: Verificar si hay scrapers Playwright a ejecutar
         id: check
+        shell: bash
         run: |
           if [ -n "${{ github.event.inputs.scraper_id }}" ]; then
             SCRAPER="${{ github.event.inputs.scraper_id }}"
@@ -105,6 +106,7 @@ jobs:
 
       - name: Ejecutar scrapers Playwright
         if: steps.check.outputs.run == 'true'
+        shell: bash
         env:
           API_URL: ${{ secrets.API_URL }}
           VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
