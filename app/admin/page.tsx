@@ -1816,6 +1816,12 @@ const FREQ_OPTIONS = [
 
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
+const PLAYWRIGHT_SCRAPER_IDS = new Set([
+  'amex', 'cabal', 'changomas', 'banco galicia', 'icbc',
+  'banco macro', 'naranjax', 'banco provincia', 'banco santander',
+  'banco supervielle', 'banco ciudad', 'visa'
+])
+
 function ScraperSchedulerTab() {
   const [schedules, setSchedules] = useState<Record<string, ScheduleRow>>({})
   const [loading, setLoading] = useState(true)
@@ -1858,14 +1864,18 @@ function ScraperSchedulerTab() {
 
   async function runNow(scraperId: string) {
     setRunning(scraperId)
-    const res = await fetch('/api/admin/run-scraper', {
+    const isPlaywright = PLAYWRIGHT_SCRAPER_IDS.has(scraperId.toLowerCase())
+    const endpoint = isPlaywright ? '/api/admin/trigger-scraper' : '/api/admin/run-scraper'
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scraperId }),
     })
     if (res.ok) {
-      const data = await res.json()
-      setMsg({ type: 'success', text: `${scraperId}: ${data.found} encontradas, ${data.processed} procesadas` })
+      const msg = isPlaywright
+        ? `${scraperId}: workflow disparado en GitHub Actions`
+        : (() => { const d = res.json(); return `${scraperId}: procesado` })()
+      setMsg({ type: 'success', text: typeof msg === 'string' ? msg : `${scraperId}: ejecutado` })
     } else {
       setMsg({ type: 'error', text: `Error al ejecutar ${scraperId}` })
     }
@@ -1924,7 +1934,14 @@ function ScraperSchedulerTab() {
                 <tr key={cfg.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                   <td className="px-5 py-3">
                     <div>
-                      <p className="font-bold text-slate-800 text-xs">{cfg.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-bold text-slate-800 text-xs">{cfg.name}</p>
+                        {PLAYWRIGHT_SCRAPER_IDS.has(cfg.id.toLowerCase()) ? (
+                          <span className="text-[9px] font-black bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-md">GH</span>
+                        ) : (
+                          <span className="text-[9px] font-black bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-md">HTTP</span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-slate-400">{cfg.group}</p>
                     </div>
                   </td>
