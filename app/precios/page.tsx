@@ -33,16 +33,19 @@ interface GroupedProduct {
   markets: Record<string, MarketProduct>
 }
 
-interface CartItem {
-  id: string
+interface CartRow {
   ean: string
-  supermarket: string
   name: string
   imageUrl: string
-  price: number
-  finalPrice: number
-  quantity: number
-  promoLabel?: string
+  quantity: number // cantidad usada para comparar (máximo de los requiredQty)
+  markets: Record<string, {
+    price: number
+    finalPrice: number
+    effectivePrice: number // precio efectivo por unidad con promo aplicada
+    promoLabel?: string
+    promoQty?: number // unidades requeridas para activar la promo
+    url: string
+  }>
 }
 
 interface Toast {
@@ -104,7 +107,7 @@ export default function PreciosPage() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<GroupedProduct[]>([])
-  const [cart, setCart] = useState<CartItem[]>([])
+  const [cart, setCart] = useState<CartRow[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<GroupedProduct | null>(null)
@@ -142,52 +145,61 @@ export default function PreciosPage() {
     setQuery('')
   }
 
-  const addToCart = (product: GroupedProduct, marketName: string) => {
-    const market = product.markets[marketName]
-    const qty = market.multiUnitPromo?.requiredQty ?? 1
-    const promoLabel = market.multiUnitPromo?.label
+  const addToCart = (product: GroupedProduct) => {
+    // Calcular cantidad óptima: máximo requiredQty entre todos los supermercados
+    const maxQty = Math.max(...Object.values(product.markets).map(m => m.multiUnitPromo?.requiredQty ?? 1))
+
+    // Construir datos por supermercado
+    const marketsData: CartRow['markets'] = {}
+    for (const [name, m] of Object.entries(product.markets)) {
+      const promoQty = m.multiUnitPromo?.requiredQty ?? 1
+      let effectivePrice = m.finalPrice
+      if (m.multiUnitPromo && maxQty >= promoQty) {
+        effectivePrice = m.multiUnitPromo.effectivePrice
+      }
+      marketsData[name] = {
+        price: m.price,
+        finalPrice: m.finalPrice,
+        effectivePrice,
+        promoLabel: m.multiUnitPromo?.label,
+        promoQty: m.multiUnitPromo?.requiredQty,
+        url: m.url,
+      }
+    }
 
     setCart(prev => {
-      const existing = prev.find(p => p.id === market.id)
+      const existing = prev.find(r => r.ean === product.ean)
       if (existing) {
-        return prev.map(p => p.id === market.id ? { ...p, quantity: p.quantity + qty } : p)
+        return prev.map(r => r.ean === product.ean ? { ...r, quantity: r.quantity + maxQty, markets: marketsData } : r)
       }
-      return [...prev, {
-        id: market.id,
-        ean: product.ean,
-        supermarket: marketName,
-        name: product.name,
-        imageUrl: product.imageUrl,
-        price: market.price,
-        finalPrice: market.finalPrice,
-        quantity: qty,
-        promoLabel,
-      }]
+      return [...prev, { ean: product.ean, name: product.name, imageUrl: product.imageUrl, quantity: maxQty, markets: marketsData }]
     })
 
-    if (promoLabel) {
-      showToast(`Se agregaron ${qty} para aprovechar el ${promoLabel}`)
-    } else {
-      showToast(`${product.name.slice(0, 30)}... agregado al carrito`)
-    }
+    showToast(`${product.name.slice(0, 30)}... agregado (${maxQty} ud.)`)
     setIsCartOpen(true)
   }
 
-  const updateQuantity = (id: string, delta: number) => {
-    setCart(prev => prev.map(p => {
-      if (p.id !== id) return p
-      return { ...p, quantity: Math.max(0, p.quantity + delta) }
-    }).filter(p => p.quantity > 0))
+  const updateQuantity = (ean: string, delta: number) => {
+    setCart(prev => prev.map(r => {
+      if (r.ean !== ean) return r
+      return { ...r, quantity: Math.max(0, r.quantity + delta) }
+    }).filter(r => r.quantity > 0))
   }
 
-  const cartTotals = cart.reduce((acc, item) => {
-    if (!acc[item.supermarket]) acc[item.supermarket] = 0
-    acc[item.supermarket] += item.finalPrice * item.quantity
+  const removeFromCart = (ean: string) => setCart(prev => prev.filter(r => r.ean !== ean))
+
+  // Totales por supermercado considerando los productos disponibles en cada uno
+  const allMarkets = [...new Set(cart.flatMap(r => Object.keys(r.markets)))]
+  const cartTotals = allMarkets.reduce((acc, market) => {
+    acc[market] = cart.reduce((sum, row) => {
+      const m = row.markets[market]
+      return m ? sum + m.effectivePrice * row.quantity : sum
+    }, 0)
     return acc
   }, {} as Record<string, number>)
 
-  const cartTotalItems = cart.reduce((acc, item) => acc + item.quantity, 0)
-  const lowestTotalMarket = Object.entries(cartTotals).sort(([, a], [, b]) => a - b)[0]?.[0] || ''
+  const cartTotalItems = cart.reduce((acc, r) => acc + r.quantity, 0)
+  const lowestTotalMarket = Object.entries(cartTotals).filter(([, v]) => v > 0).sort(([, a], [, b]) => a - b)[0]?.[0] || ''
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-slate-100 font-sans selection:bg-indigo-500/30">
@@ -413,8 +425,9 @@ export default function PreciosPage() {
                               )}
                             </div>
                             <button
-                              onClick={() => addToCart(selectedProduct, marketName)}
+                              onClick={() => addToCart(selectedProduct)}
                               className="w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center transition-colors flex-shrink-0"
+                              title="Agregar en todos los supermercados"
                             >
                               <Plus className="w-4 h-4 text-white" />
                             </button>
@@ -465,82 +478,118 @@ export default function PreciosPage() {
         </div>
       )}
 
-      {/* Cart Drawer */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCartOpen(false)} />
-          <div className="relative w-full max-w-md bg-[#111111] h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+      {/* Cart Table */}
+      {isCartOpen && cart.length > 0 && (
+        <div className="fixed inset-0 z-50 flex flex-col">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsCartOpen(false)} />
+          <div className="relative m-4 mt-16 bg-[#111111] rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Header */}
+            <div className="p-5 border-b border-white/10 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <ShoppingCart className="w-6 h-6 text-indigo-400" />
-                <h2 className="text-xl font-bold">Tu Carrito ({cartTotalItems})</h2>
+                <ShoppingCart className="w-5 h-5 text-indigo-400" />
+                <h2 className="text-lg font-bold">Comparador de Carrito</h2>
+                <span className="text-xs text-slate-400">{cart.length} producto{cart.length !== 1 ? 's' : ''}</span>
               </div>
               <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors">
-                <ArrowRight className="w-5 h-5" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {cart.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-4">
-                  <ShoppingCart className="w-16 h-16 opacity-20" />
-                  <p>Tu carrito está vacío</p>
-                </div>
-              ) : (
-                cart.map(item => (
-                  <div key={item.id} className="bg-[#1A1A1A] p-3 rounded-2xl border border-white/5 flex gap-4">
-                    <div className="w-16 h-16 bg-white rounded-xl p-1 flex-shrink-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain mix-blend-multiply" />
-                    </div>
-                    <div className="flex-1 flex flex-col justify-between py-1">
-                      <div>
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-slate-200 line-clamp-2 leading-tight">{item.name}</p>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-sm font-bold uppercase tracking-wider flex-shrink-0 ${SUPERMARKET_COLORS[item.supermarket] || SUPERMARKET_COLORS.default}`}>
-                            {item.supermarket}
-                          </span>
+            {/* Tabla */}
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left p-4 text-slate-400 font-medium text-xs uppercase tracking-wide sticky left-0 bg-[#111111] min-w-[200px]">Producto</th>
+                    <th className="text-center p-4 text-slate-400 font-medium text-xs uppercase tracking-wide min-w-[60px]">Cant.</th>
+                    {allMarkets.map(market => (
+                      <th key={market} className={`text-center p-4 text-xs font-bold uppercase tracking-wide min-w-[140px] ${market === lowestTotalMarket ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${SUPERMARKET_DOT[market] || SUPERMARKET_DOT.default}`} />
+                          {market}
+                          {market === lowestTotalMarket && <span className="text-[9px] bg-emerald-500 text-white px-1 py-0.5 rounded font-black">★</span>}
                         </div>
-                        {item.promoLabel && (
-                          <span className="text-[10px] text-orange-400 font-bold mt-0.5 inline-block">🔥 {item.promoLabel}</span>
-                        )}
-                        <p className="text-indigo-400 font-bold mt-1">{formatPrice(item.finalPrice)}</p>
-                      </div>
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-3 bg-black/40 rounded-lg p-1 border border-white/10">
-                          <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:bg-white/10 rounded-md text-slate-400">
-                            {item.quantity === 1 ? <Trash2 className="w-4 h-4 text-red-400" /> : <Minus className="w-4 h-4" />}
+                      </th>
+                    ))}
+                    <th className="p-4 min-w-[40px]" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {cart.map(row => (
+                    <tr key={row.ean} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                      {/* Producto */}
+                      <td className="p-4 sticky left-0 bg-[#111111]">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-white rounded-lg p-1 shrink-0">
+                            <img src={row.imageUrl} alt={row.name} className="w-full h-full object-contain mix-blend-multiply" />
+                          </div>
+                          <p className="text-xs font-medium text-slate-200 line-clamp-2 leading-tight">{row.name}</p>
+                        </div>
+                      </td>
+                      {/* Cantidad */}
+                      <td className="p-4">
+                        <div className="flex items-center justify-center gap-2 bg-black/40 rounded-lg p-1 border border-white/10">
+                          <button onClick={() => updateQuantity(row.ean, -1)} className="p-0.5 hover:bg-white/10 rounded text-slate-400">
+                            <Minus className="w-3 h-3" />
                           </button>
-                          <span className="text-sm font-medium w-4 text-center">{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:bg-white/10 rounded-md text-slate-400">
-                            <Plus className="w-4 h-4" />
+                          <span className="text-xs font-medium w-5 text-center">{row.quantity}</span>
+                          <button onClick={() => updateQuantity(row.ean, 1)} className="p-0.5 hover:bg-white/10 rounded text-slate-400">
+                            <Plus className="w-3 h-3" />
                           </button>
                         </div>
-                        <p className="text-sm font-semibold text-slate-300">Total: {formatPrice(item.finalPrice * item.quantity)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {cart.length > 0 && (
-              <div className="p-6 bg-[#1A1A1A] border-t border-white/10 space-y-4">
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Total por Supermercado</h3>
-                <div className="space-y-3">
-                  {Object.entries(cartTotals).map(([market, total]) => (
-                    <div key={market} className={`flex items-center justify-between p-3 rounded-xl border ${market === lowestTotalMarket ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-white/5 bg-black/40'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${SUPERMARKET_DOT[market] || SUPERMARKET_DOT.default}`} />
-                        <span className="font-medium text-slate-200">{market}</span>
-                        {market === lowestTotalMarket && <span className="text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-sm font-bold ml-2">MÁS BARATO</span>}
-                      </div>
-                      <span className={`font-bold ${market === lowestTotalMarket ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(total)}</span>
-                    </div>
+                      </td>
+                      {/* Celda por supermercado */}
+                      {allMarkets.map(market => {
+                        const m = row.markets[market]
+                        const isBest = market === lowestTotalMarket
+                        if (!m) return (
+                          <td key={market} className="p-4 text-center text-slate-600 text-xs">—</td>
+                        )
+                        const totalLine = m.effectivePrice * row.quantity
+                        return (
+                          <td key={market} className={`p-3 text-center ${isBest ? 'bg-emerald-500/5' : ''}`}>
+                            {m.price > m.effectivePrice && (
+                              <p className="text-[10px] text-slate-500 line-through">{formatPrice(m.price)}</p>
+                            )}
+                            <p className={`text-sm font-bold ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(m.effectivePrice)}</p>
+                            {m.promoLabel && (
+                              <p className="text-[9px] text-orange-400 font-bold mt-0.5">🔥 {m.promoLabel}</p>
+                            )}
+                            <p className="text-[10px] text-slate-500 mt-1">{formatPrice(totalLine)}</p>
+                          </td>
+                        )
+                      })}
+                      {/* Eliminar */}
+                      <td className="p-4">
+                        <button onClick={() => removeFromCart(row.ean)} className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-600 hover:text-red-400 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              </div>
-            )}
+                </tbody>
+                {/* Fila de totales */}
+                <tfoot>
+                  <tr className="border-t-2 border-white/20 bg-[#0A0A0A]">
+                    <td className="p-4 sticky left-0 bg-[#0A0A0A]">
+                      <p className="text-xs font-black text-slate-300 uppercase tracking-wide">TOTAL</p>
+                    </td>
+                    <td />
+                    {allMarkets.map(market => {
+                      const total = cartTotals[market] || 0
+                      const isBest = market === lowestTotalMarket
+                      return (
+                        <td key={market} className={`p-4 text-center ${isBest ? 'bg-emerald-500/10' : ''}`}>
+                          <p className={`text-base font-black ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(total)}</p>
+                          {isBest && <p className="text-[9px] text-emerald-500 font-bold uppercase mt-0.5">Más barato</p>}
+                        </td>
+                      )
+                    })}
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
         </div>
       )}
