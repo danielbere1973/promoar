@@ -35,16 +35,21 @@ export async function GET(req: NextRequest) {
   }
 
   const schedules = await prisma.scraperSchedule.findMany({
-    include: {
-      runs: {
-        orderBy: { startedAt: 'desc' },
-        take: 1,
-      }
-    },
     orderBy: { scraperId: 'asc' }
   })
 
-  return NextResponse.json({ schedules })
+  // Obtener el último run por scraper
+  const lastRuns = await prisma.scraperRun.findMany({
+    where: { scraperId: { in: schedules.map(s => s.scraperId) } },
+    orderBy: { startedAt: 'desc' },
+    distinct: ['scraperId'],
+    select: { scraperId: true, status: true, startedAt: true, found: true, processed: true, message: true }
+  })
+  const lastRunMap = Object.fromEntries(lastRuns.map(r => [r.scraperId, r]))
+
+  const schedulesWithRuns = schedules.map(s => ({ ...s, runs: lastRunMap[s.scraperId] ? [lastRunMap[s.scraperId]] : [] }))
+
+  return NextResponse.json({ schedules: schedulesWithRuns })
 }
 
 export async function POST(req: NextRequest) {
