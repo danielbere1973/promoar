@@ -98,3 +98,9 @@ export const ALL_SCRAPERS: Scraper[] = [
 ];
 
 export * from './types';
+
+// Mapa de scrapers por ID para uso en API
+export const scrapers: Record<string, Scraper> = {}
+for (const s of ALL_SCRAPERS) {
+  scrapers[s.name.toLowerCase()] = s
+}
