@@ -22,13 +22,35 @@ export async function GET(request: Request) {
     // Filtro por scraper
     if (scrapers.length > 0) {
       const scraperDomains: Record<string, string> = {
-        'Galicia': 'galicia.ar',
-        'Coto': 'coto.com.ar',
-        'Jumbo': 'jumbo.com.ar',
-        'Disco': 'disco.com.ar',
-        'Vea': 'vea.com.ar',
+        'AmEx': 'americanexpress.com',
+        'BBVA': 'bbva.com.ar',
+        'BNA': 'semananacion.com.ar',
+        'Brubank': 'brubank.com',
+        'Cabal': 'bancocredicoop.coop',
         'Carrefour': 'carrefour.com.ar',
-        'MODO': 'modo.com.ar'
+        'ChangoMás': 'masonline.com.ar',
+        'Ciudad': 'bancociudad.com.ar',
+        'Clarín 365': '365.clarin.com',
+        'Club La Nación': 'club.lanacion.com.ar',
+        'Coto': 'coto.com.ar',
+        'Cuenta DNI': 'bancoprovincia.com.ar',
+        'DIA': 'supermercadosdia.com.ar',
+        'Diarco': 'diarco.com.ar',
+        'Disco': 'disco.com.ar',
+        'Galicia': 'galicia.ar',
+        'ICBC': 'icbc.com.ar',
+        'Jumbo': 'jumbo.com.ar',
+        'Macro': 'macro.com.ar',
+        'MercadoPago': 'mercadopago.com',
+        'MODO': 'modo.com.ar',
+        'Naranja X': 'naranjax.com',
+        'Openpay': 'openpayargentina.com',
+        'Patagonia': 'bancopatagonia.com.ar',
+        'Personal Pay': 'personal.com.ar',
+        'Santander': 'santander.com.ar',
+        'Supervielle': 'supervielle.com.ar',
+        'Vea': 'vea.com.ar',
+        'VISA': 'visa.com.ar',
       };
       const domains = scrapers.map(s => scraperDomains[s]).filter(Boolean);
       if (domains.length > 0) {
