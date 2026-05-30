@@ -2113,7 +2113,7 @@ function CleanupTab({ commerces }: { commerces: { id: string; name: string }[] }
           <h3 className="text-sm font-bold text-slate-700">Borrar por comercio</h3>
         </div>
         <select value={selectedCommerce} onChange={e => setSelectedCommerce(e.target.value)}
-          className="w-full bg-slate-50 border border-slate-100 text-sm font-medium px-4 py-2.5 rounded-xl outline-none">
+          className="w-full bg-white border border-slate-200 text-sm font-medium text-slate-800 px-4 py-2.5 rounded-xl outline-none">
           <option value="">Seleccioná un comercio...</option>
           {commerces.map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
@@ -2133,7 +2133,7 @@ function CleanupTab({ commerces }: { commerces: { id: string; name: string }[] }
           <h3 className="text-sm font-bold text-slate-700">Borrar por scraper</h3>
         </div>
         <select value={selectedSource} onChange={e => setSelectedSource(e.target.value)}
-          className="w-full bg-slate-50 border border-slate-100 text-sm font-medium px-4 py-2.5 rounded-xl outline-none">
+          className="w-full bg-white border border-slate-200 text-sm font-medium text-slate-800 px-4 py-2.5 rounded-xl outline-none">
           <option value="">Seleccioná un scraper...</option>
           {SOURCE_LABELS.map(s => (
             <option key={s.value} value={s.value}>{s.label}</option>
