@@ -15,31 +15,47 @@ export async function POST(req: NextRequest) {
   const { scraperId } = await req.json() as { scraperId: string }
   if (!scraperId) return NextResponse.json({ error: 'Missing scraperId' }, { status: 400 })
 
-  const scraper = scrapers[scraperId]
-  if (!scraper) return NextResponse.json({ error: `Scraper "${scraperId}" not found` }, { status: 404 })
+  if (!scrapers[scraperId]) {
+    return NextResponse.json({ error: `Scraper "${scraperId}" not found` }, { status: 404 })
+  }
 
   const run = await prisma.scraperRun.create({ data: { scraperId, status: 'running' } })
 
   try {
-    const promos = await scraper.run()
-    let processed = 0
-    for (const promo of promos) {
-      try {
-        await (prisma as any).promo.upsert({
-          where: { slug: (promo as any).slug ?? `noslug-${Date.now()}-${processed}` },
-          update: { ...(promo as any), updatedAt: new Date() },
-          create: promo as any,
-        })
-        processed++
-      } catch {}
+    // Llamar al endpoint de scrape existente que tiene toda la lógica de guardado
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const res = await fetch(`${baseUrl}/api/admin/scrape`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Pasar el token de sesión para auth
+        'Cookie': req.headers.get('cookie') || '',
+      },
+      body: JSON.stringify({ scraper: scraperId }),
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`Scrape API error ${res.status}: ${text.slice(0, 200)}`)
     }
+
+    const data = await res.json()
+    const found = data.found ?? 0
+    const processed = data.processed ?? 0
 
     await prisma.scraperRun.update({
       where: { id: run.id },
-      data: { status: 'success', finishedAt: new Date(), found: promos.length, processed }
+      data: { status: 'success', finishedAt: new Date(), found, processed }
     })
 
-    return NextResponse.json({ ok: true, found: promos.length, processed })
+    // Actualizar nextRunAt si tiene schedule
+    const schedule = await prisma.scraperSchedule.findUnique({ where: { scraperId } })
+    if (schedule && schedule.frequency !== 'manual') {
+      const next = computeNextRun(schedule)
+      await prisma.scraperSchedule.update({ where: { scraperId }, data: { nextRunAt: next } })
+    }
+
+    return NextResponse.json({ ok: true, found, processed })
   } catch (e: any) {
     await prisma.scraperRun.update({
       where: { id: run.id },
@@ -47,4 +63,24 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
+}
+
+function computeNextRun(schedule: { frequency: string; dayOfWeek?: number | null; dayOfMonth?: number | null; hour: number }): Date {
+  const now = new Date()
+  const next = new Date(now)
+  next.setUTCMinutes(0, 0, 0)
+  if (schedule.frequency === 'daily') {
+    next.setUTCHours(schedule.hour)
+    if (next <= now) next.setUTCDate(next.getUTCDate() + 1)
+  } else if (schedule.frequency === 'weekly') {
+    const dow = schedule.dayOfWeek ?? 1
+    next.setUTCHours(schedule.hour)
+    const diff = (dow - next.getUTCDay() + 7) % 7 || 7
+    next.setUTCDate(next.getUTCDate() + diff)
+  } else if (schedule.frequency === 'monthly') {
+    next.setUTCHours(schedule.hour)
+    next.setUTCDate(schedule.dayOfMonth ?? 1)
+    if (next <= now) next.setUTCMonth(next.getUTCMonth() + 1)
+  }
+  return next
 }
