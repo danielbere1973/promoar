@@ -102,6 +102,149 @@ function getBestPromo(markets: Record<string, MarketProduct>, minRegularPrice: n
   return best
 }
 
+function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffectivePrice, updateQuantity, removeFromCart }: {
+  cart: CartRow[]
+  allMarkets: string[]
+  cartTotals: Record<string, number>
+  lowestTotalMarket: string
+  getEffectivePrice: (m: CartRow['markets'][string], qty: number) => number
+  updateQuantity: (ean: string, delta: number) => void
+  removeFromCart: (ean: string) => void
+}) {
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
+  const [expandedTotals, setExpandedTotals] = useState(false)
+
+  // Totales de precio de lista (sin descuentos)
+  const listTotals = allMarkets.reduce((acc, market) => {
+    acc[market] = cart.reduce((sum, row) => {
+      const m = row.markets[market]
+      return m ? sum + m.price * row.quantity : sum
+    }, 0)
+    return acc
+  }, {} as Record<string, number>)
+
+  const toggleProduct = (ean: string) => setExpandedProducts(prev => {
+    const next = new Set(prev)
+    next.has(ean) ? next.delete(ean) : next.add(ean)
+    return next
+  })
+
+  return (
+    <div className="md:hidden p-2 space-y-1.5">
+      {/* Totales arriba */}
+      <div className="bg-[#0A0A0A] rounded-xl border border-white/10 overflow-hidden">
+        <button className="w-full flex items-center justify-between px-3 py-2" onClick={() => setExpandedTotals(prev => !prev)}>
+          <div>
+            <p className="text-[9px] text-slate-400 uppercase tracking-wide font-bold">Total más barato · {lowestTotalMarket}</p>
+            <p className="text-emerald-400 font-black text-base">{formatPrice(cartTotals[lowestTotalMarket] || 0)}</p>
+            <p className="text-[9px] text-emerald-700">
+              Ahorrás {formatPrice((listTotals[lowestTotalMarket] || 0) - (cartTotals[lowestTotalMarket] || 0))} vs precio de lista
+            </p>
+          </div>
+          <ArrowRight className={`w-4 h-4 text-slate-500 transition-transform ${expandedTotals ? 'rotate-90' : ''}`} />
+        </button>
+
+        {expandedTotals && (
+          <div className="border-t border-white/10">
+            {allMarkets.map(market => {
+              const lista = listTotals[market] || 0
+              const conDesc = cartTotals[market] || 0
+              const ahorrado = lista - conDesc
+              const isBest = market === lowestTotalMarket
+              return (
+                <div key={market} className={`px-3 py-2 border-b border-white/5 ${isBest ? 'bg-emerald-500/5' : ''}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${SUPERMARKET_DOT[market] || SUPERMARKET_DOT.default}`} />
+                      <p className={`text-[11px] font-bold ${isBest ? 'text-emerald-400' : 'text-slate-300'}`}>{market} {isBest && '★'}</p>
+                    </div>
+                    <p className={`text-sm font-black ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(conDesc)}</p>
+                  </div>
+                  <div className="flex justify-between text-[9px] text-slate-500 pl-3">
+                    <span>Lista: {formatPrice(lista)}</span>
+                    {ahorrado > 0 && <span className="text-emerald-700">Ahorrás {formatPrice(ahorrado)}</span>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Productos */}
+      {cart.map(row => {
+        const isExpanded = expandedProducts.has(row.ean)
+        const bestPrice = Math.min(...Object.values(row.markets).map(m => getEffectivePrice(m, row.quantity)))
+        const bestMarketForRow = allMarkets.find(mk => row.markets[mk] && getEffectivePrice(row.markets[mk], row.quantity) === bestPrice) || ''
+        const hasPromo = Object.values(row.markets).some(m => m.promoLabel)
+
+        return (
+          <div key={row.ean} className="bg-[#1A1A1A] rounded-xl border border-white/10 overflow-hidden">
+            {/* Fila compacta */}
+            <div className="flex items-center gap-2 px-2 py-2">
+              <div className="w-8 h-8 bg-white rounded-lg p-0.5 shrink-0">
+                <img src={row.imageUrl} alt={row.name} className="w-full h-full object-contain mix-blend-multiply" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-medium text-slate-200 line-clamp-1 leading-tight">{row.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${SUPERMARKET_DOT[bestMarketForRow] || SUPERMARKET_DOT.default}`} />
+                  <p className="text-emerald-400 font-black text-[11px]">{formatPrice(bestPrice)}</p>
+                  {hasPromo && <span className="text-[9px] text-orange-400">🔥</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 bg-black/40 rounded-lg px-1.5 py-1 border border-white/10 shrink-0">
+                <button onClick={() => updateQuantity(row.ean, -1)} className="text-slate-400"><Minus className="w-3 h-3" /></button>
+                <span className="text-[11px] font-medium w-3 text-center">{row.quantity}</span>
+                <button onClick={() => updateQuantity(row.ean, 1)} className="text-slate-400"><Plus className="w-3 h-3" /></button>
+              </div>
+              <button onClick={() => removeFromCart(row.ean)} className="text-slate-600 hover:text-red-400 shrink-0 p-1">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+              {hasPromo && (
+                <button onClick={() => toggleProduct(row.ean)} className="text-slate-500 shrink-0">
+                  <ArrowRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                </button>
+              )}
+            </div>
+
+            {/* Detalle promos por super (expandido) */}
+            {isExpanded && (
+              <div className="border-t border-white/10">
+                {allMarkets.map(market => {
+                  const m = row.markets[market]
+                  if (!m || !m.promoLabel) return null
+                  const promoActiva = m.promoQty ? row.quantity >= m.promoQty : false
+                  const faltanParaPromo = m.promoQty && !promoActiva ? m.promoQty - row.quantity : 0
+                  const precioUnit = getEffectivePrice(m, row.quantity)
+                  return (
+                    <div key={market} className="flex items-center justify-between px-3 py-1.5 border-b border-white/5">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${SUPERMARKET_DOT[market] || SUPERMARKET_DOT.default}`} />
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-300">{market}</p>
+                          <p className={`text-[9px] font-bold ${promoActiva ? 'text-orange-400' : 'text-amber-500/60'}`}>
+                            🔥 {m.promoLabel}{faltanParaPromo > 0 ? ` (agregá ${faltanParaPromo} más)` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {m.price > precioUnit && <p className="text-[9px] text-slate-500 line-through">{formatPrice(m.price)}</p>}
+                        <p className="text-[11px] font-bold text-white">{formatPrice(precioUnit)}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+    </div>
+  )
+}
+
 export default function PreciosPage() {
   const [section, setSection] = useState<'supermercados' | 'farmacias'>('supermercados')
   const [query, setQuery] = useState('')
@@ -271,10 +414,10 @@ export default function PreciosPage() {
                   type="text"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata, Galletitas Oreo...' : 'Ej. Ibuprofeno 400mg, Paracetamol...'}
-                  className="flex-1 bg-transparent text-xl py-3 px-2 outline-none text-white placeholder:text-slate-500"
+                  placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata...' : 'Ej. Ibuprofeno 400mg...'}
+                  className="flex-1 bg-transparent text-base py-3 px-2 outline-none text-white placeholder:text-slate-500 min-w-0"
                 />
-                <button type="submit" disabled={loading || !query.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                <button type="submit" disabled={loading || !query.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 sm:px-8 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shrink-0">
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Buscar'}
                 </button>
               </div>
@@ -302,7 +445,7 @@ export default function PreciosPage() {
                 const bestPromo = getBestPromo(p.markets, p.minPrice)
                 return (
                   <div key={p.ean} className="bg-[#1A1A1A] border border-white/10 rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col">
-                    <div className="relative h-48 bg-white p-4 flex items-center justify-center">
+                    <div className="relative h-32 bg-white p-3 flex items-center justify-center">
                       <span className="absolute top-3 right-3 bg-black/80 backdrop-blur-md text-white px-3 py-1 text-xs font-bold rounded-full shadow-md z-10">
                         EAN: {p.ean || 'N/A'}
                       </span>
@@ -501,10 +644,46 @@ export default function PreciosPage() {
               </button>
             </div>
 
-            {/* Tabla */}
+            {/* Mobile: tarjetas verticales / Desktop: tabla horizontal */}
             <div className="flex-1 overflow-auto">
-              <table className="w-full text-sm border-collapse">
+
+              {/* MOBILE: acordeón */}
+              <MobileCart
+                cart={cart}
+                allMarkets={allMarkets}
+                cartTotals={cartTotals}
+                lowestTotalMarket={lowestTotalMarket}
+                getEffectivePrice={getEffectivePrice}
+                updateQuantity={updateQuantity}
+                removeFromCart={removeFromCart}
+              />
+
+              {/* DESKTOP: tabla horizontal */}
+              <table className="hidden md:table w-full text-sm border-collapse">
                 <thead>
+                  {/* Fila de totales arriba — sticky */}
+                  <tr className="border-b-2 border-white/20 bg-[#0A0A0A]">
+                    <td className="p-3 sticky left-0 bg-[#0A0A0A]">
+                      <p className="text-[10px] font-black text-slate-300 uppercase tracking-wide">TOTAL</p>
+                    </td>
+                    <td />
+                    {allMarkets.map(market => {
+                      const lista = cart.reduce((sum, row) => { const m = row.markets[market]; return m ? sum + m.price * row.quantity : sum }, 0)
+                      const conDesc = cartTotals[market] || 0
+                      const ahorrado = lista - conDesc
+                      const isBest = market === lowestTotalMarket
+                      return (
+                        <td key={market} className={`p-3 text-center ${isBest ? 'bg-emerald-500/10' : ''}`}>
+                          <p className={`text-base font-black ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(conDesc)}</p>
+                          {lista > conDesc && <p className="text-[9px] text-slate-500 line-through">{formatPrice(lista)}</p>}
+                          {ahorrado > 0 && <p className="text-[9px] text-emerald-600 font-bold">-{formatPrice(ahorrado)}</p>}
+                          {isBest && <p className="text-[9px] text-emerald-500 font-bold uppercase mt-0.5">Más barato ★</p>}
+                        </td>
+                      )
+                    })}
+                    <td />
+                  </tr>
+                  {/* Headers de columnas */}
                   <tr className="border-b border-white/10">
                     <th className="text-left p-4 text-slate-400 font-medium text-xs uppercase tracking-wide sticky left-0 bg-[#111111] min-w-[200px]">Producto</th>
                     <th className="text-center p-4 text-slate-400 font-medium text-xs uppercase tracking-wide min-w-[60px]">Cant.</th>
@@ -523,7 +702,6 @@ export default function PreciosPage() {
                 <tbody>
                   {cart.map(row => (
                     <tr key={row.ean} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
-                      {/* Producto */}
                       <td className="p-4 sticky left-0 bg-[#111111]">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-white rounded-lg p-1 shrink-0">
@@ -532,34 +710,24 @@ export default function PreciosPage() {
                           <p className="text-xs font-medium text-slate-200 line-clamp-2 leading-tight">{row.name}</p>
                         </div>
                       </td>
-                      {/* Cantidad */}
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2 bg-black/40 rounded-lg p-1 border border-white/10">
-                          <button onClick={() => updateQuantity(row.ean, -1)} className="p-0.5 hover:bg-white/10 rounded text-slate-400">
-                            <Minus className="w-3 h-3" />
-                          </button>
+                          <button onClick={() => updateQuantity(row.ean, -1)} className="p-0.5 hover:bg-white/10 rounded text-slate-400"><Minus className="w-3 h-3" /></button>
                           <span className="text-xs font-medium w-5 text-center">{row.quantity}</span>
-                          <button onClick={() => updateQuantity(row.ean, 1)} className="p-0.5 hover:bg-white/10 rounded text-slate-400">
-                            <Plus className="w-3 h-3" />
-                          </button>
+                          <button onClick={() => updateQuantity(row.ean, 1)} className="p-0.5 hover:bg-white/10 rounded text-slate-400"><Plus className="w-3 h-3" /></button>
                         </div>
                       </td>
-                      {/* Celda por supermercado */}
                       {allMarkets.map(market => {
                         const m = row.markets[market]
                         const isBest = market === lowestTotalMarket
-                        if (!m) return (
-                          <td key={market} className="p-4 text-center text-slate-600 text-xs">—</td>
-                        )
+                        if (!m) return <td key={market} className="p-4 text-center text-slate-600 text-xs">—</td>
                         const promoActiva = m.promoQty ? row.quantity >= m.promoQty : false
                         const precioUnit = getEffectivePrice(m, row.quantity)
                         const totalLine = precioUnit * row.quantity
                         const faltanParaPromo = m.promoQty && !promoActiva ? m.promoQty - row.quantity : 0
                         return (
                           <td key={market} className={`p-3 text-center ${isBest ? 'bg-emerald-500/5' : ''}`}>
-                            {m.price > precioUnit && (
-                              <p className="text-[10px] text-slate-500 line-through">{formatPrice(m.price)}</p>
-                            )}
+                            {m.price > precioUnit && <p className="text-[10px] text-slate-500 line-through">{formatPrice(m.price)}</p>}
                             <p className={`text-sm font-bold ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(precioUnit)}</p>
                             {m.promoLabel && (
                               <p className={`text-[9px] font-bold mt-0.5 ${promoActiva ? 'text-orange-400' : 'text-amber-500/60'}`}>
@@ -570,7 +738,6 @@ export default function PreciosPage() {
                           </td>
                         )
                       })}
-                      {/* Eliminar */}
                       <td className="p-4">
                         <button onClick={() => removeFromCart(row.ean)} className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-600 hover:text-red-400 transition-colors">
                           <Trash2 className="w-4 h-4" />
@@ -579,26 +746,6 @@ export default function PreciosPage() {
                     </tr>
                   ))}
                 </tbody>
-                {/* Fila de totales */}
-                <tfoot>
-                  <tr className="border-t-2 border-white/20 bg-[#0A0A0A]">
-                    <td className="p-4 sticky left-0 bg-[#0A0A0A]">
-                      <p className="text-xs font-black text-slate-300 uppercase tracking-wide">TOTAL</p>
-                    </td>
-                    <td />
-                    {allMarkets.map(market => {
-                      const total = cartTotals[market] || 0
-                      const isBest = market === lowestTotalMarket
-                      return (
-                        <td key={market} className={`p-4 text-center ${isBest ? 'bg-emerald-500/10' : ''}`}>
-                          <p className={`text-base font-black ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(total)}</p>
-                          {isBest && <p className="text-[9px] text-emerald-500 font-bold uppercase mt-0.5">Más barato</p>}
-                        </td>
-                      )
-                    })}
-                    <td />
-                  </tr>
-                </tfoot>
               </table>
             </div>
           </div>

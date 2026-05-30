@@ -424,6 +424,14 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         multiUnitPromo = parsePromoEntry(vtexPromo.code.trim(), vtexPromo.effectiveDiscount)
       }
 
+      // Para Cencosud: si hay effectiveDiscount pero no multiUnitPromo, aplicar el descuento al finalPrice
+      if (isCencosudSite && !multiUnitPromo && vtexPromo?.effectiveDiscount) {
+        const discount = parseFloat(String(vtexPromo.effectiveDiscount))
+        if (discount > 0 && discount < 1) {
+          finalPrice = Math.round(priceList * (1 - discount))
+        }
+      }
+
       // Para Cencosud sin dato en cache, no usar fallback de clusters (evita datos incorrectos)
       if (!multiUnitPromo && !isCencosudSite) {
         for (const pt of [...teaserTexts, promoCluster, hastaCluster].filter(Boolean)) {
@@ -442,8 +450,11 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
       }
 
       // Para Cencosud: solo mostrar texto si hay dato en cache (evita clusters incorrectos)
+      const cencosudSimplePromo = isCencosudSite && !multiUnitPromo && vtexPromo?.effectiveDiscount && parseFloat(String(vtexPromo.effectiveDiscount)) > 0
+        ? (vtexPromo.code && vtexPromo.code !== 'Oferta' ? vtexPromo.code : `${Math.round(parseFloat(String(vtexPromo.effectiveDiscount)) * 100)}% OFF`)
+        : undefined
       let promoText = isCencosudSite
-        ? (multiUnitPromo?.label || (primePromo ? 'Solo Prime' : '-'))
+        ? (multiUnitPromo?.label || cencosudSimplePromo || (primePromo ? 'Solo Prime' : '-'))
         : (multiUnitPromo?.label || teaserTexts[0] || promoCluster || hastaCluster || '-')
       if (promoText === '-') {
         if (spot > 0 && spot < salePrice) {
