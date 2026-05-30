@@ -30,7 +30,13 @@ function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+function isNxM(type: string): boolean {
+  return /^\d+[xX]\d+$/.test(type.trim())
+}
+
 function parseDiscount(type: string): number {
+  // NxM: no es un porcentaje, devolver 0 para que se maneje por separado
+  if (isNxM(type)) return 0
   const m = type.match(/(\d+)/);
   return m ? parseInt(m[1]) : 0;
 }
@@ -197,24 +203,29 @@ export const ClubLaNacionScraper: Scraper = {
       const item = items[i];
       if (!item.slug || !item.discountType) continue;
 
+      const nxm = isNxM(item.discountType)
       const discountValue = parseDiscount(item.discountType);
-      if (!discountValue) continue;
+      if (!discountValue && !nxm) continue;
 
       const categoria = CATEGORY_MAP[item.categorySlug] || detectCategoria(item.name) || 'Otros';
       const detail = await fetchDetail(item.slug);
       await sleep(DELAY_MS);
 
-      const title = `${discountValue}% descuento – ${item.name}`;
+      const title = nxm
+        ? `${item.discountType} – ${item.name}`
+        : `${discountValue}% descuento – ${item.name}`;
 
       allPromos.push({
         storeName: item.name,
         storeLogoUrl: item.logoUrl,
         title,
-        description: detail.description || `${discountValue}% de descuento en ${item.name} con Club La Nacion.`,
+        description: detail.description || (nxm
+          ? `${item.discountType} en ${item.name} con Club La Nacion.`
+          : `${discountValue}% de descuento en ${item.name} con Club La Nacion.`),
         sourceText: detail.sourceText || title,
         sourceUrl: `${SITE_BASE}${item.slug}`,
-        discount: String(discountValue),
-        discountType: 'PERCENTAGE_DESCUENTO',
+        discount: nxm ? item.discountType : String(discountValue),
+        discountType: nxm ? 'NXM' : 'PERCENTAGE_DESCUENTO',
         validDays: detail.validDays ?? 127,
         validFrom: detail.validFrom,
         validUntil: detail.validUntil,

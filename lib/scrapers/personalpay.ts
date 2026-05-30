@@ -105,11 +105,12 @@ export const PersonalPayScraper: Scraper = {
           if (!storeName) continue;
 
           const discountStr: string = item.discounts || '';
-          const pct = parseInt(discountStr.replace('%', ''));
-          if (!pct || isNaN(pct)) continue;
+          const nxmMatch = discountStr.match(/^(\d+)[xX](\d+)$/)
+          const pct = nxmMatch ? 0 : parseInt(discountStr.replace('%', ''));
+          if (!nxmMatch && (!pct || isNaN(pct))) continue;
 
           const typeCode: string = item.typeCode || 'Discount';
-          const discountType = typeCode === 'Cashback' ? 'PERCENTAGE_REINTEGRO' : 'PERCENTAGE_DESCUENTO';
+          const discountType = nxmMatch ? 'NXM' : (typeCode === 'Cashback' ? 'PERCENTAGE_REINTEGRO' : 'PERCENTAGE_DESCUENTO');
 
           const days: string[] = item.days || [];
           const validDays = parseDays(days);
@@ -127,8 +128,10 @@ export const PersonalPayScraper: Scraper = {
           const validUntil = item.dueDate ? new Date(item.dueDate) : undefined;
 
           const typeLabel = typeCode === 'Cashback' ? 'reintegro' : 'descuento';
-          const title = `${pct}% de ${typeLabel} – ${storeName}`;
-          const description = `${pct}% de ${typeLabel} en ${storeName}. ${daysLabel}.${cap ? ` Tope: $${cap.toLocaleString('es-AR')}.` : ''}`;
+          const title = nxmMatch ? `${discountStr} – ${storeName}` : `${pct}% de ${typeLabel} – ${storeName}`;
+          const description = nxmMatch
+            ? `${discountStr} en ${storeName}. ${daysLabel}.`
+            : `${pct}% de ${typeLabel} en ${storeName}. ${daysLabel}.${cap ? ` Tope: $${cap.toLocaleString('es-AR')}.` : ''}`;
 
           allPromos.push({
             storeName,
@@ -137,7 +140,7 @@ export const PersonalPayScraper: Scraper = {
             description,
             sourceText: `${discountStr} ${typeLabel} ${storeName} ${daysLabel}`,
             sourceUrl: PAGE_URL,
-            discount: String(pct),
+            discount: nxmMatch ? discountStr : String(pct),
             discountType,
             cap: cap ?? null,
             capPeriod: cap ? 'WEEKLY' : undefined,
