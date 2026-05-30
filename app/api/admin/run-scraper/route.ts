@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json()
-    const found = data.found ?? 0
+    const found = data.totalFound ?? data.found ?? 0
     const processed = data.processed ?? 0
 
     await prisma.scraperRun.update({
