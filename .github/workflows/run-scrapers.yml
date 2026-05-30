@@ -98,13 +98,32 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Cache node_modules
+        if: steps.check.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+
+      - name: Cache Playwright browsers
+        if: steps.check.outputs.run == 'true'
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium
+
       - name: Install dependencies
         if: steps.check.outputs.run == 'true'
-        run: npm ci
+        run: npm ci --prefer-offline
 
-      - name: Install Playwright
-        if: steps.check.outputs.run == 'true'
+      - name: Install Playwright + deps del sistema
+        if: steps.check.outputs.run == 'true' && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
+
+      - name: Install solo deps del sistema (browser ya cacheado)
+        if: steps.check.outputs.run == 'true' && steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Install Xvfb
         if: steps.check.outputs.run == 'true'
