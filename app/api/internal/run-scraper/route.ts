@@ -11,7 +11,6 @@ function computeNextRun(schedule: { frequency: string; dayOfWeek?: number | null
   const now = new Date()
   const next = new Date(now)
   next.setUTCMinutes(0, 0, 0)
-
   if (schedule.frequency === 'daily') {
     next.setUTCHours(schedule.hour)
     if (next <= now) next.setUTCDate(next.getUTCDate() + 1)
@@ -21,12 +20,10 @@ function computeNextRun(schedule: { frequency: string; dayOfWeek?: number | null
     const diff = (dow - next.getUTCDay() + 7) % 7 || 7
     next.setUTCDate(next.getUTCDate() + diff)
   } else if (schedule.frequency === 'monthly') {
-    const dom = schedule.dayOfMonth ?? 1
     next.setUTCHours(schedule.hour)
-    next.setUTCDate(dom)
+    next.setUTCDate(schedule.dayOfMonth ?? 1)
     if (next <= now) next.setUTCMonth(next.getUTCMonth() + 1)
   }
-
   return next
 }
 
@@ -39,37 +36,34 @@ export async function POST(request: Request) {
   const { scraperId } = await request.json() as { scraperId: string }
   if (!scraperId) return NextResponse.json({ error: 'Missing scraperId' }, { status: 400 })
 
-  const scraper = scrapers[scraperId]
-  if (!scraper) return NextResponse.json({ error: `Scraper "${scraperId}" not found` }, { status: 404 })
+  if (!scrapers[scraperId]) {
+    return NextResponse.json({ error: `Scraper "${scraperId}" not found` }, { status: 404 })
+  }
 
-  // Registrar inicio del run
-  const run = await prisma.scraperRun.create({
-    data: { scraperId, status: 'running' }
-  })
+  const run = await prisma.scraperRun.create({ data: { scraperId, status: 'running' } })
 
   try {
-    const promos = await scraper.run()
-    let processed = 0
-
-    for (const promo of promos) {
-      try {
-        // Usar la misma lógica de upsert que el endpoint de scrape admin
-        await prisma.promo.upsert({
-          where: { slug: promo.slug ?? `${scraperId}-${Date.now()}-${processed}` },
-          update: { ...promo, updatedAt: new Date() },
-          create: promo as any,
-        })
-        processed++
-      } catch {}
-    }
-
-    // Actualizar run como exitoso
-    await prisma.scraperRun.update({
-      where: { id: run.id },
-      data: { status: 'success', finishedAt: new Date(), found: promos.length, processed }
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://promoar.vercel.app'
+    const res = await fetch(`${baseUrl}/api/admin/scrape`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scraper: scraperId }),
     })
 
-    // Calcular próximo run
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`Scrape API error ${res.status}: ${text.slice(0, 200)}`)
+    }
+
+    const data = await res.json()
+    const found = data.totalFound ?? data.found ?? 0
+    const processed = data.processed ?? 0
+
+    await prisma.scraperRun.update({
+      where: { id: run.id },
+      data: { status: 'success', finishedAt: new Date(), found, processed }
+    })
+
     const schedule = await prisma.scraperSchedule.findUnique({ where: { scraperId } })
     if (schedule && schedule.frequency !== 'manual') {
       await prisma.scraperSchedule.update({
@@ -78,7 +72,7 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json({ ok: true, found: promos.length, processed })
+    return NextResponse.json({ ok: true, found, processed })
   } catch (e: any) {
     await prisma.scraperRun.update({
       where: { id: run.id },
