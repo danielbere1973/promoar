@@ -27,24 +27,31 @@ export async function POST(req: NextRequest) {
   try {
     let scraperFilter: string | undefined;
     let categoriaFilter: string | undefined;
+    let preScrapedPromos: any[] | undefined;
     try {
       const body = await req.json();
       scraperFilter = body.scraper;
       categoriaFilter = body.categoria;
+      preScrapedPromos = body.promos; // promos pre-scrapeadas desde GitHub Actions
     } catch { /* body vacío */ }
 
-    const scrapersToRun = ALL_SCRAPERS.filter(s =>
-      !scraperFilter || s.name.toLowerCase() === scraperFilter.toLowerCase()
-    );
-
-    console.log(`[Scrape] Corriendo: ${scrapersToRun.map(s => s.name).join(', ')}${categoriaFilter ? ` | Categoría: ${categoriaFilter}` : ''}`);
-
     const flatPromos: any[] = [];
-    for (const scraper of scrapersToRun) {
-      const result = await (scraper as any).run(categoriaFilter);
-      flatPromos.push(...result);
+
+    if (preScrapedPromos?.length) {
+      // Promos enviadas externamente (scrapers Playwright desde GitHub Actions)
+      flatPromos.push(...preScrapedPromos);
+      console.log(`[Scrape] Procesando ${flatPromos.length} promos pre-scrapeadas`);
+    } else {
+      const scrapersToRun = ALL_SCRAPERS.filter(s =>
+        !scraperFilter || s.name.toLowerCase() === scraperFilter.toLowerCase()
+      );
+      console.log(`[Scrape] Corriendo: ${scrapersToRun.map(s => s.name).join(', ')}${categoriaFilter ? ` | Categoría: ${categoriaFilter}` : ''}`);
+      for (const scraper of scrapersToRun) {
+        const result = await (scraper as any).run(categoriaFilter);
+        flatPromos.push(...result);
+      }
+      console.log(`[Scrape] Total promos encontradas: ${flatPromos.length}`);
     }
-    console.log(`[Scrape] Total promos encontradas: ${flatPromos.length}`);
 
     // ── AGRUPACIÓN: title + sourceUrl → 1 Promo con N Requirements ───────────
     // Permite que "30% reintegro + 6 CSI" del mismo comercio genere

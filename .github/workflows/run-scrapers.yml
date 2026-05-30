@@ -9,31 +9,118 @@ on:
         description: 'ID del scraper a ejecutar (vacío = todos los programados)'
         required: false
 
+env:
+  # Scrapers que usan Playwright (necesitan browser local)
+  PLAYWRIGHT_SCRAPERS: "amex,cabal,changomas,banco galicia,icbc,banco macro,naranjax,banco provincia,banco santander,banco supervielle,banco ciudad,visa"
+
 jobs:
-  run:
+  run-http:
     runs-on: ubuntu-latest
+    name: Scrapers HTTP
     steps:
-      - name: Obtener scrapers a ejecutar
+      - name: Obtener scrapers HTTP a ejecutar
         id: get-scrapers
         run: |
           if [ -n "${{ github.event.inputs.scraper_id }}" ]; then
-            echo "scrapers=${{ github.event.inputs.scraper_id }}" >> $GITHUB_OUTPUT
+            SCRAPER="${{ github.event.inputs.scraper_id }}"
+            # Verificar si es Playwright
+            if echo "$PLAYWRIGHT_SCRAPERS" | grep -qi "$SCRAPER"; then
+              echo "scrapers=" >> $GITHUB_OUTPUT
+            else
+              echo "scrapers=$SCRAPER" >> $GITHUB_OUTPUT
+            fi
           else
             RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" "${{ secrets.API_URL }}/api/internal/scrapers-due")
-            SCRAPERS=$(echo $RESPONSE | python3 -c "import sys,json; print(','.join(json.load(sys.stdin)['scrapers']))")
-            echo "scrapers=$SCRAPERS" >> $GITHUB_OUTPUT
+            ALL=$(echo $RESPONSE | python3 -c "import sys,json; print(','.join(json.load(sys.stdin)['scrapers']))" 2>/dev/null || echo "")
+            # Filtrar solo los HTTP
+            HTTP=""
+            IFS=',' read -ra LIST <<< "$ALL"
+            for S in "${LIST[@]}"; do
+              if ! echo "$PLAYWRIGHT_SCRAPERS" | grep -qi "$S"; then
+                HTTP="${HTTP}${HTTP:+,}${S}"
+              fi
+            done
+            echo "scrapers=$HTTP" >> $GITHUB_OUTPUT
           fi
 
-      - name: Ejecutar scrapers
+      - name: Ejecutar scrapers HTTP
         if: steps.get-scrapers.outputs.scrapers != ''
         run: |
           IFS=',' read -ra SCRAPER_LIST <<< "${{ steps.get-scrapers.outputs.scrapers }}"
           for SCRAPER in "${SCRAPER_LIST[@]}"; do
-            echo "Ejecutando: $SCRAPER"
+            echo "Ejecutando HTTP: $SCRAPER"
             curl -s -X POST \
               -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" \
               -H "Content-Type: application/json" \
               -d "{\"scraperId\":\"$SCRAPER\"}" \
               "${{ secrets.API_URL }}/api/internal/run-scraper"
             echo ""
+          done
+
+  run-playwright:
+    runs-on: ubuntu-latest
+    name: Scrapers Playwright
+    steps:
+      - name: Verificar si hay scrapers Playwright a ejecutar
+        id: check
+        run: |
+          if [ -n "${{ github.event.inputs.scraper_id }}" ]; then
+            SCRAPER="${{ github.event.inputs.scraper_id }}"
+            if echo "$PLAYWRIGHT_SCRAPERS" | grep -qi "$SCRAPER"; then
+              echo "run=true" >> $GITHUB_OUTPUT
+              echo "scraper=$SCRAPER" >> $GITHUB_OUTPUT
+            else
+              echo "run=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" "${{ secrets.API_URL }}/api/internal/scrapers-due")
+            ALL=$(echo $RESPONSE | python3 -c "import sys,json; print(','.join(json.load(sys.stdin)['scrapers']))" 2>/dev/null || echo "")
+            PW=""
+            IFS=',' read -ra LIST <<< "$ALL"
+            for S in "${LIST[@]}"; do
+              if echo "$PLAYWRIGHT_SCRAPERS" | grep -qi "$S"; then
+                PW="${PW}${PW:+,}${S}"
+              fi
+            done
+            if [ -n "$PW" ]; then
+              echo "run=true" >> $GITHUB_OUTPUT
+              echo "scraper=$PW" >> $GITHUB_OUTPUT
+            else
+              echo "run=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.run == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.run == 'true'
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        if: steps.check.outputs.run == 'true'
+        run: npm ci
+
+      - name: Install Playwright
+        if: steps.check.outputs.run == 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Xvfb
+        if: steps.check.outputs.run == 'true'
+        run: sudo apt-get install -y xvfb
+
+      - name: Ejecutar scrapers Playwright
+        if: steps.check.outputs.run == 'true'
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
+          DISPLAY: ':99'
+        run: |
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          IFS=',' read -ra SCRAPER_LIST <<< "${{ steps.check.outputs.scraper }}"
+          for SCRAPER in "${SCRAPER_LIST[@]}"; do
+            echo "Ejecutando Playwright: $SCRAPER"
+            npx tsx scripts/run-playwright-scraper.ts "$SCRAPER"
           done
