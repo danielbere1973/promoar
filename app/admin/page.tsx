@@ -2113,6 +2113,7 @@ function CleanupTab({ commerces }: { commerces: { id: string; name: string }[] }
           <h3 className="text-sm font-bold text-slate-700">Borrar por comercio</h3>
         </div>
         <select value={selectedCommerce} onChange={e => setSelectedCommerce(e.target.value)}
+          style={{ colorScheme: 'light' }}
           className="w-full bg-white border border-slate-200 text-sm font-medium text-slate-800 px-4 py-2.5 rounded-xl outline-none">
           <option value="">Seleccioná un comercio...</option>
           {commerces.map(c => (
@@ -2133,6 +2134,7 @@ function CleanupTab({ commerces }: { commerces: { id: string; name: string }[] }
           <h3 className="text-sm font-bold text-slate-700">Borrar por scraper</h3>
         </div>
         <select value={selectedSource} onChange={e => setSelectedSource(e.target.value)}
+          style={{ colorScheme: 'light' }}
           className="w-full bg-white border border-slate-200 text-sm font-medium text-slate-800 px-4 py-2.5 rounded-xl outline-none">
           <option value="">Seleccioná un scraper...</option>
           {SOURCE_LABELS.map(s => (
