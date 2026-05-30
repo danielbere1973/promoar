@@ -37,13 +37,13 @@ interface CartRow {
   ean: string
   name: string
   imageUrl: string
-  quantity: number // cantidad usada para comparar (máximo de los requiredQty)
+  quantity: number
   markets: Record<string, {
-    price: number
-    finalPrice: number
-    effectivePrice: number // precio efectivo por unidad con promo aplicada
+    price: number         // precio de lista
+    finalPrice: number    // precio sin promo multiunit
+    effectivePrice: number // precio por unidad CON promo activa
     promoLabel?: string
-    promoQty?: number // unidades requeridas para activar la promo
+    promoQty?: number     // unidades requeridas para activar la promo
     url: string
   }>
 }
@@ -146,22 +146,15 @@ export default function PreciosPage() {
   }
 
   const addToCart = (product: GroupedProduct) => {
-    // Calcular cantidad óptima: máximo requiredQty entre todos los supermercados
-    const maxQty = Math.max(...Object.values(product.markets).map(m => m.multiUnitPromo?.requiredQty ?? 1))
-
-    // Construir datos por supermercado
+    // Construir datos por supermercado — precios base, la promo se activa dinámicamente según cantidad
     const marketsData: CartRow['markets'] = {}
     for (const [name, m] of Object.entries(product.markets)) {
-      const promoQty = m.multiUnitPromo?.requiredQty ?? 1
-      let effectivePrice = m.finalPrice
-      if (m.multiUnitPromo && maxQty >= promoQty) {
-        effectivePrice = m.multiUnitPromo.effectivePrice
-      }
+      const hasDiscount = m.price > m.finalPrice || m.multiUnitPromo
       marketsData[name] = {
         price: m.price,
         finalPrice: m.finalPrice,
-        effectivePrice,
-        promoLabel: m.multiUnitPromo?.label,
+        effectivePrice: m.multiUnitPromo ? m.multiUnitPromo.effectivePrice : m.finalPrice,
+        promoLabel: m.multiUnitPromo?.label || (hasDiscount && m.discountText !== '-' ? m.discountText : undefined),
         promoQty: m.multiUnitPromo?.requiredQty,
         url: m.url,
       }
@@ -170,12 +163,12 @@ export default function PreciosPage() {
     setCart(prev => {
       const existing = prev.find(r => r.ean === product.ean)
       if (existing) {
-        return prev.map(r => r.ean === product.ean ? { ...r, quantity: r.quantity + maxQty, markets: marketsData } : r)
+        return prev.map(r => r.ean === product.ean ? { ...r, quantity: r.quantity + 1, markets: marketsData } : r)
       }
-      return [...prev, { ean: product.ean, name: product.name, imageUrl: product.imageUrl, quantity: maxQty, markets: marketsData }]
+      return [...prev, { ean: product.ean, name: product.name, imageUrl: product.imageUrl, quantity: 1, markets: marketsData }]
     })
 
-    showToast(`${product.name.slice(0, 30)}... agregado (${maxQty} ud.)`)
+    showToast(`${product.name.slice(0, 30)}... agregado al carrito`)
     setIsCartOpen(true)
   }
 
@@ -188,12 +181,16 @@ export default function PreciosPage() {
 
   const removeFromCart = (ean: string) => setCart(prev => prev.filter(r => r.ean !== ean))
 
+  // Precio efectivo por unidad según cantidad: activa la promo si se cumple la condición
+  const getEffectivePrice = (m: CartRow['markets'][string], qty: number): number =>
+    (m.promoQty && qty >= m.promoQty) ? m.effectivePrice : m.finalPrice
+
   // Totales por supermercado considerando los productos disponibles en cada uno
   const allMarkets = [...new Set(cart.flatMap(r => Object.keys(r.markets)))]
   const cartTotals = allMarkets.reduce((acc, market) => {
     acc[market] = cart.reduce((sum, row) => {
       const m = row.markets[market]
-      return m ? sum + m.effectivePrice * row.quantity : sum
+      return m ? sum + getEffectivePrice(m, row.quantity) * row.quantity : sum
     }, 0)
     return acc
   }, {} as Record<string, number>)
@@ -345,12 +342,21 @@ export default function PreciosPage() {
                         </div>
                       )}
 
-                      <button
-                        onClick={() => setSelectedProduct(p)}
-                        className="mt-auto w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition-colors"
-                      >
-                        Ver precios en todos los supers
-                      </button>
+                      <div className="mt-auto flex gap-2">
+                        <button
+                          onClick={() => setSelectedProduct(p)}
+                          className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition-colors"
+                        >
+                          Ver precios
+                        </button>
+                        <button
+                          onClick={() => addToCart(p)}
+                          className="w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center transition-colors flex-shrink-0"
+                          title="Agregar al carrito"
+                        >
+                          <Plus className="w-5 h-5 text-white" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -364,7 +370,7 @@ export default function PreciosPage() {
       {selectedProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedProduct(null)} />
-          <div className="relative w-full max-w-md bg-[#111111] border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-md bg-[#111111] border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             {/* Header del modal */}
             <div className="p-5 border-b border-white/10 flex items-start gap-4">
               <div className="w-16 h-16 bg-white rounded-xl p-1 flex-shrink-0">
@@ -381,7 +387,7 @@ export default function PreciosPage() {
             </div>
 
             {/* Lista de supers */}
-            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
+            <div className="p-3 space-y-1.5 overflow-y-auto flex-1">
               {(() => {
                 const modalBestPromo = getBestPromo(selectedProduct.markets, selectedProduct.minPrice)
                 const overallWinner = modalBestPromo && modalBestPromo.promo.effectivePrice < selectedProduct.minPrice
@@ -545,15 +551,20 @@ export default function PreciosPage() {
                         if (!m) return (
                           <td key={market} className="p-4 text-center text-slate-600 text-xs">—</td>
                         )
-                        const totalLine = m.effectivePrice * row.quantity
+                        const promoActiva = m.promoQty ? row.quantity >= m.promoQty : false
+                        const precioUnit = getEffectivePrice(m, row.quantity)
+                        const totalLine = precioUnit * row.quantity
+                        const faltanParaPromo = m.promoQty && !promoActiva ? m.promoQty - row.quantity : 0
                         return (
                           <td key={market} className={`p-3 text-center ${isBest ? 'bg-emerald-500/5' : ''}`}>
-                            {m.price > m.effectivePrice && (
+                            {m.price > precioUnit && (
                               <p className="text-[10px] text-slate-500 line-through">{formatPrice(m.price)}</p>
                             )}
-                            <p className={`text-sm font-bold ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(m.effectivePrice)}</p>
+                            <p className={`text-sm font-bold ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(precioUnit)}</p>
                             {m.promoLabel && (
-                              <p className="text-[9px] text-orange-400 font-bold mt-0.5">🔥 {m.promoLabel}</p>
+                              <p className={`text-[9px] font-bold mt-0.5 ${promoActiva ? 'text-orange-400' : 'text-amber-500/60'}`}>
+                                🔥 {m.promoLabel}{!promoActiva && faltanParaPromo > 0 ? ` (+${faltanParaPromo})` : ''}
+                              </p>
                             )}
                             <p className="text-[10px] text-slate-500 mt-1">{formatPrice(totalLine)}</p>
                           </td>
