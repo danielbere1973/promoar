@@ -2026,7 +2026,7 @@ const SOURCE_LABELS: { label: string; value: string }[] = [
   { label: 'Disco',        value: 'disco.com.ar' },
   { label: 'Vea',          value: 'vea.com.ar' },
   { label: 'Carrefour',    value: 'carrefour.com.ar' },
-  { label: 'ChangoMás',    value: 'changomas.com.ar' },
+  { label: 'ChangoMás',    value: 'masonline.com.ar' },
   { label: 'Diarco',       value: 'diarco.com.ar' },
   { label: 'DIA',          value: 'supermercadosdia.com.ar' },
   { label: 'MODO',         value: 'modo.com.ar' },
