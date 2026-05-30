@@ -1371,7 +1371,7 @@ export default function AdminPage() {
                   {entities && subTab === 'cardSegments' && (entities.cardSegments?.length === 0 ? <EmptyState msg="No hay segmentos de tarjeta configurados" /> : (entities.cardSegments || []).map(cs => (
                     <EntityRow
                       key={cs.id}
-                      name={`${cs.cardNetwork.name} ${cs.name}`}
+                      name={`${cs.cardNetwork.name} ${cs.cardType === 'CREDIT' ? 'Crédito' : cs.cardType === 'DEBIT' ? 'Débito' : 'Prepaga'} ${cs.name}`}
                       onEdit={() => setEditingEntity({ type: 'cardSegment', ...cs, cardNetworkId: cs.cardNetworkId, cardType: cs.cardType })}
                       onDelete={() => handleDeleteEntity('cardSegment', cs.id)}
                     />
