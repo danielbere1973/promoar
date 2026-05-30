@@ -160,12 +160,12 @@ export async function PUT(req: Request) {
         logoUrl: data.logoUrl,
         active: data.active,
       }
-      if (data.cardNetworkIds) {
+      if (data.cardNetworkIds?.length) {
         updateData.cardNetworks = {
           set: data.cardNetworkIds.map((cid: string) => ({ id: cid }))
         }
       }
-      if (data.cardSegmentIds) {
+      if (data.cardSegmentIds?.length) {
         updateData.cardSegments = {
           set: data.cardSegmentIds.map((csid: string) => ({ id: csid }))
         }
@@ -183,7 +183,7 @@ export async function PUT(req: Request) {
         logoUrl: data.logoUrl,
         active: data.active,
       }
-      if (data.cardNetworkIds) {
+      if (data.cardNetworkIds?.length) {
         updateData.cardNetworks = {
           set: data.cardNetworkIds.map((cid: string) => ({ id: cid }))
         }
