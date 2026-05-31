@@ -477,6 +477,8 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         url: productUrl || baseUrl,
         multiUnitPromo,
         primePromo,
+        vtexCategoryId: p.categoriesIds?.[0] || p.categoryId || '',
+        vtexCategory: p.categories?.[0] || '',
       }
     }).filter(Boolean) as NormalizedProduct[]
 

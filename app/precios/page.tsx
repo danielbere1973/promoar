@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Search, ShoppingCart, Loader2, Store, Plus, Minus, Trash2, ArrowRight, X, ExternalLink } from 'lucide-react'
 import CategorySelector from './CategorySelector'
 
@@ -19,6 +19,8 @@ interface MarketProduct {
   url: string
   multiUnitPromo?: MultiUnitPromo
   primePromo?: MultiUnitPromo
+  vtexCategoryId?: string
+  vtexCategory?: string
 }
 
 interface GroupedProduct {
@@ -38,12 +40,15 @@ interface CartRow {
   name: string
   imageUrl: string
   quantity: number
+  vtexCategoryId?: string
+  vtexCategory?: string
+  searchQuery?: string  // búsqueda original para encontrar similares
   markets: Record<string, {
-    price: number         // precio de lista
-    finalPrice: number    // precio sin promo multiunit
-    effectivePrice: number // precio por unidad CON promo activa
+    price: number
+    finalPrice: number
+    effectivePrice: number
     promoLabel?: string
-    promoQty?: number     // unidades requeridas para activar la promo
+    promoQty?: number
     url: string
   }>
 }
@@ -54,6 +59,9 @@ interface Toast {
 }
 
 const formatPrice = (p: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(p)
+
+const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'DIA']
+const ALL_SUPERMARKETS_FARMA = ['Farmacity', 'Farmaplus', 'OpenFarma']
 
 const SUPERMARKET_COLORS: Record<string, string> = {
   'Coto': 'bg-red-500 text-white',
@@ -100,6 +108,108 @@ function getBestPromo(markets: Record<string, MarketProduct>, minRegularPrice: n
     }
   }
   return best
+}
+
+function SimilarProductModal({ ean, market, catId, excludeEan, cartRow, onSelect, onClose }: {
+  ean: string
+  market: string
+  catId: string
+  excludeEan: string
+  cartRow: CartRow
+  onSelect: (market: string, item: { ean: string; name: string; price: number; imageUrl: string; url: string }) => void
+  onClose: () => void
+}) {
+  const [results, setResults] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const [query, setQuery] = useState('')
+
+  const doSearch = async (q: string) => {
+    if (q.length < 3) { setResults([]); return }
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/precios/search?q=${encodeURIComponent(q)}&section=supermercados`)
+      const data = await res.json()
+      const filtered = (data.results || [])
+        .filter((p: any) => p.markets?.[market] && p.ean !== excludeEan)
+        .map((p: any) => ({
+          ean: p.ean,
+          name: p.name,
+          brand: p.brand,
+          price: p.markets[market].finalPrice,
+          imageUrl: p.imageUrl,
+          url: p.markets[market].url || '',
+        }))
+      setResults(filtered)
+    } catch {}
+    setLoading(false)
+  }
+
+  // No búsqueda automática al abrir — el usuario escribe lo que quiere
+
+  useEffect(() => {
+    const timer = setTimeout(() => doSearch(query), 400)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const filtered = results
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-[#111111] border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+          <div>
+            <p className="text-sm font-bold text-white">Buscar similar en {market}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Reemplaza "{cartRow.name.slice(0, 40)}..."</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-3 shrink-0">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Ej: leche, jabón, galletitas..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              autoFocus
+              className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm text-white outline-none focus:border-indigo-500/50"
+            />
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1">Mostrando productos disponibles en {market}</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {loading ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-indigo-400" /></div>
+          ) : filtered.length === 0 && query.length >= 3 ? (
+            <p className="text-center text-slate-500 py-10 text-sm">No hay "{query}" en {market} — probá con otro término</p>
+          ) : query.length < 3 ? (
+            <p className="text-center text-slate-500 py-10 text-sm">Escribí al menos 3 letras</p>
+          ) : (
+            filtered.map(item => (
+              <button
+                key={item.ean || item.itemId}
+                onClick={() => onSelect(market, { ean: item.ean, name: item.name, price: item.price, imageUrl: item.imageUrl, url: '' })}
+                className="w-full flex items-center gap-3 p-3 bg-[#1A1A1A] hover:bg-[#222] border border-white/5 hover:border-indigo-500/30 rounded-xl transition-colors text-left"
+              >
+                <div className="w-12 h-12 bg-white rounded-lg p-1 shrink-0">
+                  <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain mix-blend-multiply" onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/48x48/eee/999?text=?' }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-200 line-clamp-2 leading-tight">{item.name}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{item.brand}</p>
+                </div>
+                <p className="text-sm font-black text-white shrink-0">{formatPrice(item.price)}</p>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffectivePrice, updateQuantity, removeFromCart }: {
@@ -250,8 +360,20 @@ export default function PreciosPage() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<GroupedProduct[]>([])
-  const [cart, setCart] = useState<CartRow[]>([])
+  const [cart, setCart] = useState<CartRow[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const saved = localStorage.getItem('promoar-precios-cart')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [isCartOpen, setIsCartOpen] = useState(false)
+  const [similarSearch, setSimilarSearch] = useState<{ ean: string; market: string; catId: string; excludeEan: string } | null>(null)
+
+  // Persistir carrito en localStorage
+  useEffect(() => {
+    try { localStorage.setItem('promoar-precios-cart', JSON.stringify(cart)) } catch {}
+  }, [cart])
   const [hasSearched, setHasSearched] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<GroupedProduct | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -308,7 +430,18 @@ export default function PreciosPage() {
       if (existing) {
         return prev.map(r => r.ean === product.ean ? { ...r, quantity: r.quantity + 1, markets: marketsData } : r)
       }
-      return [...prev, { ean: product.ean, name: product.name, imageUrl: product.imageUrl, quantity: 1, markets: marketsData }]
+      // Tomar vtexCategoryId del primer mercado que lo tenga
+      const firstMarket = Object.values(product.markets)[0] as any
+      return [...prev, {
+        ean: product.ean,
+        name: product.name,
+        imageUrl: product.imageUrl,
+        quantity: 1,
+        vtexCategoryId: firstMarket?.vtexCategoryId || '',
+        vtexCategory: firstMarket?.vtexCategory || '',
+        searchQuery: query, // guardar la búsqueda original
+        markets: marketsData
+      }]
     })
 
     showToast(`${product.name.slice(0, 30)}... agregado al carrito`)
@@ -324,12 +457,38 @@ export default function PreciosPage() {
 
   const removeFromCart = (ean: string) => setCart(prev => prev.filter(r => r.ean !== ean))
 
+  const replaceMarket = (ean: string, market: string, replacement: {
+    price: number; effectivePrice: number; promoLabel?: string; promoQty?: number; url: string
+  }) => {
+    setCart(prev => prev.map(r => {
+      if (r.ean !== ean) return r
+      return {
+        ...r,
+        markets: {
+          ...r.markets,
+          [market]: {
+            price: replacement.price,
+            finalPrice: replacement.price,
+            effectivePrice: replacement.effectivePrice,
+            promoLabel: replacement.promoLabel,
+            promoQty: replacement.promoQty,
+            url: replacement.url,
+          }
+        }
+      }
+    }))
+  }
+
   // Precio efectivo por unidad según cantidad: activa la promo si se cumple la condición
   const getEffectivePrice = (m: CartRow['markets'][string], qty: number): number =>
     (m.promoQty && qty >= m.promoQty) ? m.effectivePrice : m.finalPrice
 
   // Totales por supermercado considerando los productos disponibles en cada uno
-  const allMarkets = [...new Set(cart.flatMap(r => Object.keys(r.markets)))]
+  // Siempre mostrar todas las columnas de supermercados de la sección activa
+  const baseMarkets = section === 'farmacias' ? ALL_SUPERMARKETS_FARMA : ALL_SUPERMARKETS_SUPER
+  // Agregar cualquier supermercado extra que esté en el carrito pero no en la lista base
+  const cartMarkets = Array.from(new Set(cart.flatMap(r => Object.keys(r.markets))))
+  const allMarkets = Array.from(new Set([...baseMarkets, ...cartMarkets]))
   const cartTotals = allMarkets.reduce((acc, market) => {
     acc[market] = cart.reduce((sum, row) => {
       const m = row.markets[market]
@@ -339,7 +498,7 @@ export default function PreciosPage() {
   }, {} as Record<string, number>)
 
   const cartTotalItems = cart.reduce((acc, r) => acc + r.quantity, 0)
-  const lowestTotalMarket = Object.entries(cartTotals).filter(([, v]) => v > 0).sort(([, a], [, b]) => a - b)[0]?.[0] || ''
+  const lowestTotalMarket = Object.entries(cartTotals).filter(([, v]) => (v as number) > 0).sort(([, a], [, b]) => (a as number) - (b as number))[0]?.[0] || ''
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-slate-100 font-sans selection:bg-indigo-500/30">
@@ -720,7 +879,16 @@ export default function PreciosPage() {
                       {allMarkets.map(market => {
                         const m = row.markets[market]
                         const isBest = market === lowestTotalMarket
-                        if (!m) return <td key={market} className="p-4 text-center text-slate-600 text-xs">—</td>
+                        if (!m) return (
+                          <td key={market} className="p-3 text-center">
+                            <button
+                              onClick={() => setSimilarSearch({ ean: row.ean, market, catId: row.vtexCategoryId || '', excludeEan: row.ean })}
+                              className="text-[10px] text-slate-500 hover:text-indigo-400 transition-colors border border-white/10 hover:border-indigo-500/40 rounded-lg px-2 py-1"
+                            >
+                              + similar
+                            </button>
+                          </td>
+                        )
                         const promoActiva = m.promoQty ? row.quantity >= m.promoQty : false
                         const precioUnit = getEffectivePrice(m, row.quantity)
                         const totalLine = precioUnit * row.quantity
@@ -735,6 +903,12 @@ export default function PreciosPage() {
                               </p>
                             )}
                             <p className="text-[10px] text-slate-500 mt-1">{formatPrice(totalLine)}</p>
+                            <button
+                              onClick={() => setSimilarSearch({ ean: row.ean, market, catId: row.vtexCategoryId || '', excludeEan: row.ean })}
+                              className="text-[9px] text-slate-600 hover:text-indigo-400 transition-colors mt-0.5"
+                            >
+                              ↔ reemplazar
+                            </button>
                           </td>
                         )
                       })}
@@ -750,6 +924,31 @@ export default function PreciosPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal buscar similar */}
+      {similarSearch && (
+        <SimilarProductModal
+          ean={similarSearch.ean}
+          market={similarSearch.market}
+          catId={similarSearch.catId}
+          excludeEan={similarSearch.excludeEan}
+          cartRow={cart.find(r => r.ean === similarSearch.ean)!}
+          onSelect={(market, item) => {
+            replaceMarket(similarSearch.ean, market, {
+              price: item.price,
+              effectivePrice: item.price,
+              url: item.url || '',
+            })
+            // Actualizar nombre e imagen del carrito para ese mercado
+            setCart(prev => prev.map(r => {
+              if (r.ean !== similarSearch.ean) return r
+              return { ...r, name: item.name, imageUrl: item.imageUrl, ean: item.ean }
+            }))
+            setSimilarSearch(null)
+          }}
+          onClose={() => setSimilarSearch(null)}
+        />
       )}
     </div>
   )
