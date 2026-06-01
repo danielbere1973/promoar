@@ -239,7 +239,7 @@ export const SantanderScraper: Scraper = {
         await Promise.all(batch.map(async (id) => {
           try {
             const res = await context.request.get(`${BFF_BASE}/brands/${id}`, {
-              headers: { 'Accept': 'application/json', 'Referer': PAGE_URL },
+              headers: { ...bffHeaders, 'Accept': 'application/json', 'Referer': PAGE_URL },
               timeout: 10000,
             });
             if (!res.ok()) return;

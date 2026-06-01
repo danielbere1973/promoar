@@ -15,7 +15,7 @@ import { extractCap } from './cencosud-helpers';
 const PAGE_URL    = 'https://www.macro.com.ar/beneficios?d=Any';
 const DETAIL_BASE = 'https://apipublic.macro.com.ar/v1/card-benefits';
 const BANK_NAME   = 'Banco Macro';
-const PAGE_WAIT   = 4000;  // ms entre páginas para que cargue la API
+const PAGE_WAIT   = 6000;  // ms entre páginas para que cargue la API (más tiempo en CI)
 
 
 // ─── Mapeo de sector → categoría ─────────────────────────────────────────────
@@ -365,7 +365,7 @@ export const MacroScraper: Scraper = {
       // Esperar a que el catálogo cargue (primer batch de códigos) antes de paginar
       console.log('[Macro] Esperando primer batch del catálogo...');
       const waitStart = Date.now();
-      while (capturedCodes.size === 0 && Date.now() - waitStart < 20000) {
+      while (capturedCodes.size === 0 && Date.now() - waitStart < 45000) {
         await page.waitForTimeout(500);
       }
       if (capturedCodes.size === 0) {
