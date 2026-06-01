@@ -95,6 +95,289 @@ function isRelevantForQuery(productName: string, query: string): boolean {
 }
 
 // ---------------------------------------------------------
+// VTEX CATALOG SIMPLE (Frávega, Naldo, Coppel)
+// ---------------------------------------------------------
+async function searchVtexCatalog(query: string, supermarket: string, baseUrl: string): Promise<NormalizedProduct[]> {
+  try {
+    const url = `${baseUrl}/api/catalog_system/pub/products/search?ft=${encodeURIComponent(query)}&_from=0&_to=14`
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'es-AR,es;q=0.9',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+
+    return data.flatMap((p: any) => {
+      return (p.items || []).map((item: any) => {
+        const offer = item.sellers?.[0]?.commertialOffer || {}
+        const price = offer.Price || 0
+        const listPrice = offer.ListPrice || price
+        if (!price || (offer.AvailableQuantity || 0) <= 0) return null
+
+        let discountText = '-'
+        if (listPrice > price) {
+          const pct = Math.round((1 - price / listPrice) * 100)
+          if (pct > 0) discountText = `${pct}% OFF`
+        }
+
+        const slug = supermarket.toLowerCase().replace(/\s/g, '')
+        return {
+          ean: String(item.ean || ''),
+          id: `${slug}-${item.itemId || p.productId}`,
+          supermarket,
+          name: p.productName || 'Sin nombre',
+          brand: p.brand || '-',
+          price: listPrice,
+          finalPrice: price,
+          discountText,
+          imageUrl: item.images?.[0]?.imageUrl || '',
+          url: p.linkText ? `${baseUrl}/${p.linkText}/p` : baseUrl,
+          multiUnitPromo: parseMultiUnitPromo(discountText, listPrice),
+          vtexCategoryId: p.categoriesIds?.[0] || p.categoryId || '',
+          vtexCategory: p.categories?.[0] || '',
+        }
+      }).filter(Boolean)
+    }) as NormalizedProduct[]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------
+// EASY (VTEX IO Intelligent Search)
+// ---------------------------------------------------------
+async function searchEasy(query: string): Promise<NormalizedProduct[]> {
+  try {
+    const url = `https://www.easy.com.ar/api/io/_v/api/intelligent-search/product_search?query=${encodeURIComponent(query)}&count=15`
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'es-AR,es;q=0.9',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    const products = data.products || []
+
+    return products.flatMap((p: any) => {
+      const item = p.items?.[0] || {}
+      const offer = item.sellers?.[0]?.commertialOffer || {}
+      const price = offer.Price || 0
+      const listPrice = offer.ListPrice || price
+      if (!price || (offer.AvailableQuantity || 0) <= 0) return []
+
+      let discountText = '-'
+      const highlights = offer.discountHighlights || []
+      const teasers = offer.Teasers?.map((t: any) => t.Name) || []
+      const promos = [...highlights.map((h: any) => h.name), ...teasers].filter(Boolean)
+      if (listPrice > price) {
+        const pct = Math.round((1 - price / listPrice) * 100)
+        if (pct > 0) promos.unshift(`${pct}% OFF`)
+      }
+      if (promos.length > 0) discountText = promos[0]
+
+      return [{
+        ean: String(item.ean || ''),
+        id: `easy-${item.itemId || p.productId}`,
+        supermarket: 'Easy',
+        name: p.productName || 'Sin nombre',
+        brand: p.brand || '-',
+        price: listPrice,
+        finalPrice: price,
+        discountText,
+        imageUrl: item.images?.[0]?.imageUrl || '',
+        url: p.linkText ? `https://www.easy.com.ar/${p.linkText}/p` : 'https://www.easy.com.ar',
+        multiUnitPromo: parseMultiUnitPromo(discountText, listPrice),
+        vtexCategoryId: p.categoriesIds?.[0] || p.categoryId || '',
+        vtexCategory: p.categories?.[0] || '',
+      }]
+    }) as NormalizedProduct[]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------
+// MERCADOLIBRE (OAuth client credentials)
+// ---------------------------------------------------------
+let mlTokenCache: { token: string; expiresAt: number } | null = null
+
+async function getMlToken(): Promise<string | null> {
+  // Usar access token en cache si no expiró
+  if (mlTokenCache && Date.now() < mlTokenCache.expiresAt) return mlTokenCache.token
+
+  // Usar access token del env si todavía es válido (bootstrapping)
+  const envToken = process.env.ML_ACCESS_TOKEN
+  if (envToken && !mlTokenCache) {
+    mlTokenCache = { token: envToken, expiresAt: Date.now() + 5 * 60 * 60 * 1000 } // asumir 5h
+    return envToken
+  }
+
+  // Renovar con refresh token
+  const clientId = process.env.ML_CLIENT_ID
+  const clientSecret = process.env.ML_CLIENT_SECRET
+  const refreshToken = process.env.ML_REFRESH_TOKEN
+  if (!clientId || !clientSecret || !refreshToken) return null
+
+  try {
+    const res = await fetch('https://api.mercadolibre.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return envToken || null
+    const data = await res.json()
+    mlTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 300) * 1000 }
+    return data.access_token
+  } catch { return envToken || null }
+}
+
+async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
+  try {
+    const token = await getMlToken()
+    if (!token) return []
+    const url = `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=50&condition=new`
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    const items: any[] = data.results || []
+
+    // Agrupar por EAN (cuando está disponible) o por título normalizado
+    // Para ML mostramos el precio más bajo de cada producto único
+    const seen = new Map<string, any>()
+
+    for (const item of items) {
+      if (item.condition !== 'new') continue
+      const price = item.price || 0
+      if (!price) continue
+
+      // Clave de agrupación: EAN si existe, sino título normalizado
+      const titleKey = item.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40)
+      const key = titleKey
+
+      const existing = seen.get(key)
+      // Preferir tienda oficial, y dentro de cada tipo el más barato
+      const isOfficial = !!item.official_store_name
+      const existingIsOfficial = existing ? !!existing.official_store_name : false
+
+      if (!existing ||
+          (isOfficial && !existingIsOfficial) ||
+          (isOfficial === existingIsOfficial && price < existing.price)) {
+        seen.set(key, item)
+      }
+    }
+
+    return Array.from(seen.values()).slice(0, 20).map((item: any) => {
+      const price = item.price || 0
+      const originalPrice = item.original_price || price
+      let discountText = '-'
+      if (originalPrice > price) {
+        const pct = Math.round((1 - price / originalPrice) * 100)
+        if (pct > 0) discountText = `${pct}% OFF`
+      }
+
+      const storeName = item.official_store_name
+        ? `ML · ${item.official_store_name}`
+        : 'MercadoLibre'
+
+      return {
+        ean: '',
+        id: `ml-${item.id}`,
+        supermarket: storeName,
+        name: item.title || 'Sin nombre',
+        brand: '-',
+        price: originalPrice,
+        finalPrice: price,
+        discountText,
+        imageUrl: (item.thumbnail || '').replace('I.jpg', 'O.jpg'), // imagen más grande
+        url: item.permalink || 'https://www.mercadolibre.com.ar',
+        multiUnitPromo: undefined,
+      }
+    }) as NormalizedProduct[]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------
+// RODO (Magento GraphQL)
+// ---------------------------------------------------------
+async function searchRodo(query: string): Promise<NormalizedProduct[]> {
+  try {
+    const gql = `{
+      products(search: "${query.replace(/"/g, '')}", pageSize: 15) {
+        items {
+          name
+          sku
+          url_key
+          price { regularPrice { amount { value } } }
+          special_price
+          small_image { url }
+        }
+      }
+    }`
+
+    const res = await fetch('https://www.rodo.com.ar/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      },
+      body: JSON.stringify({ query: gql }),
+      signal: AbortSignal.timeout(8000),
+      cache: 'no-store',
+    })
+    if (!res.ok) return []
+
+    const data = await res.json()
+    const items = data?.data?.products?.items || []
+
+    return items.map((item: any) => {
+      const listPrice = item.price?.regularPrice?.amount?.value || 0
+      const finalPrice = item.special_price || listPrice
+      if (!listPrice) return null
+
+      let discountText = '-'
+      if (listPrice > finalPrice) {
+        const pct = Math.round((1 - finalPrice / listPrice) * 100)
+        if (pct > 0) discountText = `${pct}% OFF`
+      }
+
+      return {
+        ean: '',
+        id: `rodo-${item.sku}`,
+        supermarket: 'Rodo',
+        name: item.name || 'Sin nombre',
+        brand: '-',
+        price: listPrice,
+        finalPrice,
+        discountText,
+        imageUrl: item.small_image?.url || '',
+        url: item.url_key ? `https://www.rodo.com.ar/${item.url_key}` : 'https://www.rodo.com.ar',
+        multiUnitPromo: parseMultiUnitPromo(discountText, listPrice),
+      }
+    }).filter(Boolean) as NormalizedProduct[]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------
 // COTO (BFF API - Includes EAN)
 // ---------------------------------------------------------
 async function searchCoto(query: string, isCategory = false): Promise<NormalizedProduct[]> {
@@ -725,6 +1008,7 @@ export async function GET(request: Request) {
 
   const isSuper = section === 'supermercados'
   const isFarma = section === 'farmacias'
+  const isElectro = section === 'electrónica'
 
   try {
     let cotoQ = q || '', carrQ = q || '', cencoQ = q || '', diaQ = q || '', walmartQ = q || '', farmaQ = q || ''
@@ -763,6 +1047,27 @@ export async function GET(request: Request) {
         walmartQ ? searchVtexIS(walmartQ, false, 'Changomas', 'https://www.changomas.com.ar', vtexMap) : Promise.resolve([]),
       ])
       allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas]
+    }
+
+    if (isElectro) {
+      const [fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia] = await Promise.all([
+        q ? searchVtexCatalog(q, 'Frávega', 'https://www.fravega.com') : Promise.resolve([]),
+        q ? searchVtexCatalog(q, 'Naldo', 'https://www.naldo.com.ar') : Promise.resolve([]),
+        q ? searchVtexCatalog(q, 'Coppel', 'https://www.coppel.com.ar') : Promise.resolve([]),
+        q ? searchRodo(q) : Promise.resolve([]),
+        q ? searchEasy(q) : Promise.resolve([]),
+        q ? searchCarrefour(q, false) : Promise.resolve([]),
+        q ? searchCoto(q, false) : Promise.resolve([]),
+        q ? searchVtexIS(q, false, 'Jumbo', 'https://www.jumbo.com.ar', 'c') : Promise.resolve([]),
+        q ? searchVtexIS(q, false, 'Disco', 'https://www.disco.com.ar', 'c') : Promise.resolve([]),
+        q ? searchVtexIS(q, false, 'Vea', 'https://www.vea.com.ar', 'c') : Promise.resolve([]),
+        q ? searchVtexIS(q, false, 'Más Online', 'https://www.masonline.com.ar', 'c') : Promise.resolve([]),
+        q ? searchVtexIS(q, false, 'Changomas', 'https://www.changomas.com.ar', 'c') : Promise.resolve([]),
+        q ? searchVtexIS(q, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', 'c') : Promise.resolve([]),
+      ])
+      // ML se agrega por separado — múltiples vendedores, se trata diferente en la UI
+      const mlProducts = q ? await searchMercadoLibre(q) : []
+      allProducts = [...fravega, ...naldo, ...coppel, ...rodo, ...easy, ...carrefour, ...coto, ...jumbo, ...disco, ...vea, ...masOnline, ...changomas, ...dia, ...mlProducts]
     }
 
     if (isFarma) {

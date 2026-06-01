@@ -62,6 +62,7 @@ const formatPrice = (p: number) => new Intl.NumberFormat('es-AR', { style: 'curr
 
 const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'DIA']
 const ALL_SUPERMARKETS_FARMA = ['Farmacity', 'Farmaplus', 'OpenFarma']
+const ALL_SUPERMARKETS_ELECTRO = ['Frávega', 'Naldo', 'Coppel', 'Rodo', 'Easy', 'Carrefour', 'Coto', 'Jumbo', 'Disco', 'Vea', 'Más Online', 'Changomas', 'Dia']
 
 const SUPERMARKET_COLORS: Record<string, string> = {
   'Coto': 'bg-red-500 text-white',
@@ -77,6 +78,11 @@ const SUPERMARKET_COLORS: Record<string, string> = {
   'OpenFarma': 'bg-purple-600 text-white',
   'Farmatodo': 'bg-red-500 text-white',
   'Central Oeste': 'bg-blue-700 text-white',
+  'Frávega': 'bg-red-600 text-white',
+  'Naldo': 'bg-blue-800 text-white',
+  'Coppel': 'bg-yellow-600 text-white',
+  'Rodo': 'bg-slate-700 text-white',
+  'Easy': 'bg-yellow-400 text-black',
   'default': 'bg-gray-800 text-white'
 }
 
@@ -94,6 +100,11 @@ const SUPERMARKET_DOT: Record<string, string> = {
   'OpenFarma': 'bg-purple-600',
   'Farmatodo': 'bg-red-500',
   'Central Oeste': 'bg-blue-700',
+  'Frávega': 'bg-red-600',
+  'Naldo': 'bg-blue-800',
+  'Coppel': 'bg-yellow-600',
+  'Rodo': 'bg-slate-600',
+  'Easy': 'bg-yellow-400',
   'default': 'bg-gray-500'
 }
 
@@ -356,7 +367,7 @@ function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffect
 }
 
 export default function PreciosPage() {
-  const [section, setSection] = useState<'supermercados' | 'farmacias'>('supermercados')
+  const [section, setSection] = useState<'supermercados' | 'farmacias' | 'electrónica'>('supermercados')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<GroupedProduct[]>([])
@@ -384,6 +395,57 @@ export default function PreciosPage() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
   }
 
+  const searchMercadoLibreClient = async (q: string): Promise<GroupedProduct[]> => {
+    try {
+      const res = await fetch(`https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(q)}&limit=30&condition=new`)
+      if (!res.ok) return []
+      const data = await res.json()
+      const items: any[] = data.results || []
+
+      // Agrupar por título normalizado, quedarnos con el más barato por "producto"
+      const seen = new Map<string, any>()
+      for (const item of items) {
+        if (!item.price) continue
+        const key = item.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40)
+        const existing = seen.get(key)
+        const isOfficial = !!item.official_store_name
+        const existingIsOfficial = existing ? !!existing.official_store_name : false
+        if (!existing ||
+            (isOfficial && !existingIsOfficial) ||
+            (isOfficial === existingIsOfficial && item.price < existing.price)) {
+          seen.set(key, item)
+        }
+      }
+
+      return Array.from(seen.values()).slice(0, 20).map((item: any) => {
+        const price = item.price || 0
+        const originalPrice = item.original_price || price
+        const discountText = originalPrice > price ? `${Math.round((1 - price / originalPrice) * 100)}% OFF` : '-'
+        const storeName = item.official_store_name ? `ML · ${item.official_store_name}` : 'MercadoLibre'
+        const marketProduct = {
+          id: `ml-${item.id}`,
+          supermarket: storeName,
+          price: originalPrice,
+          finalPrice: price,
+          discountText,
+          url: item.permalink || 'https://www.mercadolibre.com.ar',
+          imageUrl: (item.thumbnail || '').replace('I.jpg', 'O.jpg'),
+        }
+        return {
+          ean: item.catalog_product_id || `ml-${item.id}`,
+          name: item.title,
+          brand: '-',
+          imageUrl: marketProduct.imageUrl,
+          minPrice: price,
+          maxPrice: originalPrice,
+          bestMarket: storeName,
+          availableIn: 1,
+          markets: { [storeName]: marketProduct },
+        } as GroupedProduct
+      })
+    } catch { return [] }
+  }
+
   const handleSearch = async (e?: React.FormEvent, isCategory = false, categoryId = '') => {
     if (e) e.preventDefault()
     if (!isCategory && !query.trim()) return
@@ -393,9 +455,15 @@ export default function PreciosPage() {
       const url = isCategory
         ? `/api/precios/search?cat=${categoryId}&section=${section}`
         : `/api/precios/search?q=${encodeURIComponent(query)}&section=${section}`
-      const res = await fetch(url)
-      const data = await res.json()
-      if (res.ok) setProducts(data.results || [])
+
+      // Para electrónica: búsqueda en servidor + ML desde el cliente en paralelo
+      const serverPromise = fetch(url).then(r => r.json())
+      const mlPromise = (section === 'electrónica' && query.trim())
+        ? searchMercadoLibreClient(query)
+        : Promise.resolve([])
+
+      const [data, mlResults] = await Promise.all([serverPromise, mlPromise])
+      if (data.results) setProducts([...data.results, ...mlResults])
     } catch (err) {
       console.error(err)
     } finally {
@@ -403,7 +471,7 @@ export default function PreciosPage() {
     }
   }
 
-  const handleSectionChange = (newSection: 'supermercados' | 'farmacias') => {
+  const handleSectionChange = (newSection: 'supermercados' | 'farmacias' | 'electrónica') => {
     setSection(newSection)
     setProducts([])
     setHasSearched(false)
@@ -485,7 +553,9 @@ export default function PreciosPage() {
 
   // Totales por supermercado considerando los productos disponibles en cada uno
   // Siempre mostrar todas las columnas de supermercados de la sección activa
-  const baseMarkets = section === 'farmacias' ? ALL_SUPERMARKETS_FARMA : ALL_SUPERMARKETS_SUPER
+  const baseMarkets = section === 'farmacias' ? ALL_SUPERMARKETS_FARMA
+    : section === 'electrónica' ? ALL_SUPERMARKETS_ELECTRO
+    : ALL_SUPERMARKETS_SUPER
   // Agregar cualquier supermercado extra que esté en el carrito pero no en la lista base
   const cartMarkets = Array.from(new Set(cart.flatMap(r => Object.keys(r.markets))))
   const allMarkets = Array.from(new Set([...baseMarkets, ...cartMarkets]))
@@ -521,14 +591,16 @@ export default function PreciosPage() {
               PromoAR <span className="font-light">Precios B2B</span>
             </h1>
           </div>
-          <button onClick={() => setIsCartOpen(true)} className="relative p-3 rounded-xl hover:bg-white/5 transition-colors group">
-            <ShoppingCart className="w-6 h-6 text-slate-300 group-hover:text-white transition-colors" />
-            {cartTotalItems > 0 && (
-              <span className="absolute top-1 right-1 w-5 h-5 bg-indigo-500 text-white text-xs font-bold rounded-full flex items-center justify-center ring-2 ring-[#0A0A0A]">
-                {cartTotalItems}
-              </span>
-            )}
-          </button>
+          {section !== 'electrónica' && (
+            <button onClick={() => setIsCartOpen(true)} className="relative p-3 rounded-xl hover:bg-white/5 transition-colors group">
+              <ShoppingCart className="w-6 h-6 text-slate-300 group-hover:text-white transition-colors" />
+              {cartTotalItems > 0 && (
+                <span className="absolute top-1 right-1 w-5 h-5 bg-indigo-500 text-white text-xs font-bold rounded-full flex items-center justify-center ring-2 ring-[#0A0A0A]">
+                  {cartTotalItems}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </header>
 
@@ -548,6 +620,12 @@ export default function PreciosPage() {
             >
               💊 Farmacias
             </button>
+            <button
+              onClick={() => handleSectionChange('electrónica')}
+              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${section === 'electrónica' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+            >
+              📺 Electrónica
+            </button>
           </div>
         </div>
 
@@ -555,12 +633,14 @@ export default function PreciosPage() {
           {!hasSearched && (
             <div className="text-center mb-10 space-y-4">
               <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight">
-                {section === 'supermercados' ? 'Consolidá el mercado' : 'Compará farmacias'}
+                {section === 'supermercados' ? 'Consolidá el mercado' : section === 'farmacias' ? 'Compará farmacias' : 'Compará precios de electro'}
               </h2>
               <p className="text-lg text-slate-400 max-w-2xl mx-auto">
                 {section === 'supermercados'
                   ? 'Buscá un producto y mirá su precio en los principales supermercados cruzando por EAN.'
-                  : 'Buscá un medicamento o producto de farmacia y comparalo entre Farmacity y Farmaplus.'}
+                  : section === 'farmacias'
+                  ? 'Buscá un medicamento o producto de farmacia y comparalo entre Farmacity y Farmaplus.'
+                  : 'Buscá un producto electrónico y comparalo entre Frávega, Naldo, Coppel y Rodo.'}
               </p>
             </div>
           )}
@@ -573,7 +653,7 @@ export default function PreciosPage() {
                   type="text"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata...' : 'Ej. Ibuprofeno 400mg...'}
+                  placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata...' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg...' : 'Ej. Samsung TV 55", Heladera no frost...'}
                   className="flex-1 bg-transparent text-base py-3 px-2 outline-none text-white placeholder:text-slate-500 min-w-0"
                 />
                 <button type="submit" disabled={loading || !query.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 sm:px-8 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shrink-0">
@@ -581,9 +661,11 @@ export default function PreciosPage() {
                 </button>
               </div>
             </form>
-            <div className="flex justify-center">
-              <CategorySelector section={section} onSelectCategory={(catId) => handleSearch(undefined, true, catId)} />
-            </div>
+            {section !== 'electrónica' && (
+              <div className="flex justify-center">
+                <CategorySelector section={section} onSelectCategory={(catId) => handleSearch(undefined, true, catId)} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -651,13 +733,13 @@ export default function PreciosPage() {
                         >
                           Ver precios
                         </button>
-                        <button
+                        {section !== 'electrónica' && <button
                           onClick={() => addToCart(p)}
                           className="w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center transition-colors flex-shrink-0"
                           title="Agregar al carrito"
                         >
                           <Plus className="w-5 h-5 text-white" />
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   </div>
@@ -786,8 +868,8 @@ export default function PreciosPage() {
         </div>
       )}
 
-      {/* Cart Table */}
-      {isCartOpen && cart.length > 0 && (
+      {/* Cart Table — solo para supermercados y farmacias */}
+      {isCartOpen && cart.length > 0 && section !== 'electrónica' && (
         <div className="fixed inset-0 z-50 flex flex-col">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsCartOpen(false)} />
           <div className="relative m-4 mt-16 bg-[#111111] rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
