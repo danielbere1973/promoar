@@ -358,10 +358,17 @@ export const MacroScraper: Scraper = {
 
       // ── Paso 2: Auto-click "Todas las categorías" ──
       console.log('[Macro] Clickeando "Todas las categorías"...');
-      await page.evaluate(() => {
+      const btnExists = await page.evaluate(() => {
         const btn = document.querySelector('.bm-categoria[data-category="0"]') as HTMLElement | null;
-        if (btn) btn.click();
+        if (btn) { btn.click(); return true; }
+        // Intentar selector alternativo
+        const btns = Array.from(document.querySelectorAll('[data-category]')) as HTMLElement[]
+        console.log('Botones encontrados:', btns.map(b => b.getAttribute('data-category')).join(','))
+        const all = btns.find(b => b.getAttribute('data-category') === '0' || b.textContent?.includes('Todas'))
+        if (all) { all.click(); return true; }
+        return false;
       });
+      console.log('[Macro] Botón encontrado:', btnExists);
       // Esperar a que el catálogo cargue (primer batch de códigos) antes de paginar
       console.log('[Macro] Esperando primer batch del catálogo...');
       const waitStart = Date.now();
@@ -369,7 +376,10 @@ export const MacroScraper: Scraper = {
         await page.waitForTimeout(500);
       }
       if (capturedCodes.size === 0) {
-        console.log('[Macro] ⚠️ Catálogo no cargó en 20s');
+        const pageTitle = await page.title().catch(() => 'N/A')
+        console.log('[Macro] ⚠️ Catálogo no cargó en 45s. Título página:', pageTitle)
+        // Screenshot de debug
+        await page.screenshot({ path: '/tmp/macro-debug.png' }).catch(() => {})
       } else {
         console.log(`[Macro] Primer batch: ${capturedCodes.size} códigos`);
       }
