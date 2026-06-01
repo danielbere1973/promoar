@@ -179,10 +179,12 @@ function extractNetworks(card: ModoCard): Array<{ network: string; type: 'CREDIT
     cabal: 'Cabal', maestro: 'Maestro', naranja: 'Naranja X',
   };
   for (const n of card.credit_list ?? []) {
+    if (!n) continue;
     const network = nameMap[n.toLowerCase()];
     if (network) result.push({ network, type: 'CREDIT' });
   }
   for (const n of card.debit_list ?? []) {
+    if (!n) continue;
     const network = nameMap[n.toLowerCase()];
     if (network) result.push({ network, type: 'DEBIT' });
   }
