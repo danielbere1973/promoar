@@ -1903,30 +1903,35 @@ function ScraperSchedulerTab() {
 
   async function runAllHttp() {
     setMsg(null)
+    let ok = 0, err = 0
     for (const s of httpScrapers) {
       setRunning(s.id)
-      await fetch('/api/admin/run-scraper', {
+      const res = await fetch('/api/admin/run-scraper', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scraperId: s.id }),
       })
+      if (res.ok) ok++; else err++
     }
     setRunning(null)
-    setMsg({ type: 'success', text: `✅ Todos los scrapers HTTP ejecutados` })
-    setTimeout(() => setMsg(null), 5000)
+    setMsg({ type: err > 0 ? 'error' : 'success', text: `${ok} scrapers OK${err > 0 ? `, ${err} con error` : ''}` })
+    setTimeout(() => setMsg(null), 8000)
     load()
   }
 
   async function runAllGh() {
     setMsg(null)
-    const scraperIds = playwrightScrapers.map(s => s.id).join(',')
-    const res = await fetch('/api/admin/trigger-scraper', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scraperId: scraperIds }),
-    })
-    if (res.ok) setMsg({ type: 'success', text: `🤖 Workflow GitHub Actions disparado para todos los scrapers Playwright` })
-    else setMsg({ type: 'error', text: 'Error al disparar el workflow' })
+    // Disparar uno por uno para evitar problemas con espacios en los nombres
+    let ok = 0
+    for (const s of playwrightScrapers) {
+      const res = await fetch('/api/admin/trigger-scraper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scraperId: s.id }),
+      })
+      if (res.ok) ok++
+    }
+    setMsg({ type: 'success', text: `🤖 ${ok} workflows GitHub Actions disparados` })
     setTimeout(() => setMsg(null), 5000)
   }
 
