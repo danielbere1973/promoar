@@ -322,9 +322,9 @@ export const MacroScraper: Scraper = {
 
       await page.goto(PAGE_URL, { waitUntil: 'networkidle', timeout: 45000 });
 
-      // La Apikey ya debería estar capturada del request event listener.
-      // Solo buscar en window como fallback si no se capturó aún.
+      // Buscar API key: 1) desde requests interceptados 2) desde window 3) desde HTML
       if (!capturedApiKey) {
+        // Intentar desde window con múltiples variantes
         const fromWindow = await page.evaluate(() => {
           const w = window as any;
           if (w.urlServicios?.url_servicio_client_id) return w.urlServicios.url_servicio_client_id;
@@ -336,12 +336,22 @@ export const MacroScraper: Scraper = {
           }
           return '';
         }).catch(() => '');
+
         if (fromWindow) {
           capturedApiKey = fromWindow;
           capturedHeaders = { 'Apikey': fromWindow, 'Accept': 'application/json', 'Referer': PAGE_URL };
           console.log('[Macro] Apikey obtenida de window ✓');
         } else {
-          console.log('[Macro] ⚠️ Apikey no encontrada en window (se usará la de los headers si fue capturada)');
+          // Fallback: extraer del HTML de la página
+          const html = await page.content().catch(() => '')
+          const match = html.match(/url_servicio_client_id["\s:]*([A-Za-z0-9]{20,50})/)
+          if (match) {
+            capturedApiKey = match[1]
+            capturedHeaders = { 'Apikey': match[1], 'Accept': 'application/json', 'Referer': PAGE_URL }
+            console.log('[Macro] Apikey extraída del HTML ✓:', match[1].slice(0, 20) + '...')
+          } else {
+            console.log('[Macro] ⚠️ Apikey no encontrada en window ni en HTML')
+          }
         }
       }
 
@@ -361,14 +371,35 @@ export const MacroScraper: Scraper = {
       const btnExists = await page.evaluate(() => {
         const btn = document.querySelector('.bm-categoria[data-category="0"]') as HTMLElement | null;
         if (btn) { btn.click(); return true; }
-        // Intentar selector alternativo
         const btns = Array.from(document.querySelectorAll('[data-category]')) as HTMLElement[]
-        console.log('Botones encontrados:', btns.map(b => b.getAttribute('data-category')).join(','))
         const all = btns.find(b => b.getAttribute('data-category') === '0' || b.textContent?.includes('Todas'))
         if (all) { all.click(); return true; }
         return false;
       });
       console.log('[Macro] Botón encontrado:', btnExists);
+
+      // Si el botón no existe y tenemos API key, usar la API directamente
+      if (!btnExists && capturedApiKey) {
+        console.log('[Macro] Usando API directamente sin botón...')
+        try {
+          const apiRes = await context.request.get(
+            `https://apipublic.macro.com.ar/v1/card-benefits/provinces/ARGENTINA?page=1&size=50`,
+            { headers: capturedHeaders, timeout: 15000 }
+          )
+          if (apiRes.ok()) {
+            const json = await apiRes.json()
+            const items: any[] = json?.promotions ?? []
+            for (const item of items) {
+              const code = item.city ?? item.code ?? item['external-code']
+              if (code) capturedCodes.add(String(code))
+            }
+            console.log(`[Macro] API directa: ${capturedCodes.size} códigos`)
+          }
+        } catch (e) {
+          console.log('[Macro] Error en API directa:', e)
+        }
+      }
+
       // Esperar a que el catálogo cargue (primer batch de códigos) antes de paginar
       console.log('[Macro] Esperando primer batch del catálogo...');
       const waitStart = Date.now();
