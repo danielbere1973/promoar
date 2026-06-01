@@ -123,7 +123,10 @@ jobs:
         env:
           API_URL: ${{ secrets.API_URL }}
           VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
+          DISPLAY: ':99'
         run: |
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
           IFS=',' read -ra SCRAPER_LIST <<< "${{ steps.check.outputs.scraper }}"
           for SCRAPER in "${SCRAPER_LIST[@]}"; do
             echo "Ejecutando Playwright: $SCRAPER"
