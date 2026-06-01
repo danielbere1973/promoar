@@ -1898,12 +1898,60 @@ function ScraperSchedulerTab() {
 
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" /></div>
 
+  const httpScrapers = SCRAPERS_CONFIG.filter(s => !PLAYWRIGHT_SCRAPER_IDS.has(s.id.toLowerCase()))
+  const playwrightScrapers = SCRAPERS_CONFIG.filter(s => PLAYWRIGHT_SCRAPER_IDS.has(s.id.toLowerCase()))
+
+  async function runAllHttp() {
+    setMsg(null)
+    for (const s of httpScrapers) {
+      setRunning(s.id)
+      await fetch('/api/admin/run-scraper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scraperId: s.id }),
+      })
+    }
+    setRunning(null)
+    setMsg({ type: 'success', text: `✅ Todos los scrapers HTTP ejecutados` })
+    setTimeout(() => setMsg(null), 5000)
+    load()
+  }
+
+  async function runAllGh() {
+    setMsg(null)
+    const scraperIds = playwrightScrapers.map(s => s.id).join(',')
+    const res = await fetch('/api/admin/trigger-scraper', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scraperId: scraperIds }),
+    })
+    if (res.ok) setMsg({ type: 'success', text: `🤖 Workflow GitHub Actions disparado para todos los scrapers Playwright` })
+    else setMsg({ type: 'error', text: 'Error al disparar el workflow' })
+    setTimeout(() => setMsg(null), 5000)
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-black text-slate-800">Administración de Scrapers</h2>
           <p className="text-xs text-slate-400 mt-0.5">Configurá la frecuencia de ejecución de cada scraper</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={runAllHttp}
+            disabled={!!running}
+            className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all disabled:opacity-50"
+          >
+            {running ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
+            Ejecutar todos HTTP
+          </button>
+          <button
+            onClick={runAllGh}
+            className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all"
+          >
+            <Bot size={13} /> Ejecutar todos GH
+          </button>
         </div>
       </div>
 
