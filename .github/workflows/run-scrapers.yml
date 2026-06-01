@@ -65,10 +65,23 @@ jobs:
         shell: bash
         run: |
           if [ -n "${{ github.event.inputs.scraper_id }}" ]; then
-            SCRAPER="${{ github.event.inputs.scraper_id }}"
-            if echo "$PLAYWRIGHT_SCRAPERS" | grep -qi "$SCRAPER"; then
+            INPUT="${{ github.event.inputs.scraper_id }}"
+            # Puede ser un solo scraper o una lista separada por comas
+            # Filtramos solo los que son Playwright
+            PW=""
+            IFS=',' read -ra LIST <<< "$INPUT"
+            for S in "${LIST[@]}"; do
+              S=$(echo "$S" | xargs)  # trim spaces
+              if echo "$PLAYWRIGHT_SCRAPERS" | grep -qi "$S"; then
+                PW="${PW}${PW:+,}${S}"
+              else
+                # Si no es Playwright, igual lo incluimos (puede ser válido)
+                PW="${PW}${PW:+,}${S}"
+              fi
+            done
+            if [ -n "$PW" ]; then
               echo "run=true" >> $GITHUB_OUTPUT
-              echo "scraper=$SCRAPER" >> $GITHUB_OUTPUT
+              echo "scraper=$PW" >> $GITHUB_OUTPUT
             else
               echo "run=false" >> $GITHUB_OUTPUT
             fi
