@@ -1950,27 +1950,29 @@ function ScraperSchedulerTab() {
                       <select
                         value={s.frequency}
                         onChange={e => update(cfg.id, 'frequency', e.target.value)}
-                        className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none"
+                        style={{ colorScheme: 'light' }}
+                        className="text-xs bg-white text-slate-800 border border-slate-200 rounded-lg px-2 py-1 outline-none"
                       >
                         {FREQ_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                       </select>
                       {s.frequency === 'weekly' && (
                         <select value={s.dayOfWeek ?? 1} onChange={e => update(cfg.id, 'dayOfWeek', parseInt(e.target.value))}
-                          className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none">
+                          style={{ colorScheme: 'light' }}
+                          className="text-xs bg-white text-slate-800 border border-slate-200 rounded-lg px-2 py-1 outline-none">
                           {DAYS_ES.map((d, i) => <option key={i} value={i}>{d}</option>)}
                         </select>
                       )}
                       {s.frequency === 'monthly' && (
                         <input type="number" min={1} max={31} value={s.dayOfMonth ?? 1}
                           onChange={e => update(cfg.id, 'dayOfMonth', parseInt(e.target.value))}
-                          className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none w-16" />
+                          className="text-xs bg-white text-slate-800 border border-slate-200 rounded-lg px-2 py-1 outline-none w-16" />
                       )}
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     <input type="number" min={0} max={23} value={s.hour}
                       onChange={e => update(cfg.id, 'hour', parseInt(e.target.value))}
-                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none w-14" />
+                      className="text-xs bg-white text-slate-800 border border-slate-200 rounded-lg px-2 py-1 outline-none w-14" />
                   </td>
                   <td className="px-3 py-3 text-[11px] text-slate-500">
                     {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
