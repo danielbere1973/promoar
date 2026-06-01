@@ -19,6 +19,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Scraper "${scraperId}" not found` }, { status: 404 })
   }
 
+  const PLAYWRIGHT_IDS = new Set([
+    'amex', 'cabal', 'changomas', 'banco galicia', 'icbc',
+    'banco macro', 'naranjax', 'banco provincia', 'banco santander',
+    'banco supervielle', 'banco ciudad', 'visa',
+    'jumbo', 'disco', 'vea',
+  ])
+  if (PLAYWRIGHT_IDS.has(scraperId.toLowerCase())) {
+    return NextResponse.json({ error: `Scraper "${scraperId}" requiere Playwright — usar GitHub Actions` }, { status: 400 })
+  }
+
   const run = await prisma.scraperRun.create({ data: { scraperId, status: 'running' } })
 
   try {
