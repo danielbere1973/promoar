@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, ShoppingCart, Loader2, Store, Plus, Minus, Trash2, ArrowRight, X, ExternalLink } from 'lucide-react'
+import { Search, ShoppingCart, Loader2, Store, Plus, Minus, Trash2, ArrowRight, X, ExternalLink, SlidersHorizontal } from 'lucide-react'
 import CategorySelector from './CategorySelector'
 
 interface MultiUnitPromo {
@@ -21,6 +21,13 @@ interface MarketProduct {
   primePromo?: MultiUnitPromo
   vtexCategoryId?: string
   vtexCategory?: string
+}
+
+function extractCategory(vtexCategory?: string): string {
+  if (!vtexCategory) return ''
+  const segs = vtexCategory.replace(/\/$/, '').split('/').filter(Boolean)
+  // Devolver el segundo nivel si hay 3+, sino el primero
+  return segs.length >= 2 ? segs[1] : segs[0] || ''
 }
 
 interface GroupedProduct {
@@ -62,7 +69,25 @@ const formatPrice = (p: number) => new Intl.NumberFormat('es-AR', { style: 'curr
 
 const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'DIA']
 const ALL_SUPERMARKETS_FARMA = ['Farmacity', 'Farmaplus', 'OpenFarma']
-const ALL_SUPERMARKETS_ELECTRO = ['Frávega', 'Naldo', 'Coppel', 'Rodo', 'Easy', 'Carrefour', 'Coto', 'Jumbo', 'Disco', 'Vea', 'Más Online', 'Changomas', 'Dia']
+const ALL_SUPERMARKETS_ELECTRO = ['Megatone', 'Frávega', 'Naldo', 'Coppel', 'Rodo', 'Easy', 'Carrefour', 'Coto', 'Jumbo', 'Disco', 'Vea', 'Más Online', 'Changomas', 'Dia']
+
+const STORE_LOGOS: Record<string, string> = {
+  'Frávega': 'https://www.google.com/s2/favicons?domain=fravega.com&sz=64',
+  'Naldo': 'https://www.google.com/s2/favicons?domain=naldo.com.ar&sz=64',
+  'Coppel': 'https://www.google.com/s2/favicons?domain=coppel.com.ar&sz=64',
+  'Rodo': 'https://www.google.com/s2/favicons?domain=rodo.com.ar&sz=64',
+  'Easy': 'https://www.google.com/s2/favicons?domain=easy.com.ar&sz=64',
+  'Megatone': 'https://www.google.com/s2/favicons?domain=megatone.net&sz=64',
+  'Carrefour': 'https://www.google.com/s2/favicons?domain=carrefour.com.ar&sz=64',
+  'Coto': 'https://www.google.com/s2/favicons?domain=cotodigital3.com.ar&sz=64',
+  'Jumbo': 'https://www.google.com/s2/favicons?domain=jumbo.com.ar&sz=64',
+  'Disco': 'https://www.google.com/s2/favicons?domain=disco.com.ar&sz=64',
+  'Vea': 'https://www.google.com/s2/favicons?domain=vea.com.ar&sz=64',
+  'Más Online': 'https://www.google.com/s2/favicons?domain=masonline.com.ar&sz=64',
+  'Changomas': 'https://www.google.com/s2/favicons?domain=changomas.com.ar&sz=64',
+  'Dia': 'https://www.google.com/s2/favicons?domain=supermercadosdia.com.ar&sz=64',
+  'MercadoLibre': 'https://www.google.com/s2/favicons?domain=mercadolibre.com.ar&sz=64',
+}
 
 const SUPERMARKET_COLORS: Record<string, string> = {
   'Coto': 'bg-red-500 text-white',
@@ -78,6 +103,7 @@ const SUPERMARKET_COLORS: Record<string, string> = {
   'OpenFarma': 'bg-purple-600 text-white',
   'Farmatodo': 'bg-red-500 text-white',
   'Central Oeste': 'bg-blue-700 text-white',
+  'Megatone': 'bg-orange-600 text-white',
   'Frávega': 'bg-red-600 text-white',
   'Naldo': 'bg-blue-800 text-white',
   'Coppel': 'bg-yellow-600 text-white',
@@ -100,6 +126,7 @@ const SUPERMARKET_DOT: Record<string, string> = {
   'OpenFarma': 'bg-purple-600',
   'Farmatodo': 'bg-red-500',
   'Central Oeste': 'bg-blue-700',
+  'Megatone': 'bg-orange-600',
   'Frávega': 'bg-red-600',
   'Naldo': 'bg-blue-800',
   'Coppel': 'bg-yellow-600',
@@ -371,6 +398,16 @@ export default function PreciosPage() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<GroupedProduct[]>([])
+  // Filtros para sección Electrónica
+  const [electroFilters, setElectroFilters] = useState<{
+    brands: string[]
+    stores: string[]
+    categories: string[]
+    priceMin: number
+    priceMax: number
+  }>({ brands: [], stores: [], categories: [], priceMin: 0, priceMax: Infinity })
+  const [showElectroFilters, setShowElectroFilters] = useState(true)
+
   const [cart, setCart] = useState<CartRow[]>(() => {
     if (typeof window === 'undefined') return []
     try {
@@ -393,6 +430,44 @@ export default function PreciosPage() {
     const id = Date.now()
     setToasts(prev => [...prev, { id, message }])
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
+  }
+
+  const searchMegatoneClient = async (q: string): Promise<GroupedProduct[]> => {
+    try {
+      const url = `https://www.megatone.net/api/catalog_system/pub/products/search?ft=${encodeURIComponent(q)}&_from=0&_to=14`
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
+      if (!res.ok) return []
+      const data = await res.json()
+      if (!Array.isArray(data)) return []
+      return data.flatMap((p: any) => {
+        const item = p.items?.[0] || {}
+        const offer = item.sellers?.[0]?.commertialOffer || {}
+        const price = offer.Price || 0
+        const listPrice = offer.ListPrice || price
+        if (!price || (offer.AvailableQuantity || 0) <= 0) return []
+        const discountText = listPrice > price ? `${Math.round((1 - price / listPrice) * 100)}% OFF` : '-'
+        const marketProduct = {
+          id: `megatone-${item.itemId || p.productId}`,
+          supermarket: 'Megatone',
+          price: listPrice,
+          finalPrice: price,
+          discountText,
+          url: p.linkText ? `https://www.megatone.net/${p.linkText}/p` : 'https://www.megatone.net',
+          imageUrl: item.images?.[0]?.imageUrl || '',
+        }
+        return [{
+          ean: String(item.ean || ''),
+          name: p.productName || 'Sin nombre',
+          brand: p.brand || '-',
+          imageUrl: marketProduct.imageUrl,
+          minPrice: price,
+          maxPrice: listPrice,
+          bestMarket: 'Megatone',
+          availableIn: 1,
+          markets: { 'Megatone': marketProduct },
+        } as GroupedProduct]
+      })
+    } catch { return [] }
   }
 
   const searchMercadoLibreClient = async (q: string): Promise<GroupedProduct[]> => {
@@ -458,12 +533,14 @@ export default function PreciosPage() {
 
       // Para electrónica: búsqueda en servidor + ML desde el cliente en paralelo
       const serverPromise = fetch(url).then(r => r.json())
-      const mlPromise = (section === 'electrónica' && query.trim())
-        ? searchMercadoLibreClient(query)
-        : Promise.resolve([])
+      const isElectro = section === 'electrónica' && !!query.trim()
+      const mlPromise = isElectro ? searchMercadoLibreClient(query) : Promise.resolve([])
 
       const [data, mlResults] = await Promise.all([serverPromise, mlPromise])
-      if (data.results) setProducts([...data.results, ...mlResults])
+      if (data.results) {
+        setProducts([...data.results, ...mlResults])
+        setElectroFilters({ brands: [], stores: [], categories: [], priceMin: 0, priceMax: Infinity })
+      }
     } catch (err) {
       console.error(err)
     } finally {
@@ -671,10 +748,139 @@ export default function PreciosPage() {
 
         {hasSearched && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-semibold">Resultados Consolidados</h3>
-              <p className="text-slate-400">{products.length} productos agrupados</p>
+            {/* Header de resultados */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              {section === 'electrónica' && query && (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <span className="text-slate-500">Electrónica</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-white font-medium">{query}</span>
+                </div>
+              )}
+              {section !== 'electrónica' && <h3 className="text-2xl font-semibold">Resultados Consolidados</h3>}
+              <div className="flex items-center gap-3 ml-auto">
+                {section === 'electrónica' && (
+                  <button
+                    onClick={() => setShowElectroFilters(!showElectroFilters)}
+                    className="flex items-center gap-2 text-xs font-bold px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" /> Filtrar
+                  </button>
+                )}
+                <p className="text-slate-400 text-sm">{(() => {
+                  const filtered = section === 'electrónica' ? products.filter(p => {
+                    const market = Object.values(p.markets)[0] as any
+                    const store = market?.supermarket || p.bestMarket
+                    const cat = extractCategory(market?.vtexCategory)
+                    if (electroFilters.brands.length && !electroFilters.brands.includes(p.brand)) return false
+                    if (electroFilters.stores.length && !electroFilters.stores.includes(store)) return false
+                    if (electroFilters.categories.length && (!cat || !electroFilters.categories.includes(cat))) return false
+                    if (p.minPrice < electroFilters.priceMin || p.minPrice > electroFilters.priceMax) return false
+                    return true
+                  }) : products
+                  return `${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}`
+                })()}</p>
+              </div>
             </div>
+
+            {/* Layout con filtros para Electrónica */}
+            <div className={section === 'electrónica' ? 'flex gap-6' : ''}>
+              {/* Panel de filtros */}
+              {section === 'electrónica' && showElectroFilters && (() => {
+                const allBrands = Array.from(new Set(products.map(p => p.brand).filter(b => b && b !== '-'))).sort()
+                const allStores = Array.from(new Set(products.map(p => {
+                  const market = Object.values(p.markets)[0] as any
+                  return market?.supermarket || p.bestMarket
+                }))).sort()
+                const allCategories = Array.from(new Set(products.map(p => {
+                  const market = Object.values(p.markets)[0] as any
+                  return extractCategory(market?.vtexCategory)
+                }).filter(Boolean))).sort()
+                const prices = products.map(p => p.minPrice).filter(Boolean)
+                const globalMin = Math.min(...prices)
+                const globalMax = Math.max(...prices)
+                return (
+                  <div className="w-56 shrink-0 space-y-4">
+                    {allCategories.length > 0 && (
+                      <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-4">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Categoría</p>
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {allCategories.map(cat => (
+                            <label key={cat} className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
+                              <input type="checkbox" checked={electroFilters.categories.includes(cat)}
+                                onChange={() => setElectroFilters(f => ({
+                                  ...f, categories: f.categories.includes(cat) ? f.categories.filter(c => c !== cat) : [...f.categories, cat]
+                                }))}
+                                className="w-3.5 h-3.5 rounded accent-indigo-500" />
+                              <span className="text-xs text-slate-300">{cat}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Marca</p>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {allBrands.map(brand => (
+                          <label key={brand} className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
+                            <input type="checkbox" checked={electroFilters.brands.includes(brand)}
+                              onChange={() => setElectroFilters(f => ({
+                                ...f, brands: f.brands.includes(brand) ? f.brands.filter(b => b !== brand) : [...f.brands, brand]
+                              }))}
+                              className="w-3.5 h-3.5 rounded accent-indigo-500" />
+                            <span className="text-xs text-slate-300">{brand}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Tienda</p>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {allStores.map(store => (
+                          <label key={store} className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
+                            <input type="checkbox" checked={electroFilters.stores.includes(store)}
+                              onChange={() => setElectroFilters(f => ({
+                                ...f, stores: f.stores.includes(store) ? f.stores.filter(s => s !== store) : [...f.stores, store]
+                              }))}
+                              className="w-3.5 h-3.5 rounded accent-indigo-500" />
+                            <span className="text-xs text-slate-300">{store}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Precio</p>
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-[10px] text-slate-500 mb-1">Mínimo</p>
+                          <input type="number" min={globalMin} max={globalMax}
+                            value={electroFilters.priceMin || ''}
+                            onChange={e => setElectroFilters(f => ({ ...f, priceMin: Number(e.target.value) || 0 }))}
+                            placeholder={formatPrice(globalMin)}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500 mb-1">Máximo</p>
+                          <input type="number" min={globalMin} max={globalMax}
+                            value={electroFilters.priceMax === Infinity ? '' : electroFilters.priceMax}
+                            onChange={e => setElectroFilters(f => ({ ...f, priceMax: Number(e.target.value) || Infinity }))}
+                            placeholder={formatPrice(globalMax)}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none" />
+                        </div>
+                      </div>
+                    </div>
+                    {(electroFilters.brands.length > 0 || electroFilters.stores.length > 0 || electroFilters.categories.length > 0 || electroFilters.priceMin > 0 || electroFilters.priceMax < Infinity) && (
+                      <button onClick={() => setElectroFilters({ brands: [], stores: [], categories: [], priceMin: 0, priceMax: Infinity })}
+                        className="w-full text-xs text-slate-400 hover:text-white py-2 border border-white/10 rounded-xl transition-colors">
+                        Limpiar filtros
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+
+            {/* Grid de productos */}
+            <div className="flex-1">
             {products.length === 0 && !loading && (
               <div className="py-20 text-center text-slate-500 bg-[#1A1A1A] rounded-3xl border border-white/5">
                 <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -682,14 +888,31 @@ export default function PreciosPage() {
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map(p => {
+              {(section === 'electrónica' ? products.filter(p => {
+                const market = Object.values(p.markets)[0] as any
+                const store = market?.supermarket || p.bestMarket
+                const cat = extractCategory((Object.values(p.markets)[0] as any)?.vtexCategory)
+                if (electroFilters.brands.length && !electroFilters.brands.includes(p.brand)) return false
+                if (electroFilters.stores.length && !electroFilters.stores.includes(store)) return false
+                if (electroFilters.categories.length && (!cat || !electroFilters.categories.includes(cat))) return false
+                if (p.minPrice < electroFilters.priceMin || p.minPrice > electroFilters.priceMax) return false
+                return true
+              }) : products).map(p => {
                 const bestPromo = getBestPromo(p.markets, p.minPrice)
                 return (
                   <div key={p.ean} className="bg-[#1A1A1A] border border-white/10 rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col">
                     <div className="relative h-32 bg-white p-3 flex items-center justify-center">
-                      <span className="absolute top-3 right-3 bg-black/80 backdrop-blur-md text-white px-3 py-1 text-xs font-bold rounded-full shadow-md z-10">
-                        EAN: {p.ean || 'N/A'}
-                      </span>
+                      {section !== 'electrónica' && (
+                        <span className="absolute top-3 right-3 bg-black/80 backdrop-blur-md text-white px-3 py-1 text-xs font-bold rounded-full shadow-md z-10">
+                          EAN: {p.ean || 'N/A'}
+                        </span>
+                      )}
+                      {section === 'electrónica' && STORE_LOGOS[p.bestMarket] && (
+                        <div className="absolute top-2 right-2 w-8 h-8 bg-white rounded-lg shadow-md flex items-center justify-center overflow-hidden border border-slate-100 z-10">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={STORE_LOGOS[p.bestMarket]} alt={p.bestMarket} className="w-6 h-6 object-contain" />
+                        </div>
+                      )}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={p.imageUrl} alt={p.name} className="max-h-full max-w-full object-contain mix-blend-multiply" onError={(e) => { e.currentTarget.src = 'https://placehold.co/400x400/eeeeee/999999?text=Sin+Imagen' }} />
                     </div>
@@ -703,7 +926,12 @@ export default function PreciosPage() {
                       {/* Badge precio normal */}
                       <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 flex items-center justify-between">
                         <div>
-                          <p className="text-[10px] uppercase font-bold text-indigo-400 mb-0.5">Mejor Precio en {p.bestMarket}</p>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            {section === 'electrónica' && STORE_LOGOS[p.bestMarket] && (
+                              <img src={STORE_LOGOS[p.bestMarket]} alt={p.bestMarket} className="w-4 h-4 object-contain rounded" />
+                            )}
+                            <p className="text-[10px] uppercase font-bold text-indigo-400">{p.bestMarket}</p>
+                          </div>
                           <p className="text-2xl font-bold text-white tracking-tight">{formatPrice(p.minPrice)}</p>
                           {p.markets[p.bestMarket]?.discountText !== '-' && !p.markets[p.bestMarket]?.multiUnitPromo && (
                             <p className="text-[10px] text-emerald-400 font-bold mt-1 bg-emerald-400/10 inline-block px-1.5 py-0.5 rounded">
@@ -746,6 +974,8 @@ export default function PreciosPage() {
                 )
               })}
             </div>
+            </div>{/* fin flex-1 grid */}
+            </div>{/* fin flex gap-6 layout */}
           </div>
         )}
       </main>

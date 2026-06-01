@@ -99,7 +99,7 @@ function isRelevantForQuery(productName: string, query: string): boolean {
 // ---------------------------------------------------------
 async function searchVtexCatalog(query: string, supermarket: string, baseUrl: string): Promise<NormalizedProduct[]> {
   try {
-    const url = `${baseUrl}/api/catalog_system/pub/products/search?ft=${encodeURIComponent(query)}&_from=0&_to=14`
+    const url = `${baseUrl}/api/catalog_system/pub/products/search?ft=${encodeURIComponent(query)}&_from=0&_to=29`
     const res = await fetch(url, {
       headers: {
         'Accept': 'application/json',
@@ -154,7 +154,7 @@ async function searchVtexCatalog(query: string, supermarket: string, baseUrl: st
 // ---------------------------------------------------------
 async function searchEasy(query: string): Promise<NormalizedProduct[]> {
   try {
-    const url = `https://www.easy.com.ar/api/io/_v/api/intelligent-search/product_search?query=${encodeURIComponent(query)}&count=15`
+    const url = `https://www.easy.com.ar/api/io/_v/api/intelligent-search/product_search?query=${encodeURIComponent(query)}&count=30`
     const res = await fetch(url, {
       headers: {
         'Accept': 'application/json',
@@ -314,12 +314,95 @@ async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
 }
 
 // ---------------------------------------------------------
+// MEGATONE (HTML scraping + API de precios por SKU)
+// Los productos vienen embebidos en el HTML como GlobalListado.Productos
+// Los precios se obtienen por SKU via /apirecursoswebv2/api/Productos/Obtener
+// ---------------------------------------------------------
+async function searchMegatone(query: string): Promise<NormalizedProduct[]> {
+  try {
+    // Solo funciona para búsquedas de una sola palabra (marcas: samsung, lg, philips, etc.)
+    const words = query.trim().split(/\s+/)
+    const slug = words[0].toLowerCase()
+    const htmlUrl = `https://www.megatone.net/landing/${encodeURIComponent(slug)}/`
+    const res = await fetch(htmlUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html',
+        'Accept-Language': 'es-AR,es;q=0.9',
+        'Referer': 'https://www.megatone.net/',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
+    })
+    console.log(`[Megatone] ${htmlUrl} → ${res.status}`)
+    if (!res.ok) return []
+    const html = await res.text()
+
+    // Extraer GlobalListado.Productos del HTML
+    const match = html.match(/Productos:\s*(\[[\s\S]*?\])\s*,\s*(?:Paginado|Filtros)/)
+    if (!match) return []
+
+    // El array usa sintaxis JS (comillas simples, sin comillas en keys) — convertir a JSON válido
+    let productos: any[]
+    try {
+      // Intentar JSON directo primero
+      productos = JSON.parse(match[1])
+    } catch {
+      try {
+        // Extraer productos con regex más simple — solo SKU, Nombre, URL, Imagen, Marca
+        const items: any[] = []
+        const itemRe = /\{SKU:"([^"]+)",ID:(\d+),Nombre:'([^']+)',URL:"([^"]+)",Imagen:"([^"]+)",Marca:\{[^}]*Descripcion:"([^"]+)"/g
+        let m2
+        while ((m2 = itemRe.exec(match[1])) !== null) {
+          items.push({ SKU: m2[1], ID: parseInt(m2[2]), Nombre: m2[3], URL: m2[4], Imagen: m2[5], Marca: { Descripcion: m2[6] } })
+        }
+        productos = items
+      } catch { return [] }
+    }
+
+    if (!productos.length) return []
+
+    // Extraer precios del HTML usando el onclick de gtmClickProductoListado
+    // Formato: gtmClickProductoListado("SKU", pos, precio, nombre, ...)
+    const priceMap: Record<string, number> = {}
+    const priceRe = /gtmClickProductoListado\("([^"]+)",\d+,(\d+(?:\.\d+)?),/g
+    let pm
+    while ((pm = priceRe.exec(html)) !== null) {
+      priceMap[pm[1]] = parseFloat(pm[2])
+    }
+
+    return productos.slice(0, 15).map((p: any) => {
+      const finalPrice = priceMap[p.SKU] || 0
+      if (!finalPrice) return null
+
+      return {
+        ean: String(p.EAN || ''),
+        id: `megatone-${p.SKU}`,
+        supermarket: 'Megatone',
+        name: p.Marca?.Descripcion ? `${p.Marca.Descripcion} ${p.Nombre?.trim()}` : (p.Nombre?.trim() || 'Sin nombre'),
+        brand: p.Marca?.Descripcion || '-',
+        price: finalPrice,
+        finalPrice,
+        discountText: '-',
+        imageUrl: p.Imagen || '',
+        url: `https://www.megatone.net${p.URL}`,
+        multiUnitPromo: undefined,
+        vtexCategoryId: '',
+        vtexCategory: '',
+      }
+    }).filter(Boolean) as NormalizedProduct[]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------
 // RODO (Magento GraphQL)
 // ---------------------------------------------------------
 async function searchRodo(query: string): Promise<NormalizedProduct[]> {
   try {
     const gql = `{
-      products(search: "${query.replace(/"/g, '')}", pageSize: 15) {
+      products(search: "${query.replace(/"/g, '')}", pageSize: 30) {
         items {
           name
           sku
@@ -1050,7 +1133,8 @@ export async function GET(request: Request) {
     }
 
     if (isElectro) {
-      const [fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia] = await Promise.all([
+      const [megatone, fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia] = await Promise.all([
+        q ? searchMegatone(q) : Promise.resolve([]),
         q ? searchVtexCatalog(q, 'Frávega', 'https://www.fravega.com') : Promise.resolve([]),
         q ? searchVtexCatalog(q, 'Naldo', 'https://www.naldo.com.ar') : Promise.resolve([]),
         q ? searchVtexCatalog(q, 'Coppel', 'https://www.coppel.com.ar') : Promise.resolve([]),
@@ -1067,7 +1151,7 @@ export async function GET(request: Request) {
       ])
       // ML se agrega por separado — múltiples vendedores, se trata diferente en la UI
       const mlProducts = q ? await searchMercadoLibre(q) : []
-      allProducts = [...fravega, ...naldo, ...coppel, ...rodo, ...easy, ...carrefour, ...coto, ...jumbo, ...disco, ...vea, ...masOnline, ...changomas, ...dia, ...mlProducts]
+      allProducts = [...megatone, ...fravega, ...naldo, ...coppel, ...rodo, ...easy, ...carrefour, ...coto, ...jumbo, ...disco, ...vea, ...masOnline, ...changomas, ...dia, ...mlProducts]
     }
 
     if (isFarma) {
@@ -1097,7 +1181,25 @@ export async function GET(request: Request) {
       if (before !== after) console.log(`[Relevance] ${before} → ${after} (filtró ${before - after} irrelevantes para "${q}")`)
     }
 
-    // Agrupamiento por EAN (Consolidación)
+    // Electrónica: sin agrupamiento — cada producto de cada tienda es una tarjeta independiente
+    if (isElectro) {
+      const results = allProducts
+        .sort((a, b) => a.finalPrice - b.finalPrice)
+        .map(p => ({
+          ean: p.id, // usar ID como key única
+          name: p.name,
+          brand: p.brand,
+          imageUrl: p.imageUrl,
+          minPrice: p.finalPrice,
+          maxPrice: p.price,
+          bestMarket: p.supermarket,
+          availableIn: 1,
+          markets: { [p.supermarket]: p },
+        }))
+      return NextResponse.json({ query: q, groupedCount: results.length, rawCount: allProducts.length, results })
+    }
+
+    // Agrupamiento por EAN (Consolidación) — solo para supermercados y farmacias
     const grouped = new Map<string, any>()
     
     allProducts.forEach(p => {
@@ -1137,7 +1239,9 @@ export async function GET(request: Request) {
          bestMarket,
          availableIn: marketKeys.length
        }
-    }).sort((a, b) => b.availableIn - a.availableIn) // Ordenar por productos que están en MÁS supermercados primero
+    }).sort((a, b) => isElectro
+      ? a.minPrice - b.minPrice  // Electrónica: precio más bajo primero
+      : b.availableIn - a.availableIn) // Supermercados: más disponibilidad primero
 
     return NextResponse.json({
       query: q || cat,
