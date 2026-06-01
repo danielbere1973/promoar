@@ -38,9 +38,8 @@ export async function GET(req: NextRequest) {
     orderBy: { scraperId: 'asc' }
   })
 
-  // Obtener el último run por scraper
+  // Obtener el último run para TODOS los scrapers (tengan schedule o no)
   const lastRuns = await prisma.scraperRun.findMany({
-    where: { scraperId: { in: schedules.map(s => s.scraperId) } },
     orderBy: { startedAt: 'desc' },
     distinct: ['scraperId'],
     select: { scraperId: true, status: true, startedAt: true, found: true, processed: true, message: true }
