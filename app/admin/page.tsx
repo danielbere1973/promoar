@@ -1818,7 +1818,7 @@ const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 const PLAYWRIGHT_SCRAPER_IDS = new Set([
   'amex', 'cabal', 'changomas', 'banco galicia', 'icbc',
-  'banco macro', 'naranjax', 'banco provincia', 'banco santander',
+  'banco macro', 'naranjax', 'banco santander',
   'banco supervielle', 'banco ciudad', 'visa'
 ])
 
