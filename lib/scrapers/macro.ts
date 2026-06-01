@@ -321,6 +321,9 @@ export const MacroScraper: Scraper = {
       });
 
       await page.goto(PAGE_URL, { waitUntil: 'networkidle', timeout: 45000 });
+      // Esperar a que el JS inicialice urlServicios
+      await page.waitForFunction(() => !!(window as any).urlServicios, { timeout: 15000 }).catch(() => {})
+      await page.waitForTimeout(2000)
 
       // Buscar API key: 1) desde requests interceptados 2) desde window 3) desde HTML
       if (!capturedApiKey) {
