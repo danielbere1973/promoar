@@ -1284,8 +1284,8 @@ function HomeContent() {
             })}
           </div>
 
-          {/* Top Categorías y Comercios en 2 columnas */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Top Categorías y Comercios: 1 col en mobile, 2 en desktop */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {todayDashboard.catList.length > 0 && (
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300 mb-1.5">Top categorías</p>
