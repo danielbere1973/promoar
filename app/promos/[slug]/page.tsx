@@ -110,6 +110,13 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
   if (!promo || promo.status === 'EXPIRED') notFound()
 
+  // Sucursales de este comercio (máx 50, ordenadas por nombre/address)
+  const branches = await prisma.commerceBranch.findMany({
+    where: { commerceId: promo.commerce.id },
+    orderBy: [{ city: 'asc' }, { address: 'asc' }],
+    take: 50,
+  })
+
   const bestDiscount = promo.requirements[0]
   const specificDates: string[] = promo.specificDates ? JSON.parse(promo.specificDates) : []
 
@@ -215,6 +222,40 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
             ))}
           </div>
         </div>
+
+        {/* Sucursales */}
+        {branches.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 px-5 py-4">
+            <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
+              Sucursales ({branches.length}{branches.length === 50 ? '+' : ''})
+            </h2>
+            <div className="flex flex-col divide-y divide-gray-50">
+              {branches.map(b => {
+                const label = [b.address, b.city].filter(Boolean).join(', ')
+                const mapsUrl = label
+                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label + ' ' + promo.commerce.name)}`
+                  : `https://www.google.com/maps/search/?api=1&query=${b.lat},${b.lng}`
+                return (
+                  <a
+                    key={b.id}
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between py-2.5 gap-3 hover:bg-gray-50 -mx-2 px-2 rounded-xl transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-emerald-500 shrink-0">📍</span>
+                      <span className="text-[13px] text-gray-700 truncate">
+                        {label || `${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}`}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-indigo-500 shrink-0 font-semibold">Ver mapa →</span>
+                  </a>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Legales */}
         {promo.sourceText && (
