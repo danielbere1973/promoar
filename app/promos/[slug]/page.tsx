@@ -233,8 +233,8 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
               {branches.map(b => {
                 const label = [b.address, b.city].filter(Boolean).join(', ')
                 const mapsUrl = label
-                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label + ' ' + promo.commerce.name)}`
-                  : `https://www.google.com/maps/search/?api=1&query=${b.lat},${b.lng}`
+                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(promo.commerce.name + ' ' + label)}`
+                  : `https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}/@${b.lat},${b.lng},16z`
                 return (
                   <a
                     key={b.id}
