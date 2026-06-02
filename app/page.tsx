@@ -355,6 +355,29 @@ function HomeContent() {
   const [favCategories, setFavCategories] = useState<string[]>([]) // slugs, max 3
   const [favCommerces, setFavCommerces] = useState<string[]>([])   // nombres, max 5
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['favorites', 'popular']))
+  const [nearbyBranches, setNearbyBranches] = useState<Record<string, { count: number; minDistKm: number }>>({})
+
+  // Geolocalización: pedir una vez, cachear en localStorage 1h
+  useEffect(() => {
+    const cached = localStorage.getItem('userLocation')
+    if (cached) {
+      try {
+        const { lat, lng, ts } = JSON.parse(cached)
+        if (Date.now() - ts < 3600000) {
+          fetch(`/api/branches/nearby?lat=${lat}&lng=${lng}&radius=5`)
+            .then(r => r.json()).then(setNearbyBranches).catch(() => {})
+          return
+        }
+      } catch {}
+    }
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(pos => {
+      const { latitude: lat, longitude: lng } = pos.coords
+      localStorage.setItem('userLocation', JSON.stringify({ lat, lng, ts: Date.now() }))
+      fetch(`/api/branches/nearby?lat=${lat}&lng=${lng}&radius=5`)
+        .then(r => r.json()).then(setNearbyBranches).catch(() => {})
+    }, () => {}, { timeout: 8000 })
+  }, [])
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -1493,6 +1516,13 @@ function HomeContent() {
                   <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{daysLabel}</p>
                   {capValue(promo) > 0 && <p className="text-[11px] text-gray-500">Tope: <span className="font-bold text-gray-700">{capLabel(promo).split(' ')[0]}</span></p>}
                   {minPurchaseValue(promo) > 0 && <p className="text-[11px] text-gray-500">Mínimo: <span className="font-bold text-gray-700">${minPurchaseValue(promo).toLocaleString()}</span></p>}
+                  {nearbyBranches[promo.commerce.id] && (
+                    <p className="text-[11px] text-emerald-600 font-semibold">
+                      📍 {nearbyBranches[promo.commerce.id].count === 1
+                        ? `1 sucursal a ${nearbyBranches[promo.commerce.id].minDistKm}km`
+                        : `${nearbyBranches[promo.commerce.id].count} sucursales · más cerca a ${nearbyBranches[promo.commerce.id].minDistKm}km`}
+                    </p>
+                  )}
                 </div>
 
                 {/* Detalle expandido */}

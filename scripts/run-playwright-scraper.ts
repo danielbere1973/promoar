@@ -36,24 +36,38 @@ async function main() {
     return
   }
 
-  console.log(`[${scraperId}] Enviando a API...`)
-  const res = await fetch(`${API_URL}/api/internal/save-promos`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SECRET}`,
-    },
-    body: JSON.stringify({ scraperId, promos }),
-  })
+  const BATCH_SIZE = 50
+  let totalProcessed = 0
+  let totalFound = 0
+  const batches = Math.ceil(promos.length / BATCH_SIZE)
 
-  if (!res.ok) {
-    const text = await res.text()
-    console.error(`[${scraperId}] Error: ${res.status} ${text}`)
-    process.exit(1)
+  for (let i = 0; i < promos.length; i += BATCH_SIZE) {
+    const batch = promos.slice(i, i + BATCH_SIZE)
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1
+    console.log(`[${scraperId}] Enviando batch ${batchNum}/${batches} (${batch.length} promos)...`)
+
+    const res = await fetch(`${API_URL}/api/internal/save-promos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SECRET}`,
+      },
+      body: JSON.stringify({ scraperId, promos: batch }),
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      console.error(`[${scraperId}] Error batch ${batchNum}: ${res.status} ${text}`)
+      process.exit(1)
+    }
+
+    const data = await res.json()
+    totalProcessed += data.processed ?? 0
+    totalFound += data.found ?? batch.length
+    console.log(`[${scraperId}] Batch ${batchNum}: ${data.processed}/${data.found} guardadas`)
   }
 
-  const data = await res.json()
-  console.log(`[${scraperId}] Guardadas ${data.processed}/${data.found} promos`)
+  console.log(`[${scraperId}] Total: ${totalProcessed}/${totalFound} promos guardadas`)
 }
 
 main().catch(e => { console.error('ERROR:', e.message); process.exit(1) })

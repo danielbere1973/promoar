@@ -12,10 +12,14 @@ import { chromium } from 'playwright';
 import { Scraper, ScrapedPromo } from './types';
 import { extractCap } from './cencosud-helpers';
 
-const PAGE_URL    = 'https://www.macro.com.ar/beneficios?d=Any';
-const DETAIL_BASE = 'https://apipublic.macro.com.ar/v1/card-benefits';
-const BANK_NAME   = 'Banco Macro';
-const PAGE_WAIT   = 6000;  // ms entre páginas para que cargue la API (más tiempo en CI)
+const PAGE_URL      = 'https://www.macro.com.ar/beneficios?d=Any';
+const API_BASE      = 'https://apipublic.macro.com.ar/v1/card-benefits';
+const CATALOG_BASE  = `${API_BASE}/provinces/AR-0`;
+const DETAIL_BASE   = API_BASE;
+const BANK_NAME     = 'Banco Macro';
+const PAGE_WAIT     = 6000;  // ms entre páginas para que cargue la API (más tiempo en CI)
+const LIST_CODE     = 'beneficios-mb';
+const PAGE_SIZE     = 50;
 
 
 // ─── Mapeo de sector → categoría ─────────────────────────────────────────────
@@ -273,13 +277,11 @@ export const MacroScraper: Scraper = {
         const url = req.url();
         if (!url.includes('apipublic.macro.com.ar')) return;
         const h = req.headers();
-        if (!capturedApiKey) {
-          const key = h['apikey'] ?? h['x-api-key'] ?? h['authorization'] ?? h['x-client-id'] ?? '';
-          if (key) {
-            capturedApiKey = key;
-            capturedHeaders = { ...h, 'Accept': 'application/json' };
-            console.log('[Macro] Apikey capturada de headers ✓:', key.slice(0, 20) + '...');
-          }
+        const key = h['apikey'] ?? h['x-api-key'] ?? h['authorization'] ?? h['x-client-id'] ?? '';
+        if (key && !capturedApiKey) {
+          capturedApiKey = key;
+          capturedHeaders = { ...h, 'Accept': 'application/json' };
+          console.log('[Macro] Apikey capturada de headers ✓:', key.slice(0, 20) + '...');
         }
       });
 
@@ -389,84 +391,80 @@ export const MacroScraper: Scraper = {
       });
       console.log('[Macro] Botón encontrado:', btnExists);
 
-      // Si el botón no existe, hacer el fetch desde DENTRO de la página (con cookies de sesión)
-      if (!btnExists) {
-        console.log('[Macro] Haciendo fetch desde el contexto de la página...')
-        try {
-          const result = await page.evaluate(async (apiKey: string) => {
-            const headers: Record<string, string> = {
-              'Accept': 'application/json',
-              'Referer': window.location.href,
-            }
-            if (apiKey) headers['Apikey'] = apiKey
-            const res = await fetch(
-              'https://apipublic.macro.com.ar/v1/card-benefits/provinces/ARGENTINA?page=1&size=50',
-              { headers, credentials: 'include' }
-            )
+      // Paginar directamente via context.request (comparte cookies de sesión con el browser)
+      // Usar el endpoint real descubierto: AR-0?list-code=beneficios-mb&offset=N
+      if (!btnExists || capturedCodes.size === 0) {
+        console.log('[Macro] Paginando directamente via context.request (cookies de sesión)...')
+        const apiHeaders: Record<string, string> = {
+          'Accept': 'application/json',
+          'Referer': PAGE_URL,
+          'Origin': 'https://www.macro.com.ar',
+        }
+        if (capturedApiKey) apiHeaders['Apikey'] = capturedApiKey
+
+        let offset = 1
+        let totalExpected = 0
+        while (true) {
+          const url = `${CATALOG_BASE}?list-code=${LIST_CODE}&offset=${offset}`
+          try {
+            const res = await context.request.get(url, { headers: apiHeaders, timeout: 15000 })
             const body = await res.text()
-            return { status: res.status, body }
-          }, capturedApiKey)
-          console.log('[Macro] Fetch en página status:', result.status)
-          console.log('[Macro] Fetch en página body:', result.body.slice(0, 300))
-          if (result.status === 200) {
-            const json = JSON.parse(result.body)
-            const items: any[] = json?.promotions ?? []
+            console.log(`[Macro] Catálogo offset=${offset}: HTTP ${res.status()} body=${body.slice(0, 200)}`)
+            if (!res.ok()) break
+            const json = JSON.parse(body)
+            const items: any[] = json?.promotions ?? json?.items ?? []
+            if (totalExpected === 0 && json?.total) totalExpected = json.total
+            if (items.length === 0) break
+            let nuevos = 0
             for (const item of items) {
               const code = item.city ?? item.code ?? item['external-code']
-              if (code) capturedCodes.add(String(code))
+              if (code && !capturedCodes.has(String(code))) {
+                capturedCodes.add(String(code))
+                nuevos++
+              }
             }
-            console.log(`[Macro] Fetch en página: ${capturedCodes.size} códigos`)
+            console.log(`[Macro] offset=${offset}: ${items.length} items, +${nuevos} nuevos (total: ${capturedCodes.size}${totalExpected ? '/' + totalExpected : ''})`)
+            if (items.length < PAGE_SIZE) break
+            offset += PAGE_SIZE
+          } catch (e) {
+            console.log('[Macro] Error en catálogo:', e)
+            break
           }
-        } catch (e) {
-          console.log('[Macro] Error en fetch de página:', e)
         }
       }
 
-      // Esperar a que el catálogo cargue (primer batch de códigos) antes de paginar
-      console.log('[Macro] Esperando primer batch del catálogo...');
-      const waitStart = Date.now();
-      while (capturedCodes.size === 0 && Date.now() - waitStart < 45000) {
-        await page.waitForTimeout(500);
-      }
-      if (capturedCodes.size === 0) {
-        const pageTitle = await page.title().catch(() => 'N/A')
-        console.log('[Macro] ⚠️ Catálogo no cargó en 45s. Título página:', pageTitle)
-        // Screenshot de debug
-        await page.screenshot({ path: '/tmp/macro-debug.png' }).catch(() => {})
-      } else {
-        console.log(`[Macro] Primer batch: ${capturedCodes.size} códigos`);
-      }
-
-      // ── Paso 3: Auto-paginar — parar si no llegan codes nuevos ──
-      let pagina = 1;
-      const MAX_PAGINAS = 20; // tope de seguridad
-      while (pagina <= MAX_PAGINAS) {
-        console.log(`[Macro] Página ${pagina} — ${capturedCodes.size} códigos capturados`);
-        const codesAntes = capturedCodes.size;
-
-        await page.waitForTimeout(PAGE_WAIT);
-
-        const hasNext = await page.evaluate(() => {
-          const btn = document.querySelector('.bm-pagination_next') as HTMLElement | null;
-          if (!btn) return false;
-          btn.click();
-          return true;
-        });
-
-        if (!hasNext) {
-          console.log('[Macro] No hay más páginas.');
-          break;
+      // Si el botón fue encontrado, esperar que el interceptor llene los codes y paginar por click
+      if (btnExists) {
+        console.log('[Macro] Esperando primer batch del catálogo...');
+        const waitStart = Date.now();
+        while (capturedCodes.size === 0 && Date.now() - waitStart < 45000) {
+          await page.waitForTimeout(500);
         }
-
-        await page.waitForTimeout(PAGE_WAIT);
-
-        // Si no llegaron codes nuevos después de clickear, es la última página real
-        if (capturedCodes.size === codesAntes) {
-          console.log('[Macro] Sin codes nuevos — fin de paginación.');
-          break;
+        if (capturedCodes.size === 0) {
+          const pageTitle = await page.title().catch(() => 'N/A')
+          console.log('[Macro] ⚠️ Catálogo no cargó en 45s. Título página:', pageTitle)
+          await page.screenshot({ path: '/tmp/macro-debug.png' }).catch(() => {})
+        } else {
+          console.log(`[Macro] Primer batch: ${capturedCodes.size} códigos`);
+          // Paginar por clicks en "siguiente"
+          let pagina = 1;
+          const MAX_PAGINAS = 20;
+          while (pagina <= MAX_PAGINAS) {
+            console.log(`[Macro] Página ${pagina} — ${capturedCodes.size} códigos capturados`);
+            const codesAntes = capturedCodes.size;
+            await page.waitForTimeout(PAGE_WAIT);
+            const hasNext = await page.evaluate(() => {
+              const btn = document.querySelector('.bm-pagination_next') as HTMLElement | null;
+              if (!btn) return false;
+              btn.click();
+              return true;
+            });
+            if (!hasNext) { console.log('[Macro] No hay más páginas.'); break; }
+            await page.waitForTimeout(PAGE_WAIT);
+            if (capturedCodes.size === codesAntes) { console.log('[Macro] Sin codes nuevos — fin de paginación.'); break; }
+            pagina++;
+          }
         }
-
-        pagina++;
       }
 
       console.log(`[Macro] Catálogo completo — ${capturedCodes.size} promos. Navegando detalles...`);
@@ -477,24 +475,27 @@ export const MacroScraper: Scraper = {
       const codes = [...capturedCodes];
       const DETAIL_BATCH = 10;
 
-      if (!capturedApiKey) {
-        console.log('[Macro] ⚠️ API key no capturada — no se pueden obtener detalles');
-      } else {
-        console.log(`[Macro] Fetching ${codes.length} detalles con Apikey...`);
-        for (let i = 0; i < codes.length; i += DETAIL_BATCH) {
-          const batch = codes.slice(i, i + DETAIL_BATCH);
-          const fetched = await Promise.all(batch.map(async code => {
-            try {
-              const url = `${DETAIL_BASE}/${encodeURIComponent(code)}`;
-              const res = await context.request.get(url, { headers: capturedHeaders });
-              if (!res.ok()) return null;
-              const json = await res.json();
-              return json?.promotions?.[0] ?? null;
-            } catch { return null; }
-          }));
-          details.push(...fetched.filter(Boolean));
-          console.log(`[Macro] Detalles: ${details.length}/${codes.length}`);
-        }
+      const detailHeaders: Record<string, string> = {
+        'Accept': 'application/json',
+        'Referer': PAGE_URL,
+        'Origin': 'https://www.macro.com.ar',
+      }
+      if (capturedApiKey) detailHeaders['Apikey'] = capturedApiKey
+
+      console.log(`[Macro] Fetching ${codes.length} detalles...`);
+      for (let i = 0; i < codes.length; i += DETAIL_BATCH) {
+        const batch = codes.slice(i, i + DETAIL_BATCH);
+        const fetched = await Promise.all(batch.map(async code => {
+          try {
+            const url = `${DETAIL_BASE}/${encodeURIComponent(code)}`;
+            const res = await context.request.get(url, { headers: detailHeaders, timeout: 15000 });
+            if (!res.ok()) return null;
+            const json = await res.json();
+            return json?.promotions?.[0] ?? null;
+          } catch { return null; }
+        }));
+        details.push(...fetched.filter(Boolean));
+        console.log(`[Macro] Detalles: ${details.length}/${codes.length}`);
       }
 
       await context.close().catch(() => {});

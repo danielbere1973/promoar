@@ -54,7 +54,7 @@ export default function ClassifyButton() {
   return (
     <div className="p-4 border border-gray-200 rounded-lg shadow-sm bg-white mb-6">
       <h3 className="text-lg font-bold mb-2 text-gray-800">Auto-Clasificación con IA</h3>
-      <p className="text-sm text-gray-600 mb-4">Usa Gemini para categorizar en lotes las promociones que quedaron "Sin Categoría".</p>
+      <p className="text-sm text-gray-600 mb-4">Usa reglas locales + Groq (LLaMA 3.3) para categorizar en lotes las promociones que quedaron "Sin Categoría".</p>
       <button onClick={handleClassify} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
         {loading ? 'Clasificando...' : 'Clasificar Promos Huérfanas'}
       </button>

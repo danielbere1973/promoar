@@ -250,17 +250,39 @@ model Category {
 }
 
 model Commerce {
-  id                String    @id @default(cuid())
-  name              String    @unique
-  slug              String    @unique
+  id                String           @id @default(cuid())
+  name              String           @unique
+  slug              String           @unique
   logoUrl           String?
   website           String?
-  active            Boolean   @default(true)
+  active            Boolean          @default(true)
   defaultCategoryId String?
-  defaultCategory   Category? @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
+  defaultCategory   Category?        @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
   promos            Promo[]
+  branches          CommerceBranch[]
 
   @@map("commerces")
+}
+
+model CommerceBranch {
+  id         String   @id @default(cuid())
+  commerceId String
+  commerce   Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  name       String?
+  address    String?
+  city       String?
+  province   String?
+  lat        Float
+  lng        Float
+  source     String   @default("OSM")
+  osmId      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([source, osmId])
+  @@index([commerceId])
+  @@index([lat, lng])
+  @@map("commerce_branches")
 }
 
 model Promo {
