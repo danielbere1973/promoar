@@ -389,28 +389,36 @@ export const MacroScraper: Scraper = {
       });
       console.log('[Macro] Botón encontrado:', btnExists);
 
-      // Si el botón no existe y tenemos API key, usar la API directamente
-      if (!btnExists && capturedApiKey) {
-        console.log('[Macro] Usando API directamente sin botón...')
+      // Si el botón no existe, hacer el fetch desde DENTRO de la página (con cookies de sesión)
+      if (!btnExists) {
+        console.log('[Macro] Haciendo fetch desde el contexto de la página...')
         try {
-          const apiRes = await context.request.get(
-            `https://apipublic.macro.com.ar/v1/card-benefits/provinces/ARGENTINA?page=1&size=50`,
-            { headers: capturedHeaders, timeout: 15000 }
-          )
-          console.log('[Macro] API directa status:', apiRes.status())
-          const body = await apiRes.text()
-          console.log('[Macro] API directa body:', body.slice(0, 300))
-          if (apiRes.ok()) {
-            const json = JSON.parse(body)
+          const result = await page.evaluate(async (apiKey: string) => {
+            const headers: Record<string, string> = {
+              'Accept': 'application/json',
+              'Referer': window.location.href,
+            }
+            if (apiKey) headers['Apikey'] = apiKey
+            const res = await fetch(
+              'https://apipublic.macro.com.ar/v1/card-benefits/provinces/ARGENTINA?page=1&size=50',
+              { headers, credentials: 'include' }
+            )
+            const body = await res.text()
+            return { status: res.status, body }
+          }, capturedApiKey)
+          console.log('[Macro] Fetch en página status:', result.status)
+          console.log('[Macro] Fetch en página body:', result.body.slice(0, 300))
+          if (result.status === 200) {
+            const json = JSON.parse(result.body)
             const items: any[] = json?.promotions ?? []
             for (const item of items) {
               const code = item.city ?? item.code ?? item['external-code']
               if (code) capturedCodes.add(String(code))
             }
-            console.log(`[Macro] API directa: ${capturedCodes.size} códigos`)
+            console.log(`[Macro] Fetch en página: ${capturedCodes.size} códigos`)
           }
         } catch (e) {
-          console.log('[Macro] Error en API directa:', e)
+          console.log('[Macro] Error en fetch de página:', e)
         }
       }
 
