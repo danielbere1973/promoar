@@ -360,11 +360,19 @@ export const MacroScraper: Scraper = {
 
       // ── Paso 1: Seleccionar "ARGENTINA" para traer todo el país ──
       console.log('[Macro] Seleccionando provincia ARGENTINA...');
+      // Intentar click real en el select primero
+      try {
+        await page.click('#ubicacion', { timeout: 5000 })
+        await page.selectOption('#ubicacion', 'ARGENTINA', { timeout: 5000 })
+        await page.waitForTimeout(1000)
+      } catch {}
+      // Fallback: dispatchEvent
       await page.evaluate(() => {
         const sel = document.querySelector('#ubicacion') as HTMLSelectElement | null;
         if (sel) {
           sel.value = 'ARGENTINA';
           sel.dispatchEvent(new Event('change', { bubbles: true }));
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
         }
       });
       await page.waitForTimeout(PAGE_WAIT);
