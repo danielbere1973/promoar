@@ -1516,13 +1516,15 @@ function HomeContent() {
                   <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{daysLabel}</p>
                   {capValue(promo) > 0 && <p className="text-[11px] text-gray-500">Tope: <span className="font-bold text-gray-700">{capLabel(promo).split(' ')[0]}</span></p>}
                   {minPurchaseValue(promo) > 0 && <p className="text-[11px] text-gray-500">Mínimo: <span className="font-bold text-gray-700">${minPurchaseValue(promo).toLocaleString()}</span></p>}
-                  {nearbyBranches[promo.commerce.id] && (
-                    <p className="text-[11px] text-emerald-600 font-semibold">
-                      📍 {nearbyBranches[promo.commerce.id].count === 1
-                        ? `1 sucursal a ${nearbyBranches[promo.commerce.id].minDistKm}km`
-                        : `${nearbyBranches[promo.commerce.id].count} sucursales · más cerca a ${nearbyBranches[promo.commerce.id].minDistKm}km`}
-                    </p>
-                  )}
+                  {nearbyBranches[promo.commerce.id] && (() => {
+                    const nb = nearbyBranches[promo.commerce.id]
+                    const distStr = nb.minDistKm < 0.1 ? 'menos de 100m' : `${nb.minDistKm}km`
+                    return (
+                      <p className="text-[11px] text-emerald-600 font-semibold">
+                        📍 {nb.count === 1 ? `1 sucursal a ${distStr}` : `${nb.count} sucursales · más cerca a ${distStr}`}
+                      </p>
+                    )
+                  })()}
                 </div>
 
                 {/* Detalle expandido */}
