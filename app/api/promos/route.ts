@@ -144,6 +144,7 @@ export async function GET(req: NextRequest) {
         category: { select: { name: true, slug: true, icon: true, color: true } },
         commerce: {
           select: {
+            id: true,
             name: true,
             slug: true,
             logoUrl: true,
