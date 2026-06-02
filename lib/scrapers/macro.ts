@@ -389,8 +389,11 @@ export const MacroScraper: Scraper = {
             `https://apipublic.macro.com.ar/v1/card-benefits/provinces/ARGENTINA?page=1&size=50`,
             { headers: capturedHeaders, timeout: 15000 }
           )
+          console.log('[Macro] API directa status:', apiRes.status())
+          const body = await apiRes.text()
+          console.log('[Macro] API directa body:', body.slice(0, 300))
           if (apiRes.ok()) {
-            const json = await apiRes.json()
+            const json = JSON.parse(body)
             const items: any[] = json?.promotions ?? []
             for (const item of items) {
               const code = item.city ?? item.code ?? item['external-code']
