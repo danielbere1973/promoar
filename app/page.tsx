@@ -1520,9 +1520,15 @@ function HomeContent() {
                     const nb = nearbyBranches[promo.commerce.id]
                     const distStr = nb.minDistKm < 0.1 ? 'menos de 100m' : `${nb.minDistKm}km`
                     return (
-                      <p className="text-[11px] text-emerald-600 font-semibold">
+                      <a
+                        href={`https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="text-[11px] text-emerald-600 font-semibold underline underline-offset-2"
+                      >
                         📍 {nb.count === 1 ? `1 sucursal a ${distStr}` : `${nb.count} sucursales · más cerca a ${distStr}`}
-                      </p>
+                      </a>
                     )
                   })()}
                 </div>
