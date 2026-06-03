@@ -1873,15 +1873,24 @@ function ScraperSchedulerTab() {
       body: JSON.stringify({ scraperId }),
     })
     if (res.ok) {
-      const msg = isPlaywright
-        ? `${scraperId}: workflow disparado en GitHub Actions`
-        : (() => { const d = res.json(); return `${scraperId}: procesado` })()
-      setMsg({ type: 'success', text: typeof msg === 'string' ? msg : `${scraperId}: ejecutado` })
+      if (isPlaywright) {
+        setMsg({ type: 'success', text: `${scraperId}: workflow disparado en GitHub Actions` })
+      } else {
+        const data = await res.json()
+        const found = data.found ?? 0
+        const processed = data.processed ?? 0
+        const label = SCRAPERS_CONFIG.find(s => s.id === scraperId)?.name ?? scraperId
+        const detail = processed === 0
+          ? `sin promos nuevas`
+          : `${found} leídas · ${processed} guardadas`
+        setMsg({ type: 'success', text: `✅ ${label}: ${detail}` })
+      }
     } else {
-      setMsg({ type: 'error', text: `Error al ejecutar ${scraperId}` })
+      const data = await res.json().catch(() => ({}))
+      setMsg({ type: 'error', text: `❌ ${scraperId}: ${data.error ?? 'Error desconocido'}` })
     }
     setRunning(null)
-    setTimeout(() => setMsg(null), 5000)
+    setTimeout(() => setMsg(null), 10000)
     load()
   }
 
@@ -1904,7 +1913,7 @@ function ScraperSchedulerTab() {
 
   async function runAllHttp() {
     setMsg(null)
-    let ok = 0, err = 0
+    let ok = 0, err = 0, totalFound = 0, totalProcessed = 0
     for (const s of httpScrapers) {
       setRunning(s.id)
       const res = await fetch('/api/admin/run-scraper', {
@@ -1912,11 +1921,17 @@ function ScraperSchedulerTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scraperId: s.id }),
       })
-      if (res.ok) ok++; else err++
+      if (res.ok) {
+        ok++
+        const data = await res.json().catch(() => ({}))
+        totalFound += data.found ?? 0
+        totalProcessed += data.processed ?? 0
+      } else err++
     }
     setRunning(null)
-    setMsg({ type: err > 0 ? 'error' : 'success', text: `${ok} scrapers OK${err > 0 ? `, ${err} con error` : ''}` })
-    setTimeout(() => setMsg(null), 8000)
+    const summary = `${ok} scrapers OK${err > 0 ? `, ${err} con error` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas`
+    setMsg({ type: err > 0 ? 'error' : 'success', text: summary })
+    setTimeout(() => setMsg(null), 15000)
     load()
   }
 
