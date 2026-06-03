@@ -22,6 +22,7 @@ const ENCODING_FIXES: Record<string, string> = {
   'JugueterÃ­as Carrousel': 'Jugueterías Carrousel',
   'La AnÃ³nima con MODO':   'La Anónima con MODO',
   'AhorrÃ¡ en las Full YPF': 'Ahorrá en las Full YPF',
+  'Fravega': 'Frávega',
   'AhorrÃ¡ en las YPF Full': 'Ahorrá en las YPF Full',
   'LlegÃ³ el Especial Toledo': 'Llegó el Especial Toledo',
   'CARGÃ EN YPF CON CUENTA DNI': 'CARGÁ EN YPF CON CUENTA DNI',
@@ -62,11 +63,11 @@ const MERGE_GROUPS: MergeGroup[] = [
   // Disco
   {
     canonical: 'Disco',
-    variants: ['DISCO.COM.AR', 'Disco con MODO', 'Disco - Jubilados'],
+    variants: ['DISCO.COM.AR', 'Disco con MODO', 'Disco - Jubilados', 'Supermercados Disco & Vea'],
   },
   // Toledo
   {
-    canonical: 'Toledo',
+    canonical: 'Supermercados Toledo',
     variants: [
       'Llegó el Especial Toledo',
       'LlegÃ³ el Especial Toledo',
@@ -157,10 +158,10 @@ const MERGE_GROUPS: MergeGroup[] = [
     canonical: 'Chungo',
     variants: ['CHUNGO GOOGLE PAY APPLE PAY'],
   },
-  // Fravega
+  // Fravega → renombrar a Frávega con tilde
   {
     canonical: 'Frávega',
-    variants: ['Fravega', 'FrÃ¡vega'],
+    variants: ['FrÃ¡vega'],  // Fravega se renombra abajo via ENCODING_FIXES
   },
 ]
 
@@ -220,8 +221,10 @@ async function main() {
       console.log(`  CREATE canonical: "${group.canonical}"`)
       if (!dryRun) {
         const slug = toSlug(group.canonical)
-        canonical = await prisma.commerce.create({
-          data: { name: group.canonical, slug, active: true },
+        canonical = await prisma.commerce.upsert({
+          where: { slug },
+          update: { name: group.canonical },
+          create: { name: group.canonical, slug, active: true },
         })
       } else {
         canonical = { id: 'DRY_RUN_ID', name: group.canonical, slug: toSlug(group.canonical) }
