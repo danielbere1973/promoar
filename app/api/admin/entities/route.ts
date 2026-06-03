@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const [categories, commerces, banks, wallets, cardNetworks, segments, currencies, accountTypes] = await Promise.all([
       prisma.category.findMany({ orderBy: { order: 'asc' } }),
-      prisma.commerce.findMany({ where: { active: true }, orderBy: { name: 'asc' }, include: { _count: { select: { promos: { where: { status: 'ACTIVE' } } } } } }),
+      prisma.commerce.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),
       prisma.bank.findMany({ 
         include: { segments: true, cardNetworks: true, cardSegments: true },
         orderBy: { name: 'asc' } 
@@ -32,6 +32,15 @@ export async function GET() {
       prisma.financialAccountType.findMany({ orderBy: { name: 'asc' } }),
     ])
 
+    // Conteo de promos activas por comercio
+    const promoCounts = await prisma.promo.groupBy({
+      by: ['commerceId'],
+      where: { status: 'ACTIVE' },
+      _count: { commerceId: true },
+    })
+    const promoCountMap = Object.fromEntries(promoCounts.map(p => [p.commerceId, p._count.commerceId]))
+    const commercesWithCount = commerces.map(c => ({ ...c, activePromos: promoCountMap[c.id] ?? 0 }))
+
     // cardSegments requiere migración — devuelve [] si la tabla aún no existe
     let cardSegments: any[] = []
     try {
@@ -52,8 +61,8 @@ export async function GET() {
       // tabla card_segments no existe aún — migración pendiente
     }
 
-    return NextResponse.json({ 
-      categories, commerces, banks, wallets, cardNetworks, segments, cardSegments, currencies, accountTypes 
+    return NextResponse.json({
+      categories, commerces: commercesWithCount, banks, wallets, cardNetworks, segments, cardSegments, currencies, accountTypes
     })
   } catch (error) {
     console.error('[GET /api/admin/entities]', error)
