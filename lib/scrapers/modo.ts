@@ -382,16 +382,27 @@ export const ModoScraper: Scraper = {
 
     const promos: ScrapedPromo[] = [];
 
-    for (let i = 0; i < filteredCards.length; i++) {
-      const card = filteredCards[i];
-      console.log(`[MODO] ${i + 1}/${filteredCards.length}: ${card.slug}`);
+    // Pre-filtrar cards sin descuento
+    const cardsWithDiscount = filteredCards.filter(card => {
+      const d = extractDiscount(card);
+      if (d.length === 0) { console.log(`[MODO] Sin descuento, saltando: ${card.slug}`); return false; }
+      return true;
+    });
 
+    // Fetch cap+banks en paralelo (lotes de 10)
+    const CAP_BATCH = 10;
+    const capDetailsMap = new Map<string, CapDetails>();
+    for (let i = 0; i < cardsWithDiscount.length; i += CAP_BATCH) {
+      const batch = cardsWithDiscount.slice(i, i + CAP_BATCH);
+      const results = await Promise.all(
+        batch.map(card => fetchCapAndBanks(`${PROMO_BASE_URL}/${card.slug}`))
+      );
+      batch.forEach((card, j) => capDetailsMap.set(card.slug, results[j]));
+      console.log(`[MODO] Cap fetch ${Math.min(i + CAP_BATCH, cardsWithDiscount.length)}/${cardsWithDiscount.length}`);
+    }
+
+    for (const card of cardsWithDiscount) {
       const discountInfoArray = extractDiscount(card);
-      if (discountInfoArray.length === 0) {
-        console.log(`[MODO] Sin descuento, saltando`);
-        continue;
-      }
-
       const validFrom = card.start_date ? new Date(card.start_date) : new Date();
       const validUntil = card.stop_date ? new Date(card.stop_date) : null;
       const validDays = parseDaysOfWeek(card.days_of_week);
@@ -403,24 +414,20 @@ export const ModoScraper: Scraper = {
         card.payment_flow === 'online' ? 'ONLINE' :
         card.payment_flow === 'instore' || card.payment_flow === 'trip' ? 'FISICA' : null;
 
-      // Descripción desde content rows
       let description = card.content?.row?.map(r => r.text).filter(Boolean).join(' · ') || card.title;
       description = description
         .replace(/\b(?:Desde|Del)\s+el\s+\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\s+(?:al|hasta)\s+(?:el\s+)?\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/gi, '')
         .replace(/\s*·\s*·\s*/g, ' · ').replace(/\s+/g, ' ').trim();
 
-      // Fetch cap + bcra_code (un solo fetch por promo)
       const promoUrl = `${PROMO_BASE_URL}/${card.slug}`;
-      const capDetails = await fetchCapAndBanks(promoUrl);
-      await new Promise(r => setTimeout(r, 200));
+      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capPeriod: null, banks: [], paymentChannel: 'ANY' as const, legalText: '' };
 
-      // Bancos: preferir los del HTML (con bcra_code), fallback al JSON (solo nombre)
       const allBanks = capDetails.banks.length > 0
         ? capDetails.banks
         : (card.banks ?? []).map(name => ({ name }));
 
-      let stackable: boolean | null = null;
       const conditionsText = card.content?.row?.map(r => r.text).filter(Boolean).join(' | ') || '';
+      let stackable: boolean | null = null;
       if (/no\s+(?:es\s+)?acumulable/i.test(conditionsText)) stackable = false;
       else if (/(?:es\s+)?acumulable/i.test(conditionsText)) stackable = true;
 
