@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const [categories, commerces, banks, wallets, cardNetworks, segments, currencies, accountTypes] = await Promise.all([
       prisma.category.findMany({ orderBy: { order: 'asc' } }),
-      prisma.commerce.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),
+      prisma.commerce.findMany({ where: { active: true }, orderBy: { name: 'asc' }, include: { _count: { select: { promos: { where: { status: 'ACTIVE' } } } } } }),
       prisma.bank.findMany({ 
         include: { segments: true, cardNetworks: true, cardSegments: true },
         orderBy: { name: 'asc' } 

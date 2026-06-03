@@ -65,6 +65,27 @@ Calcular en `page.tsx` a partir de las promos ya cargadas y las categorías.
 - Antes de borrar: exportar CSV desde admin
 - Después: DELETE FROM commerces WHERE "logoUrl" IS NULL
 
+### 3. Promos con múltiples comercios ("Disco y Vea", "Supermercados Disco & Vea")
+Cuando el scraper trae storeName con " y " o " & " y ambas partes matchean comercios existentes,
+duplicar la promo asignando una a cada comercio. Actualmente se guarda como un comercio ficticio.
+
+### 4. Comercios Cencosud a limpiar
+"Especial Cencosud" y "CENCOSUD PRODUCTOS SELECCIONADOS" no son comercios reales —
+Cencosud no vende con esa marca al público. Identificar qué scraper los genera y filtrarlos.
+Eliminar de la DB o reasignar las promos a los comercios correctos (Jumbo/Disco/Vea).
+
+### 5. Personal Pay promos con "2%" incorrecto
+Scraper interpreta promos "2x1" como "2%" porque detecta número seguido de símbolo.
+Agregar lógica para detectar y descartar o etiquetar correctamente promos tipo "Nx1".
+
+### 6. Logos faltantes o incorrectos
+Ver `logos-report.csv` en la raíz. 700 sin logo, 522 con favicon Google (algunos incorrectos).
+Priorizar comercios con 5+ promos. Algunos favicon Google son el ícono genérico de globo.
+
+### 7. Normalización de comercios — tabla de alias permanente
+Crear tabla `CommerceAlias` para que futuros scrapeos normalicen nombres automáticamente.
+Evita que "HAVANNA GOOGLE PAY APPLE PAY" vuelva a crearse como comercio separado.
+
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
 - `'SUP,GAS,DIN,FAR'`
