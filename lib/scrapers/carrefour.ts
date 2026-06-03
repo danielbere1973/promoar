@@ -1,13 +1,20 @@
-// Carrefour Scraper V2
-// API GraphQL VTEX: _v/public/graphql/v1?operationName=GetPromotions
+// Carrefour Scraper V3
+// REST API: Master Data BP (Bank Promotions) entity
 // Sin Playwright — JSON estructurado con campos exactos
 
 import { Scraper, ScrapedPromo } from './types';
 import { extractProvinces } from './bank-helpers';
 
 const SOURCE_URL = 'https://www.carrefour.com.ar/descuentos-bancarios';
-const GRAPHQL_URL = 'https://www.carrefour.com.ar/_v/public/graphql/v1';
-const QUERY_HASH = 'cdedb2142b133164ce61b85e94287592451ebee4a2fbede815e09336d40d29ae';
+const MD_URL = 'https://www.carrefour.com.ar/api/dataentities/BP/search';
+const FIELDS = [
+  'id', 'title', 'sub_title', 'discount_percentage',
+  'discounts_amount_installments', 'discounts_text_installments', 'discount_text_info',
+  'img_card', 'img_card_2', 'img_card_3', 'img_card_4', 'img_card_5', 'img_card_6',
+  'order', 'active_from', 'active_to', 'active', 'validText',
+  'hyper', 'market', 'ecommerce', 'express', 'maxi', 'legal',
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+].join(',');
 
 // Mapas de imagen → entidad
 const IMG_BANK: Record<string, string> = {
@@ -16,27 +23,35 @@ const IMG_BANK: Record<string, string> = {
   'galicia.png':       'Banco Galicia',
   'santander.png':     'Banco Santander',
   'macro.png':         'Banco Macro',
-  'patagonia.png':     'Banco Patagonia',
-  'supervielle.png':   'Banco Supervielle',
-  'ciudad.png':        'Banco Ciudad',
-  'credicoop.png':     'Banco Credicoop',
-  'icbc.png':          'ICBC',
-  'provincia.png':     'Banco Provincia de Buenos Aires',
-  'hipotecario.png':   'Banco Hipotecario',
-  'comafi.png':        'Banco Comafi',
-  'hsbc.png':          'HSBC',
-  'naranja.png':       'Naranja X',
+  'patagonia.png':                       'Banco Patagonia',
+  'patagonia.webp':                      'Banco Patagonia',
+  '-_promo-bancaria_patagonia (1).webp': 'Banco Patagonia',
+  'supervielle.png':                     'Banco Supervielle',
+  'ciudad.png':                          'Banco Ciudad',
+  'credicoop.png':                       'Banco Credicoop',
+  'icbc.png':                            'ICBC',
+  'provincia.png':                       'Banco Provincia de Buenos Aires',
+  'hipotecario.png':                     'Banco Hipotecario',
+  'comafi.png':                          'Banco Comafi',
+  'hsbc.png':                            'HSBC',
+  'naranja.png':                         'Naranja X',
+  'naranjax-logoxxx.png':               'Naranja X',
 };
 
 const IMG_WALLET: Record<string, string> = {
-  'mercadopago.png':      'Mercado Pago',
-  'mercadopago.webp':     'Mercado Pago',
-  'logo-modo.png':        'MODO',
-  'modo.png':             'MODO',
-  'cuenta-digital.webp':  'Carrefour Banco',
-  'cuentadigital.webp':   'Carrefour Banco',
-  'credito.png':          'Carrefour Banco',
-  'carrefour-banco.webp': 'Carrefour Banco',
+  'mercadopago.png':              'Mercado Pago',
+  'mercadopago.webp':             'Mercado Pago',
+  'mercado-pago -1.webp':         'Mercado Pago',
+  'mercado-pago -1 (1).webp':     'Mercado Pago',
+  'logo-modo.png':                'MODO',
+  'modo.png':                     'MODO',
+  'cuenta-digital.webp':          'Carrefour Banco',
+  'cuentadigital.webp':           'Carrefour Banco',
+  'credito.png':                  'Carrefour Banco',
+  'carrefour-banco.webp':         'Carrefour Banco',
+  'carrefour-banco (2).webp':     'Carrefour Banco',
+  'carrefour-credito (1).webp':   'Carrefour Banco',
+  'cuenta_dni.png':               'Cuenta DNI',
 };
 
 const IMG_NETWORK: Record<string, { network: string; type: 'CREDIT' | 'DEBIT' | null }> = {
@@ -52,14 +67,14 @@ function imgKey(filename: string | null | undefined): string {
   return (filename ?? '').toLowerCase().split('/').pop() ?? '';
 }
 
-function parseDays(fields: Record<string, string>): number {
+function parseDays(doc: Record<string, any>): number {
   const map: Record<string, number> = {
     sunday: 1, monday: 2, tuesday: 4, wednesday: 8,
     thursday: 16, friday: 32, saturday: 64,
   };
   let mask = 0;
   for (const [day, bit] of Object.entries(map)) {
-    if (fields[day] === 'true') mask |= bit;
+    if (doc[day] === true || doc[day] === 'true') mask |= bit;
   }
   return mask || 127;
 }
@@ -83,85 +98,72 @@ function parseCap(subTitle: string | null): { cap: number | null; capPeriod: 'DA
   return { cap, capPeriod };
 }
 
-function buildStoreNote(fields: Record<string, string>): string {
+function buildStoreNote(doc: Record<string, any>): string {
   const parts: string[] = [];
-  if (fields['hyper'] === 'true')     parts.push('Hipermercados');
-  if (fields['market'] === 'true')    parts.push('Market');
-  if (fields['express'] === 'true')   parts.push('Express');
-  if (fields['maxi'] === 'true')      parts.push('Maxi');
-  if (fields['ecommerce'] === 'true') parts.push('Online');
+  if (doc['hyper'])     parts.push('Hipermercados');
+  if (doc['market'])    parts.push('Market');
+  if (doc['express'])   parts.push('Express');
+  if (doc['maxi'])      parts.push('Maxi');
+  if (doc['ecommerce']) parts.push('Online');
   return parts.join(', ');
 }
 
 async function fetchPromos(): Promise<any[]> {
   const now = new Date().toISOString().slice(0, 19);
-  const vars = Buffer.from(JSON.stringify({
-    where: `active=true AND ((active_from < ${now}) AND (active_to > ${now}))`,
-    account: 'carrefourar',
-  })).toString('base64');
-
-  const extensions = JSON.stringify({
-    persistedQuery: {
-      version: 1,
-      sha256Hash: QUERY_HASH,
-      sender: 'valtech.carrefourar-bank-promotions@0.x',
-      provider: 'vtex.store-graphql@2.x',
-    },
-    variables: vars,
-  });
-
-  const url = `${GRAPHQL_URL}?workspace=master&maxAge=short&appsEtag=remove&domain=store&locale=es-AR&operationName=GetPromotions&variables=%7B%7D&extensions=${encodeURIComponent(extensions)}`;
+  const where = `active=true AND active_from < ${now} AND active_to > ${now}`;
+  const url = `${MD_URL}?_schema=mdv1&_fields=${encodeURIComponent(FIELDS)}&_where=${encodeURIComponent(where)}&_sort=order+ASC&_size=999`;
 
   const res = await fetch(url, {
     headers: {
       'Accept': 'application/json',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       'Referer': SOURCE_URL,
+      'REST-Range': 'resources=0-998',
     },
   });
 
-  if (!res.ok) throw new Error(`Carrefour API HTTP ${res.status}`);
-  const data = await res.json();
-  return data?.data?.documents ?? [];
+  if (!res.ok) throw new Error(`Carrefour Master Data HTTP ${res.status}`);
+  return res.json();
 }
 
 export const CarrefourScraper: Scraper = {
   name: 'Carrefour',
 
   async run(): Promise<ScrapedPromo[]> {
-    console.log('[Carrefour] Consultando API GraphQL...');
+    console.log('[Carrefour] Consultando Master Data BP...');
     const documents = await fetchPromos();
     console.log(`[Carrefour] ${documents.length} promos recibidas`);
 
     const promos: ScrapedPromo[] = [];
 
     for (const doc of documents) {
-      // Convertir array de fields a objeto plano
-      const f: Record<string, string> = {};
-      for (const field of doc.fields ?? []) {
-        f[field.key] = field.value === 'null' ? '' : (field.value ?? '');
-      }
+      const title = (doc['title'] ?? '') as string;
+      const subTitle = (doc['sub_title'] ?? '') as string;
 
-      // Descuento
-      const pct = f['discount_percentage'] ? parseFloat(f['discount_percentage']) : null;
-      const title = f['title'] ?? '';
-      const subTitle = f['sub_title'] ?? '';
+      // Descuento: porcentaje o cuotas sin interés
+      const pct = doc['discount_percentage'] ? parseFloat(String(doc['discount_percentage'])) : null;
+      const csiCount = doc['discounts_amount_installments'] ? parseInt(String(doc['discounts_amount_installments'])) : null;
 
-      // Cuotas sin interés desde el título si no hay porcentaje
-      let discountValue = pct;
+      let discountValue: number | null = null;
       let discountType = 'PERCENTAGE_DESCUENTO';
       let isCsi = false;
 
-      if (!discountValue) {
+      if (csiCount && csiCount > 1) {
+        discountValue = csiCount;
+        discountType = 'CUOTAS_SIN_INTERES';
+        isCsi = true;
+      } else if (pct) {
+        discountValue = pct;
+        discountType = /reintegro|ahorro|cashback|devoluc/i.test(title + subTitle)
+          ? 'PERCENTAGE_REINTEGRO' : 'PERCENTAGE_DESCUENTO';
+      } else {
+        // fallback: buscar en título
         const csiMatch = title.match(/(\d+)\s*cuotas?\s+sin\s+inter[eé]s/i);
         if (csiMatch) {
           discountValue = parseInt(csiMatch[1]);
           discountType = 'CUOTAS_SIN_INTERES';
           isCsi = true;
         }
-      } else {
-        discountType = /reintegro|ahorro|cashback|devoluc/i.test(title + subTitle)
-          ? 'PERCENTAGE_REINTEGRO' : 'PERCENTAGE_DESCUENTO';
       }
 
       if (!discountValue) {
@@ -170,17 +172,20 @@ export const CarrefourScraper: Scraper = {
       }
 
       // Fechas
-      const validFrom = f['active_from'] ? new Date(f['active_from']) : new Date();
-      const validUntil = f['active_to'] ? new Date(f['active_to']) : null;
+      const validFrom = doc['active_from'] ? new Date(doc['active_from']) : new Date();
+      const validUntil = doc['active_to'] ? new Date(doc['active_to']) : null;
 
       // Días
-      const validDays = parseDays(f);
+      const validDays = parseDays(doc);
 
       // Tope
       const { cap, capPeriod } = parseCap(subTitle);
 
-      // Entidades desde los logos (img_card, img_card_2, img_card_3...)
-      const imgs = [f['img_card'], f['img_card_2'], f['img_card_3'], f['img_card_4']].map(imgKey);
+      // Entidades desde los logos (img_card..img_card_6)
+      const imgs = [
+        doc['img_card'], doc['img_card_2'], doc['img_card_3'],
+        doc['img_card_4'], doc['img_card_5'], doc['img_card_6'],
+      ].map(v => imgKey(v));
 
       const bankNames: string[] = [];
       const walletNames: string[] = [];
@@ -200,6 +205,21 @@ export const CarrefourScraper: Scraper = {
         if (/american\s+express|amex/i.test(title)) cardNetworks.push({ network: 'American Express Banco', type: 'CREDIT' });
       }
 
+      // Bancos/billeteras desde el título como fallback
+      if (bankNames.length === 0 && walletNames.length === 0) {
+        const titleLow = title.toLowerCase();
+        if (/mercado\s*pago/i.test(title)) walletNames.push('Mercado Pago');
+        else if (/\bmodo\b/i.test(title)) walletNames.push('MODO');
+        else if (/cuenta\s+dni/i.test(title)) walletNames.push('Cuenta DNI');
+        else if (/naranja\s*x/i.test(title)) bankNames.push('Naranja X');
+        else if (/patagonia/i.test(title)) bankNames.push('Banco Patagonia');
+        else if (/galicia/i.test(title)) bankNames.push('Banco Galicia');
+        else if (/santander/i.test(title)) bankNames.push('Banco Santander');
+        else if (/bbva/i.test(title)) bankNames.push('BBVA');
+        else if (/macro/i.test(title)) bankNames.push('Banco Macro');
+        else if (/\bbna\b|naci[oó]n/i.test(title)) bankNames.push('Banco de la Nación Argentina');
+      }
+
       if (bankNames.length === 0 && walletNames.length === 0) {
         console.log(`[Carrefour] Sin entidad detectada, saltando: ${title.slice(0, 50)}`);
         continue;
@@ -209,18 +229,18 @@ export const CarrefourScraper: Scraper = {
       let paymentChannel: 'QR' | 'ANY' = 'ANY';
       if (/\bMODO\b/i.test(title + subTitle) || walletNames.includes('MODO')) paymentChannel = 'QR';
 
-      // Nota de sucursal y canal de venta
-      const storeNote = buildStoreNote(f)
-      const isOnlineOnly = f['ecommerce'] === 'true' && f['hyper'] !== 'true' && f['market'] !== 'true' && f['express'] !== 'true' && f['maxi'] !== 'true'
-      const isFisicaOnly = f['ecommerce'] !== 'true' && (f['hyper'] === 'true' || f['market'] === 'true' || f['express'] === 'true' || f['maxi'] === 'true')
-      const salesChannel: 'ONLINE' | 'FISICA' | null = isOnlineOnly ? 'ONLINE' : isFisicaOnly ? 'FISICA' : null
+      // Canal de venta
+      const storeNote = buildStoreNote(doc);
+      const isOnlineOnly = doc['ecommerce'] && !doc['hyper'] && !doc['market'] && !doc['express'] && !doc['maxi'];
+      const isFisicaOnly = !doc['ecommerce'] && (doc['hyper'] || doc['market'] || doc['express'] || doc['maxi']);
+      const salesChannel: 'ONLINE' | 'FISICA' | null = isOnlineOnly ? 'ONLINE' : isFisicaOnly ? 'FISICA' : null;
 
       const description = [title, subTitle, storeNote].filter(Boolean).join(' | ');
 
       promos.push({
         title: title.trim(),
         description,
-        sourceText: f['legal'] ?? '',
+        sourceText: doc['legal'] ?? '',
         sourceUrl: SOURCE_URL,
         discount: String(discountValue),
         discountType: discountType as any,
@@ -228,7 +248,7 @@ export const CarrefourScraper: Scraper = {
         capPeriod: capPeriod ?? undefined,
         capTarget: cap ? 'USER' : null,
         minPurchase: undefined,
-        stackable: /acumulable/i.test(f['legal'] ?? '') && !/no\s+acumulable/i.test(f['legal'] ?? '') ? true : undefined,
+        stackable: /acumulable/i.test(doc['legal'] ?? '') && !/no\s+acumulable/i.test(doc['legal'] ?? '') ? true : undefined,
         singleUse: undefined,
         validFrom,
         validUntil,
@@ -243,7 +263,7 @@ export const CarrefourScraper: Scraper = {
         storeName: 'Carrefour',
         salesChannel,
         categoria: 'Supermercados',
-        provinces: extractProvinces(f['legal'] ?? ''),
+        provinces: extractProvinces(doc['legal'] ?? ''),
       });
 
       console.log(`[Carrefour] ✅ "${title.slice(0, 55)}" → ${discountValue}${isCsi ? ' CSI' : '%'} | ${[...bankNames, ...walletNames].join(', ')} | días: ${validDays}`);
