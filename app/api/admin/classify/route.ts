@@ -23,7 +23,7 @@ const CATEGORY_RULES = [
   { cat: 'Hogar',            kw: ['easy', 'sodimac', 'blaisten', 'colchon', 'mueble', 'pintureria', 'ferreteria', 'bazar', 'el hogar', 'falabella', 'ikea', 'linio hogar'] },
   { cat: 'Mascotas',         kw: ['puppis', 'petshop', 'veterinaria', 'mascota', 'purina', 'barf', 'agropecuaria'] },
   { cat: 'Entretenimiento',  kw: ['cine', 'hoyts', 'cinemark', 'showcase', 'teatro', 'entrada', 'multiplex', 'ticket', 'disney', 'netflix', 'spotify', 'xbox', 'playstation', 'steam', 'gaming'] },
-  { cat: 'Salud y Belleza',  kw: ['perfumeria', 'natura', 'avon', 'loreal', 'estetica', 'peluqueria', 'spa', 'clinica', 'optica', 'dental', 'arcos', 'derma', 'cosmetica'] },
+  { cat: 'Salud y Belleza',  kw: ['perfumeria', 'natura', 'avon', 'loreal', 'estetica', 'peluqueria', 'spa', 'clinica', 'optica', 'dental', 'arcos', 'derma', 'cosmetica', 'fiter', 'megatlon', 'gimnasio', 'onfit'] },
   { cat: 'Viajes y Turismo', kw: ['aerolineas', 'despegar', 'almundo', 'turismo', 'hotel', 'vuelo', 'flybondi', 'jetsmart', 'booking', 'airbnb', 'latam', 'aeropuerto', 'hostel', 'crucero'] },
   // Automotores: solo términos inequívocamente automotrices (concesionarias, repuestos, 0km)
   // Las marcas de autos sin calificador se omiten para evitar falsos positivos

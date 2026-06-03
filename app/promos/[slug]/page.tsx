@@ -225,36 +225,21 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
         {/* Sucursales */}
         {branches.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 px-5 py-4">
-            <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-              Sucursales ({branches.length}{branches.length === 50 ? '+' : ''})
-            </h2>
-            <div className="flex flex-col divide-y divide-gray-50">
-              {branches.map(b => {
-                const label = [b.address, b.city].filter(Boolean).join(', ')
-                const mapsUrl = label
-                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(promo.commerce.name + ' ' + label)}`
-                  : `https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}/@${b.lat},${b.lng},16z`
-                return (
-                  <a
-                    key={b.id}
-                    href={mapsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between py-2.5 gap-3 hover:bg-gray-50 -mx-2 px-2 rounded-xl transition-colors"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-emerald-500 shrink-0">📍</span>
-                      <span className="text-[13px] text-gray-700 truncate">
-                        {label || `${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}`}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-indigo-500 shrink-0 font-semibold">Ver mapa →</span>
-                  </a>
-                )
-              })}
+          <a
+            href={`https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-5 py-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📍</span>
+              <div>
+                <p className="text-sm font-bold text-gray-800">Ver sucursales de {promo.commerce.name}</p>
+                <p className="text-xs text-gray-400">{branches.length} locales encontrados · abre Google Maps</p>
+              </div>
             </div>
-          </div>
+            <span className="text-indigo-500 font-bold text-lg">→</span>
+          </a>
         )}
 
         {/* Legales */}

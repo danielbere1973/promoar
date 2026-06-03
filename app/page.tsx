@@ -1955,6 +1955,29 @@ function HomeContent() {
                 </div>
               )}
 
+              {/* Sucursales en Maps */}
+              {nearbyBranches[selectedPromo.commerce.id] && (
+                <a
+                  href={`https://www.google.com/maps/search/${encodeURIComponent(selectedPromo.commerce.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 hover:bg-emerald-100 transition-colors"
+                >
+                  <span className="text-xl">📍</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-emerald-800">Ver sucursales en Google Maps</p>
+                    <p className="text-xs text-emerald-600">
+                      {nearbyBranches[selectedPromo.commerce.id].count} locales · más cerca a {
+                        nearbyBranches[selectedPromo.commerce.id].minDistKm < 0.1
+                          ? 'menos de 100m'
+                          : `${nearbyBranches[selectedPromo.commerce.id].minDistKm}km`
+                      }
+                    </p>
+                  </div>
+                  <span className="text-emerald-500 font-bold">→</span>
+                </a>
+              )}
+
               {/* Link a página de detalle SEO */}
               {selectedPromo.slug && (
                 <div className="mt-6 text-center">
