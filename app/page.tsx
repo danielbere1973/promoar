@@ -1398,282 +1398,135 @@ function HomeContent() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-50 mb-4 text-gray-300">
               <Search size={32} />
             </div>
-            <p className="text-gray-900 font-medium font-poppins">No encontramos promos{selectedCats.length > 0 ? ` en estas categorías` : ''}</p>
-            <p className="text-sm text-gray-500 mt-2 max-w-[250px] mx-auto">Podes crear nuevas promociones desde el panel de administrador o probar otra categoría.</p>
+            <p className="text-gray-900 font-medium">No encontramos promos{selectedCats.length > 0 ? ` en estas categorías` : ''}</p>
+            <p className="text-sm text-gray-500 mt-2 max-w-[250px] mx-auto">Probá otra categoría o ajustá los filtros.</p>
           </div>
         )}
 
-        {/* Promos */}
-        {!loading && promosFiltradas.length > 0 && (
-          <p className="text-[11px] text-gray-400 text-center mb-2">
-            Mostrando {Math.min(visibleCount, promosFiltradas.length)} de {promosFiltradas.length} promos
-          </p>
-        )}
-        <div className={viewMode === 'grid'
-          ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5'
-          : 'space-y-4'}>
-          {promosFiltradas.slice(0, visibleCount).map(promo => {
-            if (viewMode === 'list') {
-              return (
-                <div key={promo.id}
-                  className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all group flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold text-gray-900 truncate uppercase">{promo.commerce.name}</span>
-                      <button onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }} className={`text-sm shrink-0 transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`}>★</button>
-                      <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                      <span className="text-[10px] text-gray-500 truncate">{getEntidades(promo.requirements)}</span>
-                      {promo.salesChannel && (
-                        <span className="bg-yellow-400 text-red-600 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0">
-                          {promo.salesChannel === 'ONLINE' ? 'Online' : 'Físico'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-extrabold text-indigo-600">{discountLabel(promo)}</span>
-                      <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded font-medium border border-gray-100">
-                        {diasVigencia(promo).split('·')[0].trim()}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}
-                    className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-indigo-500 hover:bg-indigo-50 border border-gray-100 transition-colors shrink-0"
-                  >
-                    <Search size={18} />
-                  </button>
-                </div>
-              )
+        {/* ── LAYOUT NETFLIX: secciones por categoría ── */}
+        {!loading && promosFiltradas.length > 0 && (() => {
+          // Agrupar por categoría
+          const catOrder: string[] = []
+          const byCat = new Map<string, { catName: string; catIcon: string; catColor: string; promos: typeof promosFiltradas }>()
+          for (const p of promosFiltradas) {
+            const key = p.category.slug ?? p.category.name
+            if (!byCat.has(key)) {
+              catOrder.push(key)
+              byCat.set(key, { catName: p.category.name, catIcon: p.category.icon ?? '🏷️', catColor: p.category.color, promos: [] })
             }
+            byCat.get(key)!.promos.push(p)
+          }
 
-            {/* ── CARD V2 ── */}
-            const TIER_LABELS: Record<string, string> = { EMINENT: 'Eminent', SELECTA: 'Selecta', BLACK: 'Black', INFINITE: 'Infinite', SIGNATURE: 'Signature', PLATINUM: 'Platinum', GOLD: 'Gold', CLASSIC: 'Classic' }
-            const seg = promo.requirements.find(r => r.segment)?.segment
-              || (promo.requirements.find(r => r.cardTier)?.cardTier ? TIER_LABELS[promo.requirements.find(r => r.cardTier)!.cardTier!] : undefined)
-            const isExpanded = expandedPromos.has(promo.id)
-            const uniqueEntities = Array.from(new Map([
-              ...promo.requirements.filter(r => r.bank?.id).map(r => [r.bank!.id!, { logo: r.bank?.logoUrl, name: r.bank?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
-              ...promo.requirements.filter(r => r.wallet?.id).map(r => [r.wallet!.id!, { logo: r.wallet?.logoUrl, name: r.wallet?.name || '?' }] as [string, {logo: string|null|undefined, name: string}]),
-            ]).values())
-            const uniqueNets = Array.from(new Set(promo.requirements.map(r => r.cardNetwork?.slug).filter(Boolean)))
-            const daysLabel = formatValidDays(promo.validDays)
+          // Destacadas: top 6 por descuento
+          const destacadas = [...promosFiltradas]
+            .filter(p => bestPercentageReq(p)?.discountValue)
+            .sort((a, b) => (bestPercentageReq(b)?.discountValue ?? 0) - (bestPercentageReq(a)?.discountValue ?? 0))
+            .slice(0, 6)
+
+          const PromoCard = ({ promo }: { promo: typeof promosFiltradas[0] }) => {
+            const req = maxDiscountReq(promo)
+            const pctReq = bestPercentageReq(promo)
+            const label = discountLabel(promo)
+            const banks = Array.from(new Map(promo.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])).values())
+            const wallets = Array.from(new Map(promo.requirements.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])).values())
+            const entities = [...banks, ...wallets].slice(0, 2)
+            const days = formatValidDays(promo.validDays)
 
             return (
-              <div key={promo.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
-
-                {/* Header: logo grande O icono+nombre */}
-                <div className="relative cursor-pointer" onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}>
-                  {promo.salesChannel && (
-                    <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-br-lg">
-                      {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
-                    </div>
-                  )}
+              <div
+                onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}
+                className="bg-white border border-[#EAECF0] rounded-2xl overflow-hidden cursor-pointer flex-shrink-0 transition-shadow hover:shadow-md active:scale-[0.98]"
+                style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
+              >
+                {/* Imagen/Logo */}
+                <div className="relative bg-[#F8F9FB] border-b border-[#F0F2F5] flex items-center justify-center" style={{ height: 80 }}>
                   {promo.commerce.logoUrl ? (
-                    <div className="h-28 flex flex-col items-center justify-center p-4 bg-white gap-1">
-                      <img
-                        src={promo.commerce.logoUrl}
-                        alt={promo.commerce.name}
-                        className="max-h-16 max-w-full object-contain"
-                        onError={(e) => {
-                          const parent = (e.target as HTMLImageElement).parentElement!
-                          parent.innerHTML = `<span class="text-4xl">${promo.category.icon || '🏷️'}</span><p class="text-sm font-black text-gray-700 px-4 text-center line-clamp-2">${promo.commerce.name}</p>`
-                        }}
-                      />
-                      <p className="text-[10px] font-bold text-gray-500 text-center line-clamp-1 px-2">{promo.commerce.name}</p>
-                    </div>
+                    <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-12 max-w-[80%] object-contain p-2" />
                   ) : (
-                    <div className="h-28 flex flex-col items-center justify-center gap-2 bg-gray-50 dark:bg-slate-800">
-                      <span className="text-4xl">{promo.category.icon || '🏷️'}</span>
-                      <p className="text-sm font-black text-gray-700 dark:text-gray-200 px-4 text-center line-clamp-2">{promo.commerce.name}</p>
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-black" style={{ background: promo.category.color + '20', color: promo.category.color }}>
+                      {promo.category.icon ?? '🏷️'}
                     </div>
                   )}
-                  {/* Corazón flotante */}
-                  <button onClick={(e) => toggleSave(promo.id, e)} className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm">
-                    <Heart size={14} className={promo.isSaved ? 'text-red-500 fill-red-500' : 'text-gray-400'} />
-                  </button>
-                  {/* Categoría cuando hay logo */}
-                  {promo.commerce.logoUrl && (
-                    <div className="absolute bottom-2 left-3">
-                      <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md" style={{ background: promo.category.color + '20', color: promo.category.color }}>{promo.category.name}</span>
+                  {/* Badge descuento */}
+                  {label && (
+                    <div className="absolute top-2 right-2 bg-[#D94F2B] text-white text-[10px] font-800 font-black px-1.5 py-0.5 rounded-md leading-tight">
+                      {pctReq ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
                     </div>
                   )}
                 </div>
 
-                {/* Estrella favorito comercio */}
-                <div className="flex justify-center px-3 pt-1">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
-                    className={`text-2xl transition-colors ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                    title={favCommerces.includes(promo.commerce.name) ? `Quitar ${promo.commerce.name} de favoritos` : `Favorito: ${promo.commerce.name}`}
-                  >★</button>
-                </div>
+                {/* Body */}
+                <div className="px-2.5 pt-2 pb-3 space-y-1.5">
+                  <p className="text-[11px] font-semibold text-[#1E3A5F] truncate leading-tight">{promo.commerce.name}</p>
+                  <p className="text-[10px] text-[#8B96A5] leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
 
-                {/* Bloque descuento */}
-                <div className={`mx-3 mt-3 mb-2 rounded-2xl py-3 px-4 text-center cursor-pointer ${promo.userBestDiscount ? 'bg-indigo-700' : 'bg-gray-900'}`} onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}>
-                  {seg && <p className="text-[9px] font-black uppercase tracking-[3px] text-indigo-300 mb-0.5">✦ {seg}</p>}
-                  {getSpecialBadge(promo) && <div className={`${getSpecialBadge(promo)!.color} text-white text-[8px] font-black px-2 py-0.5 rounded-lg w-fit mx-auto mb-1`}>{getSpecialBadge(promo)!.text}</div>}
-                  {promo.commerceNote && <p className="text-[9px] font-bold uppercase tracking-widest text-yellow-300 mb-1">{promo.commerceNote}</p>}
-                  <p className="text-3xl sm:text-5xl font-black leading-none" style={{ color: '#c6f135' }}>{discountLabel(promo)}</p>
-                  {csiLabel(promo) && <p className="text-[10px] text-gray-400 mt-0.5">{csiLabel(promo)}</p>}
-                </div>
-
-                {/* Info rápida */}
-                <div className="px-4 pb-2 pt-1 space-y-0.5 cursor-pointer" onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}>
-                  <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{daysLabel}</p>
-                  {capValue(promo) > 0 && <p className="text-[11px] text-gray-500">Tope: <span className="font-bold text-gray-700">{capLabel(promo).split(' ')[0]}</span></p>}
-                  {minPurchaseValue(promo) > 0 && <p className="text-[11px] text-gray-500">Mínimo: <span className="font-bold text-gray-700">${minPurchaseValue(promo).toLocaleString()}</span></p>}
-                  {nearbyBranches[promo.commerce.id] && (() => {
-                    const nb = nearbyBranches[promo.commerce.id]
-                    const distStr = nb.minDistKm < 0.1 ? 'menos de 100m' : `${nb.minDistKm}km`
-                    return (
-                      <a
-                        href={`https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="text-[11px] text-emerald-600 font-semibold underline underline-offset-2"
-                      >
-                        📍 {nb.count === 1 ? `1 sucursal a ${distStr}` : `${nb.count} sucursales · más cerca a ${distStr}`}
-                      </a>
-                    )
-                  })()}
-                </div>
-
-                {/* Detalle expandido */}
-                {isExpanded && (
-                  <div className="mx-3 mb-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl space-y-2.5">
-                    {/* Nombre del comercio */}
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-black text-gray-900 dark:text-white flex-1">{promo.commerce.name}</p>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleFavCommerce(promo.commerce.name) }}
-                        className={`text-base transition-colors shrink-0 ${favCommerces.includes(promo.commerce.name) ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`}
-                        title={favCommerces.includes(promo.commerce.name) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-                      >★</button>
+                  {/* Entidades */}
+                  {entities.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {entities.map((e, i) => (
+                        <span key={i} className="text-[9px] font-600 font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] text-[#3A5A7A]">
+                          {e.name.split(' ').slice(-1)[0]}
+                        </span>
+                      ))}
                     </div>
-                    {/* Banco / Billetera */}
-                    {uniqueEntities.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Banco / Billetera</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {uniqueEntities.map((ent, i) => (
-                            <div key={i} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg px-2 py-1">
-                              {ent.logo && <img src={ent.logo} className="w-6 h-6 object-contain" />}
-                              <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{ent.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* Tarjetas */}
-                    {uniqueNets.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Tarjetas</p>
-                        <div className="flex flex-wrap gap-1">
-                          {uniqueNets.map((slug, i) => (
-                            <img key={i} src={CARD_NETWORK_LOGOS[slug!] || ''} className="h-7 w-auto object-contain" alt={slug!} title={slug!} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* Vigencia */}
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Vigencia</p>
-                      <p className="text-[11px] text-gray-700 dark:text-gray-300">{daysLabel}</p>
-                      {(promo.validFrom || promo.validUntil) && (
-                        <p className="text-[11px] text-gray-500">
-                          {promo.validFrom ? new Date(promo.validFrom).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
-                          {promo.validFrom && promo.validUntil ? ' al ' : ''}
-                          {promo.validUntil ? new Date(promo.validUntil).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'sin vencimiento'}
-                        </p>
-                      )}
-                    </div>
-                    {/* Forma de pago */}
-                    {promo.requirements.some(r => r.paymentChannel && r.paymentChannel !== 'ANY') && (
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Forma de pago</p>
-                        <p className="text-[11px] text-gray-700 dark:text-gray-300">{getFormasDePago(promo.requirements)}</p>
-                      </div>
-                    )}
-                    {/* Legales */}
-                    {promo.sourceText && promo.sourceText.length > 50 && promo.sourceText !== promo.description && (
-                      <details className="pt-1 border-t border-gray-200 dark:border-slate-600">
-                        <summary className="text-[10px] font-black uppercase tracking-widest text-gray-400 cursor-pointer select-none">Términos y condiciones</summary>
-                        <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed line-clamp-6">{promo.sourceText}</p>
-                      </details>
-                    )}
-                    {/* Link oficial — solo si apunta a una promo específica */}
-                    {promo.sourceUrl && (() => {
-                      try {
-                        const u = new URL(promo.sourceUrl)
-                        const hasSpecificPath = u.pathname.length > 1 || u.hash.length > 1
-                        if (!hasSpecificPath) return null
-                        return (
-                          <a href={`/api/r?url=${encodeURIComponent(promo.sourceUrl)}&promo=${promo.id}&src=promos`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-[10px] text-indigo-500 hover:underline flex items-center gap-1 pt-1 border-t border-gray-200 dark:border-slate-600">
-                            <Globe size={10} /> Ver promo oficial
-                          </a>
-                        )
-                      } catch { return null }
-                    })()}
-                  </div>
-                )}
+                  )}
 
-                {/* Footer: logos (clickeable → popup) + botón info */}
-                <div className="px-4 py-3 mt-auto border-t border-gray-50 dark:border-slate-800 flex items-center justify-between gap-2">
-                  <div
-                    className="flex items-center gap-1.5 flex-wrap cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={(e) => { e.stopPropagation(); setEntitiesPromo(promo) }}
-                  >
-                    {uniqueEntities.slice(0, 3).map((ent, i) => (
-                      <div key={i} className="h-9 w-9 rounded-full bg-white border border-gray-200 flex items-center justify-center p-1 overflow-hidden shadow-sm">
-                        {ent.logo ? <img src={ent.logo} className="w-full h-full object-contain" /> : <span className="text-[9px] font-black text-gray-400">{ent.name[0]}</span>}
-                      </div>
-                    ))}
-                    {uniqueNets.slice(0, 4).map((slug, i) => (
-                      <img key={i} src={CARD_NETWORK_LOGOS[slug!] || ''} className="h-8 w-auto object-contain" alt={slug!} title={slug!} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                    ))}
-                    {(uniqueEntities.length + uniqueNets.length) === 0 && (
-                      <span className="text-[10px] text-gray-400">Ver entidades</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={(e) => toggleExpand(promo.id, e)}
-                    className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 shrink-0 hover:text-indigo-800 transition-colors"
-                  >
-                    {isExpanded ? '− Menos' : '+ Info'}
-                  </button>
+                  {/* Días */}
+                  <p className="text-[9.5px] text-[#8B96A5]">{days === 'Todos los días' ? 'Todos los días' : days.replace('Lunes a viernes', 'Lun–Vie')}</p>
                 </div>
               </div>
             )
-          })}
-        </div>
+          }
 
-        {/* Paginación */}
-        {!loading && visibleCount < promosFiltradas.length && (
-          <div className="flex flex-col items-center gap-3 pt-6 pb-4">
-            <button
-              onClick={() => setVisibleCount(v => v + 20)}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-colors"
-            >
-              Mostrar más ({Math.min(20, promosFiltradas.length - visibleCount)} más)
-            </button>
-            <button
-              onClick={async () => {
-                setLoadingAll(true)
-                await new Promise(r => setTimeout(r, 50))
-                setVisibleCount(promosFiltradas.length)
-                setLoadingAll(false)
-              }}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1"
-            >
-              {loadingAll ? (
-                <>Cargando {promosFiltradas.length} promos...</>
-              ) : (
-                <>Mostrar todas ({promosFiltradas.length})</>
+          return (
+            <div className="space-y-0 -mx-4">
+
+              {/* Destacadas */}
+              {destacadas.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-baseline justify-between px-4 mb-3">
+                    <div>
+                      <p className="text-[15px] font-800 font-black text-[#1E3A5F]">⭐ Destacadas hoy</p>
+                      <p className="text-[11px] text-[#8B96A5] mt-0.5">Mejores descuentos del día</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2.5 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
+                    {destacadas.map(p => <PromoCard key={p.id} promo={p} />)}
+                  </div>
+                </div>
               )}
-            </button>
-          </div>
-        )}
+
+              {/* Secciones por categoría */}
+              {catOrder.map(key => {
+                const sec = byCat.get(key)!
+                return (
+                  <div key={key} className="mb-5">
+                    <div className="flex items-baseline justify-between px-4 mb-3">
+                      <div>
+                        <p className="text-[15px] font-black text-[#1E3A5F]">{sec.catIcon} {sec.catName}</p>
+                        <p className="text-[11px] text-[#8B96A5] mt-0.5">{sec.promos.length} promos</p>
+                      </div>
+                      {sec.promos.length > 4 && (
+                        <button
+                          onClick={() => setSelectedCats([key])}
+                          className="text-[12px] font-semibold text-[#D94F2B]"
+                        >
+                          Ver todas →
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex gap-2.5 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
+                      {sec.promos.map(p => <PromoCard key={p.id} promo={p} />)}
+                    </div>
+                    <div className="h-px bg-[#F0F2F5] mt-5 mx-4" />
+                  </div>
+                )
+              })}
+
+            </div>
+          )
+        })()}
+
       </div>
     </main>
 
