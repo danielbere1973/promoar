@@ -98,7 +98,7 @@ function LoginForm() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="tu@email.com"
-                className="w-full border border-gray-200 rounded-2xl pl-10 pr-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-gray-50/50 focus:bg-white transition-colors"
+                className="w-full border border-gray-200 rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-900 outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-gray-50/50 focus:bg-white transition-colors"
                 required
               />
             </div>
@@ -114,7 +114,7 @@ function LoginForm() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full border border-gray-200 rounded-2xl pl-10 pr-10 py-3 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-gray-50/50 focus:bg-white transition-colors"
+                className="w-full border border-gray-200 rounded-2xl pl-10 pr-10 py-3 text-sm text-gray-900 outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-gray-50/50 focus:bg-white transition-colors"
                 required
               />
               <button
@@ -269,7 +269,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gray-50/80 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-gray-50/80 flex items-center justify-center px-4 py-12" style={{ colorScheme: 'light' }}>
       <Suspense fallback={<div className="text-gray-400 text-sm">Cargando...</div>}>
         <LoginForm />
       </Suspense>
