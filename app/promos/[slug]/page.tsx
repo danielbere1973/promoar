@@ -91,7 +91,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   const promo = await prisma.promo.findUnique({
     where: { slug: params.slug },
     include: {
-      commerce: { include: { category: true } },
+      commerce: true,
       category: true,
       requirements: {
         include: { bank: true, wallet: true, cardNetwork: true },
