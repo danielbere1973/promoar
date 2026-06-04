@@ -745,10 +745,7 @@ function HomeContent() {
       <aside className="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-950 z-30">
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30">
-              <Sparkles size={24} />
-            </div>
-            <span className="text-xl font-black tracking-tighter text-gray-900 dark:text-white">PromoAR</span>
+            <img src="/logo.jpg" alt="PromoAR" className="h-8 w-auto object-contain" />
           </div>
 
           <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar pr-2">
@@ -974,9 +971,12 @@ function HomeContent() {
                     </button>
                   )}
                 </div>
-                <h1 className="text-lg lg:text-3xl font-black tracking-tighter text-gray-900 mt-0.5">
-                  {timeFilter === 'today' ? 'Promociones Hoy' : 'Catálogo de la Semana'}
-                </h1>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <img src="/logo.jpg" alt="PromoAR" className="h-7 lg:h-9 w-auto object-contain" />
+                  <h1 className="text-lg lg:text-3xl font-black tracking-tighter text-gray-900 hidden lg:block">
+                    {timeFilter === 'today' ? 'Promociones Hoy' : 'Catálogo de la Semana'}
+                  </h1>
+                </div>
               </div>
 
               <div className="flex items-center gap-3 flex-1 justify-end">
