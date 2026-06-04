@@ -1431,7 +1431,7 @@ function HomeContent() {
                     </div>
                   </div>
                   <button
-                    onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : setSelectedPromo(promo)}
+                    onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}
                     className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-indigo-500 hover:bg-indigo-50 border border-gray-100 transition-colors shrink-0"
                   >
                     <Search size={18} />
@@ -1456,7 +1456,7 @@ function HomeContent() {
               <div key={promo.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
 
                 {/* Header: logo grande O icono+nombre */}
-                <div className="relative cursor-pointer" onClick={() => setSelectedPromo(promo)}>
+                <div className="relative cursor-pointer" onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}>
                   {promo.salesChannel && (
                     <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-br-lg">
                       {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
@@ -1503,7 +1503,7 @@ function HomeContent() {
                 </div>
 
                 {/* Bloque descuento */}
-                <div className={`mx-3 mt-3 mb-2 rounded-2xl py-3 px-4 text-center cursor-pointer ${promo.userBestDiscount ? 'bg-indigo-700' : 'bg-gray-900'}`} onClick={() => setSelectedPromo(promo)}>
+                <div className={`mx-3 mt-3 mb-2 rounded-2xl py-3 px-4 text-center cursor-pointer ${promo.userBestDiscount ? 'bg-indigo-700' : 'bg-gray-900'}`} onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}>
                   {seg && <p className="text-[9px] font-black uppercase tracking-[3px] text-indigo-300 mb-0.5">✦ {seg}</p>}
                   {getSpecialBadge(promo) && <div className={`${getSpecialBadge(promo)!.color} text-white text-[8px] font-black px-2 py-0.5 rounded-lg w-fit mx-auto mb-1`}>{getSpecialBadge(promo)!.text}</div>}
                   {promo.commerceNote && <p className="text-[9px] font-bold uppercase tracking-widest text-yellow-300 mb-1">{promo.commerceNote}</p>}
@@ -1512,7 +1512,7 @@ function HomeContent() {
                 </div>
 
                 {/* Info rápida */}
-                <div className="px-4 pb-2 pt-1 space-y-0.5 cursor-pointer" onClick={() => setSelectedPromo(promo)}>
+                <div className="px-4 pb-2 pt-1 space-y-0.5 cursor-pointer" onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}>
                   <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{daysLabel}</p>
                   {capValue(promo) > 0 && <p className="text-[11px] text-gray-500">Tope: <span className="font-bold text-gray-700">{capLabel(promo).split(' ')[0]}</span></p>}
                   {minPurchaseValue(promo) > 0 && <p className="text-[11px] text-gray-500">Mínimo: <span className="font-bold text-gray-700">${minPurchaseValue(promo).toLocaleString()}</span></p>}
@@ -1722,8 +1722,8 @@ function HomeContent() {
       </div>
     </footer>
 
-      {/* ══════════ PROMO DETAIL MODAL / DRAWER ══════════ */}
-      {selectedPromo && (
+      {/* ══════════ PROMO DETAIL MODAL / DRAWER ══════════ (REMOVED — click va a /promos/[slug]) */}
+      {false && selectedPromo && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedPromo(null)} />
           <div className="relative bg-white rounded-t-[40px] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-full duration-300">
