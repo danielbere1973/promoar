@@ -659,7 +659,13 @@ function HomeContent() {
   const todayDashboard = useMemo(() => {
     if (promos.length === 0) return null
     const todayIdx = new Date().getDay()
-    const maxDiscount = promos.reduce((max, p) => Math.max(max, bestPercentageReq(p)?.discountValue ?? 0), 0)
+    const maxDiscount = promos.reduce((max, p) => {
+      const req = bestPercentageReq(p)
+      if (!req) return max
+      if (!['PERCENTAGE_REINTEGRO', 'PERCENTAGE_DESCUENTO', 'BONIFICACION'].includes(req.discountType ?? '')) return max
+      const val = req.discountValue ?? 0
+      return val <= 100 ? Math.max(max, val) : max
+    }, 0)
     const DAYS_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
     const dayCounts = Array.from({ length: 7 }, (_, d) => ({
       label: DAYS_LABELS[d],
