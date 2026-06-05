@@ -1427,22 +1427,22 @@ function HomeContent() {
             .slice(0, 6)
 
           const PromoCard = ({ promo }: { promo: typeof promosFiltradas[0] }) => {
-            const req = maxDiscountReq(promo)
             const pctReq = bestPercentageReq(promo)
             const label = discountLabel(promo)
             const banks = Array.from(new Map(promo.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])).values())
             const wallets = Array.from(new Map(promo.requirements.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])).values())
             const entities = [...banks, ...wallets].slice(0, 2)
             const days = formatValidDays(promo.validDays)
+            const nb = promo.commerce.id ? nearbyBranches[promo.commerce.id] : null
 
             return (
               <div
                 onClick={() => setDetailPromo(promo)}
-                className="bg-white border border-[#EAECF0] rounded-2xl overflow-hidden cursor-pointer flex-shrink-0 transition-shadow hover:shadow-md active:scale-[0.98]"
+                className="bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer flex-shrink-0 transition-shadow hover:shadow-md active:scale-[0.98]"
                 style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
               >
                 {/* Imagen/Logo */}
-                <div className="relative bg-[#F8F9FB] border-b border-[#F0F2F5] flex items-center justify-center" style={{ height: 80 }}>
+                <div className="relative bg-[#F8F9FB] dark:bg-slate-900 border-b border-[#F0F2F5] dark:border-slate-700 flex items-center justify-center" style={{ height: 80 }}>
                   {promo.commerce.logoUrl ? (
                     <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-12 max-w-[80%] object-contain p-2" />
                   ) : (
@@ -1450,9 +1450,8 @@ function HomeContent() {
                       {promo.category.icon ?? '🏷️'}
                     </div>
                   )}
-                  {/* Badge descuento */}
                   {label && (
-                    <div className="absolute top-2 right-2 bg-[#D94F2B] text-white text-[10px] font-800 font-black px-1.5 py-0.5 rounded-md leading-tight">
+                    <div className="absolute top-2 right-2 bg-[#D94F2B] text-white text-[10px] font-black px-1.5 py-0.5 rounded-md leading-tight">
                       {pctReq ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
                     </div>
                   )}
@@ -1460,28 +1459,33 @@ function HomeContent() {
 
                 {/* Body */}
                 <div className="px-2.5 pt-2 pb-3 space-y-1.5">
-                  <p className="text-[11px] font-semibold text-[#1E3A5F] truncate leading-tight">{promo.commerce.name}</p>
-                  <p className="text-[10px] text-[#8B96A5] leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
+                  <p className="text-[12px] font-bold text-[#1E3A5F] dark:text-white truncate leading-tight">{promo.commerce.name}</p>
+                  <p className="text-[10px] text-[#6B7A8D] dark:text-slate-400 leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
 
-                  {/* Entidades */}
                   {entities.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {entities.map((e, i) => (
-                        <span key={i} className="text-[9px] font-600 font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] text-[#3A5A7A]">
+                        <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300">
                           {e.name.split(' ').slice(-1)[0]}
                         </span>
                       ))}
                     </div>
                   )}
 
-                  {/* Días */}
-                  <p className="text-[9.5px] text-[#8B96A5]">{days === 'Todos los días' ? 'Todos los días' : days.replace('Lunes a viernes', 'Lun–Vie')}</p>
+                  <p className="text-[10px] text-[#8B96A5] dark:text-slate-400">{days === 'Todos los días' ? 'Todos los días' : days.replace('Lunes a viernes', 'Lun–Vie')}</p>
+
+                  {/* Sucursales cercanas */}
+                  {nb && (
+                    <p className="text-[9.5px] text-emerald-600 font-semibold">
+                      📍 {nb.count} {nb.count === 1 ? 'sucursal' : 'sucursales'} · {nb.minDistKm < 0.1 ? '-100m' : `${nb.minDistKm}km`}
+                    </p>
+                  )}
                 </div>
               </div>
             )
           }
 
-          const PREVIEW = 8 // cuántas cards mostrar antes del "Ver todas"
+          const PREVIEW = 8
 
           const Section = ({ title, subtitle, catKey, promoList }: { title: string; subtitle: string; catKey?: string; promoList: typeof promosFiltradas }) => {
             const isExpanded = !catKey || focusedCat === catKey
@@ -1494,29 +1498,22 @@ function HomeContent() {
               <div className="mb-5">
                 <div className="flex items-center justify-between px-4 mb-3">
                   <div>
-                    <p className="text-[15px] font-black text-[#1E3A5F]">{title}</p>
-                    <p className="text-[11px] text-[#8B96A5] mt-0.5">{subtitle}</p>
+                    <p className="text-[15px] font-black text-[#1E3A5F] dark:text-white">{title}</p>
+                    <p className="text-[11px] text-[#8B96A5] dark:text-slate-400 mt-0.5">{subtitle}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {/* Flechas scroll */}
+                  <div className="flex items-center gap-1.5">
                     <button onClick={() => scroll('left')}
-                      className="w-7 h-7 rounded-full bg-[#F0F2F5] hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] transition-colors text-xs font-bold">
+                      className="w-7 h-7 rounded-full bg-[#F0F2F5] dark:bg-slate-700 hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] dark:text-white transition-colors text-sm font-bold">
                       ‹
                     </button>
                     <button onClick={() => scroll('right')}
-                      className="w-7 h-7 rounded-full bg-[#F0F2F5] hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] transition-colors text-xs font-bold">
+                      className="w-7 h-7 rounded-full bg-[#F0F2F5] dark:bg-slate-700 hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] dark:text-white transition-colors text-sm font-bold">
                       ›
                     </button>
-                    {catKey && promoList.length > PREVIEW && !isExpanded && (
+                    {catKey && promoList.length > PREVIEW && (
                       <button onClick={() => setFocusedCat(catKey)}
-                        className="text-[11px] font-semibold text-[#D94F2B] ml-1">
+                        className="text-[11px] font-semibold text-[#D94F2B] ml-1 whitespace-nowrap">
                         Ver todas →
-                      </button>
-                    )}
-                    {catKey && isExpanded && focusedCat === catKey && (
-                      <button onClick={() => setFocusedCat(null)}
-                        className="text-[11px] font-semibold text-[#8B96A5] ml-1">
-                        ← Menos
                       </button>
                     )}
                   </div>
@@ -1524,7 +1521,7 @@ function HomeContent() {
                 <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
                   {shown.map(p => <PromoCard key={p.id} promo={p} />)}
                 </div>
-                <div className="h-px bg-[#F0F2F5] mt-4 mx-4" />
+                <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-4 mx-4" />
               </div>
             )
           }
@@ -1597,6 +1594,79 @@ function HomeContent() {
         </div>
       </div>
     </footer>
+
+      {/* ── Overlay "Ver todas" de una categoría ── */}
+      {focusedCat && (() => {
+        const sec = (() => {
+          for (const p of promosFiltradas) {
+            const key = p.category.slug ?? p.category.name
+            if (key === focusedCat) return { catName: p.category.name, catIcon: p.category.icon ?? '🏷️' }
+          }
+          return null
+        })()
+        const catPromos = promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === focusedCat)
+        if (!sec) return null
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setFocusedCat(null)} />
+            <div className="relative bg-white dark:bg-slate-900 flex flex-col h-full max-w-lg mx-auto w-full shadow-2xl">
+              {/* Header */}
+              <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
+                <button onClick={() => setFocusedCat(null)}
+                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-600 dark:text-white font-bold text-sm">
+                  ←
+                </button>
+                <div>
+                  <p className="text-[15px] font-black text-[#1E3A5F] dark:text-white">{sec.catIcon} {sec.catName}</p>
+                  <p className="text-[11px] text-[#8B96A5]">{catPromos.length} promos</p>
+                </div>
+              </div>
+              {/* Grid vertical */}
+              <div className="overflow-y-auto flex-1 p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {catPromos.map(p => {
+                    const pctReq = bestPercentageReq(p)
+                    const label = discountLabel(p)
+                    const banks = Array.from(new Map(p.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])).values())
+                    const wallets = Array.from(new Map(p.requirements.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])).values())
+                    const entities = [...banks, ...wallets].slice(0, 2)
+                    const nb = p.commerce.id ? nearbyBranches[p.commerce.id] : null
+                    return (
+                      <div key={p.id} onClick={() => { setDetailPromo(p); setFocusedCat(null) }}
+                        className="bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
+                        <div className="relative bg-[#F8F9FB] dark:bg-slate-900 border-b border-[#F0F2F5] dark:border-slate-700 flex items-center justify-center" style={{ height: 72 }}>
+                          {p.commerce.logoUrl
+                            ? <img src={p.commerce.logoUrl} alt={p.commerce.name} className="max-h-10 max-w-[80%] object-contain p-1" />
+                            : <span className="text-2xl">{p.category.icon ?? '🏷️'}</span>
+                          }
+                          {label && (
+                            <div className="absolute top-1.5 right-1.5 bg-[#D94F2B] text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">
+                              {pctReq ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
+                            </div>
+                          )}
+                        </div>
+                        <div className="px-2.5 py-2 space-y-1">
+                          <p className="text-[11px] font-bold text-[#1E3A5F] dark:text-white truncate">{p.commerce.name}</p>
+                          {entities.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {entities.map((e, i) => (
+                                <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300">
+                                  {e.name.split(' ').slice(-1)[0]}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {nb && <p className="text-[9px] text-emerald-600 font-semibold">📍 {nb.count} sucursales</p>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {detailPromo && (
         <PromoDetailSheet
