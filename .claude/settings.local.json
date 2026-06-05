@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:www.bancoprovincia.com.ar)"
+      "WebFetch(domain:www.bancoprovincia.com.ar)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit --skipLibCheck)",
+      "Bash(curl -s -X POST https://promoar.vercel.app/api/internal/vtex-promos -H \"Content-Type: application/json\" -H \"Authorization: Bearer promoar-vtex-2026\" -d \"{\\\\\"site\\\\\":\\\\\"test\\\\\",\\\\\"promos\\\\\":{\\\\\"123\\\\\":{\\\\\"promoCode\\\\\":\\\\\"2x1\\\\\",\\\\\"effectiveDiscount\\\\\":0.5}}}\" -w \"\\\\nHTTP %{http_code}\")"
     ]
   }
 }

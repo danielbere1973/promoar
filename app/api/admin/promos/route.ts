@@ -2,10 +2,21 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// Bulk update category for multiple promos
+// Toggle isFeatured o bulk update category
 export async function PATCH(req: NextRequest) {
   try {
-    const { ids, categoryId } = await req.json()
+    const body = await req.json()
+
+    // Toggle destacada
+    if (body.id && 'isFeatured' in body) {
+      const promo = await prisma.promo.update({
+        where: { id: body.id },
+        data: { isFeatured: body.isFeatured },
+      })
+      return NextResponse.json({ ok: true, isFeatured: promo.isFeatured })
+    }
+
+    const { ids, categoryId } = body
     if (!ids?.length || !categoryId) return NextResponse.json({ error: 'ids y categoryId requeridos' }, { status: 400 })
 
     // Actualizar categoría de las promos

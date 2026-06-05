@@ -33,9 +33,9 @@ function fechaCorta() {
 
 type Req = {
   id?: string
-  bank?: { id?: string; name: string; logoUrl?: string | null } | null
-  wallet?: { id?: string; name: string; logoUrl?: string | null } | null
-  cardNetwork?: { name: string; slug: string } | null
+  bank?: { id: string; name: string; logoUrl?: string | null } | null
+  wallet?: { id: string; name: string; logoUrl?: string | null } | null
+  cardNetwork?: { id?: string; name: string; slug: string } | null
   cardType?: string | null
   paymentChannel?: string | null
   accountType?: string | null
@@ -559,8 +559,8 @@ function HomeContent() {
         if (forMe && guestProfile?.cards?.length && status !== 'authenticated') {
           qParams.set('guest_profile', btoa(JSON.stringify(guestProfile)))
         }
-        // Provincia del usuario (guest o logueado sin addressState)
-        if (province && status !== 'authenticated') {
+        // Provincia del usuario (siempre que esté seleccionada)
+        if (province) {
           qParams.set('province', province)
         }
 
@@ -659,6 +659,51 @@ function HomeContent() {
       .slice(0, 3)
   }, [promos])
 
+  // Entidades disponibles dinámicamente según promosFiltradas + perfil
+  const availableEntities = useMemo(() => {
+    const source = promos
+    const banksMap = new Map<string, { id: string; name: string; logoUrl?: string | null }>()
+    const walletsMap = new Map<string, { id: string; name: string; logoUrl?: string | null }>()
+    const networksMap = new Map<string, { id: string; name: string; slug: string }>()
+    for (const p of source) {
+      for (const r of p.requirements) {
+        if (r.bank?.name) banksMap.set(r.bank.name, r.bank as any)
+        if (r.wallet?.name) walletsMap.set(r.wallet.name, r.wallet as any)
+        if (r.cardNetwork?.name) networksMap.set(r.cardNetwork.name, r.cardNetwork as any)
+      }
+    }
+    let banks = Array.from(banksMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+    let wallets = Array.from(walletsMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+
+    let networks = Array.from(networksMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+
+    // En modo "Para Mí", filtrar por perfil del usuario
+    if (forMe && userProfile) {
+      const profileBankIds = new Set(userProfile.banks.map((b: any) => b.bankId))
+      const profileWalletIds = new Set(userProfile.wallets.map((w: any) => w.walletId))
+      const profileNetworkIds = new Set(userProfile.cards.map((c: any) => c.cardNetworkId).filter(Boolean))
+      if (profileBankIds.size > 0) banks = banks.filter(b => b.id && profileBankIds.has(b.id))
+      if (profileWalletIds.size > 0) wallets = wallets.filter(w => w.id && profileWalletIds.has(w.id))
+      if (profileNetworkIds.size > 0) networks = networks.filter(n => n.id && profileNetworkIds.has(n.id))
+    }
+
+    return { banks, wallets, networks }
+  }, [promos, forMe, userProfile])
+
+  // Categorías populares: por cantidad de comercios únicos (no promos totales)
+  const popularCatsByCommerce = useMemo(() => {
+    const commercesPerCat = new Map<string, Set<string>>()
+    for (const p of promos) {
+      const key = p.category.slug ?? p.category.name
+      if (!commercesPerCat.has(key)) commercesPerCat.set(key, new Set())
+      commercesPerCat.get(key)!.add(p.commerce.name)
+    }
+    return Array.from(commercesPerCat.entries())
+      .sort((a, b) => b[1].size - a[1].size)
+      .slice(0, 6)
+      .map(([slug]) => slug)
+  }, [promos])
+
   const todayDashboard = useMemo(() => {
     if (promos.length === 0) return null
     const todayIdx = new Date().getDay()
@@ -688,7 +733,7 @@ function HomeContent() {
       if (v > entry.bestDiscount) entry.bestDiscount = v
     }
     const catList = Array.from(catMap.values())
-      .filter(c => c.bestDiscount > 0)
+      .filter(c => c.bestDiscount > 0 && c.bestDiscount <= 100)
       .sort((a, b) => b.count !== a.count ? b.count - a.count : b.bestDiscount - a.bestDiscount)
       .slice(0, 5)
 
@@ -745,19 +790,20 @@ function HomeContent() {
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex flex-col">
     <div className="flex flex-1">
       {/* ── Sidebar (Desktop) ── */}
-      <aside className="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-950 z-30">
-        <div className="p-6">
-          <div className="flex items-center gap-2 mb-8">
-            <img src="/logo.jpg" alt="PromoAR" className="h-8 w-auto object-contain" />
-          </div>
+      <aside className="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-950 z-30 overflow-hidden">
+        {/* Logo */}
+        <div className="flex items-center justify-center bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 py-6 px-6 shrink-0">
+          <img src="/logo.jpg" alt="PromoAR" className="w-full h-auto object-contain" />
+        </div>
 
+        <div className="flex-1 flex flex-col overflow-hidden px-6 pt-4">
           <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar pr-2">
             <p className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-4 px-3">Explorar</p>
             <div className="flex gap-1 px-3 mb-6">
               <button
                 onClick={() => setForMe(false)}
                 className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                  !forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
+                  !forMe ? 'bg-[#1E3A5F] border-[#1E3A5F] text-white shadow-sm' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
                 Todas
@@ -774,7 +820,7 @@ function HomeContent() {
                   }
                 }}
                 className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                  forMe ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
+                  forMe ? 'bg-[#1E3A5F] border-[#1E3A5F] text-white shadow-sm' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
                 Para Mí
@@ -787,7 +833,7 @@ function HomeContent() {
                   key={f}
                   onClick={() => setTimeFilter(f)}
                   className={`flex-1 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider transition-all border ${
-                    timeFilter === f ? 'bg-indigo-600 border-indigo-600 text-white shadow-md dark:shadow-indigo-900/30' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
+                    timeFilter === f ? 'bg-[#1E3A5F] border-[#1E3A5F] text-white shadow-sm' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   {f === 'today' ? 'Hoy' : 'Semana'}
@@ -800,7 +846,7 @@ function HomeContent() {
               {/* ── MIS FAVORITOS ── */}
               <div>
                 <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">⭐ Mis Favoritos</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Mis Favoritos</span>
                   <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-300 text-sm font-bold">{openSections.has('favorites') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('favorites') && (
@@ -839,29 +885,144 @@ function HomeContent() {
 
               <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
 
-              {/* ── MÁS POPULARES ── */}
+              {/* ── MÁS POPULARES (por variedad de comercios) ── */}
               <div>
                 <button onClick={() => toggleSection('popular')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
                   <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Más Populares</span>
-                  <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-300 text-sm font-bold">{openSections.has('popular') ? '−' : '+'}</span>
+                  <span className="text-gray-500 dark:text-slate-400 text-sm font-bold">{openSections.has('popular') ? '−' : '+'}</span>
                 </button>
-                {openSections.has('popular') && categorias.filter(c => (c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
+                {openSections.has('popular') && categorias.filter(c => popularCatsByCommerce.includes(c.slug)).sort((a, b) => popularCatsByCommerce.indexOf(a.slug) - popularCatsByCommerce.indexOf(b.slug)).map(cat => {
                   const isActive = selectedCats.includes(cat.slug)
-                  const isFav = favCategories.includes(cat.slug)
-                  const count = forMe ? promos.filter(p => p.category.name === cat.name).length : (cat.promoCount ?? 0)
+                  const count = promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === cat.slug).length
                   return (
-                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-[#EEF2F8] dark:bg-[#1E3A5F]/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                       <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])} className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-base">{cat.icon}</span>
-                        <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-slate-400'}`}>{cat.name}</span>
+                        <span className={`text-xs font-bold truncate ${isActive ? 'text-[#1E3A5F] dark:text-blue-300' : 'text-gray-500 dark:text-slate-400'}`}>{cat.name}</span>
                       </button>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {count > 0 && <span className="text-[10px] text-gray-400 dark:text-slate-500 tabular-nums">{count}</span>}
-                        <button onClick={() => toggleFavCategory(cat.slug)} className={`text-base leading-none transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-400 dark:text-slate-500 hover:text-yellow-400'}`} title={isFav ? 'Quitar favorito' : 'Agregar a favoritos'}>★</button>
-                      </div>
+                      {count > 0 && <span className="text-[10px] text-gray-400 tabular-nums shrink-0">{count}</span>}
                     </div>
                   )
                 })}
+              </div>
+
+              <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
+
+              {/* ── BANCOS ── */}
+              {availableEntities.banks.length > 0 && (
+                <div>
+                  <button onClick={() => toggleSection('banks')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Bancos</span>
+                    <span className="text-sm font-bold text-gray-500">{openSections.has('banks') ? '−' : '+'}</span>
+                  </button>
+                  {openSections.has('banks') && availableEntities.banks.map(b => {
+                    const isActive = activeFilters.banks.includes((b as any).id)
+                    return (
+                      <button key={(b as any).id} onClick={() => setActiveFilters(prev => ({ ...prev, banks: isActive ? prev.banks.filter(id => id !== (b as any).id) : [...prev.banks, (b as any).id] }))}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                        {b.logoUrl && <img src={b.logoUrl} className="w-5 h-5 object-contain rounded shrink-0" />}
+                        <span className="truncate">{b.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {availableEntities.wallets.length > 0 && <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />}
+
+              {/* ── BILLETERAS ── */}
+              {availableEntities.wallets.length > 0 && (
+                <div>
+                  <button onClick={() => toggleSection('wallets')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Billeteras</span>
+                    <span className="text-sm font-bold text-gray-500">{openSections.has('wallets') ? '−' : '+'}</span>
+                  </button>
+                  {openSections.has('wallets') && availableEntities.wallets.map(w => {
+                    const isActive = activeFilters.wallets.includes((w as any).id)
+                    return (
+                      <button key={(w as any).id} onClick={() => setActiveFilters(prev => ({ ...prev, wallets: isActive ? prev.wallets.filter(id => id !== (w as any).id) : [...prev.wallets, (w as any).id] }))}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                        {w.logoUrl && <img src={w.logoUrl} className="w-5 h-5 object-contain rounded shrink-0" />}
+                        <span className="truncate">{w.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
+
+              {/* ── TARJETAS ── */}
+              {availableEntities.networks.length > 0 && (
+                <div>
+                  <button onClick={() => toggleSection('networks')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Tarjetas</span>
+                    <span className="text-sm font-bold text-gray-500">{openSections.has('networks') ? '−' : '+'}</span>
+                  </button>
+                  {openSections.has('networks') && availableEntities.networks.map(n => {
+                    const isActive = activeFilters.networks.includes((n as any).id)
+                    return (
+                      <button key={(n as any).id ?? n.name}
+                        onClick={() => setActiveFilters(prev => ({ ...prev, networks: isActive ? prev.networks.filter(id => id !== (n as any).id) : [...prev.networks, (n as any).id] }))}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                        <span className="truncate">{n.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {availableEntities.networks.length > 0 && <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />}
+
+              {/* ── DÍAS ── */}
+              <div>
+                <button onClick={() => toggleSection('days')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Días</span>
+                  <span className="text-sm font-bold text-gray-500">{openSections.has('days') ? '−' : '+'}</span>
+                </button>
+                {openSections.has('days') && (
+                  <div className="flex gap-1 px-3 pb-2 flex-wrap">
+                    {[{l:'L',b:2},{l:'M',b:4},{l:'X',b:8},{l:'J',b:16},{l:'V',b:32},{l:'S',b:64},{l:'D',b:1}].map(({l, b}) => {
+                      const isActive = activeFilters.days.includes(b)
+                      return (
+                        <button key={l} onClick={() => setActiveFilters(prev => ({ ...prev, days: isActive ? prev.days.filter(d => d !== b) : [...prev.days, b] }))}
+                          className={`w-8 h-8 rounded-full text-xs font-black transition-all ${isActive ? 'bg-[#1E3A5F] text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-400 hover:bg-gray-200'}`}>
+                          {l}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
+
+              {/* ── CON TOPE / MÍNIMO / CSI ── */}
+              <div>
+                <button onClick={() => toggleSection('extras')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Condiciones</span>
+                  <span className="text-sm font-bold text-gray-500">{openSections.has('extras') ? '−' : '+'}</span>
+                </button>
+                {openSections.has('extras') && (
+                  <div className="space-y-1 px-1">
+                    {[
+                      { label: 'Con tope de reintegro', key: 'hasCap', val: true },
+                      { label: 'Sin tope', key: 'hasCap', val: false },
+                      { label: 'Con cuotas sin interés', key: 'hasInstallments', val: true },
+                    ].map(({ label, key, val }) => {
+                      const isActive = (activeFilters as any)[key] === val
+                      return (
+                        <button key={label} onClick={() => setActiveFilters(prev => ({ ...prev, [key]: isActive ? null : val }))}
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                          <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${isActive ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'}`}>
+                            {isActive && <span className="text-white text-[8px] font-black">✓</span>}
+                          </span>
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
@@ -919,9 +1080,9 @@ function HomeContent() {
 
             </div>
           </nav>
-        </div>
+        </div>{/* flex-1 wrapper */}
 
-        <div className="mt-auto pt-6 border-t border-gray-100/50 dark:border-slate-800/50 space-y-4 p-6">
+        <div className="shrink-0 pt-4 border-t border-gray-100/50 dark:border-slate-800/50 space-y-3 px-6 pb-6">
             {isAdmin && (
               <button
                 onClick={() => {
@@ -937,7 +1098,7 @@ function HomeContent() {
 
             {status === 'authenticated' ? (
               <Link href="/perfil" className="flex items-center gap-3 p-2 rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shadow-inner">
+                <div className="w-10 h-10 rounded-full bg-[#EEF2F8] dark:bg-[#1E3A5F]/30 flex items-center justify-center text-[#1E3A5F] dark:text-blue-300 font-bold shadow-inner">
                   {nombre[0]}
                 </div>
                 <div className="min-w-0">
@@ -946,7 +1107,7 @@ function HomeContent() {
                 </div>
               </Link>
             ) : (
-              <Link href="/login" className="flex items-center justify-center gap-2 w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30 hover:bg-indigo-700 transition-all active:scale-95">
+              <Link href="/login" className="flex items-center justify-center gap-2 w-full py-3 bg-[#1E3A5F] text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-[#142840] transition-all active:scale-95">
                 <LogIn size={14} /> Iniciar Sesión
               </Link>
             )}
@@ -954,32 +1115,40 @@ function HomeContent() {
       </aside>
 
       {/* ── Main Content ── */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto no-scrollbar">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto no-scrollbar">
         {/* Top bar sticky */}
         <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-20 shadow-sm shadow-black/[0.01]">
           <div className="px-4 lg:px-6 py-3 lg:py-4">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest hidden lg:block">{fechaHoy()}</p>
-                  <p className="text-[11px] text-gray-500 font-bold tracking-widest lg:hidden">{fechaCorta()}</p>
-                  {status === 'authenticated' && (
-                    <p className="text-[11px] text-indigo-600 font-bold hidden lg:block">Hola, {nombre.split(' ')[0]} 👋</p>
+              <div className="flex flex-col min-w-0">
+                {/* Mobile: fecha + usuario + logout */}
+                <div className="flex items-center gap-2 lg:hidden">
+                  <p className="text-[11px] text-gray-500 font-bold">{fechaCorta()}</p>
+                  {province && (
+                    <button onClick={() => setShowProvinceSelector(true)} className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                      <MapPin size={9} /> {province}
+                    </button>
                   )}
-                  {/* Mobile: Salir inline con la fecha */}
                   {status === 'authenticated' && (
                     <button onClick={() => { import('next-auth/react').then(m => m.signOut({ callbackUrl: '/login' })) }}
-                      className="lg:hidden text-[10px] font-bold text-gray-300 hover:text-red-400 transition-colors ml-1">
+                      className="text-[10px] font-bold text-gray-300 hover:text-red-400 transition-colors ml-auto">
                       Salir
                     </button>
                   )}
+                  {status !== 'authenticated' && (
+                    <a href="/login" className="text-[10px] font-bold text-[#D94F2B] ml-auto">Ingresar</a>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <img src="/logo.jpg" alt="PromoAR" className="h-7 lg:h-9 w-auto object-contain" />
-                  <h1 className="text-lg lg:text-3xl font-black tracking-tighter text-gray-900 hidden lg:block">
-                    {timeFilter === 'today' ? 'Promociones Hoy' : 'Catálogo de la Semana'}
-                  </h1>
+                {/* Desktop: fecha + saludo */}
+                <div className="hidden lg:flex items-center gap-2">
+                  <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">{fechaHoy()}</p>
+                  {status === 'authenticated' && (
+                    <p className="text-[11px] text-[#1E3A5F] font-bold">Hola, {nombre.split(' ')[0]} 👋</p>
+                  )}
                 </div>
+                <h1 className="text-lg lg:text-3xl font-black tracking-tighter text-[#1E3A5F] dark:text-white hidden lg:block mt-0.5">
+                  {timeFilter === 'today' ? 'Promociones Hoy' : 'Catálogo de la Semana'}
+                </h1>
               </div>
 
               <div className="flex items-center gap-3 flex-1 justify-end">
@@ -1258,119 +1427,80 @@ function HomeContent() {
 
       {/* ── Dashboard de resumen ── */}
       {!loading && todayDashboard && (
-        <div className="mb-6 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl p-5 text-white shadow-lg shadow-indigo-200/40 dark:shadow-indigo-900/30">
-          {/* Hero */}
-          <div className="flex items-start justify-between mb-4">
+        <div className="mb-4 bg-[#1E3A5F] dark:bg-slate-800 rounded-2xl p-4 text-white">
+          {/* Fila 1: héroe + días */}
+          <div className="flex items-center justify-between gap-3 mb-3">
             <div>
-              <p className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">Hoy podés ahorrar</p>
-              <p className="text-4xl sm:text-5xl font-black leading-none mt-1" style={{ color: '#c6f135' }}>
-                {todayDashboard.maxDiscount > 0 ? `Hasta ${todayDashboard.maxDiscount}%` : `${todayDashboard.totalPromos} promos`}
+              <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest leading-none mb-0.5">
+                {forMe ? 'Para tu perfil' : 'Disponibles hoy'}
               </p>
-              <p className="text-indigo-200 text-xs font-bold mt-1">{todayDashboard.totalPromos} promociones{forMe ? ' para tu perfil' : ' disponibles'} hoy</p>
+              <p className="text-2xl font-black leading-none">
+                {todayDashboard.totalPromos} promos
+                {todayDashboard.maxDiscount > 0 && <span className="text-[#D94F2B] text-lg ml-2">hasta {todayDashboard.maxDiscount}%</span>}
+              </p>
             </div>
-            <Sparkles size={32} className="text-white/20 mt-1 shrink-0" />
+            <div className="flex gap-1 shrink-0">
+              {todayDashboard.dayCounts.map(({ label, count, isToday, dayIdx }) => {
+                const isActive = activeFilters.days.includes(dayIdx)
+                return (
+                  <button key={label + dayIdx}
+                    onClick={() => setActiveFilters(prev => ({ ...prev, days: isActive ? prev.days.filter(d => d !== dayIdx) : [...prev.days, dayIdx] }))}
+                    className={`w-7 h-7 rounded-full flex flex-col items-center justify-center transition-all ${
+                      isActive ? 'bg-white text-[#1E3A5F]' : isToday ? 'bg-[#D94F2B] text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
+                    }`}>
+                    <span className="text-[9px] font-black leading-none">{label}</span>
+                    <span className="text-[8px] leading-none opacity-70">{count}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Semana L M X J V S D */}
-          <div className="grid grid-cols-7 gap-1 mb-4">
-            {todayDashboard.dayCounts.map(({ label, count, isToday, dayIdx }) => {
-              const isActive = activeFilters.days.includes(dayIdx)
-              return (
-                <button
-                  key={label + dayIdx}
-                  onClick={() => setActiveFilters(prev => ({
-                    ...prev,
-                    days: isActive ? prev.days.filter(d => d !== dayIdx) : [...prev.days, dayIdx],
-                  }))}
-                  className={`flex flex-col items-center py-2 rounded-xl transition-all ${
-                    isActive ? 'bg-white/30 ring-1 ring-white/60' : isToday ? 'bg-white/15 ring-1 ring-white/30' : 'hover:bg-white/10'
-                  }`}
-                >
-                  <span className={`text-[10px] font-black leading-none ${isToday ? 'text-white' : 'text-indigo-300'}`}>{label}</span>
-                  <span className={`text-[12px] font-black tabular-nums mt-0.5 ${count > 0 ? 'text-white' : 'text-indigo-500'}`}>{count}</span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Top Categorías y Comercios: 1 col en mobile, 2 en desktop */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Fila 2: top categorías */}
           {todayDashboard.catList.length > 0 && (
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300 mb-1.5">Top categorías</p>
-              <div className="flex flex-col gap-1.5">
-                {todayDashboard.catList.map(cat => {
-                  const isActive = selectedCats.includes(cat.slug)
-                  const isFav = favCategories.includes(cat.slug)
-                  return (
-                    <button
-                      key={cat.slug}
-                      onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
-                      className={`flex flex-col rounded-xl px-3 py-2 transition-all text-left ${
-                        isActive ? 'bg-white/25 ring-1 ring-white/60' : 'bg-white/10 hover:bg-white/20'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0 mb-0.5">
-                        <span className="text-sm shrink-0">{cat.icon}</span>
-                        <span className="text-[11px] font-bold text-white/90 truncate">{cat.name}</span>
-                        {isFav && <span className="text-yellow-300 text-[9px] shrink-0">★</span>}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-white/50">{cat.count} promos</span>
-                        <span className="text-[13px] font-black" style={{ color: '#c6f135' }}>hasta {cat.bestDiscount}%</span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar mb-2">
+              {todayDashboard.catList.map(cat => {
+                const isActive = selectedCats.includes(cat.slug)
+                return (
+                  <button key={cat.slug}
+                    onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all shrink-0 ${
+                      isActive ? 'bg-white text-[#1E3A5F]' : 'bg-white/10 text-white/80 hover:bg-white/20'
+                    }`}>
+                    <span>{cat.icon}</span>
+                    <span>{cat.name}</span>
+                    <span className={`text-[10px] font-black ${isActive ? 'text-[#D94F2B]' : 'text-white/50'}`}>{cat.bestDiscount}%</span>
+                  </button>
+                )
+              })}
             </div>
           )}
 
-          {/* Top 5 Comercios */}
+          {/* Fila 3: top comercios */}
           {todayDashboard.commList.length > 0 && (
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300 mb-1.5">Top comercios</p>
-              <div className="flex flex-col gap-1.5">
-                {todayDashboard.commList.map(c => {
-                  const isFav = favCommerces.includes(c.name)
-                  const isFiltered = activeFilters.commerces[0]?.toLowerCase() === c.name.toLowerCase()
-                  return (
-                    <button
-                      key={c.name}
-                      onClick={() => {
-                        if (isFiltered) {
-                          setActiveFilters(prev => ({ ...prev, commerces: [] }))
-                          setSearchText('')
-                        } else {
-                          setSearchMode('exact')
-                          setActiveFilters(prev => ({ ...prev, commerces: [c.name] }))
-                          setSearchText(c.name)
-                        }
-                      }}
-                      className={`flex flex-col rounded-xl px-3 py-2 transition-all text-left ${
-                        isFiltered ? 'bg-white/25 ring-1 ring-white/60' : 'bg-white/10 hover:bg-white/20'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-0.5 min-w-0">
-                        {c.logoUrl ? (
-                          <img src={c.logoUrl} alt={c.name} className="h-5 w-5 object-contain rounded shrink-0 bg-white/90 p-0.5" />
-                        ) : (
-                          <span className="h-5 w-5 flex items-center justify-center bg-white/20 rounded text-[9px] font-black shrink-0">{c.name.slice(0,2).toUpperCase()}</span>
-                        )}
-                        <span className="text-[11px] font-bold text-white/90 truncate">{c.name}</span>
-                        {isFav && <span className="text-yellow-300 text-[9px] shrink-0">★</span>}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-white/50">{c.count} promos</span>
-                        <span className="text-[12px] font-black" style={{ color: '#c6f135' }}>hasta {c.bestDiscount}%</span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pt-2 border-t border-white/10">
+              {todayDashboard.commList.map(c => {
+                const isFiltered = activeFilters.commerces[0]?.toLowerCase() === c.name.toLowerCase()
+                return (
+                  <button key={c.name}
+                    onClick={() => {
+                      if (isFiltered) { setActiveFilters(prev => ({ ...prev, commerces: [] })); setSearchText('') }
+                      else { setSearchMode('exact'); setActiveFilters(prev => ({ ...prev, commerces: [c.name] })); setSearchText(c.name) }
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all shrink-0 ${
+                      isFiltered ? 'bg-white text-[#1E3A5F]' : 'bg-white/10 text-white/80 hover:bg-white/20'
+                    }`}>
+                    {c.logoUrl
+                      ? <img src={c.logoUrl} className="h-4 w-4 object-contain rounded bg-white/90 p-0.5 shrink-0" />
+                      : <span className="text-[9px] font-black">{c.name.slice(0,2).toUpperCase()}</span>
+                    }
+                    <span>{c.name}</span>
+                    <span className={`text-[10px] font-black ${isFiltered ? 'text-[#D94F2B]' : 'text-white/50'}`}>{c.bestDiscount}%</span>
+                  </button>
+                )
+              })}
             </div>
           )}
-          </div>{/* fin grid 2 columnas */}
         </div>
       )}
 
@@ -1420,11 +1550,13 @@ function HomeContent() {
             byCat.get(key)!.promos.push(p)
           }
 
-          // Destacadas: top 6 por descuento
-          const destacadas = [...promosFiltradas]
-            .filter(p => bestPercentageReq(p)?.discountValue)
+          // Destacadas: primero las marcadas como featured, luego top por descuento
+          const featuredPromos = promosFiltradas.filter(p => (p as any).isFeatured)
+          const topByDiscount = [...promosFiltradas]
+            .filter(p => !(p as any).isFeatured && (bestPercentageReq(p)?.discountValue ?? 0) <= 100 && bestPercentageReq(p)?.discountValue)
             .sort((a, b) => (bestPercentageReq(b)?.discountValue ?? 0) - (bestPercentageReq(a)?.discountValue ?? 0))
-            .slice(0, 6)
+            .slice(0, Math.max(0, 6 - featuredPromos.length))
+          const destacadas = [...featuredPromos, ...topByDiscount]
 
           const PromoCard = ({ promo }: { promo: typeof promosFiltradas[0] }) => {
             const pctReq = bestPercentageReq(promo)
@@ -1438,7 +1570,7 @@ function HomeContent() {
             return (
               <div
                 onClick={() => setDetailPromo(promo)}
-                className="bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer flex-shrink-0 transition-shadow hover:shadow-md active:scale-[0.98]"
+                className="bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer flex-shrink-0 transition-all hover:shadow-lg hover:scale-[1.03] hover:border-[#1E3A5F] active:scale-[0.97]"
                 style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
               >
                 {/* Imagen/Logo */}
@@ -1450,7 +1582,7 @@ function HomeContent() {
                       {promo.category.icon ?? '🏷️'}
                     </div>
                   )}
-                  {label && (
+                  {(pctReq?.discountValue ?? 0) <= 100 && label && (
                     <div className="absolute top-2 right-2 bg-[#D94F2B] text-white text-[10px] font-black px-1.5 py-0.5 rounded-md leading-tight">
                       {pctReq ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
                     </div>
@@ -1464,8 +1596,8 @@ function HomeContent() {
 
                 {/* Body */}
                 <div className="px-2.5 pt-2 pb-3 space-y-1.5">
-                  <p className="text-[12px] font-bold text-[#1E3A5F] dark:text-white truncate leading-tight">{promo.commerce.name}</p>
-                  <p className="text-[10px] text-[#6B7A8D] dark:text-slate-400 leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
+                  <p className="text-[13px] font-bold text-gray-900 dark:text-white truncate leading-tight">{promo.commerce.name}</p>
+                  <p className="text-[11px] text-gray-600 dark:text-slate-400 leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
 
                   {entities.length > 0 && (
                     <div className="flex flex-wrap gap-1">
@@ -1540,12 +1672,9 @@ function HomeContent() {
         })()}
 
       </div>
-    </main>
 
-    </div>{/* fin flex row sidebar+content */}
-
-    {/* ══════════ FOOTER ══════════ */}
-    <footer className="bg-slate-900 text-slate-400 mt-12 pb-24">
+      {/* ══════════ FOOTER ══════════ */}
+    <footer className="bg-slate-900 text-slate-400 pb-24">
       <div className="max-w-5xl mx-auto px-6 py-10">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
           <div>
@@ -1592,6 +1721,8 @@ function HomeContent() {
         </div>
       </div>
     </footer>
+    </main>
+    </div>{/* fin flex row sidebar+content */}
 
       {/* ── Overlay "Ver todas" de una categoría ── */}
       {focusedCat && (() => {

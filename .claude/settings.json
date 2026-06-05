@@ -13,7 +13,8 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
       "Bash(curl -s \"https://ahorrosybeneficios.bancopatagonia.com.ar/pub/media/mageplaza/search/ahorrosybeneficios_0.js\")",
       "Bash(curl -s \"https://ahorrosybeneficios.bancopatagonia.com.ar/ahorrosybeneficios/havanna.html\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s \"https://api.mercadolibre.com/sites/MLA/search?q=heladera+samsung&limit=3\")"
     ]
   }
 }

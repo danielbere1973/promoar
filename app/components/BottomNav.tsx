@@ -41,13 +41,12 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
     { label: 'Comunidad',   icon: Users,             href: '/comunidad', action: undefined },
     { label: 'Filtros',     icon: SlidersHorizontal, href: undefined,    action: onFilter },
     { label: 'Categorías',  icon: undefined,         href: '/explorar',  action: undefined },
-    { label: 'Buscar',      icon: Search,            href: undefined,    action: onSearch },
     { label: 'Inversiones', icon: TrendingUp,        href: '/finanzas',  action: undefined },
     { label: 'Perfil',      icon: UserCircle,        href: '/perfil',    action: undefined },
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-slate-700 z-30 pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 lg:left-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-slate-700 z-30 pb-safe">
       <div className="flex w-full justify-around items-center px-1 pt-1.5 pb-1">
         {navItems.map((item) => {
           const active = item.href ? pathname === item.href : false

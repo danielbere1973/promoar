@@ -302,6 +302,7 @@ model Promo {
   categoryId         String
   commerceId         String
   status             PromoStatus        @default(DRAFT)
+  isFeatured         Boolean            @default(false)
   sourceUrl          String?
   sourceNote         String?
   commerceNote       String?            // Ej: "Solo comercios con Openpay"

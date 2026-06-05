@@ -326,7 +326,12 @@ async function collectPromosForSite({ host, baseUrl }) {
       }
     }
 
-    console.log(`[${host}] ${Object.keys(promos).length} promos recolectadas`)
+    // Debug: verificar SKUs con ambos segmentos
+    const skuIds = Object.values(promos).map(p => p.skuId)
+    const withBoth = [...new Set(skuIds)].filter(id =>
+      promos[`${id}__generic`] && promos[`${id}__jumbo_prime`]
+    )
+    console.log(`[${host}] ${Object.keys(promos).length} promos recolectadas (${withBoth.length} con ambos segmentos: ${withBoth.slice(0,5).join(',')})`)
     console.log(`[${host}] Enriqueciendo con catálogo...`)
     await enrichWithCatalog(baseUrl, promos)
   } finally {

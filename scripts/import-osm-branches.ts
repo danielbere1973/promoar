@@ -193,10 +193,38 @@ out body;`
   return []
 }
 
+async function exportCsv() {
+  const dbCommerces = await prisma.commerce.findMany({ select: { id: true, name: true } })
+  const normStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+  const rows: string[] = ['Marca,Comercios en DB,Sucursales OSM,Comercios matcheados']
+
+  for (const def of BRANCH_DEFS) {
+    const allNames = [def.name, ...(def.aliases ?? [])]
+    const matchingCommerces = dbCommerces.filter(c => {
+      const nc = normStr(c.name)
+      return allNames.some(n => {
+        const nn = normStr(n)
+        return nc === nn || nc.startsWith(nn + ' ') || nc.includes(' ' + nn) || nc.includes(nn)
+      })
+    })
+    const branches = await queryOverpass(def)
+    const comerciosStr = matchingCommerces.map(c => c.name).join(' | ') || '—'
+    rows.push(`"${def.name}",${matchingCommerces.length},${branches.length},"${comerciosStr}"`)
+    console.log(`${def.name}: ${branches.length} OSM, ${matchingCommerces.length} DB`)
+    await new Promise(r => setTimeout(r, 800))
+  }
+
+  const fs = await import('fs')
+  fs.writeFileSync('osm-branches-export.csv', rows.join('\n'), 'utf8')
+  console.log('\n✅ Exportado a osm-branches-export.csv')
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const commerceFilter = args[args.indexOf('--commerce') + 1]?.toLowerCase()
   const dryRun = args.includes('--dry-run')
+  const exportMode = args.includes('--export')
 
   if (dryRun) console.log('⚠️  DRY RUN — sin cambios en DB')
 
@@ -212,49 +240,57 @@ async function main() {
   let totalSkipped = 0
 
   for (const def of defs) {
-    // Buscar el commerce en DB por nombre exacto o alias
     const allNames = [def.name, ...(def.aliases ?? [])]
-    const commerce = dbCommerces.find(c =>
-      allNames.some(n => normStr(c.name) === normStr(n))
-    )
 
-    if (!commerce) {
+    // Buscar TODOS los comercios que contengan el nombre de la marca
+    // Ej: "Havanna" matchea "HAVANNA GOOGLE PAY", "Havanna San Nicolas", etc.
+    const matchingCommerces = dbCommerces.filter(c => {
+      const nc = normStr(c.name)
+      return allNames.some(n => {
+        const nn = normStr(n)
+        return nc === nn || nc.startsWith(nn + ' ') || nc.includes(' ' + nn) || nc.includes(nn)
+      })
+    })
+
+    if (matchingCommerces.length === 0) {
       console.log(`⚠️  ${def.name}: no encontrado en DB, saltando`)
       continue
     }
 
-    console.log(`\n📍 ${def.name} (${commerce.id})...`)
+    console.log(`\n📍 ${def.name} → ${matchingCommerces.length} comercio(s): ${matchingCommerces.map(c => c.name).join(', ')}`)
     const branches = await queryOverpass(def)
     console.log(`   OSM: ${branches.length} sucursales encontradas`)
 
     if (branches.length === 0 || dryRun) {
-      if (dryRun && branches.length > 0) console.log(`   (dry-run) Se guardarían ${branches.length} sucursales`)
+      if (dryRun && branches.length > 0) console.log(`   (dry-run) Se guardarían ${branches.length} sucursales para ${matchingCommerces.length} comercios`)
       continue
     }
 
-    // Guardar en DB (upsert por osmId)
+    // Guardar en DB: para cada sucursal OSM, crear una entrada por cada comercio que matcheó
     let imported = 0
     let skipped = 0
     for (const b of branches) {
-      try {
-        await prisma.commerceBranch.upsert({
-          where: { source_osmId: { source: 'OSM', osmId: b.osmId } },
-          update: { lat: b.lat, lng: b.lng, name: b.name, address: b.address, city: b.city, province: b.province },
-          create: {
-            commerceId: commerce.id,
-            osmId: b.osmId,
-            source: 'OSM',
-            lat: b.lat,
-            lng: b.lng,
-            name: b.name,
-            address: b.address,
-            city: b.city,
-            province: b.province,
-          },
-        })
-        imported++
-      } catch {
-        skipped++
+      for (const commerce of matchingCommerces) {
+        try {
+          await prisma.commerceBranch.upsert({
+            where: { source_osmId: { source: 'OSM', osmId: `${b.osmId}_${commerce.id}` } },
+            update: { lat: b.lat, lng: b.lng, name: b.name, address: b.address, city: b.city, province: b.province },
+            create: {
+              commerceId: commerce.id,
+              osmId: `${b.osmId}_${commerce.id}`,
+              source: 'OSM',
+              lat: b.lat,
+              lng: b.lng,
+              name: b.name,
+              address: b.address,
+              city: b.city,
+              province: b.province,
+            },
+          })
+          imported++
+        } catch {
+          skipped++
+        }
       }
     }
 
@@ -273,4 +309,9 @@ async function main() {
   await prisma.$disconnect()
 }
 
-main().catch(e => { console.error('ERROR:', e); process.exit(1) })
+const _args = process.argv.slice(2)
+if (_args.includes('--export')) {
+  exportCsv().catch(e => { console.error('ERROR:', e); process.exit(1) })
+} else {
+  main().catch(e => { console.error('ERROR:', e); process.exit(1) })
+}

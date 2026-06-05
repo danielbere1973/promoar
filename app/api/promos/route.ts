@@ -78,14 +78,15 @@ export async function GET(req: NextRequest) {
     }
 
     // Filtro por provincia: usuario logueado con addressState, o guest con param ?province=
-    const guestProvince = searchParams.get('province')
+    const paramProvince = searchParams.get('province')
     let userProvince: string | null = null
 
     if (email) {
       const userObj = await prisma.user.findUnique({ where: { email }, select: { addressState: true } })
-      userProvince = userObj?.addressState || null
-    } else if (guestProvince) {
-      userProvince = guestProvince
+      // Preferir el param explícito (selección manual) sobre el guardado en perfil
+      userProvince = paramProvince || userObj?.addressState || null
+    } else {
+      userProvince = paramProvince
     }
 
     if (userProvince) {
@@ -155,7 +156,7 @@ export async function GET(req: NextRequest) {
           include: {
             bank: { select: { id: true, name: true, logoUrl: true } },
             wallet: { select: { id: true, name: true, logoUrl: true } },
-            cardNetwork: { select: { name: true, slug: true } },
+            cardNetwork: { select: { id: true, name: true, slug: true } },
           },
         },
       },

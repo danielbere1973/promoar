@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PromoAR — Opción 2: Bold & Energético</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #F0F4F8; color: #1E3A5F; min-height: 100vh; }
+
+  /* HEADER */
+  .header {
+    background: #1E3A5F;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo { font-size: 24px; font-weight: 900; color: white; letter-spacing: -0.5px; }
+  .logo span { color: #D94F2B; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.2); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; border: 2px solid rgba(255,255,255,0.3); }
+  .notif-btn { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+
+  /* HERO */
+  .hero { background: #1E3A5F; padding: 4px 20px 24px; }
+  .hero-inner { background: #D94F2B; border-radius: 20px; padding: 20px; position: relative; overflow: hidden; }
+  .hero-bg { position: absolute; right: -20px; top: -20px; font-size: 120px; opacity: 0.1; }
+  .hero-tag { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.7); margin-bottom: 4px; }
+  .hero-num { font-size: 52px; font-weight: 900; color: white; line-height: 1; letter-spacing: -2px; }
+  .hero-sub { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.85); margin-top: 4px; }
+  .hero-pills { display: flex; gap: 8px; margin-top: 16px; }
+  .hero-pill { background: rgba(255,255,255,0.2); border-radius: 100px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: white; }
+
+  /* CATS */
+  .cats-wrap { background: #1E3A5F; padding: 0 20px 16px; overflow-x: auto; }
+  .cats { display: flex; gap: 8px; white-space: nowrap; }
+  .cat {
+    padding: 8px 16px; border-radius: 100px;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7);
+    border: 1.5px solid transparent;
+    transition: all 0.15s;
+  }
+  .cat.active { background: white; color: #1E3A5F; }
+  .cat:hover:not(.active) { background: rgba(255,255,255,0.2); color: white; }
+
+  /* SECTION TITLE */
+  .section { padding: 20px 20px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .section-title { font-size: 16px; font-weight: 800; color: #1E3A5F; }
+  .section-link { font-size: 13px; font-weight: 600; color: #D94F2B; }
+
+  /* CARDS */
+  .cards { padding: 0 20px 100px; display: flex; flex-direction: column; gap: 12px; }
+
+  .card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 8px rgba(30,58,95,0.08);
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(30,58,95,0.15); }
+
+  .card-header {
+    background: #1E3A5F;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-header-left { display: flex; align-items: center; gap: 10px; }
+  .card-logo-sm {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .card-commerce { font-size: 15px; font-weight: 800; color: white; }
+  .card-cat { font-size: 11px; color: rgba(255,255,255,0.6); font-weight: 500; }
+  .card-discount-big { font-size: 28px; font-weight: 900; color: #D94F2B; }
+  .card-discount-type { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.6); text-align: right; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .card-body { padding: 14px 16px; }
+  .card-info-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .info-icon { font-size: 14px; }
+  .info-text { font-size: 13px; color: #4A5568; font-weight: 500; }
+  .info-text strong { color: #1E3A5F; font-weight: 700; }
+
+  .card-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+  .chip-bank { background: #EEF2F8; color: #1E3A5F; }
+  .chip-orange { background: #FEF0EC; color: #D94F2B; }
+  .chip-blue { background: #EBF5FF; color: #2D7DD2; }
+
+  /* BOTTOM NAV */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #1E3A5F;
+    display: flex; padding: 10px 0 18px;
+  }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
+  .nav-icon { font-size: 20px; }
+  .nav-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.5); }
+  .nav-item.active .nav-label { color: white; }
+  .nav-item.active .nav-icon { }
+  .active-bar { width: 20px; height: 3px; background: #D94F2B; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">Promo<span>%</span>AR</div>
+  <div class="header-right">
+    <div class="notif-btn">🔔</div>
+    <div class="avatar">PB</div>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-bg">%</div>
+    <div class="hero-tag">Mejor descuento hoy</div>
+    <div class="hero-num">35%</div>
+    <div class="hero-sub">reintegro en Coto con BNA</div>
+    <div class="hero-pills">
+      <div class="hero-pill">847 promos hoy</div>
+      <div class="hero-pill">12 para tu perfil</div>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORÍAS -->
+<div class="cats-wrap">
+  <div class="cats">
+    <div class="cat active">🛒 Supermercados</div>
+    <div class="cat">🍕 Gastronomía</div>
+    <div class="cat">⛽ Combustible</div>
+    <div class="cat">💊 Farmacias</div>
+    <div class="cat">👗 Indumentaria</div>
+    <div class="cat">📱 Tecnología</div>
+  </div>
+</div>
+
+<!-- SECTION -->
+<div class="section">
+  <div class="section-title">Supermercados</div>
+  <div class="section-link">Ver todas →</div>
+</div>
+
+<!-- CARDS -->
+<div class="cards">
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-logo-sm">🛒</div>
+        <div>
+          <div class="card-commerce">Coto</div>
+          <div class="card-cat">Supermercados</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="card-discount-big">35%</div>
+        <div class="card-discount-type">Reintegro</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-info-row">
+        <span class="info-icon">🏦</span>
+        <span class="info-text"><strong>Banco Nación</strong> · Visa / Mastercard Débito</span>
+      </div>
+      <div class="card-info-row">
+        <span class="info-icon">📅</span>
+        <span class="info-text">Todos los días · Vence 30 jun</span>
+      </div>
+      <div class="card-info-row">
+        <span class="info-icon">🔒</span>
+        <span class="info-text">Tope <strong>$8.000/mes</strong></span>
+      </div>
+      <div class="card-chips" style="margin-top:8px">
+        <span class="chip chip-bank">BNA</span>
+        <span class="chip chip-blue">Débito</span>
+        <span class="chip chip-orange">Sin mínimo</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-logo-sm">🛒</div>
+        <div>
+          <div class="card-commerce">Carrefour</div>
+          <div class="card-cat">Supermercados</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="card-discount-big">30%</div>
+        <div class="card-discount-type">Descuento</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-info-row">
+        <span class="info-icon">📱</span>
+        <span class="info-text"><strong>Mercado Pago</strong> · QR · Dinero en cuenta</span>
+      </div>
+      <div class="card-info-row">
+        <span class="info-icon">📅</span>
+        <span class="info-text">Jueves · Vence 30 jun</span>
+      </div>
+      <div class="card-info-row">
+        <span class="info-icon">✅</span>
+        <span class="info-text"><strong>Sin tope</strong> · Acumulable</span>
+      </div>
+      <div class="card-chips" style="margin-top:8px">
+        <span class="chip chip-bank">Mercado Pago</span>
+        <span class="chip chip-orange">QR</span>
+        <span class="chip chip-orange">Acumulable</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-logo-sm">🛒</div>
+        <div>
+          <div class="card-commerce">Jumbo</div>
+          <div class="card-cat">Supermercados</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="card-discount-big">25%</div>
+        <div class="card-discount-type">Reintegro</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-info-row">
+        <span class="info-icon">🏦</span>
+        <span class="info-text"><strong>Banco Galicia</strong> · Visa Crédito</span>
+      </div>
+      <div class="card-info-row">
+        <span class="info-icon">📅</span>
+        <span class="info-text">Martes y jueves · Vence 30 jun</span>
+      </div>
+      <div class="card-info-row">
+        <span class="info-icon">🔒</span>
+        <span class="info-text">Tope <strong>$6.000/mes</strong> · Mín. $2.000</span>
+      </div>
+      <div class="card-chips" style="margin-top:8px">
+        <span class="chip chip-bank">Galicia</span>
+        <span class="chip chip-blue">Visa Crédito</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-left">
+        <div class="card-logo-sm">⛽</div>
+        <div>
+          <div class="card-commerce">YPF</div>
+          <div class="card-cat">Combustible</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="card-discount-big">25%</div>
+        <div class="card-discount-type">Reintegro</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-info-row">
+        <span class="info-icon">🏦</span>
+        <span class="info-text"><strong>BBVA</strong> · Débito</span>
+      </div>
+      <div class="card-info-row">
+        <span class="info-icon">📅</span>
+        <span class="info-text">Miércoles y viernes</span>
+      </div>
+      <div class="card-chips" style="margin-top:8px">
+        <span class="chip chip-bank">BBVA</span>
+        <span class="chip chip-blue">Débito</span>
+        <span class="chip chip-orange">Combustible</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <div class="nav-item active">
+    <div class="nav-icon">🏷️</div>
+    <div class="nav-label" style="color:white">Promos</div>
+    <div class="active-bar"></div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">🔍</div>
+    <div class="nav-label">Buscar</div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">☰</div>
+    <div class="nav-label">Filtros</div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">👤</div>
+    <div class="nav-label">Perfil</div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -11,6 +11,7 @@ export default function Registro() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [acceptsNewsletter, setAcceptsNewsletter] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -138,6 +139,19 @@ export default function Registro() {
               </div>
             )}
 
+            {/* Consentimiento newsletter */}
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={acceptsNewsletter}
+                onChange={e => setAcceptsNewsletter(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 accent-[#1E3A5F] shrink-0"
+              />
+              <span className="text-xs text-gray-500 leading-relaxed">
+                Acepto recibir información, notificaciones y newsletter de PromoAR al email declarado en el registro.
+              </span>
+            </label>
+
             {error && (
               <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
             )}
@@ -145,7 +159,7 @@ export default function Registro() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-700 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+              className="w-full bg-[#1E3A5F] hover:bg-[#142840] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors"
             >
               {loading ? 'Creando cuenta...' : 'Crear cuenta'}
             </button>

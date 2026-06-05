@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PromoAR — Layout Netflix</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #F4F6F9; color: #1E3A5F; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+  /* ── HEADER ── */
+  .header {
+    background: white;
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid #EAECF0;
+    position: sticky; top: 0; z-index: 20;
+  }
+  .logo { font-size: 22px; font-weight: 900; color: #1E3A5F; letter-spacing: -0.5px; }
+  .logo span { color: #D94F2B; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: #F4F6F9; border: 1px solid #E4E8EF;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; cursor: pointer;
+  }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: #1E3A5F; color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+  }
+
+  /* ── HERO BANNER ── */
+  .hero {
+    background: white;
+    padding: 20px 20px 0;
+    border-bottom: 1px solid #EAECF0;
+  }
+  .hero-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+  .hero-greeting { font-size: 12px; color: #8B96A5; font-weight: 500; margin-bottom: 2px; }
+  .hero-title { font-size: 20px; font-weight: 800; color: #1E3A5F; }
+  .hero-title span { color: #D94F2B; }
+  .best-pill {
+    background: #FEF0EC; border: 1px solid #F5C4B5;
+    border-radius: 12px; padding: 8px 12px; text-align: center;
+    min-width: 90px;
+  }
+  .best-pill-num { font-size: 22px; font-weight: 900; color: #D94F2B; line-height: 1; }
+  .best-pill-label { font-size: 10px; color: #D94F2B; font-weight: 600; margin-top: 1px; }
+  .best-pill-sub { font-size: 10px; color: #8B96A5; margin-top: 2px; }
+
+  /* ── CATEGORÍAS SCROLL ── */
+  .cats-wrap {
+    background: white;
+    overflow-x: auto;
+    padding: 12px 20px;
+    scrollbar-width: none;
+  }
+  .cats-wrap::-webkit-scrollbar { display: none; }
+  .cats { display: flex; gap: 8px; white-space: nowrap; }
+  .cat {
+    padding: 7px 14px; border-radius: 100px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    background: #F4F6F9; color: #8B96A5;
+    border: 1.5px solid #E4E8EF;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .cat.active { background: #1E3A5F; color: white; border-color: #1E3A5F; }
+  .cat:hover:not(.active) { border-color: #1E3A5F; color: #1E3A5F; }
+
+  /* ── SECCIONES ── */
+  .content { padding: 20px 0 100px; }
+
+  .section { margin-bottom: 28px; }
+  .section-header {
+    padding: 0 20px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title { font-size: 15px; font-weight: 800; color: #1E3A5F; }
+  .section-count { font-size: 12px; color: #8B96A5; font-weight: 500; }
+  .section-link { font-size: 13px; font-weight: 600; color: #D94F2B; cursor: pointer; }
+
+  /* ── SCROLL ROW ── */
+  .scroll-row {
+    overflow-x: auto;
+    padding: 0 20px 8px;
+    scrollbar-width: none;
+    display: flex; gap: 12px;
+  }
+  .scroll-row::-webkit-scrollbar { display: none; }
+
+  /* ── CARD ── */
+  .card {
+    background: white;
+    border: 1px solid #EAECF0;
+    border-radius: 16px;
+    width: 160px;
+    min-width: 160px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: box-shadow 0.15s, transform 0.15s;
+    flex-shrink: 0;
+  }
+  .card:hover { box-shadow: 0 6px 20px rgba(30,58,95,0.12); transform: translateY(-2px); }
+
+  .card-img {
+    width: 100%; height: 90px;
+    background: #F4F6F9;
+    display: flex; align-items: center; justify-content: center;
+    border-bottom: 1px solid #F0F2F5;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-img img { max-width: 80%; max-height: 70%; object-fit: contain; }
+  .card-img-emoji { font-size: 40px; }
+  .card-img-bg { position: absolute; inset: 0; opacity: 0.04; font-size: 80px; display: flex; align-items: center; justify-content: center; }
+
+  .card-discount-badge {
+    position: absolute; top: 8px; right: 8px;
+    background: #D94F2B; color: white;
+    font-size: 11px; font-weight: 800;
+    padding: 3px 7px; border-radius: 8px;
+  }
+
+  .card-body { padding: 10px 12px 12px; }
+  .card-cat { font-size: 10px; font-weight: 600; color: #D94F2B; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+  .card-commerce { font-size: 14px; font-weight: 700; color: #1E3A5F; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-desc { font-size: 11px; color: #8B96A5; font-weight: 400; line-height: 1.4; margin-bottom: 10px; }
+  .card-desc strong { color: #1E3A5F; font-weight: 600; }
+
+  .card-entities { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+  .entity-logo {
+    height: 18px; width: auto; max-width: 32px;
+    object-fit: contain;
+  }
+  .entity-pill {
+    height: 20px; padding: 0 6px;
+    background: #F4F6F9; border: 1px solid #E4E8EF;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; color: #4A6A8A;
+  }
+  .entity-sep { font-size: 10px; color: #C8D0DA; }
+
+  .card-day { font-size: 11px; color: #8B96A5; font-weight: 400; }
+  .card-day strong { color: #1E3A5F; font-weight: 600; }
+
+  /* ── WIDE CARD (destacada) ── */
+  .card-wide {
+    width: 260px; min-width: 260px;
+    display: flex; flex-direction: column;
+  }
+  .card-wide .card-img { height: 110px; }
+  .card-wide .card-body { display: flex; flex-direction: column; flex: 1; }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: white; border-top: 1px solid #EAECF0;
+    display: flex; padding: 8px 0 18px;
+  }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; padding: 4px 0; }
+  .nav-icon { font-size: 20px; }
+  .nav-label { font-size: 10px; font-weight: 600; color: #8B96A5; }
+  .nav-item.active .nav-label { color: #1E3A5F; font-weight: 700; }
+  .nav-dot { width: 4px; height: 4px; border-radius: 50%; background: #D94F2B; }
+
+  /* ── DIVIDER ── */
+  .divider { height: 8px; background: #F4F6F9; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">Promo<span>%</span>AR</div>
+  <div class="header-right">
+    <div class="icon-btn">🔍</div>
+    <div class="icon-btn">⚡</div>
+    <div class="avatar">PB</div>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-top">
+    <div>
+      <div class="hero-greeting">Miércoles · Buenos Aires</div>
+      <div class="hero-title">847 promos<br>disponibles <span>hoy</span></div>
+    </div>
+    <div class="best-pill">
+      <div class="best-pill-num">35%</div>
+      <div class="best-pill-label">mejor</div>
+      <div class="best-pill-sub">descuento</div>
+    </div>
+  </div>
+
+  <!-- CATEGORÍAS -->
+  <div class="cats-wrap" style="padding: 0 0 0; margin: 0 -20px;">
+    <div class="cats" style="padding: 0 20px;">
+      <div class="cat active">Todas</div>
+      <div class="cat">🛒 Supermercados</div>
+      <div class="cat">🍕 Gastronomía</div>
+      <div class="cat">⛽ Combustible</div>
+      <div class="cat">💊 Farmacias</div>
+      <div class="cat">👗 Indumentaria</div>
+      <div class="cat">📱 Tecnología</div>
+      <div class="cat">🐾 Mascotas</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- SECCIÓN: SUPERMERCADOS -->
+  <div class="section">
+    <div class="section-header">
+      <div>
+        <div class="section-title">🛒 Supermercados</div>
+        <div class="section-count">211 promos</div>
+      </div>
+      <div class="section-link">Ver todas →</div>
+    </div>
+    <div class="scroll-row">
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">🛒</div>
+          <div class="card-discount-badge">35%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Supermercados</div>
+          <div class="card-commerce">Coto</div>
+          <div class="card-desc">Aprovechá hasta <strong>35% de ahorro</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">BNA</div>
+            <div class="entity-sep">·</div>
+            <div class="entity-pill">Visa</div>
+            <div class="entity-pill">MC</div>
+          </div>
+          <div class="card-day">Todos los días</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">🛒</div>
+          <div class="card-discount-badge">30%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Supermercados</div>
+          <div class="card-commerce">Carrefour</div>
+          <div class="card-desc"><strong>30% de descuento</strong> con dinero en cuenta</div>
+          <div class="card-entities">
+            <div class="entity-pill">Mercado Pago</div>
+          </div>
+          <div class="card-day"><strong>Jueves</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">🛒</div>
+          <div class="card-discount-badge">25%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Supermercados</div>
+          <div class="card-commerce">Jumbo</div>
+          <div class="card-desc">Hasta <strong>25% de ahorro</strong> y 3 cuotas sin interés</div>
+          <div class="card-entities">
+            <div class="entity-pill">Galicia</div>
+            <div class="entity-sep">·</div>
+            <div class="entity-pill">Visa</div>
+          </div>
+          <div class="card-day"><strong>Mar</strong> y <strong>Jue</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">🛒</div>
+          <div class="card-discount-badge">20%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Supermercados</div>
+          <div class="card-commerce">Disco</div>
+          <div class="card-desc">Aprovechá hasta <strong>20% de ahorro</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">Santander</div>
+            <div class="entity-sep">·</div>
+            <div class="entity-pill">Visa</div>
+          </div>
+          <div class="card-day"><strong>Lunes</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">🛒</div>
+          <div class="card-discount-badge">20%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Supermercados</div>
+          <div class="card-commerce">La Anónima</div>
+          <div class="card-desc">Hasta <strong>20% de ahorro</strong> con MODO</div>
+          <div class="card-entities">
+            <div class="entity-pill">MODO</div>
+            <div class="entity-sep">+</div>
+            <div class="entity-pill">Macro</div>
+          </div>
+          <div class="card-day">Todos los días</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- SECCIÓN: GASTRONOMÍA -->
+  <div class="section" style="margin-top:20px">
+    <div class="section-header">
+      <div>
+        <div class="section-title">🍕 Gastronomía</div>
+        <div class="section-count">1304 promos</div>
+      </div>
+      <div class="section-link">Ver todas →</div>
+    </div>
+    <div class="scroll-row">
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">☕</div>
+          <div class="card-discount-badge">30%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Gastronomía</div>
+          <div class="card-commerce">Havanna</div>
+          <div class="card-desc">Hasta <strong>30% de ahorro</strong> con QR</div>
+          <div class="card-entities">
+            <div class="entity-pill">ICBC</div>
+            <div class="entity-sep">+</div>
+            <div class="entity-pill">MODO</div>
+          </div>
+          <div class="card-day">Todos los días</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">🍔</div>
+          <div class="card-discount-badge">25%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Gastronomía</div>
+          <div class="card-commerce">McDonald's</div>
+          <div class="card-desc">Hasta <strong>25% de descuento</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">Galicia</div>
+            <div class="entity-sep">·</div>
+            <div class="entity-pill">MC</div>
+          </div>
+          <div class="card-day"><strong>Miércoles</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">🍦</div>
+          <div class="card-discount-badge">20%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Gastronomía</div>
+          <div class="card-commerce">Freddo</div>
+          <div class="card-desc">Hasta <strong>20% de reintegro</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">BBVA</div>
+            <div class="entity-sep">·</div>
+            <div class="entity-pill">Visa</div>
+          </div>
+          <div class="card-day"><strong>Viernes</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">🍕</div>
+          <div class="card-discount-badge">20%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Gastronomía</div>
+          <div class="card-commerce">Mostaza</div>
+          <div class="card-desc">Hasta <strong>20% de descuento</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">Naranja X</div>
+          </div>
+          <div class="card-day">Todos los días</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">☕</div>
+          <div class="card-discount-badge">15%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Gastronomía</div>
+          <div class="card-commerce">Café Martínez</div>
+          <div class="card-desc">Hasta <strong>15% de ahorro</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">Santander</div>
+          </div>
+          <div class="card-day"><strong>Lun</strong> y <strong>Mié</strong></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- SECCIÓN: COMBUSTIBLE -->
+  <div class="section" style="margin-top:20px">
+    <div class="section-header">
+      <div>
+        <div class="section-title">⛽ Combustible</div>
+        <div class="section-count">18 promos</div>
+      </div>
+      <div class="section-link">Ver todas →</div>
+    </div>
+    <div class="scroll-row">
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">⛽</div>
+          <div class="card-discount-badge">25%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Combustible</div>
+          <div class="card-commerce">YPF</div>
+          <div class="card-desc">Hasta <strong>25% de ahorro</strong> en carga</div>
+          <div class="card-entities">
+            <div class="entity-pill">BBVA</div>
+            <div class="entity-sep">·</div>
+            <div class="entity-pill">Débito</div>
+          </div>
+          <div class="card-day"><strong>Mié</strong> y <strong>Vie</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">⛽</div>
+          <div class="card-discount-badge">20%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Combustible</div>
+          <div class="card-commerce">Shell</div>
+          <div class="card-desc">Hasta <strong>20% de reintegro</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">Galicia</div>
+            <div class="entity-sep">·</div>
+            <div class="entity-pill">Visa</div>
+          </div>
+          <div class="card-day"><strong>Jueves</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">⛽</div>
+          <div class="card-discount-badge">15%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Combustible</div>
+          <div class="card-commerce">Axion</div>
+          <div class="card-desc">Hasta <strong>15% de ahorro</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">Santander</div>
+          </div>
+          <div class="card-day">Todos los días</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- SECCIÓN: FARMACIAS -->
+  <div class="section" style="margin-top:20px">
+    <div class="section-header">
+      <div>
+        <div class="section-title">💊 Farmacias</div>
+        <div class="section-count">194 promos</div>
+      </div>
+      <div class="section-link">Ver todas →</div>
+    </div>
+    <div class="scroll-row">
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">💊</div>
+          <div class="card-discount-badge">20%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Farmacias</div>
+          <div class="card-commerce">Farmacity</div>
+          <div class="card-desc">Hasta <strong>20% de descuento</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">Galicia</div>
+            <div class="entity-sep">·</div>
+            <div class="entity-pill">Visa</div>
+          </div>
+          <div class="card-day"><strong>Martes</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">💊</div>
+          <div class="card-discount-badge">15%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Farmacias</div>
+          <div class="card-commerce">Dr. Ahorro</div>
+          <div class="card-desc">Hasta <strong>15% de ahorro</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">MODO</div>
+            <div class="entity-sep">+</div>
+            <div class="entity-pill">BNA</div>
+          </div>
+          <div class="card-day">Todos los días</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-img">
+          <div class="card-img-emoji">💊</div>
+          <div class="card-discount-badge">10%</div>
+        </div>
+        <div class="card-body">
+          <div class="card-cat">Farmacias</div>
+          <div class="card-commerce">Farmaplus</div>
+          <div class="card-desc">Hasta <strong>10% de ahorro</strong></div>
+          <div class="card-entities">
+            <div class="entity-pill">Supervielle</div>
+          </div>
+          <div class="card-day"><strong>Lunes</strong></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <div class="nav-item active">
+    <div class="nav-icon">🏷️</div>
+    <div class="nav-label" style="color:#1E3A5F">Promos</div>
+    <div class="nav-dot"></div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">🔍</div>
+    <div class="nav-label">Buscar</div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">⚡</div>
+    <div class="nav-label">Filtros</div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">👤</div>
+    <div class="nav-label">Perfil</div>
+  </div>
+</div>
+
+</body>
+</html>

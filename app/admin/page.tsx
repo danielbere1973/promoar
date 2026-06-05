@@ -74,6 +74,7 @@ type PromoFull = {
   categoryId: string
   commerceId: string
   status: string
+  isFeatured: boolean
   sourceUrl: string | null
   sourceNote: string | null
   sourceText: string | null
@@ -1034,6 +1035,10 @@ export default function AdminPage() {
                     isDeleting={deleteConfirm === p.id}
                     onCancelDelete={() => setDeleteConfirm(null)}
                     confirmDelete={() => handleDelete(p.id)}
+                    onToggleFeatured={async () => {
+                      const res = await fetch('/api/admin/promos', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, isFeatured: !p.isFeatured }) })
+                      if (res.ok) fetchPromos()
+                    }}
                     discount={
                       p.requirements.length > 0
                         ? discountLabel(p.requirements.reduce((max, r) => (r.discountValue ?? 0) > (max.discountValue ?? 0) ? r : max, p.requirements[0]))
@@ -2298,9 +2303,9 @@ function EntityRow({ name, img, onEdit, onDelete, badge }: any) {
   )
 }
 
-function PromoCard({ promo, onEdit, onDelete, isDeleting, onCancelDelete, confirmDelete, discount, conditions, isExpiredView }: any) {
+function PromoCard({ promo, onEdit, onDelete, isDeleting, onCancelDelete, confirmDelete, discount, conditions, isExpiredView, onToggleFeatured }: any) {
   return (
-    <div className="bg-white border border-slate-200 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-all flex flex-col group">
+    <div className={`bg-white border rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-all flex flex-col group ${promo.isFeatured ? 'border-yellow-300 bg-yellow-50/30' : 'border-slate-200'}`}>
       <div className="flex justify-between items-start gap-4 mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
@@ -2310,12 +2315,18 @@ function PromoCard({ promo, onEdit, onDelete, isDeleting, onCancelDelete, confir
             <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${promo.status === 'ACTIVE' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
               {promo.status}
             </span>
+            {promo.isFeatured && <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-yellow-100 text-yellow-700">⭐ DESTACADA</span>}
           </div>
-          <h4 className="font-bold text-slate-900 text-sm leading-tight group-hover:text-indigo-600 transition-colors">{promo.title}</h4>
+          <h4 className="font-bold text-slate-900 text-sm leading-tight">{promo.title}</h4>
           <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{promo.commerce.name}</p>
         </div>
-        <div className="shrink-0 text-right">
+        <div className="flex flex-col items-end gap-2">
           <span className="text-xl font-black text-green-600 tracking-tighter">{discount}</span>
+          <button onClick={onToggleFeatured}
+            title={promo.isFeatured ? 'Quitar de destacadas' : 'Marcar como destacada'}
+            className={`text-lg transition-colors ${promo.isFeatured ? 'text-yellow-400 hover:text-gray-300' : 'text-gray-200 hover:text-yellow-400'}`}>
+            ★
+          </button>
         </div>
       </div>
 
