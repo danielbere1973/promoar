@@ -14,6 +14,7 @@ import PromoDetailSheet from './components/PromoDetailSheet'
 import PromoWizard, { GuestProfile } from './components/PromoWizard'
 import ProvinceSelector from './components/ProvinceSelector'
 import ThemeToggle from './components/ThemeToggle'
+import SplashScreen from './components/SplashScreen'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -311,6 +312,7 @@ function HomeContent() {
 
   const [promos, setPromos] = useState<Promo[]>([])
   const [loading, setLoading] = useState(true)
+  const [initialLoad, setInitialLoad] = useState(true)
   const [visibleCount, setVisibleCount] = useState(20)
   const [loadingAll, setLoadingAll] = useState(false)
   const [showAccessDenied, setShowAccessDenied] = useState(
@@ -576,7 +578,10 @@ function HomeContent() {
       } catch (e: any) {
         if (e?.name !== 'AbortError') console.error(e)
       } finally {
-        if (!controller.signal.aborted) setLoading(false)
+        if (!controller.signal.aborted) {
+          setLoading(false)
+          setInitialLoad(false)
+        }
       }
     }
     load()
@@ -787,6 +792,8 @@ function HomeContent() {
 
 
   return (
+    <>
+    {initialLoad && <SplashScreen loading={loading} />}
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex flex-col">
     <div className="flex flex-1">
       {/* ── Sidebar (Desktop) ── */}
@@ -845,37 +852,45 @@ function HomeContent() {
 
               {/* ── MIS FAVORITOS ── */}
               <div>
-                <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Mis Favoritos</span>
-                  <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-300 text-sm font-bold">{openSections.has('favorites') ? '−' : '+'}</span>
+                <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
+                  <span className="text-sm font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Mis Favoritos</span>
+                  <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-300 text-base font-bold">{openSections.has('favorites') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('favorites') && (
-                  <div className="mt-1 space-y-3 px-3">
+                  <div className="mt-2 space-y-4 px-3">
                     <div>
-                      <p className="text-[9px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-widest mb-1">Categorías <span className="text-gray-500 dark:text-slate-500">({favCategories.length}/3)</span></p>
-                      {favCategories.length === 0 && <p className="text-[10px] text-gray-500 dark:text-slate-500 italic px-1">Marcá ★ en una categoría</p>}
+                      <p className="text-[11px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-widest mb-2">
+                        Categorías <span className="text-gray-400 dark:text-slate-500 font-bold">({favCategories.length}/3)</span>
+                      </p>
+                      {favCategories.length === 0 && (
+                        <p className="text-xs text-gray-400 dark:text-slate-500 italic px-1 py-1">Marcá ★ en una categoría</p>
+                      )}
                       {favCategories.map(slug => {
                         const cat = categorias.find(c => c.slug === slug)
                         if (!cat) return null
                         const isActive = selectedCats.includes(slug)
                         return (
-                          <div key={slug} className={`flex items-center justify-between px-2 py-1.5 rounded-lg ${isActive ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                          <div key={slug} className={`flex items-center justify-between px-2 py-2 rounded-xl ${isActive ? 'bg-[#EEF2F8] dark:bg-[#1E3A5F]/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                             <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== slug) : [...prev, slug])} className="flex items-center gap-2 flex-1 min-w-0">
-                              <span className="text-base">{cat.icon}</span>
-                              <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-slate-300'}`}>{cat.name}</span>
+                              <span className="text-lg">{cat.icon}</span>
+                              <span className={`text-sm font-bold truncate ${isActive ? 'text-[#1E3A5F] dark:text-blue-300' : 'text-gray-700 dark:text-slate-300'}`}>{cat.name}</span>
                             </button>
-                            <button onClick={() => toggleFavCategory(slug)} className="text-yellow-400 hover:text-gray-400 dark:hover:text-slate-600 ml-2 shrink-0" title="Quitar de favoritos">★</button>
+                            <button onClick={() => toggleFavCategory(slug)} className="text-yellow-400 hover:text-gray-300 dark:hover:text-slate-600 ml-2 shrink-0 text-lg" title="Quitar de favoritos">★</button>
                           </div>
                         )
                       })}
                     </div>
                     <div>
-                      <p className="text-[9px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-widest mb-1">Comercios <span className="text-gray-500 dark:text-slate-500">({favCommerces.length}/5)</span></p>
-                      {favCommerces.length === 0 && <p className="text-[10px] text-gray-500 dark:text-slate-500 italic px-1">Marcá ★ en un comercio</p>}
+                      <p className="text-[11px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-widest mb-2">
+                        Comercios <span className="text-gray-400 dark:text-slate-500 font-bold">({favCommerces.length}/5)</span>
+                      </p>
+                      {favCommerces.length === 0 && (
+                        <p className="text-xs text-gray-400 dark:text-slate-500 italic px-1 py-1">Marcá ★ en un comercio</p>
+                      )}
                       {favCommerces.map(name => (
-                        <div key={name} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800">
-                          <span className="text-xs font-bold text-gray-700 dark:text-slate-300 truncate flex-1">{name}</span>
-                          <button onClick={() => toggleFavCommerce(name)} className="text-yellow-400 hover:text-gray-400 dark:hover:text-slate-600 ml-2 shrink-0" title="Quitar de favoritos">★</button>
+                        <div key={name} className="flex items-center justify-between px-2 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800">
+                          <span className="text-sm font-bold text-gray-700 dark:text-slate-300 truncate flex-1">{name}</span>
+                          <button onClick={() => toggleFavCommerce(name)} className="text-yellow-400 hover:text-gray-300 dark:hover:text-slate-600 ml-2 shrink-0 text-lg" title="Quitar de favoritos">★</button>
                         </div>
                       ))}
                     </div>
@@ -1861,6 +1876,7 @@ function HomeContent() {
         />
       )}
     </div>
+    </>
   )
 }
 

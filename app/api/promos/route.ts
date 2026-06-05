@@ -46,21 +46,11 @@ export async function GET(req: NextRequest) {
     const today = new Date()
     const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
 
-    // Auto-expiration logic: Lazy update active promos that have already expired
-    // We only expire if the validUntil date is strictly before the START of today.
-    try {
-      await prisma.promo.updateMany({
-        where: {
-          status: 'ACTIVE',
-          validUntil: { lt: startOfToday }
-        },
-        data: {
-          status: 'EXPIRED'
-        }
-      })
-    } catch (e) {
-      console.error('Error in auto-expiration logic:', e)
-    }
+    // Auto-expiration: se maneja en background, no bloquea el request
+    prisma.promo.updateMany({
+      where: { status: 'ACTIVE', validUntil: { lt: startOfToday } },
+      data: { status: 'EXPIRED' }
+    }).catch(() => {})
 
     // Default to today if no specific day filter is provided
     const defaultDayBit = 1 << today.getDay()
@@ -80,11 +70,23 @@ export async function GET(req: NextRequest) {
     // Filtro por provincia: usuario logueado con addressState, o guest con param ?province=
     const paramProvince = searchParams.get('province')
     let userProvince: string | null = null
+    let fetchedUser: any = null
 
     if (email) {
-      const userObj = await prisma.user.findUnique({ where: { email }, select: { addressState: true } })
-      // Preferir el param explícito (selección manual) sobre el guardado en perfil
+      // Una sola query: traemos provincia + perfil completo de una vez (evita doble hit a DB)
+      const userObj = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          addressState: true,
+          financialProfile: { include: { banks: true, wallets: true, cards: true } },
+          savedPromos: { select: { promoId: true } },
+        }
+      })
       userProvince = paramProvince || userObj?.addressState || null
+      // Pre-asignar si forMe y no admin (evita segunda query más adelante)
+      if (forMe && !isAdmin && userObj?.financialProfile) {
+        fetchedUser = userObj as any
+      }
     } else {
       userProvince = paramProvince
     }
@@ -149,7 +151,6 @@ export async function GET(req: NextRequest) {
             name: true,
             slug: true,
             logoUrl: true,
-            _count: { select: { promos: { where: { status: 'ACTIVE' } } } },
           },
         },
         requirements: {
@@ -199,7 +200,6 @@ export async function GET(req: NextRequest) {
     // FILTRADO POR PERFIL FINANCIERO - CON BYPASS PARA ADMIN
     // ═══════════════════════════════════════════════════════════════════════
     let userProfile = null
-    let fetchedUser = null
 
     // Guest profile: perfil temporal sin registro (viene en query param base64)
     const guestProfileParam = searchParams.get('guest_profile')
@@ -215,16 +215,20 @@ export async function GET(req: NextRequest) {
     // Mapa cardTier → segmentId: para matchear tiers (Selecta, Eminent) con segmentos del perfil
     const tierToSegmentId = new Map<string, string>()
     if (forMe && email && !isAdmin) {
-      fetchedUser = await prisma.user.findUnique({
-        where: { email },
-        include: {
-          financialProfile: { include: { banks: true, wallets: true, cards: true } },
-          savedPromos: true
-        }
-      })
-      userProfile = fetchedUser?.financialProfile || null
+      // fetchedUser ya fue cargado arriba junto con la provincia (evita segunda query)
+      if (!fetchedUser) {
+        fetchedUser = await prisma.user.findUnique({
+          where: { email },
+          select: {
+            addressState: true,
+            financialProfile: { include: { banks: true, wallets: true, cards: true } },
+            savedPromos: { select: { promoId: true } },
+          }
+        }) as any
+      }
+      userProfile = (fetchedUser as any)?.financialProfile || null
 
-      // Cargar segmentos bancarios para mapear cardTier → segmentId por nombre
+      // Cargar segmentos bancarios en paralelo con otras operaciones si es necesario
       if (userProfile) {
         const allSegments = await prisma.bankSegment.findMany({ select: { id: true, name: true } })
         for (const seg of allSegments) {
@@ -475,6 +479,13 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Ordenamiento ──────────────────────────────────────────────────────
+    // Popularidad de comercio: cantidad de promos en el resultado actual (sin _count subquery)
+    const commercePromoCount: Record<string, number> = {}
+    for (const p of dedupedPromos) {
+      const cname = (p as any).commerce?.name ?? ''
+      commercePromoCount[cname] = (commercePromoCount[cname] ?? 0) + 1
+    }
+
     // 1. Métricas por promo
     const promoData = dedupedPromos.map(p => {
       const maxPct = (p as any).requirements.reduce((max: number, r: any) => {
@@ -486,8 +497,8 @@ export async function GET(req: NextRequest) {
         return Math.max(max, r.discountValue ?? 0)
       }, 0)
       const catSlug: string = (p as any).category?.slug ?? ''
-      const commercePopularity: number = (p as any).commerce?._count?.promos ?? 0
       const name: string = (p as any).commerce?.name ?? ''
+      const commercePopularity: number = commercePromoCount[name] ?? 0
       // Tipo: 1 = solo %, 2 = % + CSI, 3 = solo CSI
       const type = maxPct > 0 && maxCsi > 0 ? 2 : maxPct > 0 ? 1 : 3
       return { p, maxPct, maxCsi, catSlug, commercePopularity, name, type }
