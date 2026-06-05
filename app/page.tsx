@@ -1455,6 +1455,11 @@ function HomeContent() {
                       {pctReq ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
                     </div>
                   )}
+                  {nb && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-emerald-600/90 text-white text-[9px] font-semibold px-2 py-0.5 text-center truncate">
+                      📍 {nb.count} {nb.count === 1 ? 'sucursal' : 'sucursales'}
+                    </div>
+                  )}
                 </div>
 
                 {/* Body */}
@@ -1473,13 +1478,6 @@ function HomeContent() {
                   )}
 
                   <p className="text-[10px] text-[#8B96A5] dark:text-slate-400">{days === 'Todos los días' ? 'Todos los días' : days.replace('Lunes a viernes', 'Lun–Vie')}</p>
-
-                  {/* Sucursales cercanas */}
-                  {nb && (
-                    <p className="text-[9.5px] text-emerald-600 font-semibold">
-                      📍 {nb.count} {nb.count === 1 ? 'sucursal' : 'sucursales'} · {nb.minDistKm < 0.1 ? '-100m' : `${nb.minDistKm}km`}
-                    </p>
-                  )}
                 </div>
               </div>
             )
