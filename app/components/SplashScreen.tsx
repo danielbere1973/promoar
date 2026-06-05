@@ -1,12 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
 
-export default function SplashScreen({ loading }: { loading: boolean }) {
+export default function SplashScreen({ loading, onDone }: { loading: boolean; onDone: () => void }) {
   const [progress, setProgress] = useState(0)
-  const [visible, setVisible] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
 
-  // Simula progreso: va rápido al 70%, luego frena hasta que loading=false
+  // Animación de progreso: va rápido a 70%, luego frena hasta que loading=false
   useEffect(() => {
     let raf: number
     let start: number | null = null
@@ -17,12 +16,11 @@ export default function SplashScreen({ loading }: { loading: boolean }) {
       if (!start) start = ts
       const elapsed = ts - start
       const fast = Math.min((elapsed / FAST_DURATION) * 70, 70)
-      // Después de 70%, avanza muy lento
       const slow = elapsed > FAST_DURATION
         ? Math.min(70 + ((elapsed - FAST_DURATION) / 8000) * (SLOW_TARGET - 70), SLOW_TARGET)
         : fast
       setProgress(Math.round(slow))
-      if (slow < SLOW_TARGET || loading) raf = requestAnimationFrame(animate)
+      if (slow < SLOW_TARGET) raf = requestAnimationFrame(animate)
     }
     raf = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(raf)
@@ -32,19 +30,25 @@ export default function SplashScreen({ loading }: { loading: boolean }) {
   useEffect(() => {
     if (!loading) {
       setProgress(100)
-      const t = setTimeout(() => {
+      const t1 = setTimeout(() => {
         setFadeOut(true)
-        setTimeout(() => setVisible(false), 400)
-      }, 300)
-      return () => clearTimeout(t)
+        const t2 = setTimeout(() => {
+          onDone()
+        }, 450)
+        return () => clearTimeout(t2)
+      }, 350)
+      return () => clearTimeout(t1)
     }
   }, [loading])
 
-  if (!visible) return null
-
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white transition-opacity duration-400 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white"
+      style={{
+        opacity: fadeOut ? 0 : 1,
+        transition: 'opacity 0.45s ease-out',
+        pointerEvents: fadeOut ? 'none' : 'auto',
+      }}
     >
       <div className="flex flex-col items-center gap-8 px-8 w-full max-w-sm">
         {/* Logo */}
@@ -64,10 +68,11 @@ export default function SplashScreen({ loading }: { loading: boolean }) {
         <div className="w-full space-y-2">
           <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-300 ease-out"
+              className="h-full rounded-full"
               style={{
                 width: `${progress}%`,
                 background: 'linear-gradient(90deg, #D94F2B, #e8724f)',
+                transition: 'width 0.3s ease-out',
               }}
             />
           </div>

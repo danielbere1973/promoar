@@ -312,7 +312,7 @@ function HomeContent() {
 
   const [promos, setPromos] = useState<Promo[]>([])
   const [loading, setLoading] = useState(true)
-  const [initialLoad, setInitialLoad] = useState(true)
+  const [showSplash, setShowSplash] = useState(true)
   const [visibleCount, setVisibleCount] = useState(20)
   const [loadingAll, setLoadingAll] = useState(false)
   const [showAccessDenied, setShowAccessDenied] = useState(
@@ -580,7 +580,6 @@ function HomeContent() {
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
-          setInitialLoad(false)
         }
       }
     }
@@ -793,7 +792,7 @@ function HomeContent() {
 
   return (
     <>
-    {initialLoad && <SplashScreen loading={loading} />}
+    {showSplash && <SplashScreen loading={loading} onDone={() => setShowSplash(false)} />}
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex flex-col">
     <div className="flex flex-1">
       {/* ── Sidebar (Desktop) ── */}
