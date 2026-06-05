@@ -83,7 +83,9 @@ function formatDate(d: string | null | undefined): string {
   return new Date(d).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function PromoDetailSheet({ promo, onClose }: { promo: Promo; onClose: () => void }) {
+type NearbyBranch = { count: number; minDistKm: number }
+
+export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { promo: Promo; nearbyBranch?: NearbyBranch; onClose: () => void }) {
   // Cerrar con Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -344,6 +346,24 @@ export default function PromoDetailSheet({ promo, onClose }: { promo: Promo; onC
                 </div>
               )}
             </div>
+          )}
+
+          {/* Sucursales */}
+          {nearbyBranch && (
+            <a
+              href={`https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 hover:bg-emerald-100 transition-colors"
+            >
+              <MapPin size={18} className="text-emerald-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-emerald-800">Ver sucursales en Google Maps</p>
+                <p className="text-xs text-emerald-600">
+                  {nearbyBranch.count} {nearbyBranch.count === 1 ? 'sucursal' : 'sucursales'} · más cerca a {nearbyBranch.minDistKm < 0.1 ? 'menos de 100m' : `${nearbyBranch.minDistKm}km`}
+                </p>
+              </div>
+              <span className="text-emerald-500 font-bold text-sm">→</span>
+            </a>
           )}
 
           {/* Legales */}

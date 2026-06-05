@@ -1,5 +1,5 @@
 'use client'
-import { Suspense } from 'react'
+import React, { Suspense } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -64,7 +64,7 @@ type Promo = {
   salesChannel?: string | null
   commerceNote?: string | null
   category: { name: string; slug?: string; color: string; icon?: string }
-  commerce: { name: string; logoUrl?: string | null }
+  commerce: { id?: string; name: string; logoUrl?: string | null }
   requirements: Req[]
   validFrom: string
   validUntil: string | null
@@ -322,6 +322,7 @@ function HomeContent() {
   const [isCategoryOpen, setIsCategoryOpen] = useState(false)
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null)
   const [detailPromo, setDetailPromo] = useState<Promo | null>(null)
+  const [focusedCat, setFocusedCat] = useState<string | null>(null)
   const [entitiesPromo, setEntitiesPromo] = useState<Promo | null>(null)
   const [expandedPromos, setExpandedPromos] = useState<Set<string>>(new Set())
   const toggleExpand = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setExpandedPromos(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
@@ -1480,51 +1481,65 @@ function HomeContent() {
             )
           }
 
-          return (
-            <div className="space-y-0 -mx-4">
+          const PREVIEW = 8 // cuántas cards mostrar antes del "Ver todas"
 
-              {/* Destacadas */}
-              {destacadas.length > 0 && (
-                <div className="mb-5">
-                  <div className="flex items-baseline justify-between px-4 mb-3">
-                    <div>
-                      <p className="text-[15px] font-800 font-black text-[#1E3A5F]">⭐ Destacadas hoy</p>
-                      <p className="text-[11px] text-[#8B96A5] mt-0.5">Mejores descuentos del día</p>
-                    </div>
+          const Section = ({ title, subtitle, catKey, promoList }: { title: string; subtitle: string; catKey?: string; promoList: typeof promosFiltradas }) => {
+            const isExpanded = !catKey || focusedCat === catKey
+            const shown = isExpanded ? promoList : promoList.slice(0, PREVIEW)
+            const scrollRef = React.useRef<HTMLDivElement>(null)
+            const scroll = (dir: 'left' | 'right') => {
+              scrollRef.current?.scrollBy({ left: dir === 'right' ? 180 : -180, behavior: 'smooth' })
+            }
+            return (
+              <div className="mb-5">
+                <div className="flex items-center justify-between px-4 mb-3">
+                  <div>
+                    <p className="text-[15px] font-black text-[#1E3A5F]">{title}</p>
+                    <p className="text-[11px] text-[#8B96A5] mt-0.5">{subtitle}</p>
                   </div>
-                  <div className="flex gap-2.5 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
-                    {destacadas.map(p => <PromoCard key={p.id} promo={p} />)}
+                  <div className="flex items-center gap-2">
+                    {/* Flechas scroll */}
+                    <button onClick={() => scroll('left')}
+                      className="w-7 h-7 rounded-full bg-[#F0F2F5] hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] transition-colors text-xs font-bold">
+                      ‹
+                    </button>
+                    <button onClick={() => scroll('right')}
+                      className="w-7 h-7 rounded-full bg-[#F0F2F5] hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] transition-colors text-xs font-bold">
+                      ›
+                    </button>
+                    {catKey && promoList.length > PREVIEW && !isExpanded && (
+                      <button onClick={() => setFocusedCat(catKey)}
+                        className="text-[11px] font-semibold text-[#D94F2B] ml-1">
+                        Ver todas →
+                      </button>
+                    )}
+                    {catKey && isExpanded && focusedCat === catKey && (
+                      <button onClick={() => setFocusedCat(null)}
+                        className="text-[11px] font-semibold text-[#8B96A5] ml-1">
+                        ← Menos
+                      </button>
+                    )}
                   </div>
                 </div>
-              )}
+                <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
+                  {shown.map(p => <PromoCard key={p.id} promo={p} />)}
+                </div>
+                <div className="h-px bg-[#F0F2F5] mt-4 mx-4" />
+              </div>
+            )
+          }
 
-              {/* Secciones por categoría */}
+          return (
+            <div className="space-y-0 -mx-4">
+              {destacadas.length > 0 && (
+                <Section title="⭐ Destacadas hoy" subtitle="Mejores descuentos del día" promoList={destacadas} />
+              )}
               {catOrder.map(key => {
                 const sec = byCat.get(key)!
                 return (
-                  <div key={key} className="mb-5">
-                    <div className="flex items-baseline justify-between px-4 mb-3">
-                      <div>
-                        <p className="text-[15px] font-black text-[#1E3A5F]">{sec.catIcon} {sec.catName}</p>
-                        <p className="text-[11px] text-[#8B96A5] mt-0.5">{sec.promos.length} promos</p>
-                      </div>
-                      {sec.promos.length > 4 && (
-                        <button
-                          onClick={() => setSelectedCats([key])}
-                          className="text-[12px] font-semibold text-[#D94F2B]"
-                        >
-                          Ver todas →
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex gap-2.5 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
-                      {sec.promos.map(p => <PromoCard key={p.id} promo={p} />)}
-                    </div>
-                    <div className="h-px bg-[#F0F2F5] mt-5 mx-4" />
-                  </div>
+                  <Section key={key} catKey={key} title={`${sec.catIcon} ${sec.catName}`} subtitle={`${sec.promos.length} promos`} promoList={sec.promos} />
                 )
               })}
-
             </div>
           )
         })()}
@@ -1586,6 +1601,7 @@ function HomeContent() {
       {detailPromo && (
         <PromoDetailSheet
           promo={detailPromo}
+          nearbyBranch={detailPromo.commerce.id ? nearbyBranches[detailPromo.commerce.id] : undefined}
           onClose={() => setDetailPromo(null)}
         />
       )}
