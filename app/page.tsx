@@ -10,6 +10,7 @@ import FilterDrawer, { FilterState } from './components/FilterDrawer'
 import ActiveFilters from './components/ActiveFilters'
 import CategorySheet from './components/CategorySheet'
 import EntitiesSheet, { CARD_NETWORK_LOGOS } from './components/EntitiesSheet'
+import PromoDetailSheet from './components/PromoDetailSheet'
 import PromoWizard, { GuestProfile } from './components/PromoWizard'
 import ProvinceSelector from './components/ProvinceSelector'
 import ThemeToggle from './components/ThemeToggle'
@@ -320,6 +321,7 @@ function HomeContent() {
   const [selectedCats, setSelectedCats] = useState<string[]>([])
   const [isCategoryOpen, setIsCategoryOpen] = useState(false)
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null)
+  const [detailPromo, setDetailPromo] = useState<Promo | null>(null)
   const [entitiesPromo, setEntitiesPromo] = useState<Promo | null>(null)
   const [expandedPromos, setExpandedPromos] = useState<Set<string>>(new Set())
   const toggleExpand = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setExpandedPromos(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
@@ -1434,7 +1436,7 @@ function HomeContent() {
 
             return (
               <div
-                onClick={() => promo.slug ? router.push(`/promos/${promo.slug}`) : null}
+                onClick={() => setDetailPromo(promo)}
                 className="bg-white border border-[#EAECF0] rounded-2xl overflow-hidden cursor-pointer flex-shrink-0 transition-shadow hover:shadow-md active:scale-[0.98]"
                 style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
               >
@@ -1580,6 +1582,13 @@ function HomeContent() {
         </div>
       </div>
     </footer>
+
+      {detailPromo && (
+        <PromoDetailSheet
+          promo={detailPromo}
+          onClose={() => setDetailPromo(null)}
+        />
+      )}
 
       {entitiesPromo && (
         <EntitiesSheet
