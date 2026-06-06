@@ -12,7 +12,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { scraperId } = await req.json() as { scraperId: string }
+  const body = await req.json() as { scraperId: string; forceLocal?: boolean }
+  const { scraperId } = body
+  const forceLocal = !!body.forceLocal
   if (!scraperId) return NextResponse.json({ error: 'Missing scraperId' }, { status: 400 })
 
   // Verificar que el scraper existe (por id o por nombre lowercase)
@@ -27,7 +29,8 @@ export async function POST(req: NextRequest) {
     'banco supervielle', 'banco ciudad', 'visa',
     'jumbo', 'disco', 'vea', 'banco patagonia',
   ])
-  if (PLAYWRIGHT_IDS.has(scraperId.toLowerCase())) {
+  // forceLocal=true se usa desde la solapa "Local" del admin para correr Playwright scrapers localmente
+  if (!forceLocal && PLAYWRIGHT_IDS.has(scraperId.toLowerCase())) {
     return NextResponse.json({ error: `Scraper "${scraperId}" requiere Playwright — usar GitHub Actions` }, { status: 400 })
   }
 
@@ -43,7 +46,7 @@ export async function POST(req: NextRequest) {
         // Pasar el token de sesión para auth
         'Cookie': req.headers.get('cookie') || '',
       },
-      body: JSON.stringify({ scraper: scraperId }),
+      body: JSON.stringify({ scraper: scraperId, forceLocal }),
     })
 
     if (!res.ok) {

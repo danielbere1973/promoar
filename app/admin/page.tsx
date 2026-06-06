@@ -1845,6 +1845,7 @@ const PLAYWRIGHT_SCRAPER_IDS = new Set([
 ])
 
 function ScraperSchedulerTab() {
+  const [scraperSubTab, setScraperSubTab] = useState<'gh' | 'local'>('gh')
   const [schedules, setSchedules] = useState<Record<string, ScheduleRow>>({})
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState<string | null>(null)
@@ -1884,26 +1885,25 @@ function ScraperSchedulerTab() {
     setTimeout(() => setMsg(null), 3000)
   }
 
-  async function runNow(scraperId: string) {
+  async function runNow(scraperId: string, local = false) {
     setRunning(scraperId)
     const isPlaywright = PLAYWRIGHT_SCRAPER_IDS.has(scraperId.toLowerCase())
-    const endpoint = isPlaywright ? '/api/admin/trigger-scraper' : '/api/admin/run-scraper'
+    const useGh = isPlaywright && !local
+    const endpoint = useGh ? '/api/admin/trigger-scraper' : '/api/admin/run-scraper'
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scraperId }),
+      body: JSON.stringify({ scraperId, ...(local && { forceLocal: true }) }),
     })
     if (res.ok) {
-      if (isPlaywright) {
+      if (useGh) {
         setMsg({ type: 'success', text: `${scraperId}: workflow disparado en GitHub Actions` })
       } else {
         const data = await res.json()
         const found = data.found ?? 0
         const processed = data.processed ?? 0
         const label = SCRAPERS_CONFIG.find(s => s.id === scraperId)?.name ?? scraperId
-        const detail = processed === 0
-          ? `sin promos nuevas`
-          : `${found} leídas · ${processed} guardadas`
+        const detail = processed === 0 ? `sin promos nuevas` : `${found} leídas · ${processed} guardadas`
         setMsg({ type: 'success', text: `✅ ${label}: ${detail}` })
       }
     } else {
@@ -1958,7 +1958,6 @@ function ScraperSchedulerTab() {
 
   async function runAllGh() {
     setMsg(null)
-    // Disparar uno por uno para evitar problemas con espacios en los nombres
     let ok = 0
     for (const s of playwrightScrapers) {
       const res = await fetch('/api/admin/trigger-scraper', {
@@ -1972,30 +1971,88 @@ function ScraperSchedulerTab() {
     setTimeout(() => setMsg(null), 5000)
   }
 
+  async function runAllLocal() {
+    setMsg(null)
+    let ok = 0, err = 0, totalFound = 0, totalProcessed = 0
+    for (const s of SCRAPERS_CONFIG) {
+      setRunning(s.id)
+      const res = await fetch('/api/admin/run-scraper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scraperId: s.id, forceLocal: true }),
+      })
+      if (res.ok) {
+        ok++
+        const data = await res.json().catch(() => ({}))
+        totalFound += data.found ?? 0
+        totalProcessed += data.processed ?? 0
+      } else err++
+    }
+    setRunning(null)
+    setMsg({ type: err > 0 ? 'error' : 'success', text: `Local: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas` })
+    setTimeout(() => setMsg(null), 15000)
+    load()
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-black text-slate-800">Administración de Scrapers</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Configurá la frecuencia de ejecución de cada scraper</p>
+      {/* Solapas GH Actions / Local */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex bg-slate-100 rounded-2xl p-1 gap-1">
+          <button
+            onClick={() => setScraperSubTab('gh')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${scraperSubTab === 'gh' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            GitHub Actions
+          </button>
+          <button
+            onClick={() => setScraperSubTab('local')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${scraperSubTab === 'local' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Local (contingencia)
+          </button>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={runAllHttp}
-            disabled={!!running}
-            className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all disabled:opacity-50"
-          >
-            {running ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
-            Ejecutar todos HTTP
-          </button>
-          <button
-            onClick={runAllGh}
-            className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all"
-          >
-            <Bot size={13} /> Ejecutar todos GH
-          </button>
+        <div>
+          <h2 className="text-lg font-black text-slate-800">
+            {scraperSubTab === 'gh' ? 'Scrapers — GitHub Actions' : 'Scrapers — Ejecución Local'}
+          </h2>
+          <p className="text-xs text-slate-400">
+            {scraperSubTab === 'gh' ? 'Schedules y ejecución via GitHub Actions / HTTP' : 'Correr scrapers localmente cuando GH Actions falla — requiere npm run dev'}
+          </p>
         </div>
       </div>
+
+      {scraperSubTab === 'gh' && (
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={runAllHttp}
+          disabled={!!running}
+          className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all disabled:opacity-50"
+        >
+          {running ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
+          Ejecutar todos HTTP
+        </button>
+        <button
+          onClick={runAllGh}
+          className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all"
+        >
+          <Bot size={13} /> Ejecutar todos GH
+        </button>
+      </div>
+      )}
+
+      {scraperSubTab === 'local' && (
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={runAllLocal}
+          disabled={!!running}
+          className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-all disabled:opacity-50"
+        >
+          {running ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
+          Ejecutar todos (local)
+        </button>
+      </div>
+      )}
 
       {msg && (
         <div className={`px-4 py-3 rounded-2xl text-sm font-medium ${msg.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -2003,7 +2060,8 @@ function ScraperSchedulerTab() {
         </div>
       )}
 
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+      {/* ── Tabla GH Actions (original) ── */}
+      {scraperSubTab === 'gh' && <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
@@ -2017,10 +2075,9 @@ function ScraperSchedulerTab() {
             </tr>
           </thead>
           <tbody>
-            {/* HTTP scrapers primero, luego separador, luego GitHub Actions */}
             {([
               ...httpScrapers,
-              null, // separador
+              null,
               ...playwrightScrapers,
             ] as (ScraperConfig | null)[]).map((cfg) => {
               if (cfg === null) return (
@@ -2119,7 +2176,51 @@ function ScraperSchedulerTab() {
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
+
+      {/* ── Tabla Local (contingencia) ── */}
+      {scraperSubTab === 'local' && <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 bg-orange-50 border-b border-orange-100">
+          <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">
+            Todos los scrapers corren localmente — requiere <code className="font-mono bg-orange-100 px-1 rounded">npm run dev</code>
+          </p>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50">
+              <th className="px-5 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Scraper</th>
+              <th className="px-5 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Tipo</th>
+              <th className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Ejecutar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SCRAPERS_CONFIG.map(cfg => (
+              <tr key={cfg.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                <td className="px-5 py-3">
+                  <p className="font-bold text-slate-800 text-xs">{cfg.name}</p>
+                  <p className="text-[10px] text-slate-400">{cfg.description}</p>
+                </td>
+                <td className="px-5 py-3">
+                  {PLAYWRIGHT_SCRAPER_IDS.has(cfg.id.toLowerCase())
+                    ? <span className="text-[9px] font-black bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-md">Playwright</span>
+                    : <span className="text-[9px] font-black bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-md">HTTP</span>
+                  }
+                </td>
+                <td className="px-5 py-3 text-right">
+                  <button
+                    onClick={() => runNow(cfg.id, true)}
+                    disabled={!!running}
+                    className="text-[10px] font-bold px-3 py-1.5 bg-orange-50 text-orange-700 hover:bg-orange-100 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1 ml-auto"
+                  >
+                    {running === cfg.id ? <RefreshCw size={10} className="animate-spin" /> : <Play size={10} />}
+                    {running === cfg.id ? 'Corriendo...' : 'Run local'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>}
     </div>
   )
 }

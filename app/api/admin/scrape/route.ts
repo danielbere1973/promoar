@@ -29,11 +29,13 @@ export async function POST(req: NextRequest) {
     let scraperFilter: string | undefined;
     let categoriaFilter: string | undefined;
     let preScrapedPromos: any[] | undefined;
+    let forceLocal = false;
     try {
       const body = await req.json();
       scraperFilter = body.scraper;
       categoriaFilter = body.categoria;
       preScrapedPromos = body.promos; // promos pre-scrapeadas desde GitHub Actions
+      forceLocal = !!body.forceLocal; // solapa "Local" del admin — saltea guard Playwright
     } catch { /* body vacío */ }
 
     // Scrapers que requieren Playwright — no pueden correr en Vercel (Chromium no disponible)
@@ -50,8 +52,8 @@ export async function POST(req: NextRequest) {
       flatPromos.push(...preScrapedPromos);
       console.log(`[Scrape] Procesando ${flatPromos.length} promos pre-scrapeadas`);
     } else {
-      // Bloquear scrapers Playwright si se intenta correr directamente (sin preScrapedPromos)
-      if (scraperFilter && PLAYWRIGHT_SCRAPER_NAMES.has(scraperFilter.toLowerCase())) {
+      // Bloquear scrapers Playwright si no es ejecución local explícita
+      if (!forceLocal && scraperFilter && PLAYWRIGHT_SCRAPER_NAMES.has(scraperFilter.toLowerCase())) {
         return NextResponse.json({ error: `Scraper "${scraperFilter}" requiere Playwright — usar GitHub Actions` }, { status: 400 })
       }
       const scrapersToRun = ALL_SCRAPERS.filter(s =>
