@@ -34,19 +34,30 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const schedules = await prisma.scraperSchedule.findMany({
-    orderBy: { scraperId: 'asc' }
-  })
+  const [schedules, lastRuns] = await Promise.all([
+    prisma.scraperSchedule.findMany({ orderBy: { scraperId: 'asc' } }),
+    prisma.scraperRun.findMany({
+      orderBy: { startedAt: 'desc' },
+      distinct: ['scraperId'],
+      select: { scraperId: true, status: true, startedAt: true, found: true, processed: true, message: true }
+    })
+  ])
 
-  // Obtener el último run para TODOS los scrapers (tengan schedule o no)
-  const lastRuns = await prisma.scraperRun.findMany({
-    orderBy: { startedAt: 'desc' },
-    distinct: ['scraperId'],
-    select: { scraperId: true, status: true, startedAt: true, found: true, processed: true, message: true }
-  })
   const lastRunMap = Object.fromEntries(lastRuns.map(r => [r.scraperId, r]))
+  const scheduleMap = Object.fromEntries(schedules.map(s => [s.scraperId, s]))
 
-  const schedulesWithRuns = schedules.map(s => ({ ...s, runs: lastRunMap[s.scraperId] ? [lastRunMap[s.scraperId]] : [] }))
+  // Incluir TODOS los scrapers que tienen runs, aunque no tengan schedule guardado
+  const allScraperIds = new Set([...schedules.map(s => s.scraperId), ...lastRuns.map(r => r.scraperId)])
+
+  const schedulesWithRuns = Array.from(allScraperIds).map(id => ({
+    scraperId: id,
+    frequency: 'manual',
+    hour: 6,
+    active: true,
+    nextRunAt: null,
+    ...scheduleMap[id],
+    runs: lastRunMap[id] ? [lastRunMap[id]] : [],
+  }))
 
   return NextResponse.json({ schedules: schedulesWithRuns })
 }

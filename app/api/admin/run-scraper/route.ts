@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
-import { scrapers } from '@/lib/scrapers'
+import { ALL_SCRAPERS } from '@/lib/scrapers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -15,7 +15,9 @@ export async function POST(req: NextRequest) {
   const { scraperId } = await req.json() as { scraperId: string }
   if (!scraperId) return NextResponse.json({ error: 'Missing scraperId' }, { status: 400 })
 
-  if (!scrapers[scraperId]) {
+  // Verificar que el scraper existe (por id o por nombre lowercase)
+  const scraperExists = ALL_SCRAPERS.some(s => s.name.toLowerCase() === scraperId.toLowerCase() || s.name.toLowerCase().replace(/\s+/g, '-') === scraperId.toLowerCase())
+  if (!scraperExists) {
     return NextResponse.json({ error: `Scraper "${scraperId}" not found` }, { status: 404 })
   }
 
