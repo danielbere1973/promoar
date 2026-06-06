@@ -3,6 +3,7 @@
 // Técnica: HTTP puro + parsing HTML estructurado (Magento)
 // Cada promo tiene clases CSS específicas con todos los datos
 
+import { chromium } from 'playwright';
 import { Scraper, ScrapedPromo } from './types';
 import { dedup, extractDates } from './bank-helpers';
 
@@ -139,11 +140,11 @@ const SEGMENT_CLASSES = [
   { cls: 'list-benef3', name: 'Patagonia Singular', spanCls: 'misc-singular' },
 ];
 
-async function fetchPromoPage(slug: string, storeName: string): Promise<ScrapedPromo[]> {
+async function fetchPromoPage(slug: string, storeName: string, requestCtx: import('playwright').APIRequestContext): Promise<ScrapedPromo[]> {
   const url = `${BASE_URL}/${slug}`;
   try {
-    const res  = await fetch(url, { headers: HEADERS });
-    if (!res.ok) return [];
+    const res  = await requestCtx.get(url, { timeout: 15000 });
+    if (!res.ok()) return [];
     const html = await res.text();
 
     // Título
@@ -285,26 +286,48 @@ export const PatagoniaScraper: Scraper = {
   async run(): Promise<ScrapedPromo[]> {
     console.log('[Patagonia] Iniciando scraper V3 (HTML estructurado)...');
 
-    const jsRes  = await fetch(JS_URL, { headers: HEADERS });
-    const jsText = await jsRes.text();
-    const match  = jsText.match(/mp_products_search = (\[[\s\S]*?\]);/);
-    if (!match) { console.error('[Patagonia] No se pudo parsear el JS'); return []; }
-
-    const items: Array<{ value: string; u: string }> = JSON.parse(match[1]);
-    console.log(`[Patagonia] ${items.length} promos en el JS`);
-
-    const BATCH = 15;
+    // Usar Playwright — el server bloquea IPs de GH Actions con fetch nativo
+    const browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
+    });
     const allPromos: ScrapedPromo[] = [];
 
-    for (let i = 0; i < items.length; i += BATCH) {
-      const batch = items.slice(i, i + BATCH);
-      const results = await Promise.all(
-        batch.map(item => fetchPromoPage(item.u, item.value.trim()))
-      );
-      for (const r of results) allPromos.push(...r);
-      process.stdout.write(`\r  ${Math.min(i + BATCH, items.length)}/${items.length}`);
+    try {
+      const ctx = await browser.newContext({
+        userAgent: HEADERS['User-Agent'],
+        locale: 'es-AR',
+        extraHTTPHeaders: { 'Accept-Language': 'es-AR,es;q=0.9,en;q=0.8', Referer: BASE_URL },
+        ignoreHTTPSErrors: true,
+      });
+
+      const jsRes = await ctx.request.get(JS_URL, { timeout: 30000 });
+      if (!jsRes.ok()) {
+        console.error(`[Patagonia] HTTP ${jsRes.status()} al obtener JS`);
+        return [];
+      }
+      const jsText = await jsRes.text();
+
+      const match  = jsText.match(/mp_products_search = (\[[\s\S]*?\]);/);
+      if (!match) { console.error('[Patagonia] No se pudo parsear el JS'); return []; }
+
+      const items: Array<{ value: string; u: string }> = JSON.parse(match[1]);
+      console.log(`[Patagonia] ${items.length} promos en el JS`);
+
+      const BATCH = 15;
+
+      for (let i = 0; i < items.length; i += BATCH) {
+        const batch = items.slice(i, i + BATCH);
+        const results = await Promise.all(
+          batch.map(item => fetchPromoPage(item.u, item.value.trim(), ctx.request))
+        );
+        for (const r of results) allPromos.push(...r);
+        process.stdout.write(`\r  ${Math.min(i + BATCH, items.length)}/${items.length}`);
+      }
+      console.log();
+    } finally {
+      await browser.close();
     }
-    console.log();
 
     const result = dedup(allPromos);
     console.log(`[PatagoniaScraper] Total: ${result.length} promos`);

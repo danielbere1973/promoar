@@ -61,6 +61,9 @@ export const ICBCScraper: Scraper = {
     try {
       const ctx = await browser.newContext({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        viewport: { width: 1280, height: 720 },
+        locale: 'es-AR',
+        extraHTTPHeaders: { 'Accept-Language': 'es-AR,es;q=0.9,en;q=0.8' },
         ignoreHTTPSErrors: true,
       });
       await ctx.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
@@ -68,16 +71,22 @@ export const ICBCScraper: Scraper = {
       const page = await ctx.newPage();
       await page.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf}', r => r.abort());
 
-      // Capturar headers completos de la primera request exitosa a la API
+      // Capturar headers de la primera request exitosa a la API
       let capturedHeaders: Record<string, string> = {};
       page.on('request', req => {
         const url = req.url();
-        if ((url.includes('utilidades-icbc') || url.includes('icbc-prod')) && url.includes('/api/')) {
+        if (url.includes('utilidades-icbc') && url.includes('/api/')) {
           capturedHeaders = { ...req.headers() };
         }
       });
 
-      await page.goto(PAGE_URL, { waitUntil: 'networkidle', timeout: 40000 }).catch(() => {});
+      // Esperar explícitamente por una respuesta de la API
+      const apiResponsePromise = page.waitForResponse(
+        res => res.url().includes('utilidades-icbc') && res.url().includes('/api/'),
+        { timeout: 40000 }
+      ).catch(() => null);
+
+      await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 40000 }).catch(() => {});
       await page.waitForTimeout(3000);
 
       // Si no capturamos headers aún, hacer scroll para triggear requests
@@ -86,7 +95,11 @@ export const ICBCScraper: Scraper = {
           await page.evaluate(() => window.scrollBy(0, window.innerHeight * 2));
           await page.waitForTimeout(500);
         }
-        await page.waitForTimeout(2000);
+        const apiResp = await apiResponsePromise;
+        if (apiResp && !capturedHeaders['accesstoken']) {
+          capturedHeaders = { ...apiResp.request().headers() };
+        }
+        await page.waitForTimeout(1000);
       }
       console.log('[ICBC] Headers capturados:', Object.keys(capturedHeaders).filter(k => ['accesstoken','cookie','authorization'].includes(k.toLowerCase())).join(', ') || 'ninguno');
 
