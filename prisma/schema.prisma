@@ -53,8 +53,26 @@ model User {
   savedPromos      SavedPromo[]
   sessions         Session[]
   trustedDevices   TrustedDevice[]
+  events           UserEvent[]
 
   @@map("users")
+}
+
+model UserEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  sessionId  String
+  eventType  String
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("user_events")
 }
 
 model Account {

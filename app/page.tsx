@@ -15,6 +15,7 @@ import PromoWizard, { GuestProfile } from './components/PromoWizard'
 import ProvinceSelector from './components/ProvinceSelector'
 import ThemeToggle from './components/ThemeToggle'
 import SplashScreen from './components/SplashScreen'
+import { useTracking } from '@/lib/useTracking'
 
 // Caché de módulo: sobrevive navegaciones internas, se limpia con F5
 // TTL de 5 minutos para la carga por defecto (sin filtros complejos)
@@ -324,6 +325,7 @@ function HomeContent() {
   })()
   const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'MODERATOR'
   const searchParams = useSearchParams()
+  const { track } = useTracking()
   const router = useRouter()
   const DIAS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -540,6 +542,7 @@ function HomeContent() {
   }, [categoriaParam, categorias])
 
   // Sincroniza selectedCats (slugs) → URL, sin re-render
+  const prevCatsRef = useRef<string[]>([])
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (selectedCats.length > 0) {
@@ -549,6 +552,21 @@ function HomeContent() {
     }
     const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname
     window.history.replaceState(null, '', newUrl)
+
+    // Trackear cambios de categoría (no el restore inicial desde URL)
+    if (prevCatsRef.current.length > 0 || selectedCats.length > 0) {
+      const added = selectedCats.filter(s => !prevCatsRef.current.includes(s))
+      const removed = prevCatsRef.current.filter(s => !selectedCats.includes(s))
+      added.forEach(slug => {
+        const cat = categorias.find(c => c.slug === slug)
+        track({ type: 'CATEGORY_CLICK', categorySlug: slug, categoryName: cat?.name ?? slug, action: 'select' })
+      })
+      removed.forEach(slug => {
+        const cat = categorias.find(c => c.slug === slug)
+        track({ type: 'CATEGORY_CLICK', categorySlug: slug, categoryName: cat?.name ?? slug, action: 'deselect' })
+      })
+    }
+    prevCatsRef.current = selectedCats
   }, [selectedCats])
 
   useEffect(() => {
@@ -614,6 +632,17 @@ function HomeContent() {
     load()
     return () => controller.abort()
   }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode])
+
+  // Tracking de forMe y timeFilter
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    track({ type: 'FOR_ME_TOGGLE', value: forMe })
+  }, [forMe])
+  useEffect(() => {
+    if (isFirstRender.current) return
+    track({ type: 'TIME_FILTER', value: timeFilter })
+  }, [timeFilter])
 
   // Helper para mostrar los chips de "camino de migas"
   const getFilterChips = () => {
@@ -1205,7 +1234,9 @@ function HomeContent() {
                       setSearchText(e.target.value)
                       if (searchTimer.current) clearTimeout(searchTimer.current)
                       searchTimer.current = setTimeout(() => {
-                        setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
+                        const val = e.target.value
+                        setActiveFilters(prev => ({ ...prev, commerces: val ? [val] : [] }))
+                        if (val) track({ type: 'COMMERCE_SEARCH', query: val })
                       }, 400)
                     }}
                     className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
@@ -1527,7 +1558,7 @@ function HomeContent() {
                   <button key={c.name}
                     onClick={() => {
                       if (isFiltered) { setActiveFilters(prev => ({ ...prev, commerces: [] })); setSearchText('') }
-                      else { setSearchMode('exact'); setActiveFilters(prev => ({ ...prev, commerces: [c.name] })); setSearchText(c.name) }
+                      else { setSearchMode('exact'); setActiveFilters(prev => ({ ...prev, commerces: [c.name] })); setSearchText(c.name); track({ type: 'COMMERCE_CLICK', commerceName: c.name, source: 'dashboard' }) }
                     }}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all shrink-0 ${
                       isFiltered ? 'bg-white text-[#1E3A5F]' : 'bg-white/10 text-white/80 hover:bg-white/20'
@@ -1611,7 +1642,10 @@ function HomeContent() {
 
             return (
               <div
-                onClick={() => setDetailPromo(promo)}
+                onClick={() => {
+                  setDetailPromo(promo)
+                  track({ type: 'PROMO_VIEW', promoId: promo.id, promoTitle: promo.title, commerceName: promo.commerce.name, categorySlug: promo.category.slug ?? '', discount: bestPercentageReq(promo)?.discountValue })
+                }}
                 className="bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer flex-shrink-0 transition-all hover:shadow-lg hover:scale-[1.03] hover:border-[#1E3A5F] active:scale-[0.97]"
                 style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
               >
