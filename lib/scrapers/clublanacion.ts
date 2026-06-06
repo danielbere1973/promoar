@@ -193,29 +193,41 @@ export const ClubLaNacionScraper: Scraper = {
     const isTest = categoriaFilter === 'TEST';
     const efectiveFilter = isTest ? undefined : categoriaFilter;
     console.log(`[ClubLN] Iniciando scraper${efectiveFilter ? ` — categoría: ${efectiveFilter}` : isTest ? ' — MODO TEST (5 ítems)' : ''}...`);
-    const allPromos: ScrapedPromo[] = [];
 
     let items = await fetchAllSlugs(efectiveFilter);
     if (isTest) items = items.slice(0, 5);
-    console.log(`[ClubLN] Total slugs: ${items.length}`);
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (!item.slug || !item.discountType) continue;
-
-      const nxm = isNxM(item.discountType)
+    // Filtrar ítems sin descuento antes de hacer los fetches de detalle
+    const validItems = items.filter(item => {
+      if (!item.slug || !item.discountType) return false;
+      const nxm = isNxM(item.discountType);
       const discountValue = parseDiscount(item.discountType);
-      if (!discountValue && !nxm) continue;
+      return discountValue > 0 || nxm;
+    });
+    console.log(`[ClubLN] ${items.length} slugs → ${validItems.length} con descuento válido`);
 
+    // Fetch de detalle en batches paralelos (igual que MODO) → mucho más rápido
+    const DETAIL_BATCH = 10;
+    const detailMap = new Map<string, Partial<ScrapedPromo>>();
+    for (let i = 0; i < validItems.length; i += DETAIL_BATCH) {
+      const batch = validItems.slice(i, i + DETAIL_BATCH);
+      const results = await Promise.all(batch.map(item => fetchDetail(item.slug)));
+      batch.forEach((item, j) => detailMap.set(item.slug, results[j]));
+      console.log(`[ClubLN] Detalle ${Math.min(i + DETAIL_BATCH, validItems.length)}/${validItems.length}`);
+      if (i + DETAIL_BATCH < validItems.length) await sleep(200);
+    }
+
+    const allPromos: ScrapedPromo[] = validItems.map(item => {
+      const nxm = isNxM(item.discountType);
+      const discountValue = parseDiscount(item.discountType);
       const categoria = CATEGORY_MAP[item.categorySlug] || detectCategoria(item.name) || 'Otros';
-      const detail = await fetchDetail(item.slug);
-      await sleep(DELAY_MS);
+      const detail = detailMap.get(item.slug) ?? {};
 
       const title = nxm
         ? `${item.discountType} – ${item.name}`
         : `${discountValue}% descuento – ${item.name}`;
 
-      allPromos.push({
+      return {
         storeName: item.name,
         storeLogoUrl: item.logoUrl,
         title,
@@ -235,12 +247,8 @@ export const ClubLaNacionScraper: Scraper = {
         cardNetworks: [],
         categoria,
         note: detail.note,
-      } as ScrapedPromo);
-
-      if ((i + 1) % 10 === 0) {
-        console.log(`[ClubLN] Procesados: ${i + 1}/${items.length}`);
-      }
-    }
+      } as ScrapedPromo;
+    });
 
     console.log(`[ClubLN] Total: ${allPromos.length} promo(s) extraída(s)`);
     return allPromos;
