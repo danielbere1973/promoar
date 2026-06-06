@@ -71,51 +71,23 @@ export const ICBCScraper: Scraper = {
       const page = await ctx.newPage();
       await page.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf}', r => r.abort());
 
-      // Capturar headers de la primera request exitosa a la API
-      let capturedHeaders: Record<string, string> = {};
-      page.on('request', req => {
-        const url = req.url();
-        if (url.includes('utilidades-icbc') && url.includes('/api/')) {
-          capturedHeaders = { ...req.headers() };
-        }
-      });
-
-      // Esperar explícitamente por una respuesta de la API
-      const apiResponsePromise = page.waitForResponse(
-        res => res.url().includes('utilidades-icbc') && res.url().includes('/api/'),
-        { timeout: 40000 }
-      ).catch(() => null);
-
       await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 40000 }).catch(() => {});
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(4000);
 
-      // Si no capturamos headers aún, hacer scroll para triggear requests
-      if (!capturedHeaders['accesstoken']) {
-        for (let i = 0; i < 5; i++) {
-          await page.evaluate(() => window.scrollBy(0, window.innerHeight * 2));
-          await page.waitForTimeout(500);
-        }
-        const apiResp = await apiResponsePromise;
-        if (apiResp && !capturedHeaders['accesstoken']) {
-          capturedHeaders = { ...apiResp.request().headers() };
-        }
-        await page.waitForTimeout(1000);
-      }
-      console.log('[ICBC] Headers capturados:', Object.keys(capturedHeaders).filter(k => ['accesstoken','cookie','authorization'].includes(k.toLowerCase())).join(', ') || 'ninguno');
-
+      // Llamar a la API desde dentro del browser — usa las cookies/tokens del contexto sin capturar nada
       const apiGet = async (path: string) => {
         try {
-          const res = await ctx.request.get(`${API_BASE}${path}`, {
-            headers: {
-              ...capturedHeaders,
-              'Accept': 'application/json',
-              'Referer': PAGE_URL,
-              'Origin': PAGE_URL,
-            },
-            timeout: 15000,
-          });
-          if (!res.ok()) { console.log(`[ICBC] HTTP ${res.status()} → ${path}`); return null; }
-          return await res.json();
+          const result = await page.evaluate(async ({ url, referer }: { url: string; referer: string }) => {
+            const res = await fetch(url, {
+              method: 'GET',
+              headers: { 'Accept': 'application/json', 'Referer': referer, 'Origin': referer },
+              credentials: 'include',
+            });
+            if (!res.ok) return { error: res.status };
+            return await res.json();
+          }, { url: `${API_BASE}${path}`, referer: PAGE_URL });
+          if ((result as any)?.error) { console.log(`[ICBC] HTTP ${(result as any).error} → ${path}`); return null; }
+          return result;
         } catch { return null; }
       };
 
