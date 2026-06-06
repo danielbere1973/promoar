@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
       preScrapedPromos = body.promos; // promos pre-scrapeadas desde GitHub Actions
     } catch { /* body vacío */ }
 
+    // Scrapers que requieren Playwright — no pueden correr en Vercel (Chromium no disponible)
+    const PLAYWRIGHT_SCRAPER_NAMES = new Set([
+      'jumbo', 'disco', 'vea', 'amex', 'cabal', 'changomas',
+      'banco galicia', 'icbc', 'banco macro', 'naranjax', 'banco provincia',
+      'banco santander', 'banco supervielle', 'banco ciudad', 'visa', 'banco patagonia',
+    ])
+
     const flatPromos: any[] = [];
 
     if (preScrapedPromos?.length) {
@@ -43,6 +50,10 @@ export async function POST(req: NextRequest) {
       flatPromos.push(...preScrapedPromos);
       console.log(`[Scrape] Procesando ${flatPromos.length} promos pre-scrapeadas`);
     } else {
+      // Bloquear scrapers Playwright si se intenta correr directamente (sin preScrapedPromos)
+      if (scraperFilter && PLAYWRIGHT_SCRAPER_NAMES.has(scraperFilter.toLowerCase())) {
+        return NextResponse.json({ error: `Scraper "${scraperFilter}" requiere Playwright — usar GitHub Actions` }, { status: 400 })
+      }
       const scrapersToRun = ALL_SCRAPERS.filter(s =>
         !scraperFilter || s.name.toLowerCase() === scraperFilter.toLowerCase()
       );

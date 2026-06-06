@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     'amex', 'cabal', 'changomas', 'banco galicia', 'icbc',
     'banco macro', 'naranjax', 'banco provincia', 'banco santander',
     'banco supervielle', 'banco ciudad', 'visa',
-    'jumbo', 'disco', 'vea',
+    'jumbo', 'disco', 'vea', 'banco patagonia',
   ])
   if (PLAYWRIGHT_IDS.has(scraperId.toLowerCase())) {
     return NextResponse.json({ error: `Scraper "${scraperId}" requiere Playwright — usar GitHub Actions` }, { status: 400 })

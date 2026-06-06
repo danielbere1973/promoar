@@ -607,23 +607,35 @@ export default function AdminPage() {
     setScraperModal(false)
     setError('')
     setSuccess('')
-    let totalFound = 0, totalProcessed = 0, errors = 0
+    let totalFound = 0, totalProcessed = 0, errors = 0, triggered = 0
     for (const item of queue) {
       const name = SCRAPERS_CONFIG.find(s => s.id === item.id)?.name ?? item.id
       setScrapingCurrent(name)
+      const isPlaywright = PLAYWRIGHT_SCRAPER_IDS.has(item.id.toLowerCase())
       try {
-        const res = await fetch('/api/admin/scrape', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scraper: item.id, categoria: item.categoria })
-        })
-        const data = await res.json()
-        if (res.ok) {
-          totalFound += data.totalFound ?? 0
-          totalProcessed += data.processed ?? 0
+        if (isPlaywright) {
+          // Scrapers Playwright no pueden correr en Vercel → disparar GitHub Actions
+          const res = await fetch('/api/admin/trigger-scraper', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scraperId: item.id }),
+          })
+          if (res.ok) triggered++
+          else { errors++; console.error(`[${name}] Error al disparar GitHub Actions`) }
         } else {
-          errors++
-          console.error(`[${name}] ${data.error}`)
+          const res = await fetch('/api/admin/scrape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scraper: item.id, categoria: item.categoria })
+          })
+          const data = await res.json()
+          if (res.ok) {
+            totalFound += data.totalFound ?? 0
+            totalProcessed += data.processed ?? 0
+          } else {
+            errors++
+            console.error(`[${name}] ${data.error}`)
+          }
         }
       } catch {
         errors++
@@ -633,10 +645,13 @@ export default function AdminPage() {
     setScraping(false)
     setScrapingCurrent('')
     fetchPromos()
+    const parts = []
+    if (totalFound > 0 || totalProcessed > 0) parts.push(`Leídas: ${totalFound} | Procesadas: ${totalProcessed}`)
+    if (triggered > 0) parts.push(`${triggered} workflow${triggered !== 1 ? 's' : ''} disparado${triggered !== 1 ? 's' : ''} en GitHub`)
     if (errors === 0) {
-      setSuccess(`🤖 Scraping finalizado (${queue.length} fuente${queue.length !== 1 ? 's' : ''}). Leídas: ${totalFound} | Procesadas: ${totalProcessed}`)
+      setSuccess(`🤖 Scraping finalizado (${queue.length} fuente${queue.length !== 1 ? 's' : ''}). ${parts.join(' · ')}`)
     } else {
-      setSuccess(`🤖 Finalizado con ${errors} error${errors !== 1 ? 'es' : ''}. Leídas: ${totalFound} | Procesadas: ${totalProcessed}`)
+      setSuccess(`🤖 Finalizado con ${errors} error${errors !== 1 ? 'es' : ''}. ${parts.join(' · ')}`)
     }
   }
 
@@ -1825,7 +1840,8 @@ const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const PLAYWRIGHT_SCRAPER_IDS = new Set([
   'amex', 'cabal', 'changomas', 'banco galicia', 'icbc',
   'banco macro', 'naranjax', 'banco santander',
-  'banco supervielle', 'banco ciudad', 'visa'
+  'banco supervielle', 'banco ciudad', 'visa',
+  'jumbo', 'disco', 'vea', 'banco patagonia',
 ])
 
 function ScraperSchedulerTab() {
