@@ -16,6 +16,23 @@ import ProvinceSelector from './components/ProvinceSelector'
 import ThemeToggle from './components/ThemeToggle'
 import SplashScreen from './components/SplashScreen'
 
+// Caché de módulo: sobrevive navegaciones internas, se limpia con F5
+// TTL de 5 minutos para la carga por defecto (sin filtros complejos)
+const CACHE_TTL_MS = 5 * 60 * 1000
+type PromoCache = { promos: Promo[]; key: string; ts: number }
+let _promoCache: PromoCache | null = null
+
+function getCached(key: string): Promo[] | null {
+  if (!_promoCache) return null
+  if (_promoCache.key !== key) return null
+  if (Date.now() - _promoCache.ts > CACHE_TTL_MS) return null
+  return _promoCache.promos
+}
+
+function setCache(key: string, promos: Promo[]) {
+  _promoCache = { promos, key, ts: Date.now() }
+}
+
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
@@ -312,7 +329,11 @@ function HomeContent() {
 
   const [promos, setPromos] = useState<Promo[]>([])
   const [loading, setLoading] = useState(true)
-  const [showSplash, setShowSplash] = useState(true)
+  // Splash solo en la primera carga de la sesión (sessionStorage persiste navegaciones)
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return !sessionStorage.getItem('splashDone')
+  })
   const [visibleCount, setVisibleCount] = useState(20)
   const [loadingAll, setLoadingAll] = useState(false)
   const [showAccessDenied, setShowAccessDenied] = useState(
@@ -536,42 +557,49 @@ function HomeContent() {
     const controller = new AbortController()
 
     async function load() {
+      const qParams = new URLSearchParams()
+      qParams.set('for_me', String(forMe))
+      qParams.set('view', timeFilter)
+      if (selectedCats.length > 0) qParams.set('categories', selectedCats.join(','))
+      if (activeFilters.banks.length) qParams.set('banks', activeFilters.banks.join(','))
+      if (activeFilters.wallets.length) qParams.set('wallets', activeFilters.wallets.join(','))
+      if (activeFilters.networks.length) qParams.set('networks', activeFilters.networks.join(','))
+      if (activeFilters.days.length) qParams.set('days', activeFilters.days.join(','))
+      if (activeFilters.channels.length) qParams.set('channels', activeFilters.channels.join(','))
+      if (activeFilters.capPeriods.length) qParams.set('capPeriods', activeFilters.capPeriods.join(','))
+      if (activeFilters.hasCap !== null) qParams.set('hasCap', String(activeFilters.hasCap))
+      if (activeFilters.capMin !== null) qParams.set('capMin', String(activeFilters.capMin))
+      if (activeFilters.capMax !== null) qParams.set('capMax', String(activeFilters.capMax))
+      if (activeFilters.commerces.length) {
+        qParams.set('commerces', activeFilters.commerces.join(','))
+        qParams.set('searchMode', searchMode)
+      }
+      if (activeFilters.discountRanges.length) qParams.set('discountRanges', activeFilters.discountRanges.join(','))
+      if (activeFilters.hasInstallments !== null) qParams.set('hasInstallments', String(activeFilters.hasInstallments))
+      if (forMe && guestProfile?.cards?.length && status !== 'authenticated') {
+        qParams.set('guest_profile', btoa(JSON.stringify(guestProfile)))
+      }
+      if (province) qParams.set('province', province)
+
+      const cacheKey = qParams.toString()
+
+      // Caché hit: mostrar datos inmediatamente, sin spinner
+      const cached = getCached(cacheKey)
+      if (cached) {
+        setPromos(cached)
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       try {
-        const qParams = new URLSearchParams()
-        qParams.set('for_me', String(forMe))
-        qParams.set('view', timeFilter)
-        if (selectedCats.length > 0) qParams.set('categories', selectedCats.join(','))
-        if (activeFilters.banks.length) qParams.set('banks', activeFilters.banks.join(','))
-        if (activeFilters.wallets.length) qParams.set('wallets', activeFilters.wallets.join(','))
-        if (activeFilters.networks.length) qParams.set('networks', activeFilters.networks.join(','))
-        if (activeFilters.days.length) qParams.set('days', activeFilters.days.join(','))
-        if (activeFilters.channels.length) qParams.set('channels', activeFilters.channels.join(','))
-        if (activeFilters.capPeriods.length) qParams.set('capPeriods', activeFilters.capPeriods.join(','))
-        if (activeFilters.hasCap !== null) qParams.set('hasCap', String(activeFilters.hasCap))
-        if (activeFilters.capMin !== null) qParams.set('capMin', String(activeFilters.capMin))
-        if (activeFilters.capMax !== null) qParams.set('capMax', String(activeFilters.capMax))
-        if (activeFilters.commerces.length) {
-          qParams.set('commerces', activeFilters.commerces.join(','))
-          qParams.set('searchMode', searchMode)
-        }
-        if (activeFilters.discountRanges.length) qParams.set('discountRanges', activeFilters.discountRanges.join(','))
-        if (activeFilters.hasInstallments !== null) qParams.set('hasInstallments', String(activeFilters.hasInstallments))
-        // Guest profile
-        if (forMe && guestProfile?.cards?.length && status !== 'authenticated') {
-          qParams.set('guest_profile', btoa(JSON.stringify(guestProfile)))
-        }
-        // Provincia del usuario (siempre que esté seleccionada)
-        if (province) {
-          qParams.set('province', province)
-        }
-
-        const res = await fetch(`/api/promos?${qParams.toString()}`, {
+        const res = await fetch(`/api/promos?${cacheKey}`, {
           cache: 'no-store',
           signal: controller.signal,
         })
         if (res.ok) {
           const data = await res.json()
+          setCache(cacheKey, data.promos)
           setPromos(data.promos)
           setVisibleCount(20)
         }
@@ -792,7 +820,7 @@ function HomeContent() {
 
   return (
     <>
-    {showSplash && <SplashScreen loading={loading} onDone={() => setShowSplash(false)} />}
+    {showSplash && <SplashScreen loading={loading} onDone={() => { sessionStorage.setItem('splashDone', '1'); setShowSplash(false) }} />}
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex flex-col">
     <div className="flex flex-1">
       {/* ── Sidebar (Desktop) ── */}
