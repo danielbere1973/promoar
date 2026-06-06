@@ -331,11 +331,12 @@ function HomeContent() {
 
   const [promos, setPromos] = useState<Promo[]>([])
   const [loading, setLoading] = useState(true)
-  // Splash solo en la primera carga de la sesión (sessionStorage persiste navegaciones)
-  const [showSplash, setShowSplash] = useState(() => {
-    if (typeof window === 'undefined') return true
-    return !sessionStorage.getItem('splashDone')
-  })
+  // Splash solo en la primera carga de la sesión
+  // Siempre true en SSR para evitar hydration mismatch — useEffect lo oculta si ya fue visto
+  const [showSplash, setShowSplash] = useState(true)
+  useEffect(() => {
+    if (sessionStorage.getItem('splashDone')) setShowSplash(false)
+  }, [])
   const [visibleCount, setVisibleCount] = useState(20)
   const [loadingAll, setLoadingAll] = useState(false)
   const [showAccessDenied, setShowAccessDenied] = useState(
