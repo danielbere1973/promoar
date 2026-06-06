@@ -415,11 +415,23 @@ export const DiscoScraper: Scraper = {
 
   async run(): Promise<ScrapedPromo[]> {
     console.log('[Disco] Iniciando scraper...');
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+      headless: true,
+      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+    });
     const allPromos: ScrapedPromo[] = [];
 
     try {
-      const page = await browser.newPage();
+      const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        viewport: { width: 1280, height: 720 },
+        locale: 'es-AR',
+        extraHTTPHeaders: { 'Accept-Language': 'es-AR,es;q=0.9,en;q=0.8' },
+      });
+      const page = await context.newPage();
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      });
 
       // Bloquear recursos innecesarios para acelerar el scraping
       await page.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf}', route => route.abort());
@@ -429,7 +441,7 @@ export const DiscoScraper: Scraper = {
         allPromos.push(...promos);
       }
 
-      await page.close();
+      await context.close();
     } finally {
       await browser.close();
     }
