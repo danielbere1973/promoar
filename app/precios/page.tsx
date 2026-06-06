@@ -19,6 +19,7 @@ interface MarketProduct {
   url: string
   multiUnitPromo?: MultiUnitPromo
   primePromo?: MultiUnitPromo
+  jumboCheck?: number
   vtexCategoryId?: string
   vtexCategory?: string
 }
@@ -56,6 +57,7 @@ interface CartRow {
     effectivePrice: number
     promoLabel?: string
     promoQty?: number
+    jumboCheck?: number
     url: string
   }>
 }
@@ -566,6 +568,7 @@ export default function PreciosPage() {
         effectivePrice: m.multiUnitPromo ? m.multiUnitPromo.effectivePrice : m.finalPrice,
         promoLabel: m.multiUnitPromo?.label || (hasDiscount && m.discountText !== '-' ? m.discountText : undefined),
         promoQty: m.multiUnitPromo?.requiredQty,
+        jumboCheck: m.jumboCheck,
         url: m.url,
       }
     }
@@ -938,6 +941,14 @@ export default function PreciosPage() {
                               {p.markets[p.bestMarket]?.discountText}
                             </p>
                           )}
+                          {(() => {
+                            const jc = Object.values(p.markets).find(m => (m as any).jumboCheck)
+                            return jc ? (
+                              <p className="text-[10px] font-black mt-1 bg-green-500/20 text-green-400 inline-block px-1.5 py-0.5 rounded border border-green-500/30">
+                                J{(jc as any).jumboCheck}% Jumbo Cheques
+                              </p>
+                            ) : null
+                          })()}
                         </div>
                         <p className="text-xs text-slate-400">En {p.availableIn} supers</p>
                       </div>
@@ -1030,6 +1041,9 @@ export default function PreciosPage() {
                               <p className="text-sm font-semibold text-slate-200">{marketName}</p>
                               {m.discountText !== '-' && !m.multiUnitPromo && (
                                 <p className="text-[10px] text-emerald-400 font-bold mt-0.5">{m.discountText}</p>
+                              )}
+                              {(m as any).jumboCheck && (
+                                <p className="text-[10px] font-black text-green-400 mt-0.5">J{(m as any).jumboCheck}% Jumbo Cheques</p>
                               )}
                             </div>
                           </div>

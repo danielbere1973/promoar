@@ -829,6 +829,16 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
           promoText = `${Math.round((1 - finalPrice / priceList) * 100)}% OFF`
         }
       }
+      // JumboChecks: detectar por nombre de cluster (patrón check100/check70/check50)
+      let jumboCheck: number | undefined
+      if (supermarket === 'Jumbo') {
+        for (const val of Object.values(p.clusterHighlights || {})) {
+          const name = (typeof val === 'object' ? (val as any).name : String(val)) || ''
+          const m = name.match(/check(\d+)/i)
+          if (m) { jumboCheck = parseInt(m[1]); break }
+        }
+      }
+
       const productUrl = p.linkText ? `${baseUrl}/${p.linkText}/p` : ''
       return {
         ean: String(item.ean || ''),
@@ -843,6 +853,7 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         url: productUrl || baseUrl,
         multiUnitPromo,
         primePromo,
+        jumboCheck,
         vtexCategoryId: p.categoriesIds?.[0] || p.categoryId || '',
         vtexCategory: p.categories?.[0] || '',
       }
