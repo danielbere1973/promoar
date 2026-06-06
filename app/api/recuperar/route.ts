@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     })
 
     await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: 'PromoAR <noreply@promoar.com.ar>',
       to: email,
       subject: 'Recuperá tu contraseña - PromoAR',
       html: `

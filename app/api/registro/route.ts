@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: 'PromoAR <noreply@promoar.com.ar>',
       to: cleanEmail,
       subject: 'Tu código de verificación - PromoAr',
       html: `<p>Hola ${name}, tu código es: <strong>${verificationCode}</strong></p>`

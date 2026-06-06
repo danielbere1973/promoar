@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 console.log("Generando código para login:", verificationCode);
     // 3. Enviar el mail
     await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: 'PromoAR <noreply@promoar.com.ar>',
       to: email,
       subject: 'Tu código de acceso - PromoAr',
       html: `<p>Detectamos un ingreso desde un nuevo dispositivo. Tu código es: <strong>${verificationCode}</strong></p>`
