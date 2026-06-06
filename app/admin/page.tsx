@@ -2017,7 +2017,21 @@ function ScraperSchedulerTab() {
             </tr>
           </thead>
           <tbody>
-            {SCRAPERS_CONFIG.map(cfg => {
+            {/* HTTP scrapers primero, luego separador, luego GitHub Actions */}
+            {([
+              ...httpScrapers,
+              null, // separador
+              ...playwrightScrapers,
+            ] as (ScraperConfig | null)[]).map((cfg) => {
+              if (cfg === null) return (
+                <tr key="separator">
+                  <td colSpan={7} className="px-5 py-2 bg-purple-50 border-y border-purple-100">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5">
+                      <Bot size={10} /> GitHub Actions — requieren Playwright
+                    </span>
+                  </td>
+                </tr>
+              )
               const s = schedules[cfg.id] ?? { scraperId: cfg.id, frequency: 'manual', hour: 6, active: true }
               const last = lastRun(s)
               return (
