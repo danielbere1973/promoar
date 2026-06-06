@@ -28,11 +28,11 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <PostHogProvider>
-          <Providers>
+        <Providers>
+          <PostHogProvider>
             {children}
-          </Providers>
-        </PostHogProvider>
+          </PostHogProvider>
+        </Providers>
       </body>
     </html>
   )
