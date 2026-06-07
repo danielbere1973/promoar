@@ -41,6 +41,7 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
     { label: 'Comunidad',   icon: Users,             href: '/comunidad', action: undefined },
     { label: 'Filtros',     icon: SlidersHorizontal, href: undefined,    action: onFilter },
     { label: 'Categorías',  icon: undefined,         href: '/explorar',  action: undefined },
+    { label: 'Buscar',      icon: Search,            href: undefined,    action: onSearch },
     { label: 'Inversiones', icon: TrendingUp,        href: '/finanzas',  action: undefined },
     { label: 'Perfil',      icon: UserCircle,        href: '/perfil',    action: undefined },
   ]

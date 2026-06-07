@@ -1305,10 +1305,11 @@ function HomeContent() {
 
             {/* Mobile-only selector y quick filters */}
             <div className="lg:hidden mt-1.5">
-              <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5 items-center">
+              <div className="relative">
+              <div className="flex gap-1 overflow-x-auto no-scrollbar pb-0.5 items-center pr-6">
                 <button
                   onClick={() => setForMe(false)}
-                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all border ${
                     !forMe ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400'
                   }`}
                 >Todas</button>
@@ -1321,7 +1322,7 @@ function HomeContent() {
                       setWizardOpen(true)
                     }
                   }}
-                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all border ${
                     forMe ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400'
                   }`}
                 >Para Mí</button>
@@ -1330,7 +1331,7 @@ function HomeContent() {
 
                 {(['today', 'week'] as const).map(f => (
                   <button key={f} onClick={() => setTimeFilter(f)}
-                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                    className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold uppercase transition-all border ${
                       timeFilter === f ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500'
                     }`}>
                     {f === 'today' ? 'Hoy' : 'Semana'}
@@ -1340,16 +1341,13 @@ function HomeContent() {
                 <div className="w-px h-4 bg-gray-200 shrink-0" />
 
                 <button onClick={() => setIsCategoryOpen(true)}
-                  className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg border font-bold text-[10px] uppercase transition-all ${
+                  className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg border font-bold text-[10px] uppercase transition-all ${
                     selectedCats.length > 0 ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-700'
                   }`}>
                   <Tag size={10} /> {selectedCats.length > 0 ? `Cats (${selectedCats.length})` : 'Categorías'}
                 </button>
-
-                <button onClick={() => setIsProductSearchOpen(true)}
-                  className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 font-bold text-[10px] uppercase transition-all">
-                  <ShoppingBag size={10} /> Productos
-                </button>
+              </div>
+              <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-white/90 dark:from-slate-900/90 to-transparent lg:hidden" />
               </div>
 
               {/* Chip de provincia */}
@@ -1390,6 +1388,11 @@ function HomeContent() {
                       ))}
                     </div>
                   </div>
+                  <button onClick={() => { setMobileSearchOpen(false); setIsProductSearchOpen(true) }}
+                    title="Buscar por producto"
+                    className="p-2 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 hover:text-indigo-600 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors shrink-0">
+                    <ShoppingBag size={16} />
+                  </button>
                   <button onClick={() => { setMobileSearchOpen(false); setActiveFilters(prev => ({ ...prev, commerces: [] })) }}
                     className="p-2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400">
                     <X size={16} />
