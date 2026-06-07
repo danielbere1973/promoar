@@ -12,7 +12,7 @@ const API_URL     = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios/b
 
 const BANK_NAME   = 'Banco Ciudad';
 const PAGE_SIZE   = 12;
-const MAX_PAGES   = 95;
+const MAX_PAGES   = 105;
 
 function parseDiasMask(dias: string): number {
   if (!dias) return 127;
