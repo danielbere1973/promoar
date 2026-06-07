@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Calendar, Tag, Settings, X, Search, Sparkles, Heart, Info, Smartphone, Clock, Globe, SlidersHorizontal, LogIn, MapPin } from 'lucide-react'
+import { Calendar, Tag, Settings, X, Search, Sparkles, Heart, Info, Smartphone, Clock, Globe, SlidersHorizontal, LogIn, MapPin, ShoppingBag } from 'lucide-react'
 import BottomNav from './components/BottomNav'
 import FilterDrawer, { FilterState } from './components/FilterDrawer'
 import ActiveFilters from './components/ActiveFilters'
@@ -13,6 +13,7 @@ import EntitiesSheet, { CARD_NETWORK_LOGOS } from './components/EntitiesSheet'
 import PromoDetailSheet from './components/PromoDetailSheet'
 import PromoWizard, { GuestProfile } from './components/PromoWizard'
 import ProvinceSelector from './components/ProvinceSelector'
+import ProductSearch from './components/ProductSearch'
 import ThemeToggle from './components/ThemeToggle'
 import SplashScreen from './components/SplashScreen'
 import { useTracking } from '@/lib/useTracking'
@@ -375,6 +376,7 @@ function HomeContent() {
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const mobileSearchRef = useRef<HTMLInputElement>(null)
+  const [isProductSearchOpen, setIsProductSearchOpen] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [searchMode, setSearchMode] = useState<'startsWith' | 'contains' | 'exact'>('startsWith')
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1255,6 +1257,16 @@ function HomeContent() {
                 </div>
 
                 <button
+                  onClick={() => setIsProductSearchOpen(true)}
+                  type="button"
+                  title="Buscar por producto"
+                  className="hidden md:flex items-center gap-2 px-4 py-3 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer relative z-10"
+                >
+                  <ShoppingBag size={16} />
+                  Buscar producto
+                </button>
+
+                <button
                   onClick={() => setIsFilterOpen(true)}
                   type="button"
                   className={`hidden md:flex items-center gap-2 px-4 py-3 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer relative z-10 ${
@@ -1332,6 +1344,11 @@ function HomeContent() {
                     selectedCats.length > 0 ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-700'
                   }`}>
                   <Tag size={10} /> {selectedCats.length > 0 ? `Cats (${selectedCats.length})` : 'Categorías'}
+                </button>
+
+                <button onClick={() => setIsProductSearchOpen(true)}
+                  className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 font-bold text-[10px] uppercase transition-all">
+                  <ShoppingBag size={10} /> Productos
                 </button>
               </div>
 
@@ -1912,6 +1929,17 @@ function HomeContent() {
         categorias={categorias}
         selected={selectedCats}
         onChange={setSelectedCats}
+      />
+      <ProductSearch
+        isOpen={isProductSearchOpen}
+        onClose={() => setIsProductSearchOpen(false)}
+        forMe={forMe}
+        onSelectCommerce={(name) => {
+          setSearchText(name)
+          setSearchMode('exact')
+          setActiveFilters(prev => ({ ...prev, commerces: [name] }))
+          track({ type: 'COMMERCE_SEARCH', query: name })
+        }}
       />
       <PromoWizard
         open={wizardOpen}

@@ -42,6 +42,16 @@ Coto, Diarco, Jumbo, Disco, Vea, Changomas, Carrefour, MODO, MercadoPago, Cuenta
   2. Comercio más popular (`_count` promos activas)
   3. Alfabético por nombre de comercio
   4. Más cuotas sin interés primero como desempate final
+- **Búsqueda de productos** ("¿cómo busco carteras?"): modelo `CommerceProduct`
+  (commerceId, categoria, subcategoria, productos, source) cargado desde
+  `unicenter-catalogo.csv` vía `scripts/load-commerce-products.ts` (2534 filas, 138 comercios).
+  Endpoint `/api/search/products?q=` reutiliza el matching por perfil de `/api/promos`
+  (REGLA 1-3 + caso CUENTA_DNI). UI: bottom sheet `ProductSearch.tsx` con buscador debounced,
+  invocado desde botones "Buscar producto" / "Productos" en `page.tsx`.
+  Comercios sin catálogo scrapeado pero con promos activas (Zara, Adidas, Lacoste, Samsonite,
+  Swatch, Burger King, Bimba y Lola, Despegar, Pandoras, Ave Caesar, G-Shock Casio, The Embers)
+  se cargaron a mano con `source: 'manual'` (sitios bloqueados por Akamai/SSL o de baja calidad
+  de extracción — se usó navegador headed para inspeccionar y curar categorías reales).
 
 ## Decisiones de arquitectura importantes
 - `selectedCats` en page.tsx usa **slugs** (no ids) — se guarda en URL y se restaura al montar leyendo `window.location.search` directamente (no `useSearchParams`)
@@ -85,6 +95,25 @@ Priorizar comercios con 5+ promos. Algunos favicon Google son el ícono genéric
 ### 7. Normalización de comercios — tabla de alias permanente
 Crear tabla `CommerceAlias` para que futuros scrapeos normalicen nombres automáticamente.
 Evita que "HAVANNA GOOGLE PAY APPLE PAY" vuelva a crearse como comercio separado.
+
+### 8. Búsqueda de productos — DONE (ver "Features implementados")
+Implementada: modelo `CommerceProduct`, endpoint `/api/search/products?q=` y UI `ProductSearch.tsx`.
+122 de las 273 marcas del catálogo de Unicenter no tienen `Commerce` en la base (nunca aparecieron
+con promos bancarias activas) — no se les puede cargar catálogo hasta que exista el comercio.
+Cuando aparezca una promo nueva de alguna de esas marcas, recargar `unicenter-catalogo.csv`
+contra el `Commerce` recién creado (mismo bloqueo del punto 7: requiere matching de nombres).
+Pendiente menor: completar matching difuso marca↔Commerce para los que no matchearon exacto.
+
+### 9. Precios en línea — IMPORTANTE: debe ser consulta en vivo, NO scraping/almacenamiento
+Fase futura. El usuario fue explícito: los precios varían demasiado
+seguido (inflación, dólar, temporada, promos) como para guardarlos scrapeados — quedarían
+desactualizados rápido. La consulta de precios debe hacerse **en el momento**, contra la
+fuente online (API del comercio), no contra una tabla propia con datos scrapeados.
+
+El scrapeo de categorías de Unicenter (punto 8) ya identificó qué plataforma e-commerce usa
+cada marca (Shopify/VTEX/TiendaNube/WooCommerce/Powla/generic) — eso es el mapa que indica
+qué API de cada plataforma consultar en vivo para traer precio actualizado
+(ej. Shopify `/products.json` trae precio, VTEX tiene API de búsqueda con precio, etc.).
 
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:

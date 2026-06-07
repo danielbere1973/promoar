@@ -14,6 +14,7 @@ const PUBLIC_PATHS = [
   '/api/recuperar',
   '/api/nueva-password',
   '/api/promos',
+  '/api/search',
   '/api/categories',
   '/api/public',
   '/api/precios',

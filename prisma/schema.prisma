@@ -278,8 +278,27 @@ model Commerce {
   defaultCategory   Category?        @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
   promos            Promo[]
   branches          CommerceBranch[]
+  products          CommerceProduct[]
 
   @@map("commerces")
+}
+
+// Catálogo de categorías/productos que vende cada comercio (scrapeado de su sitio online).
+// Permite búsqueda "¿qué comercios venden carteras?" sin modelar precios (ver punto 9 de CLAUDE.md).
+model CommerceProduct {
+  id           String   @id @default(cuid())
+  commerceId   String
+  commerce     Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  categoria    String
+  subcategoria String?
+  productos    String?
+  source       String   @default("unicenter")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([commerceId])
+  @@index([categoria])
+  @@map("commerce_products")
 }
 
 model CommerceBranch {
