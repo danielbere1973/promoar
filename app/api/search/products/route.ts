@@ -47,6 +47,16 @@ export async function GET(req: NextRequest) {
     const email = session?.user?.email || req.headers.get('x-user-email')
     const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'MODERATOR'
 
+    // Guest profile: perfil temporal sin registro (viene en query param base64)
+    const guestProfileParam = searchParams.get('guest_profile')
+    let guestCards: any[] | null = null
+    if (guestProfileParam) {
+      try {
+        const decoded = JSON.parse(Buffer.from(guestProfileParam, 'base64').toString('utf-8'))
+        if (Array.isArray(decoded?.cards)) guestCards = decoded.cards
+      } catch {}
+    }
+
     let userCards: any[] = []
     const tierToSegmentId = new Map<string, string>()
     if (forMe && email && !isAdmin) {
@@ -62,10 +72,14 @@ export async function GET(req: NextRequest) {
           cardTier: null, isPayroll: false, isPensioner: false,
         }))
         userCards = [...(profile.cards ?? []), ...walletVirtualCards]
-
-        const allSegments = await prisma.bankSegment.findMany({ select: { id: true, name: true } })
-        for (const seg of allSegments) tierToSegmentId.set(seg.name.toUpperCase(), seg.id)
       }
+    } else if (forMe && !email && guestCards?.length) {
+      userCards = guestCards
+    }
+
+    if (userCards.length > 0) {
+      const allSegments = await prisma.bankSegment.findMany({ select: { id: true, name: true } })
+      for (const seg of allSegments) tierToSegmentId.set(seg.name.toUpperCase(), seg.id)
     }
 
     const hasProfile = forMe && !isAdmin && userCards.length > 0

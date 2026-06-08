@@ -138,7 +138,7 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
   const bestLabel = bestDiscount ? discountLabel(bestDiscount) : ''
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[110] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 

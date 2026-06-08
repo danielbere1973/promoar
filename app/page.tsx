@@ -4,16 +4,15 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Calendar, Tag, Settings, X, Search, Sparkles, Heart, Info, Smartphone, Clock, Globe, SlidersHorizontal, LogIn, MapPin, ShoppingBag } from 'lucide-react'
+import { Calendar, Tag, Settings, X, Search, Sparkles, Heart, Info, Smartphone, Clock, Globe, SlidersHorizontal, LogIn, MapPin, ShoppingBag, UserCircle } from 'lucide-react'
 import BottomNav from './components/BottomNav'
 import FilterDrawer, { FilterState } from './components/FilterDrawer'
 import ActiveFilters from './components/ActiveFilters'
-import CategorySheet from './components/CategorySheet'
 import EntitiesSheet, { CARD_NETWORK_LOGOS } from './components/EntitiesSheet'
 import PromoDetailSheet from './components/PromoDetailSheet'
+import PromoCard from './components/PromoCard'
 import PromoWizard, { GuestProfile } from './components/PromoWizard'
 import ProvinceSelector from './components/ProvinceSelector'
-import ProductSearch from './components/ProductSearch'
 import ThemeToggle from './components/ThemeToggle'
 import SplashScreen from './components/SplashScreen'
 import { useTracking } from '@/lib/useTracking'
@@ -94,6 +93,16 @@ type Promo = {
 }
 
 type Categoria = { id: string; name: string; slug: string; icon: string; color: string; promoCount?: number }
+
+type ProductCommerceResult = {
+  id: string
+  name: string
+  slug: string
+  logoUrl: string | null
+  matchedCategories: string[]
+  promoCount: number
+  promos: Promo[]
+}
 
 const DISCOUNT_RANGES = [
   { id: '0-10', label: '≤10%' },
@@ -346,7 +355,6 @@ function HomeContent() {
 
   const categoriaParam = searchParams.get('categoria')
   const [selectedCats, setSelectedCats] = useState<string[]>([])
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false)
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null)
   const [detailPromo, setDetailPromo] = useState<Promo | null>(null)
   const [focusedCat, setFocusedCat] = useState<string | null>(null)
@@ -374,12 +382,19 @@ function HomeContent() {
   const [wizardOpen, setWizardOpen] = useState(false)
   const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null)
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const mobileSearchRef = useRef<HTMLInputElement>(null)
-  const [isProductSearchOpen, setIsProductSearchOpen] = useState(false)
+  const [searchTab, setSearchTab] = useState<'comercios' | 'productos'>('comercios')
   const [searchText, setSearchText] = useState('')
   const [searchMode, setSearchMode] = useState<'startsWith' | 'contains' | 'exact'>('startsWith')
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Búsqueda de productos: resultados agrupados por comercio, mostrados in-page (mismo esquema que comercios)
+  const [productQuery, setProductQuery] = useState('')
+  const [productResults, setProductResults] = useState<ProductCommerceResult[]>([])
+  const [productSearchLoading, setProductSearchLoading] = useState(false)
+  const [productSearched, setProductSearched] = useState(false)
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string | null>(null)
+  const productSearchRef = useRef<HTMLInputElement>(null)
+  const productDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [province, setProvince] = useState<string | null>(null)
   const [showProvinceSelector, setShowProvinceSelector] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
@@ -647,6 +662,35 @@ function HomeContent() {
     track({ type: 'TIME_FILTER', value: timeFilter })
   }, [timeFilter])
 
+  // Búsqueda de productos: debounced fetch a /api/search/products, resultados agrupados por comercio
+  useEffect(() => {
+    if (productDebounce.current) clearTimeout(productDebounce.current)
+    const q = productQuery.trim()
+    setProductCategoryFilter(null)
+    if (searchTab !== 'productos' || q.length < 2) {
+      setProductResults([]); setProductSearched(false); setProductSearchLoading(false)
+      return
+    }
+    setProductSearchLoading(true)
+    productDebounce.current = setTimeout(async () => {
+      try {
+        let url = `/api/search/products?q=${encodeURIComponent(q)}&for_me=${forMe}`
+        if (forMe && guestProfile?.cards?.length && status !== 'authenticated') {
+          url += `&guest_profile=${encodeURIComponent(btoa(JSON.stringify(guestProfile)))}`
+        }
+        const res = await fetch(url)
+        const data = await res.json()
+        setProductResults(data.commerces ?? [])
+      } catch {
+        setProductResults([])
+      } finally {
+        setProductSearchLoading(false)
+        setProductSearched(true)
+      }
+    }, 400)
+    return () => { if (productDebounce.current) clearTimeout(productDebounce.current) }
+  }, [productQuery, searchTab, forMe, guestProfile, status])
+
   // Helper para mostrar los chips de "camino de migas"
   const getFilterChips = () => {
     const chips: { id: string, label: string, type: string }[] = []
@@ -754,10 +798,18 @@ function HomeContent() {
     return { banks, wallets, networks }
   }, [promos, forMe, userProfile])
 
+  // Modo búsqueda de productos: reemplaza el feed por categoría con resultados agrupados por comercio
+  const isProductSearchMode = searchTab === 'productos' && productQuery.trim().length >= 2
+
   // Categorías populares: por cantidad de comercios únicos (no promos totales)
+  // En modo búsqueda de productos, derivar de los resultados de la búsqueda (no del feed general)
+  // para que el menú lateral refleje las categorías involucradas en lo buscado
   const popularCatsByCommerce = useMemo(() => {
+    const source = isProductSearchMode
+      ? productResults.flatMap(c => c.promos.map(p => ({ category: p.category, commerce: { name: c.name } })))
+      : promos
     const commercesPerCat = new Map<string, Set<string>>()
-    for (const p of promos) {
+    for (const p of source) {
       const key = p.category.slug ?? p.category.name
       if (!commercesPerCat.has(key)) commercesPerCat.set(key, new Set())
       commercesPerCat.get(key)!.add(p.commerce.name)
@@ -766,7 +818,7 @@ function HomeContent() {
       .sort((a, b) => b[1].size - a[1].size)
       .slice(0, 6)
       .map(([slug]) => slug)
-  }, [promos])
+  }, [promos, isProductSearchMode, productResults])
 
   const todayDashboard = useMemo(() => {
     if (promos.length === 0) return null
@@ -966,11 +1018,22 @@ function HomeContent() {
                   <span className="text-gray-500 dark:text-slate-400 text-sm font-bold">{openSections.has('popular') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('popular') && categorias.filter(c => popularCatsByCommerce.includes(c.slug)).sort((a, b) => popularCatsByCommerce.indexOf(a.slug) - popularCatsByCommerce.indexOf(b.slug)).map(cat => {
-                  const isActive = selectedCats.includes(cat.slug)
-                  const count = promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === cat.slug).length
+                  // En modo búsqueda de productos, este menú filtra los resultados de la búsqueda
+                  // (productCategoryFilter, por nombre) en vez del feed general (selectedCats, por slug)
+                  const isActive = isProductSearchMode ? productCategoryFilter === cat.name : selectedCats.includes(cat.slug)
+                  const count = isProductSearchMode
+                    ? productResults.flatMap(c2 => c2.promos).filter(p => p.category.name === cat.name).length
+                    : promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === cat.slug).length
+                  const handleClick = () => {
+                    if (isProductSearchMode) {
+                      setProductCategoryFilter(prev => prev === cat.name ? null : cat.name)
+                    } else {
+                      setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])
+                    }
+                  }
                   return (
                     <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-[#EEF2F8] dark:bg-[#1E3A5F]/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
-                      <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])} className="flex items-center gap-2 flex-1 min-w-0">
+                      <button onClick={handleClick} className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-base">{cat.icon}</span>
                         <span className={`text-xs font-bold truncate ${isActive ? 'text-[#1E3A5F] dark:text-blue-300' : 'text-gray-500 dark:text-slate-400'}`}>{cat.name}</span>
                       </button>
@@ -1134,12 +1197,21 @@ function HomeContent() {
                   <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-500 dark:group-hover:text-slate-300 text-sm">{openSections.has('others') ? '−' : '+'}</span>
                 </button>
                 {openSections.has('others') && categorias.filter(c => !(c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
-                  const isActive = selectedCats.includes(cat.slug)
+                  const isActive = isProductSearchMode ? productCategoryFilter === cat.name : selectedCats.includes(cat.slug)
                   const isFav = favCategories.includes(cat.slug)
-                  const count = forMe ? promos.filter(p => p.category.name === cat.name).length : (cat.promoCount ?? 0)
+                  const count = isProductSearchMode
+                    ? productResults.flatMap(c2 => c2.promos).filter(p => p.category.name === cat.name).length
+                    : (forMe ? promos.filter(p => p.category.name === cat.name).length : (cat.promoCount ?? 0))
+                  const handleClick = () => {
+                    if (isProductSearchMode) {
+                      setProductCategoryFilter(prev => prev === cat.name ? null : cat.name)
+                    } else {
+                      setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])
+                    }
+                  }
                   return (
                     <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
-                      <button onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])} className="flex items-center gap-2 flex-1 min-w-0">
+                      <button onClick={handleClick} className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-base">{cat.icon}</span>
                         <span className={`text-xs font-bold truncate ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-slate-400'}`}>{cat.name}</span>
                       </button>
@@ -1195,24 +1267,6 @@ function HomeContent() {
           <div className="px-4 lg:px-6 py-3 lg:py-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-col min-w-0">
-                {/* Mobile: fecha + usuario + logout */}
-                <div className="flex items-center gap-2 lg:hidden">
-                  <p className="text-[11px] text-gray-500 font-bold">{fechaCorta()}</p>
-                  {province && (
-                    <button onClick={() => setShowProvinceSelector(true)} className="text-[10px] text-gray-400 flex items-center gap-0.5">
-                      <MapPin size={9} /> {province}
-                    </button>
-                  )}
-                  {status === 'authenticated' && (
-                    <button onClick={() => { import('next-auth/react').then(m => m.signOut({ callbackUrl: '/login' })) }}
-                      className="text-[10px] font-bold text-gray-300 hover:text-red-400 transition-colors ml-auto">
-                      Salir
-                    </button>
-                  )}
-                  {status !== 'authenticated' && (
-                    <a href="/login" className="text-[10px] font-bold text-[#D94F2B] ml-auto">Ingresar</a>
-                  )}
-                </div>
                 {/* Desktop: fecha + saludo */}
                 <div className="hidden lg:flex items-center gap-2">
                   <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">{fechaHoy()}</p>
@@ -1227,44 +1281,60 @@ function HomeContent() {
 
               <div className="flex items-center gap-3 flex-1 justify-end">
                 <ThemeToggle />
-                <div className="relative max-w-xs w-full hidden md:block">
-                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
-                  <input
-                    type="text"
-                    placeholder="Buscar comercio..."
-                    value={searchText}
-                    onChange={(e) => {
-                      setSearchText(e.target.value)
-                      if (searchTimer.current) clearTimeout(searchTimer.current)
-                      searchTimer.current = setTimeout(() => {
-                        const val = e.target.value
-                        setActiveFilters(prev => ({ ...prev, commerces: val ? [val] : [] }))
-                        if (val) track({ type: 'COMMERCE_SEARCH', query: val })
-                      }, 400)
-                    }}
-                    className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
-                  />
-                  {searchText && (
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5">
-                      {(['startsWith', 'contains', 'exact'] as const).map(mode => (
-                        <button key={mode} onClick={() => setSearchMode(mode)}
-                          className={`px-2 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400 hover:bg-gray-300 dark:hover:bg-slate-500'}`}>
-                          {mode === 'startsWith' ? 'Empieza' : mode === 'contains' ? 'Contiene' : 'Exacto'}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                <div className="hidden md:flex flex-col gap-1.5 max-w-xs w-full">
+                  <div className="flex gap-1 self-end">
+                    <button onClick={() => setSearchTab('comercios')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                        searchTab === 'comercios' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'
+                      }`}>
+                      Comercios
+                    </button>
+                    <button onClick={() => setSearchTab('productos')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                        searchTab === 'productos' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'
+                      }`}>
+                      Productos
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                    {searchTab === 'comercios' ? (
+                      <input
+                        type="text"
+                        placeholder="Buscar comercio..."
+                        value={searchText}
+                        onChange={(e) => {
+                          setSearchText(e.target.value)
+                          if (searchTimer.current) clearTimeout(searchTimer.current)
+                          searchTimer.current = setTimeout(() => {
+                            const val = e.target.value
+                            setActiveFilters(prev => ({ ...prev, commerces: val ? [val] : [] }))
+                            if (val) track({ type: 'COMMERCE_SEARCH', query: val })
+                          }, 400)
+                        }}
+                        className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Ej: carteras, zapatillas, perfumes..."
+                        value={productQuery}
+                        onChange={(e) => setProductQuery(e.target.value)}
+                        className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white border-none rounded-2xl text-[11px] font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                      />
+                    )}
+                    {searchTab === 'comercios' && searchText && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5">
+                        {(['startsWith', 'contains', 'exact'] as const).map(mode => (
+                          <button key={mode} onClick={() => setSearchMode(mode)}
+                            className={`px-2 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400 hover:bg-gray-300 dark:hover:bg-slate-500'}`}>
+                            {mode === 'startsWith' ? 'Empieza' : mode === 'contains' ? 'Contiene' : 'Exacto'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                <button
-                  onClick={() => setIsProductSearchOpen(true)}
-                  type="button"
-                  title="Buscar por producto"
-                  className="hidden md:flex items-center gap-2 px-4 py-3 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer relative z-10"
-                >
-                  <ShoppingBag size={16} />
-                  Buscar producto
-                </button>
 
                 <button
                   onClick={() => setIsFilterOpen(true)}
@@ -1279,19 +1349,6 @@ function HomeContent() {
                   Filtros
                 </button>
 
-                {/* Mobile Filter Button */}
-                <button
-                  onClick={() => setIsFilterOpen(true)}
-                  type="button"
-                  className={`md:hidden p-2 rounded-lg border transition-all cursor-pointer relative z-10 ${
-                    getFilterChips().filter(c => c.type !== 'category').length > 0
-                      ? 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 dark:hover:bg-indigo-700'
-                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  <SlidersHorizontal size={18} />
-                </button>
-
                 <div className="hidden sm:flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm shrink-0">
                   <button onClick={() => setViewMode('grid')} className={`p-2 rounded-xl transition-colors ${viewMode === 'grid' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
@@ -1303,67 +1360,50 @@ function HomeContent() {
               </div>
             </div>
 
-            {/* Mobile-only selector y quick filters */}
-            <div className="lg:hidden mt-1.5">
-              <div className="relative">
-              <div className="flex gap-1 overflow-x-auto no-scrollbar pb-0.5 items-center pr-6">
-                <button
-                  onClick={() => setForMe(false)}
-                  className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all border ${
-                    !forMe ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400'
-                  }`}
-                >Todas</button>
-                <button
-                  onClick={() => {
-                    if (status === 'authenticated') {
-                      if (!userProfile?.cards?.length) setWizardOpen(true)
-                      else setForMe(true)
-                    } else {
-                      setWizardOpen(true)
-                    }
-                  }}
-                  className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all border ${
-                    forMe ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400'
-                  }`}
-                >Para Mí</button>
-
-                <div className="w-px h-4 bg-gray-200 shrink-0" />
-
-                {(['today', 'week'] as const).map(f => (
-                  <button key={f} onClick={() => setTimeFilter(f)}
-                    className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold uppercase transition-all border ${
-                      timeFilter === f ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500'
-                    }`}>
-                    {f === 'today' ? 'Hoy' : 'Semana'}
+            {/* Mobile-only header rediseñado (estilo Mercado Libre) */}
+            <div className="lg:hidden mt-2.5 space-y-2.5">
+              {/* Avatar / iniciales + saludo + fecha */}
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
+                  status === 'authenticated' ? 'bg-[#1E3A5F] text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
+                }`}>
+                  {status === 'authenticated' ? iniciales : <UserCircle size={18} />}
+                </div>
+                <div className="min-w-0 leading-tight">
+                  <p className="text-[12px] font-black text-gray-900 dark:text-white truncate">
+                    {status === 'authenticated' ? `Hola, ${nombre.split(' ')[0]}` : 'Invitado'}
+                  </p>
+                  <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold">{fechaCorta()}</p>
+                </div>
+                {status === 'authenticated' ? (
+                  <button onClick={() => { import('next-auth/react').then(m => m.signOut({ callbackUrl: '/login' })) }}
+                    className="text-[10px] font-bold text-gray-300 hover:text-red-400 transition-colors ml-auto">
+                    Salir
                   </button>
-                ))}
-
-                <div className="w-px h-4 bg-gray-200 shrink-0" />
-
-                <button onClick={() => setIsCategoryOpen(true)}
-                  className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg border font-bold text-[10px] uppercase transition-all ${
-                    selectedCats.length > 0 ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-700'
-                  }`}>
-                  <Tag size={10} /> {selectedCats.length > 0 ? `Cats (${selectedCats.length})` : 'Categorías'}
-                </button>
-              </div>
-              <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-white/90 dark:from-slate-900/90 to-transparent lg:hidden" />
+                ) : (
+                  <a href="/login" className="text-[10px] font-bold text-[#D94F2B] ml-auto">Ingresar</a>
+                )}
               </div>
 
-              {/* Chip de provincia */}
-              {province && (
-                <button
-                  onClick={() => setShowProvinceSelector(true)}
-                  className="mt-1 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-600 w-fit"
-                >
-                  <MapPin size={10} /> {province}
-                </button>
-              )}
+              {/* Buscador con tabs Comercios / Productos */}
+              <div>
+                <div className="flex gap-1 mb-1.5">
+                  <button onClick={() => setSearchTab('comercios')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                      searchTab === 'comercios' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'
+                    }`}>
+                    Comercios
+                  </button>
+                  <button onClick={() => setSearchTab('productos')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                      searchTab === 'productos' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'
+                    }`}>
+                    Productos
+                  </button>
+                </div>
 
-              {/* Búsqueda mobile (se abre desde BottomNav) */}
-              {mobileSearchOpen && (
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="relative flex-1">
+                {searchTab === 'comercios' && (
+                  <div className="relative">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                     <input
                       ref={mobileSearchRef}
@@ -1377,49 +1417,155 @@ function HomeContent() {
                           setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
                         }, 400)
                       }}
-                      className="w-full pl-9 pr-28 py-2 bg-gray-100 dark:bg-slate-700 dark:text-white rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="w-full pl-9 pr-9 py-2.5 bg-gray-100 dark:bg-slate-700 dark:text-white rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
                     />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5">
-                      {(['startsWith', 'contains', 'exact'] as const).map(mode => (
-                        <button key={mode} onClick={() => setSearchMode(mode)}
-                          className={`px-1.5 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400'}`}>
-                          {mode === 'startsWith' ? 'Empieza' : mode === 'contains' ? 'Contiene' : 'Exacto'}
-                        </button>
-                      ))}
-                    </div>
+                    {searchText && (
+                      <button onClick={() => { setSearchText(''); setActiveFilters(prev => ({ ...prev, commerces: [] })) }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500">
+                        <X size={14} />
+                      </button>
+                    )}
                   </div>
-                  <button onClick={() => { setMobileSearchOpen(false); setIsProductSearchOpen(true) }}
-                    title="Buscar por producto"
-                    className="p-2 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 hover:text-indigo-600 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors shrink-0">
-                    <ShoppingBag size={16} />
-                  </button>
-                  <button onClick={() => { setMobileSearchOpen(false); setActiveFilters(prev => ({ ...prev, commerces: [] })) }}
-                    className="p-2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400">
-                    <X size={16} />
-                  </button>
+                )}
+
+                {searchTab === 'productos' && (
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                    <input
+                      ref={productSearchRef}
+                      type="text"
+                      placeholder="Ej: carteras, zapatillas, perfumes..."
+                      value={productQuery}
+                      onChange={e => setProductQuery(e.target.value)}
+                      className="w-full pl-9 pr-9 py-2.5 bg-gray-100 dark:bg-slate-700 dark:text-white rounded-2xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    {productQuery && (
+                      <button onClick={() => setProductQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Localidad según ubicación */}
+              {province && (
+                <button onClick={() => setShowProvinceSelector(true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-gray-500 dark:text-slate-400">
+                  <MapPin size={11} className="text-[#D94F2B]" /> {province}
+                </button>
+              )}
+
+              {/* Mini resumen: promos para vos + top categorías + top comercios */}
+              {!loading && todayDashboard && (
+                <div className="bg-[#1E3A5F] dark:bg-slate-800 rounded-2xl px-3 py-2.5 text-white">
+                  <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest leading-none mb-1">
+                    {forMe ? 'Promos para vos' : 'Promos disponibles hoy'}
+                  </p>
+                  <p className="text-base font-black leading-none mb-2">
+                    {todayDashboard.totalPromos} promos
+                    {todayDashboard.maxDiscount > 0 && <span className="text-[#D94F2B] text-sm ml-1.5">hasta {todayDashboard.maxDiscount}%</span>}
+                  </p>
+                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                    {todayDashboard.catList.slice(0, 3).map(cat => {
+                      const isActive = selectedCats.includes(cat.slug)
+                      return (
+                        <button key={cat.slug}
+                          onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all shrink-0 ${
+                            isActive ? 'bg-white text-[#1E3A5F]' : 'bg-white/10 text-white/80'
+                          }`}>
+                          <span>{cat.icon}</span><span>{cat.name}</span>
+                        </button>
+                      )
+                    })}
+                    {todayDashboard.commList.slice(0, 2).map(c => {
+                      const isFiltered = activeFilters.commerces[0]?.toLowerCase() === c.name.toLowerCase()
+                      return (
+                        <button key={c.name}
+                          onClick={() => {
+                            if (isFiltered) { setActiveFilters(prev => ({ ...prev, commerces: [] })); setSearchText('') }
+                            else { setSearchMode('exact'); setActiveFilters(prev => ({ ...prev, commerces: [c.name] })); setSearchText(c.name); track({ type: 'COMMERCE_CLICK', commerceName: c.name, source: 'dashboard' }) }
+                          }}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all shrink-0 ${
+                            isFiltered ? 'bg-white text-[#1E3A5F]' : 'bg-white/10 text-white/80'
+                          }`}>
+                          {c.logoUrl
+                            ? <img src={c.logoUrl} className="h-3.5 w-3.5 object-contain rounded bg-white/90 p-0.5 shrink-0" />
+                            : <span className="text-[8px] font-black">{c.name.slice(0,2).toUpperCase()}</span>
+                          }
+                          <span>{c.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 
-              {/* Categorías: scroll horizontal, todas visibles */}
-              <div className="mt-1 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                {categorias.sort((a,b) => (b.promoCount ?? 0) - (a.promoCount ?? 0)).map(cat => {
-                  const isActive = selectedCats.includes(cat.slug)
-                  const count = cat.promoCount ?? 0  // usar siempre el total DB, no el filtrado
-                  if (count === 0 && !isActive) return null
-                  return (
-                    <button
-                      key={cat.slug}
-                      onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
-                      className={`shrink-0 flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[9px] font-bold transition-all border ${
-                        isActive ? 'bg-gray-900 border-gray-900 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600'
-                      }`}
-                    >
-                      <span className="text-[10px]">{cat.icon}</span>
-                      <span>{cat.name}</span>
-                      <span className="opacity-50">·{count}</span>
-                    </button>
-                  )
-                })}
+              {/* Categorías: scroll horizontal con opción "Todos" */}
+              <div className="relative">
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 pr-6">
+                  <button onClick={() => setSelectedCats([])}
+                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all border ${
+                      selectedCats.length === 0 ? 'bg-gray-900 border-gray-900 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600'
+                    }`}>
+                    Todos
+                  </button>
+                  {categorias.sort((a,b) => (b.promoCount ?? 0) - (a.promoCount ?? 0)).map(cat => {
+                    const isActive = selectedCats.includes(cat.slug)
+                    const count = cat.promoCount ?? 0  // usar siempre el total DB, no el filtrado
+                    if (count === 0 && !isActive) return null
+                    return (
+                      <button
+                        key={cat.slug}
+                        onClick={() => setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])}
+                        className={`shrink-0 flex items-center gap-0.5 px-2 py-1 rounded-lg text-[9px] font-bold transition-all border ${
+                          isActive ? 'bg-gray-900 border-gray-900 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600'
+                        }`}
+                      >
+                        <span className="text-[10px]">{cat.icon}</span>
+                        <span>{cat.name}</span>
+                        <span className="opacity-50">·{count}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-white/90 dark:from-slate-900/90 to-transparent" />
+              </div>
+
+              {/* Para Mí / Todas / Hoy / Semana */}
+              <div className="flex gap-1.5 items-center overflow-x-auto no-scrollbar">
+                <button
+                  onClick={() => setForMe(false)}
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all border ${
+                    !forMe ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400'
+                  }`}
+                >Todas</button>
+                <button
+                  onClick={() => {
+                    if (status === 'authenticated') {
+                      if (!userProfile?.cards?.length) setWizardOpen(true)
+                      else setForMe(true)
+                    } else {
+                      setWizardOpen(true)
+                    }
+                  }}
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all border ${
+                    forMe ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-400'
+                  }`}
+                >Para Mí</button>
+
+                <div className="w-px h-4 bg-gray-200 shrink-0" />
+
+                {(['today', 'week'] as const).map(f => (
+                  <button key={f} onClick={() => setTimeFilter(f)}
+                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all border ${
+                      timeFilter === f ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-500'
+                    }`}>
+                    {f === 'today' ? 'Hoy' : 'Semana'}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -1521,7 +1667,7 @@ function HomeContent() {
 
       {/* ── Dashboard de resumen ── */}
       {!loading && todayDashboard && (
-        <div className="mb-4 bg-[#1E3A5F] dark:bg-slate-800 rounded-2xl p-4 text-white">
+        <div className="hidden lg:block mb-4 bg-[#1E3A5F] dark:bg-slate-800 rounded-2xl p-4 text-white">
           {/* Fila 1: héroe + días */}
           <div className="flex items-center justify-between gap-3 mb-3">
             <div>
@@ -1620,7 +1766,7 @@ function HomeContent() {
         )}
 
         {/* Empty State */}
-        {!loading && promosFiltradas.length === 0 && (
+        {!loading && !isProductSearchMode && promosFiltradas.length === 0 && (
           <div className="py-16 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-50 mb-4 text-gray-300">
               <Search size={32} />
@@ -1630,8 +1776,115 @@ function HomeContent() {
           </div>
         )}
 
+        {/* ── BÚSQUEDA DE PRODUCTOS: resultados agrupados por comercio (mismo esquema que el feed, in-page) ── */}
+        {isProductSearchMode && (() => {
+          const handleProductPromoClick = (promo: Promo) => {
+            setDetailPromo(promo)
+            track({ type: 'PROMO_VIEW', promoId: promo.id, promoTitle: promo.title, commerceName: promo.commerce.name, categorySlug: promo.category.slug ?? '', discount: bestPercentageReq(promo)?.discountValue })
+          }
+
+          // Las promos vienen anidadas bajo el comercio (sin `commerce` propio) — se les agrega acá
+          const withCommerce = (c: ProductCommerceResult, p: Promo): Promo => ({ ...p, commerce: { id: c.id, name: c.name, logoUrl: c.logoUrl } })
+
+          if (productSearchLoading) {
+            return (
+              <div className="flex items-center justify-center py-16">
+                <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )
+          }
+
+          const withPromos = productResults.filter(c => c.promos.length > 0)
+
+          if (productSearched && withPromos.length === 0) {
+            return (
+              <div className="py-16 text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-50 dark:bg-slate-800 mb-4 text-gray-300">
+                  <ShoppingBag size={32} />
+                </div>
+                <p className="text-gray-900 dark:text-white font-medium">No encontramos comercios para "{productQuery}"</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400 mt-2 max-w-[250px] mx-auto">Probá con otra palabra, por ejemplo una categoría o tipo de producto.</p>
+              </div>
+            )
+          }
+
+          // Categorías de PromoAR (las 19 fijas) entre las promos encontradas — desambiguación cuando el
+          // producto buscado pertenece a más de una (ej. "tacos" → Gastronomía + Indumentaria)
+          const allCategories = Array.from(new Set(withPromos.flatMap(c => c.promos.map(p => p.category.name)))).sort((a, b) => a.localeCompare(b, 'es'))
+          const visible = productCategoryFilter
+            ? withPromos
+                .map(c => ({ ...c, promos: c.promos.filter(p => p.category.name === productCategoryFilter) }))
+                .filter(c => c.promos.length > 0)
+            : withPromos
+
+          const ProductSection = ({ c }: { c: ProductCommerceResult }) => {
+            const scrollRef = React.useRef<HTMLDivElement>(null)
+            return (
+              <div className="mb-5">
+                <div className="flex items-center gap-2.5 px-4 mb-3">
+                  {c.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.logoUrl} alt={c.name} className="w-9 h-9 rounded-xl object-contain bg-white border border-gray-100 dark:border-slate-700 shrink-0" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-[#F0F2F5] dark:bg-slate-700 flex items-center justify-center shrink-0">
+                      <ShoppingBag size={16} className="text-gray-300 dark:text-slate-500" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-black text-[#1E3A5F] dark:text-white truncate">{c.name}</p>
+                    <p className="text-[11px] text-[#8B96A5] dark:text-slate-400 truncate">{c.promos.length} {c.promos.length === 1 ? 'promo' : 'promos'} para vos</p>
+                  </div>
+                </div>
+                <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
+                  {c.promos.map(p => {
+                    const promo = withCommerce(c, p)
+                    return <PromoCard key={p.id} promo={promo} nearbyCount={nearbyBranches[c.id]?.count} onClick={() => handleProductPromoClick(promo)} />
+                  })}
+                </div>
+                <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-4 mx-4" />
+              </div>
+            )
+          }
+
+          return (
+            <div className="space-y-0 -mx-4">
+              <p className="px-4 mb-4 text-[11px] text-[#8B96A5] dark:text-slate-400 leading-snug">
+                Estos resultados se basan en un catálogo que puede no reflejar el stock actual de cada comercio — algunas categorías o productos podrían no estar disponibles hoy.
+              </p>
+              {allCategories.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 px-4 mb-4">
+                  <button
+                    onClick={() => setProductCategoryFilter(null)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors ${
+                      productCategoryFilter === null
+                        ? 'bg-[#1E3A5F] text-white'
+                        : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  {allCategories.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setProductCategoryFilter(cat === productCategoryFilter ? null : cat)}
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors ${
+                        productCategoryFilter === cat
+                          ? 'bg-[#1E3A5F] text-white'
+                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {visible.map(c => <ProductSection key={c.id} c={c} />)}
+            </div>
+          )
+        })()}
+
         {/* ── LAYOUT NETFLIX: secciones por categoría ── */}
-        {!loading && promosFiltradas.length > 0 && (() => {
+        {!loading && !isProductSearchMode && promosFiltradas.length > 0 && (() => {
           // Agrupar por categoría
           const catOrder: string[] = []
           const byCat = new Map<string, { catName: string; catIcon: string; catColor: string; promos: typeof promosFiltradas }>()
@@ -1652,64 +1905,9 @@ function HomeContent() {
             .slice(0, Math.max(0, 6 - featuredPromos.length))
           const destacadas = [...featuredPromos, ...topByDiscount]
 
-          const PromoCard = ({ promo }: { promo: typeof promosFiltradas[0] }) => {
-            const pctReq = bestPercentageReq(promo)
-            const label = discountLabel(promo)
-            const banks = Array.from(new Map(promo.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])).values())
-            const wallets = Array.from(new Map(promo.requirements.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])).values())
-            const entities = [...banks, ...wallets].slice(0, 2)
-            const days = formatValidDays(promo.validDays)
-            const nb = promo.commerce.id ? nearbyBranches[promo.commerce.id] : null
-
-            return (
-              <div
-                onClick={() => {
-                  setDetailPromo(promo)
-                  track({ type: 'PROMO_VIEW', promoId: promo.id, promoTitle: promo.title, commerceName: promo.commerce.name, categorySlug: promo.category.slug ?? '', discount: bestPercentageReq(promo)?.discountValue })
-                }}
-                className="bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer flex-shrink-0 transition-all hover:shadow-lg hover:scale-[1.03] hover:border-[#1E3A5F] active:scale-[0.97]"
-                style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
-              >
-                {/* Imagen/Logo */}
-                <div className="relative bg-[#F8F9FB] dark:bg-slate-900 border-b border-[#F0F2F5] dark:border-slate-700 flex items-center justify-center" style={{ height: 80 }}>
-                  {promo.commerce.logoUrl ? (
-                    <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-12 max-w-[80%] object-contain p-2" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-black" style={{ background: promo.category.color + '20', color: promo.category.color }}>
-                      {promo.category.icon ?? '🏷️'}
-                    </div>
-                  )}
-                  {(pctReq?.discountValue ?? 0) <= 100 && label && (
-                    <div className="absolute top-2 right-2 bg-[#D94F2B] text-white text-[10px] font-black px-1.5 py-0.5 rounded-md leading-tight">
-                      {pctReq ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
-                    </div>
-                  )}
-                  {nb && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-emerald-600/90 text-white text-[9px] font-semibold px-2 py-0.5 text-center truncate">
-                      📍 {nb.count} {nb.count === 1 ? 'sucursal' : 'sucursales'}
-                    </div>
-                  )}
-                </div>
-
-                {/* Body */}
-                <div className="px-2.5 pt-2 pb-3 space-y-1.5">
-                  <p className="text-[13px] font-bold text-gray-900 dark:text-white truncate leading-tight">{promo.commerce.name}</p>
-                  <p className="text-[11px] text-gray-600 dark:text-slate-400 leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
-
-                  {entities.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {entities.map((e, i) => (
-                        <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300">
-                          {e.name.split(' ').slice(-1)[0]}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <p className="text-[10px] text-[#8B96A5] dark:text-slate-400">{days === 'Todos los días' ? 'Todos los días' : days.replace('Lunes a viernes', 'Lun–Vie')}</p>
-                </div>
-              </div>
-            )
+          const handlePromoClick = (promo: typeof promosFiltradas[0]) => {
+            setDetailPromo(promo)
+            track({ type: 'PROMO_VIEW', promoId: promo.id, promoTitle: promo.title, commerceName: promo.commerce.name, categorySlug: promo.category.slug ?? '', discount: bestPercentageReq(promo)?.discountValue })
           }
 
           const PREVIEW = 8
@@ -1746,7 +1944,7 @@ function HomeContent() {
                   </div>
                 </div>
                 <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
-                  {shown.map(p => <PromoCard key={p.id} promo={p} />)}
+                  {shown.map(p => <PromoCard key={p.id} promo={p} nearbyCount={p.commerce.id ? nearbyBranches[p.commerce.id]?.count : null} onClick={() => handlePromoClick(p)} />)}
                 </div>
                 <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-4 mx-4" />
               </div>
@@ -1912,7 +2110,9 @@ function HomeContent() {
 
       <BottomNav
         onFilter={() => setIsFilterOpen(true)}
-        onSearch={() => { setMobileSearchOpen(v => !v); setTimeout(() => mobileSearchRef.current?.focus(), 100) }}
+        onSearch={() => {
+          setTimeout(() => (searchTab === 'productos' ? productSearchRef : mobileSearchRef).current?.focus(), 100)
+        }}
       />
       <FilterDrawer
         isOpen={isFilterOpen}
@@ -1924,24 +2124,6 @@ function HomeContent() {
         onApply={(f) => {
           setActiveFilters(f)
           setIsFilterOpen(false)
-        }}
-      />
-      <CategorySheet
-        isOpen={isCategoryOpen}
-        onClose={() => setIsCategoryOpen(false)}
-        categorias={categorias}
-        selected={selectedCats}
-        onChange={setSelectedCats}
-      />
-      <ProductSearch
-        isOpen={isProductSearchOpen}
-        onClose={() => setIsProductSearchOpen(false)}
-        forMe={forMe}
-        onSelectCommerce={(name) => {
-          setSearchText(name)
-          setSearchMode('exact')
-          setActiveFilters(prev => ({ ...prev, commerces: [name] }))
-          track({ type: 'COMMERCE_SEARCH', query: name })
         }}
       />
       <PromoWizard
