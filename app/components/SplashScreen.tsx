@@ -52,7 +52,7 @@ export default function SplashScreen({ loading, onDone }: { loading: boolean; on
     >
       <div className="flex flex-col items-center gap-8 px-8 w-full max-w-sm">
         {/* Logo */}
-        <img src="/logo.jpg" alt="PromoAR" className="w-48 h-auto object-contain" />
+        <img src="/promoar_gabi_transparente.png" alt="PromoAR" className="w-48 h-auto object-contain" />
 
         {/* Tagline */}
         <div className="text-center space-y-1">
