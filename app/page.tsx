@@ -1035,7 +1035,7 @@ function HomeContent() {
                     <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-[#EEF2F8] dark:bg-[#1E3A5F]/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                       <button onClick={handleClick} className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-base">{cat.icon}</span>
-                        <span className={`text-xs font-bold truncate ${isActive ? 'text-[#1E3A5F] dark:text-blue-300' : 'text-gray-500 dark:text-slate-400'}`}>{cat.name}</span>
+                        <span className={`text-xs font-bold truncate ${isActive ? 'text-[#1E3A5F] dark:text-blue-300' : 'text-gray-600 dark:text-slate-400'}`}>{cat.name}</span>
                       </button>
                       {count > 0 && <span className="text-[10px] text-gray-400 tabular-nums shrink-0">{count}</span>}
                     </div>
@@ -1056,7 +1056,7 @@ function HomeContent() {
                     const isActive = activeFilters.banks.includes((b as any).id)
                     return (
                       <button key={(b as any).id} onClick={() => setActiveFilters(prev => ({ ...prev, banks: isActive ? prev.banks.filter(id => id !== (b as any).id) : [...prev.banks, (b as any).id] }))}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                         {b.logoUrl && <img src={b.logoUrl} className="w-5 h-5 object-contain rounded shrink-0" />}
                         <span className="truncate">{b.name}</span>
                       </button>
@@ -1078,7 +1078,7 @@ function HomeContent() {
                     const isActive = activeFilters.wallets.includes((w as any).id)
                     return (
                       <button key={(w as any).id} onClick={() => setActiveFilters(prev => ({ ...prev, wallets: isActive ? prev.wallets.filter(id => id !== (w as any).id) : [...prev.wallets, (w as any).id] }))}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                         {w.logoUrl && <img src={w.logoUrl} className="w-5 h-5 object-contain rounded shrink-0" />}
                         <span className="truncate">{w.name}</span>
                       </button>
@@ -1101,7 +1101,7 @@ function HomeContent() {
                     return (
                       <button key={(n as any).id ?? n.name}
                         onClick={() => setActiveFilters(prev => ({ ...prev, networks: isActive ? prev.networks.filter(id => id !== (n as any).id) : [...prev.networks, (n as any).id] }))}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                         <span className="truncate">{n.name}</span>
                       </button>
                     )
@@ -1150,7 +1150,7 @@ function HomeContent() {
                       const isActive = (activeFilters as any)[key] === val
                       return (
                         <button key={label} onClick={() => setActiveFilters(prev => ({ ...prev, [key]: isActive ? null : val }))}
-                          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                           <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${isActive ? 'border-[#1E3A5F] bg-[#1E3A5F]' : 'border-gray-300'}`}>
                             {isActive && <span className="text-white text-[8px] font-black">✓</span>}
                           </span>
@@ -1832,25 +1832,45 @@ function HomeContent() {
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] font-black text-[#1E3A5F] dark:text-white truncate">{c.name}</p>
-                    <p className="text-[11px] text-[#8B96A5] dark:text-slate-400 truncate">{c.promos.length} {c.promos.length === 1 ? 'promo' : 'promos'} para vos</p>
+                    <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">{c.promos.length} {c.promos.length === 1 ? 'promo' : 'promos'} para vos</p>
                   </div>
                 </div>
-                <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
-                  {c.promos.map(p => {
-                    const promo = withCommerce(c, p)
-                    return <PromoCard key={p.id} promo={promo} nearbyCount={nearbyBranches[c.id]?.count} onClick={() => handleProductPromoClick(promo)} />
-                  })}
+                <div className="relative">
+                  <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 py-2" style={{ scrollbarWidth: 'none' }}>
+                    {c.promos.map(p => {
+                      const promo = withCommerce(c, p)
+                      return <PromoCard key={p.id} promo={promo} nearbyCount={nearbyBranches[c.id]?.count} onClick={() => handleProductPromoClick(promo)} />
+                    })}
+                  </div>
+                  {c.promos.length > 2 && (
+                    <div className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#f8fafc] dark:from-[#020617] to-transparent pointer-events-none" />
+                  )}
                 </div>
-                <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-4 mx-4" />
+                <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-2 mx-4" />
               </div>
             )
           }
 
+          const hasPercentagePromo = visible.some(c =>
+            c.promos.some(p => p.requirements?.some((r: any) =>
+              r.discountType === 'PERCENTAGE_REINTEGRO' || r.discountType === 'PERCENTAGE_DESCUENTO'
+            ))
+          )
+
           return (
             <div className="space-y-0 -mx-4">
-              <p className="px-4 mb-4 text-[11px] text-[#8B96A5] dark:text-slate-400 leading-snug">
-                Estos resultados se basan en un catálogo que puede no reflejar el stock actual de cada comercio — algunas categorías o productos podrían no estar disponibles hoy.
+              <p className="px-4 mb-3 text-[11px] text-gray-500 dark:text-slate-400 leading-snug">
+                Estos resultados se basan en un catálogo que puede no reflejar el stock actual — algunas categorías o productos podrían no estar disponibles hoy.
               </p>
+              {hasPercentagePromo && (
+                <div className="mx-4 mb-4 px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 flex gap-2 items-start">
+                  <span className="text-amber-500 shrink-0 mt-0.5">⚠</span>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-snug">
+                    Las promos con % de supermercados suelen tener excepciones por rubro (electrónica, indumentaria, etc.). Verificá los legales en cada promo antes de ir.
+                  </p>
+                </div>
+              )}
+
               {allCategories.length > 1 && (
                 <div className="flex flex-wrap gap-1.5 px-4 mb-4">
                   <button

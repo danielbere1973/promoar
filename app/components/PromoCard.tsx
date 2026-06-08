@@ -73,7 +73,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, fullWidth }: Pr
   return (
     <div
       onClick={onClick}
-      className={`bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:scale-[1.03] hover:border-[#1E3A5F] active:scale-[0.97] ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
+      className={`bg-white dark:bg-slate-800 border-2 border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:scale-[1.03] hover:border-[#1E3A5F] active:scale-[0.97] ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
       style={fullWidth ? undefined : { width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
     >
       {/* Imagen/Logo */}
@@ -101,19 +101,19 @@ export default function PromoCard({ promo, nearbyCount, onClick, fullWidth }: Pr
       {/* Body */}
       <div className="px-2.5 pt-2 pb-3 space-y-1.5">
         <p className="text-[13px] font-bold text-gray-900 dark:text-white truncate leading-tight">{promo.commerce.name}</p>
-        <p className="text-[11px] text-gray-600 dark:text-slate-400 leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
+        <p className="text-[11px] text-gray-700 dark:text-slate-400 leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
 
         {entities.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {entities.map((e, i) => (
-              <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300">
+              <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300 border border-[#C8D5E8] dark:border-slate-600">
                 {e.name.split(' ').slice(-1)[0]}
               </span>
             ))}
           </div>
         )}
 
-        <p className="text-[10px] text-[#8B96A5] dark:text-slate-400">{days === 'Todos los días' ? 'Todos los días' : days.replace('Lunes a viernes', 'Lun–Vie')}</p>
+        <p className="text-[10px] text-gray-500 dark:text-slate-400">{days === 'Todos los días' ? 'Todos los días' : days.replace('Lunes a viernes', 'Lun–Vie')}</p>
       </div>
     </div>
   )
