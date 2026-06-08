@@ -858,8 +858,8 @@ function HomeContent() {
       {/* ── Sidebar (Desktop) ── */}
       <aside className="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-950 z-30 overflow-hidden">
         {/* Logo */}
-        <div className="flex items-center justify-center bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 py-6 px-6 shrink-0">
-          <img src="/logo.jpg" alt="PromoAR" className="w-full h-auto object-contain" />
+        <div className="flex items-center justify-center bg-white border-b border-gray-100 dark:border-slate-700 py-6 px-6 shrink-0">
+          <img src="/promoar_gabi_transparente.png" alt="PromoAR" className="w-full h-auto object-contain" />
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden px-6 pt-4">

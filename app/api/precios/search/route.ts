@@ -732,7 +732,9 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         : (rawListPrice > 0 && rawListPrice <= salePrice * 3)
           ? rawListPrice
           : (offer.PriceWithoutDiscount || salePrice || 0)
-      const spot = offer.spotPrice || 0
+      // Cencosud también tiene spotPrice corrupto (no es precio real al público) — ignorarlo,
+      // igual que ListPrice. offer.Price ya viene resuelto con el descuento aplicado.
+      const spot = isCencosudSite ? 0 : (offer.spotPrice || 0)
       const available = (offer.AvailableQuantity || 0) > 0
 
       if (!available || listPrice <= 0) return null
