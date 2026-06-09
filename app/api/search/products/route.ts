@@ -9,6 +9,19 @@ export const dynamic = 'force-dynamic'
 // que lo venden junto con sus promos activas, filtradas por perfil financiero
 // si el usuario pidió "para mí". Precios NO se modelan acá — ver CLAUDE.md punto 9
 // (deben consultarse en línea, nunca scrapearse).
+// Word-boundary check: ensures "litera" doesn't match inside "literatura"
+function hasWordMatch(text: string | null, term: string): boolean {
+  if (!text) return false
+  const t = text.toLowerCase()
+  const idx = t.indexOf(term)
+  if (idx === -1) return false
+  const before = idx === 0 || !/[a-záéíóúñü]/.test(t[idx - 1])
+  const after = idx + term.length >= t.length || !/[a-záéíóúñü]/.test(t[idx + term.length])
+  return before && after
+}
+
+const STOP_WORDS = new Set(['para', 'de', 'del', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'con', 'sin', 'en', 'a'])
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -19,27 +32,53 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ commerces: [] })
     }
 
-    const matches = await prisma.commerceProduct.findMany({
-      where: {
-        OR: [
-          { categoria: { contains: q, mode: 'insensitive' } },
-          { subcategoria: { contains: q, mode: 'insensitive' } },
-          { productos: { contains: q, mode: 'insensitive' } },
-        ],
-      },
-      select: { commerceId: true, categoria: true, subcategoria: true },
+    const qLower = q.toLowerCase()
+    const words = qLower.split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS.has(w))
+    const searchTerms = words.length > 0 ? words : [qLower]
+
+    // Build OR conditions for all search terms across all fields
+    const orConditions = searchTerms.flatMap(term => [
+      { categoria: { contains: term, mode: 'insensitive' as const } },
+      { subcategoria: { contains: term, mode: 'insensitive' as const } },
+      { productos: { contains: term, mode: 'insensitive' as const } },
+    ])
+
+    const allMatches = await prisma.commerceProduct.findMany({
+      where: { OR: orConditions },
+      select: { commerceId: true, categoria: true, subcategoria: true, productos: true },
     })
 
-    if (!matches.length) {
-      return NextResponse.json({ commerces: [] })
-    }
-
+    // Filter out word-boundary false positives and score by how many search terms match
     const matchedCategoriesByCommerce = new Map<string, Set<string>>()
-    for (const m of matches) {
+    const relevanceByCommerce = new Map<string, number>()
+    const wordMatchCountByCommerce = new Map<string, Set<string>>()
+
+    for (const m of allMatches) {
+      // Check each search term with word boundaries
+      const matchedTerms = searchTerms.filter(term =>
+        hasWordMatch(m.categoria, term) ||
+        hasWordMatch(m.subcategoria, term) ||
+        hasWordMatch(m.productos, term)
+      )
+      if (matchedTerms.length === 0) continue
+
       const set = matchedCategoriesByCommerce.get(m.commerceId) ?? new Set<string>()
       set.add(m.subcategoria || m.categoria)
       matchedCategoriesByCommerce.set(m.commerceId, set)
+
+      const termSet = wordMatchCountByCommerce.get(m.commerceId) ?? new Set<string>()
+      matchedTerms.forEach(t => termSet.add(t))
+      wordMatchCountByCommerce.set(m.commerceId, termSet)
+
+      const currentRel = relevanceByCommerce.get(m.commerceId) ?? 0
+      let rel = 1
+      if (m.categoria?.toLowerCase() === qLower) rel = 3
+      else if (matchedTerms.some(t => hasWordMatch(m.categoria, t) && m.categoria!.toLowerCase().split(/[\s|,]+/).some(w => w.trim() === t))) rel = 3
+      else if (matchedTerms.some(t => hasWordMatch(m.subcategoria, t))) rel = 2
+      if (rel > currentRel) relevanceByCommerce.set(m.commerceId, rel)
     }
+
+    const matches = allMatches.filter(m => matchedCategoriesByCommerce.has(m.commerceId))
     const commerceIds = Array.from(matchedCategoriesByCommerce.keys())
 
     // ── Perfil financiero del usuario (mismo criterio que /api/promos) ──────
@@ -190,8 +229,14 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // Comercios con más promos coincidentes primero, luego alfabético
+    // Más palabras de la query que matchean primero, luego relevancia, luego promos
     results.sort((a, b) => {
+      const wordsA = wordMatchCountByCommerce.get(a.id)?.size ?? 0
+      const wordsB = wordMatchCountByCommerce.get(b.id)?.size ?? 0
+      if (wordsB !== wordsA) return wordsB - wordsA
+      const relA = relevanceByCommerce.get(a.id) ?? 1
+      const relB = relevanceByCommerce.get(b.id) ?? 1
+      if (relB !== relA) return relB - relA
       if (b.promoCount !== a.promoCount) return b.promoCount - a.promoCount
       return a.name.localeCompare(b.name, 'es')
     })

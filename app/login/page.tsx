@@ -63,7 +63,7 @@ function LoginForm() {
       setError('Credenciales incorrectas. Verificá tu correo y contraseña.')
       setLoading(false)
     } else {
-      router.push('/')
+      router.push('/promos')
       router.refresh()
     }
   }
@@ -175,7 +175,7 @@ function LoginForm() {
 
         {/* Botón Google */}
         <button
-          onClick={() => signIn('google', { callbackUrl: '/' })}
+          onClick={() => signIn('google', { callbackUrl: '/promos' })}
           className="w-full flex items-center justify-center gap-3 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 py-3 rounded-2xl text-sm font-semibold transition-colors shadow-sm"
         >
           <svg width="18" height="18" viewBox="0 0 48 48">
@@ -218,7 +218,7 @@ function LoginForm() {
                       redirect: false,
                     })
                     if (result?.ok) {
-                      const cb = searchParams.get('callbackUrl') || '/'
+                      const cb = searchParams.get('callbackUrl') || '/promos'
                       router.push(cb)
                       setTimeout(() => setLoading(false), 5000)
                     } else {

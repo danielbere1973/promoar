@@ -34,10 +34,10 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
     return name.slice(0, 2).toUpperCase()
   })()
 
-  const isHome = pathname === '/'
+  const isHome = pathname === '/promos'
 
   const navItems = [
-    { label: 'Promos',      icon: Sun,               href: '/',          action: undefined as (() => void) | undefined },
+    { label: 'Promos',      icon: Sun,               href: '/promos',    action: undefined as (() => void) | undefined },
     { label: 'Comunidad',   icon: Users,             href: '/comunidad', action: undefined },
     { label: 'Filtros',     icon: SlidersHorizontal, href: undefined,    action: onFilter },
     { label: 'Categorías',  icon: undefined,         href: '/explorar',  action: undefined },
