@@ -24,6 +24,8 @@ const PUBLIC_PATHS = [
   '/api/admin/scrape',
   '/precios',
   '/favicon.ico',
+  '/sitemap.xml',
+  '/robots.txt',
 ]
 
 // Rutas solo para ADMIN
@@ -77,5 +79,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api/public|favicon.ico).*)'], // Excluimos lo que sabemos que es 100% público para ahorrar ciclos
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)'],
 }
