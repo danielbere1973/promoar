@@ -73,9 +73,10 @@ export default function PromoCard({ promo, nearbyCount, onClick, fullWidth }: Pr
   return (
     <div
       onClick={onClick}
-      className={`bg-white dark:bg-slate-800 border-2 border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:scale-[1.03] hover:border-[#1E3A5F] active:scale-[0.97] ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
+      className={`group bg-white dark:bg-slate-800 border-2 border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:scale-[1.03] hover:border-[#1E3A5F] active:scale-[0.97] ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
       style={fullWidth ? undefined : { width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
     >
+      <div className="h-0.5 bg-[#1E3A5F] dark:bg-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
       {/* Imagen/Logo */}
       <div className="relative bg-[#F8F9FB] dark:bg-slate-900 border-b border-[#F0F2F5] dark:border-slate-700 flex items-center justify-center" style={{ height: 80 }}>
         {promo.commerce.logoUrl ? (

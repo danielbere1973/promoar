@@ -357,6 +357,30 @@ function HomeContent() {
   const [selectedCats, setSelectedCats] = useState<string[]>([])
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null)
   const [detailPromo, setDetailPromo] = useState<Promo | null>(null)
+
+  const openPromoDetail = React.useCallback((promo: Promo) => {
+    setDetailPromo(promo)
+    if (promo.slug) {
+      window.history.pushState({ promoSlug: promo.slug }, '', `/promos/${promo.slug}`)
+    }
+  }, [])
+
+  const closePromoDetail = React.useCallback(() => {
+    setDetailPromo(null)
+    if (window.location.pathname !== '/promos') {
+      window.history.replaceState({}, '', '/promos')
+    }
+  }, [])
+
+  React.useEffect(() => {
+    const onPopState = () => {
+      if (window.location.pathname === '/promos') {
+        setDetailPromo(null)
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
   const [focusedCat, setFocusedCat] = useState<string | null>(null)
   const [entitiesPromo, setEntitiesPromo] = useState<Promo | null>(null)
   const [expandedPromos, setExpandedPromos] = useState<Set<string>>(new Set())
@@ -1280,24 +1304,21 @@ function HomeContent() {
               </div>
 
               <div className="flex items-center gap-3 flex-1 justify-end">
-                <div className="hidden lg:block"><ThemeToggle /></div>
-                <div className="hidden md:flex flex-col gap-1.5 max-w-xs w-full">
-                  <div className="flex gap-1 self-end">
-                    <button onClick={() => setSearchTab('comercios')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
-                        searchTab === 'comercios' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'
-                      }`}>
-                      Comercios
-                    </button>
-                    <button onClick={() => setSearchTab('productos')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
-                        searchTab === 'productos' ? 'bg-gray-900 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500'
-                      }`}>
-                      Productos
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                <div className="hidden md:flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10 w-96">
+                  <button onClick={() => setSearchTab('comercios')}
+                    className={`px-3 h-full text-[10px] font-black uppercase whitespace-nowrap border-r border-gray-200 dark:border-slate-600 transition-all ${
+                      searchTab === 'comercios' ? 'bg-gray-900 text-white' : 'text-gray-400 dark:text-slate-400 hover:text-gray-600'
+                    }`}>
+                    Comercios
+                  </button>
+                  <button onClick={() => setSearchTab('productos')}
+                    className={`px-3 h-full text-[10px] font-black uppercase whitespace-nowrap border-r border-gray-200 dark:border-slate-600 transition-all ${
+                      searchTab === 'productos' ? 'bg-gray-900 text-white' : 'text-gray-400 dark:text-slate-400 hover:text-gray-600'
+                    }`}>
+                    Productos
+                  </button>
+                  <div className="relative flex-1 h-full">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 pointer-events-none" />
                     {searchTab === 'comercios' ? (
                       <input
                         type="text"
@@ -1312,26 +1333,16 @@ function HomeContent() {
                             if (val) track({ type: 'COMMERCE_SEARCH', query: val })
                           }, 400)
                         }}
-                        className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white border-none rounded-2xl text-[11px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                        className="w-full h-full pl-8 pr-3 bg-transparent text-gray-900 dark:text-white text-[11px] font-medium outline-none"
                       />
                     ) : (
                       <input
                         type="text"
-                        placeholder="Ej: carteras, zapatillas, perfumes..."
+                        placeholder="Ej: zapatillas, carteras..."
                         value={productQuery}
                         onChange={(e) => setProductQuery(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white border-none rounded-2xl text-[11px] font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                        className="w-full h-full pl-8 pr-3 bg-transparent text-gray-900 dark:text-white text-[11px] font-medium outline-none"
                       />
-                    )}
-                    {searchTab === 'comercios' && searchText && (
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5">
-                        {(['startsWith', 'contains', 'exact'] as const).map(mode => (
-                          <button key={mode} onClick={() => setSearchMode(mode)}
-                            className={`px-2 py-1 rounded-lg text-[9px] font-black transition-all ${searchMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-slate-600 text-gray-500 dark:text-slate-400 hover:bg-gray-300 dark:hover:bg-slate-500'}`}>
-                            {mode === 'startsWith' ? 'Empieza' : mode === 'contains' ? 'Contiene' : 'Exacto'}
-                          </button>
-                        ))}
-                      </div>
                     )}
                   </div>
                 </div>
@@ -1357,6 +1368,7 @@ function HomeContent() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                   </button>
                 </div>
+                <div className="hidden lg:block"><ThemeToggle /></div>
               </div>
             </div>
 
@@ -1722,8 +1734,8 @@ function HomeContent() {
         {/* ── BÚSQUEDA DE PRODUCTOS: resultados agrupados por comercio (mismo esquema que el feed, in-page) ── */}
         {isProductSearchMode && (() => {
           const handleProductPromoClick = (promo: Promo) => {
-            setDetailPromo(promo)
             track({ type: 'PROMO_VIEW', promoId: promo.id, promoTitle: promo.title, commerceName: promo.commerce.name, categorySlug: promo.category.slug ?? '', discount: bestPercentageReq(promo)?.discountValue })
+            openPromoDetail(promo)
           }
 
           // Las promos vienen anidadas bajo el comercio (sin `commerce` propio) — se les agrega acá
@@ -1869,8 +1881,8 @@ function HomeContent() {
           const destacadas = [...featuredPromos, ...topByDiscount]
 
           const handlePromoClick = (promo: typeof promosFiltradas[0]) => {
-            setDetailPromo(promo)
             track({ type: 'PROMO_VIEW', promoId: promo.id, promoTitle: promo.title, commerceName: promo.commerce.name, categorySlug: promo.category.slug ?? '', discount: bestPercentageReq(promo)?.discountValue })
+            openPromoDetail(promo)
           }
 
           const PREVIEW = 8
@@ -2019,7 +2031,7 @@ function HomeContent() {
                     const entities = [...banks, ...wallets].slice(0, 2)
                     const nb = p.commerce.id ? nearbyBranches[p.commerce.id] : null
                     return (
-                      <div key={p.id} onClick={() => { setDetailPromo(p); setFocusedCat(null) }}
+                      <div key={p.id} onClick={() => { openPromoDetail(p); setFocusedCat(null) }}
                         className="bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
                         <div className="relative bg-[#F8F9FB] dark:bg-slate-900 border-b border-[#F0F2F5] dark:border-slate-700 flex items-center justify-center" style={{ height: 72 }}>
                           {p.commerce.logoUrl
@@ -2059,7 +2071,7 @@ function HomeContent() {
         <PromoDetailSheet
           promo={detailPromo}
           nearbyBranch={detailPromo.commerce.id ? nearbyBranches[detailPromo.commerce.id] : undefined}
-          onClose={() => setDetailPromo(null)}
+          onClose={closePromoDetail}
         />
       )}
 

@@ -273,6 +273,7 @@ model Commerce {
   slug              String           @unique
   logoUrl           String?
   website           String?
+  instagramUrl      String?
   active            Boolean          @default(true)
   defaultCategoryId String?
   defaultCategory   Category?        @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
