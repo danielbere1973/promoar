@@ -203,6 +203,76 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {/* ── DIFERENCIAL: Búsqueda por producto ── */}
+      <section className="py-20 bg-gradient-to-br from-[#1E3A5F] to-[#2a4f82] text-white overflow-hidden relative">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-[#D94F2B] rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-300 rounded-full blur-3xl" />
+        </div>
+        <div className="relative max-w-6xl mx-auto px-4 grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 bg-[#D94F2B]/20 border border-[#D94F2B]/40 rounded-full px-3 py-1 text-xs font-bold text-[#ff8066] mb-6 uppercase tracking-widest">
+              ✦ Solo en PromoAR
+            </div>
+            <h2 className="text-3xl lg:text-4xl font-black leading-tight mb-4">
+              Buscá el producto.<br />
+              <span className="text-[#D94F2B]">Nosotros te decimos<br />quién tiene promo.</span>
+            </h2>
+            <p className="text-blue-100 text-lg leading-relaxed mb-6">
+              Otras apps te muestran promos. PromoAR hace algo que nadie más hace: buscás <strong className="text-white">"zapatillas"</strong>, <strong className="text-white">"colchón"</strong> o <strong className="text-white">"notebook"</strong> y te decimos exactamente qué tiendas tienen descuento hoy para tus tarjetas.
+            </p>
+            <ul className="space-y-2 mb-8">
+              {[
+                'Buscá por nombre de producto',
+                'Solo te muestra tiendas con promo activa',
+                'Filtrado por tus tarjetas y bancos',
+              ].map(item => (
+                <li key={item} className="flex items-center gap-2 text-sm text-blue-100">
+                  <span className="w-5 h-5 rounded-full bg-[#D94F2B] flex items-center justify-center text-white text-[10px] font-black shrink-0">✓</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <Link href="/promos"
+              className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#D94F2B] hover:bg-[#c44325] text-white rounded-2xl font-black text-base transition-all hover:scale-105 active:scale-95 shadow-lg">
+              Probarlo ahora →
+            </Link>
+          </div>
+          {/* Mockup búsqueda */}
+          <div className="flex justify-center">
+            <div className="bg-white/10 backdrop-blur rounded-3xl p-4 border border-white/20 shadow-2xl w-full max-w-[320px]">
+              {/* Barra de búsqueda */}
+              <div className="flex items-center bg-white rounded-2xl px-3 h-11 mb-4 gap-2 shadow-sm">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span className="text-gray-400 text-sm flex-1">zapatillas nike</span>
+                <div className="bg-[#D94F2B] rounded-lg px-2 py-0.5 text-[10px] font-black text-white">Productos</div>
+              </div>
+              {/* Resultados */}
+              <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest mb-2 px-1">3 tiendas con promo hoy</p>
+              <div className="space-y-2">
+                {[
+                  { init: 'AD', name: 'Adidas', cat: 'Indumentaria · Zapatillas', pct: '20%', bank: 'Galicia' },
+                  { init: 'NI', name: 'Nike Factory', cat: 'Indumentaria · Calzado', pct: '15%', bank: 'BBVA' },
+                  { init: 'SP', name: 'Sportline', cat: 'Deportes · Zapatillas', pct: '25%', bank: 'Nación' },
+                ].map((p) => (
+                  <div key={p.name} className="bg-white rounded-2xl px-3 py-2.5 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-[11px] font-black text-gray-500 shrink-0">{p.init}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-black text-gray-900 leading-tight">{p.name}</p>
+                      <p className="text-[10px] text-gray-400">{p.cat}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="bg-[#D94F2B] text-white text-[11px] font-black px-2 py-0.5 rounded-lg block">{p.pct}</span>
+                      <span className="text-[9px] text-gray-400 mt-0.5 block">{p.bank}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── 4. DEMO ── */}
       <section className="py-20">
         <div className="max-w-6xl mx-auto px-4 grid lg:grid-cols-2 gap-12 items-center">
@@ -216,6 +286,7 @@ export default async function LandingPage() {
                 { n: '1', t: 'Cargá tus tarjetas', d: 'Decile al sistema qué banco y tipo de tarjeta tenés. Sin claves ni contraseñas.' },
                 { n: '2', t: 'El sistema filtra por vos', d: 'Solo ves las promos que aplican a tus tarjetas y cuentas. Nada más.' },
                 { n: '3', t: 'Filtrá por categoría o día', d: 'Supermercados, combustible, farmacias... o simplemente "qué hay para hoy".' },
+                { n: '4', t: 'Buscá comercios y productos', d: '¿Necesitás una zapatilla o un colchón? Buscá el producto y te mostramos qué tiendas tienen promo hoy.' },
               ].map((step) => (
                 <li key={step.n} className="flex gap-4">
                   <div className="w-8 h-8 rounded-full bg-[#D94F2B] text-white flex items-center justify-center text-sm font-black shrink-0 mt-0.5">
@@ -233,11 +304,48 @@ export default async function LandingPage() {
               Probarlo ahora →
             </Link>
           </div>
-          {/* Demo placeholder — reemplazar con GIF real */}
-          <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl aspect-[4/3] flex flex-col items-center justify-center border-2 border-dashed border-gray-300">
-            <div className="text-5xl mb-3">📱</div>
-            <p className="text-sm font-bold text-gray-500">GIF demo del filtrado</p>
-            <p className="text-xs text-gray-400 mt-1">Reemplazar con screenshot o GIF real</p>
+          {/* Mockup de la app */}
+          <div className="flex justify-center">
+            <div className="bg-[#1E3A5F] rounded-[2.5rem] p-4 shadow-2xl shadow-[#1E3A5F]/30 w-full max-w-[300px]">
+              {/* Search bar */}
+              <div className="flex items-center bg-white/10 rounded-2xl px-3 h-9 mb-3 gap-2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-60 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span className="text-white/50 text-[11px]">zapatillas nike...</span>
+                <div className="ml-auto bg-white/20 rounded-lg px-2 py-0.5 text-[9px] font-bold text-white/70">Productos</div>
+              </div>
+              {/* Header */}
+              <div className="mb-3">
+                <p className="text-[10px] font-bold text-green-400 uppercase tracking-widest flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span>
+                  Para tu perfil
+                </p>
+                <p className="text-2xl font-black text-white mt-0.5">11.400 promos</p>
+                <p className="text-[#D94F2B] text-sm font-bold">· hasta 100%</p>
+              </div>
+              {/* Promo cards */}
+              <div className="space-y-2">
+                {[
+                  { init: 'JU', name: 'Jumbo', cat: '🛒 Supermercados', pct: '20%', bank: 'Galicia' },
+                  { init: 'YP', name: 'YPF', cat: '⛽ Combustible', pct: '25%', bank: 'BBVA' },
+                  { init: 'FA', name: 'Farmacity', cat: '💊 Farmacias', pct: '30%', bank: 'Nación' },
+                  { init: 'PP', name: 'Personal Pay', cat: '🍽 Gastronomía', pct: '15%', bank: 'Santander' },
+                ].map((p) => (
+                  <div key={p.name} className="bg-white rounded-2xl px-3 py-2.5 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-[11px] font-black text-gray-500 shrink-0">
+                      {p.init}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-black text-gray-900 leading-tight">{p.name}</p>
+                      <p className="text-[10px] text-gray-400">{p.cat}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="bg-[#D94F2B] text-white text-[11px] font-black px-2 py-0.5 rounded-lg block">{p.pct}</span>
+                      <span className="text-[9px] text-gray-400 mt-0.5 block">{p.bank}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
