@@ -3,8 +3,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Share2, Copy, Check } from 'lucide-react'
 
 type Req = {
-  bank?: { name: string } | null
-  wallet?: { name: string } | null
+  bank?: { name: string; slug?: string } | null
+  wallet?: { name: string; slug?: string } | null
   discountType?: string
   discountValue?: number
 }
@@ -182,9 +182,17 @@ export default function PromoCard({ promo, nearbyCount, onClick, fullWidth }: Pr
         {entities.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {entities.map((e, i) => (
-              <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300 border border-[#C8D5E8] dark:border-slate-600">
-                {e.name.split(' ').slice(-1)[0]}
-              </span>
+              e.slug ? (
+                <a key={i} href={`/bancos/${e.slug}`}
+                  onClick={ev => ev.stopPropagation()}
+                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300 border border-[#C8D5E8] dark:border-slate-600 hover:bg-[#1E3A5F] hover:text-white hover:border-[#1E3A5F] transition-colors">
+                  {e.name.split(' ').slice(-1)[0]}
+                </a>
+              ) : (
+                <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300 border border-[#C8D5E8] dark:border-slate-600">
+                  {e.name.split(' ').slice(-1)[0]}
+                </span>
+              )
             ))}
           </div>
         )}

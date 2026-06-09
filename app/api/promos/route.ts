@@ -155,8 +155,8 @@ export async function GET(req: NextRequest) {
         },
         requirements: {
           include: {
-            bank: { select: { id: true, name: true, logoUrl: true } },
-            wallet: { select: { id: true, name: true, logoUrl: true } },
+            bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
+            wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
             cardNetwork: { select: { id: true, name: true, slug: true } },
           },
         },

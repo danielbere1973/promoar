@@ -14,16 +14,16 @@ export const metadata: Metadata = {
 }
 
 const BANKS = [
-  { name: 'Galicia',    logo: 'https://www.google.com/s2/favicons?sz=128&domain=galicia.ar' },
-  { name: 'BBVA',       logo: 'https://www.bbva.com.ar/favicon.ico' },
-  { name: 'Santander',  logo: 'https://www.google.com/s2/favicons?sz=128&domain=santander.com.ar' },
-  { name: 'Nación',     logo: 'https://www.google.com/s2/favicons?sz=128&domain=bna.com.ar' },
-  { name: 'Macro',      logo: 'https://www.google.com/s2/favicons?sz=128&domain=macro.com.ar' },
-  { name: 'ICBC',       logo: 'https://logo-teka.com/wp-content/uploads/2026/01/icbc-vertical-logo.svg' },
-  { name: 'Naranja X',  logo: 'https://www.google.com/s2/favicons?sz=128&domain=naranjax.com' },
-  { name: 'Brubank',    logo: 'https://www.google.com/s2/favicons?sz=128&domain=brubank.com' },
-  { name: 'Ciudad',     logo: 'https://www.bancociudad.com.ar/beneficios/assets/img/logo-banco-ciudad.svg' },
-  { name: 'Uala',       logo: 'https://www.google.com/s2/favicons?sz=128&domain=ualabee.com' },
+  { name: 'Galicia',    slug: 'galicia',      logo: 'https://www.google.com/s2/favicons?sz=128&domain=galicia.ar' },
+  { name: 'BBVA',       slug: 'bbva',         logo: 'https://www.bbva.com.ar/favicon.ico' },
+  { name: 'Santander',  slug: 'santander',    logo: 'https://www.google.com/s2/favicons?sz=128&domain=santander.com.ar' },
+  { name: 'Nación',     slug: 'banco-nacion', logo: 'https://www.google.com/s2/favicons?sz=128&domain=bna.com.ar' },
+  { name: 'Macro',      slug: 'macro',        logo: 'https://www.google.com/s2/favicons?sz=128&domain=macro.com.ar' },
+  { name: 'ICBC',       slug: 'icbc',         logo: 'https://logo-teka.com/wp-content/uploads/2026/01/icbc-vertical-logo.svg' },
+  { name: 'Naranja X',  slug: 'naranja-x',    logo: 'https://www.google.com/s2/favicons?sz=128&domain=naranjax.com' },
+  { name: 'Brubank',    slug: 'brubank',      logo: 'https://www.google.com/s2/favicons?sz=128&domain=brubank.com' },
+  { name: 'Ciudad',     slug: 'ciudad',       logo: 'https://www.bancociudad.com.ar/beneficios/assets/img/logo-banco-ciudad.svg' },
+  { name: 'Ualá',       slug: 'uala-bank',    logo: 'https://www.google.com/s2/favicons?sz=128&domain=ualabee.com' },
 ]
 
 const FEATURES = [
@@ -167,11 +167,12 @@ export default async function LandingPage() {
           </p>
           <div className="flex flex-wrap justify-center items-center gap-6 lg:gap-10">
             {BANKS.map((bank) => (
-              <div key={bank.name} className="flex flex-col items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
+              <Link key={bank.name} href={`/bancos/${bank.slug}`}
+                className="flex flex-col items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity group">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={bank.logo} alt={bank.name} className="h-8 w-8 object-contain rounded" />
-                <span className="text-[10px] font-semibold text-gray-500">{bank.name}</span>
-              </div>
+                <img src={bank.logo} alt={bank.name} className="h-8 w-8 object-contain rounded group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-semibold text-gray-500 group-hover:text-[#1E3A5F]">{bank.name}</span>
+              </Link>
             ))}
             <div className="flex flex-col items-center gap-1.5 opacity-50">
               <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">

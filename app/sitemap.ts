@@ -29,6 +29,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }))
 
+  const [banks, wallets] = await Promise.all([
+    prisma.bank.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }).catch(() => []),
+    prisma.wallet.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }).catch(() => []),
+  ])
+
+  const bankRoutes: MetadataRoute.Sitemap = [...banks, ...wallets].map(e => ({
+    url: `${BASE_URL}/bancos/${e.slug}`,
+    lastModified: e.updatedAt,
+    changeFrequency: 'daily' as const,
+    priority: 0.9,
+  }))
+
   const commerces = await prisma.commerce.findMany({
     where: { active: true, instagramUrl: { not: null } },
     select: { slug: true, updatedAt: true },
@@ -42,5 +54,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }))
 
-  return [...staticRoutes, ...commerceRoutes, ...promoRoutes]
+  return [...staticRoutes, ...bankRoutes, ...commerceRoutes, ...promoRoutes]
 }
