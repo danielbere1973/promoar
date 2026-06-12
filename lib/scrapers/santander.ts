@@ -75,8 +75,19 @@ function parseItem(item: any, brandName?: string, brandId?: string | number): Sc
   else if (rawText.includes('platinum')) cardTier = 'PLATINUM';
   else if (rawText.includes('gold'))     cardTier = 'GOLD';
 
+  // Programas exclusivos Sorpresa / Súper Miércoles: el banco los identifica con
+  // tag.code SOR/SMX o con categorías SOR/SMI. Anteponemos una leyenda visible
+  // para que el usuario sepa que la promo pertenece a uno de estos programas
+  // (Sorpresa suele requerir suscripción con costo de membresía mensual).
+  const categoryCodes = new Set((item.categories ?? []).map((c: any) => c.code));
+  const isSorpresa = item.tag?.code === 'SOR' || categoryCodes.has('SOR');
+  const isSuperMiercoles = item.tag?.code === 'SMX' || categoryCodes.has('SMI');
+  const programLabels: string[] = [];
+  if (isSorpresa) programLabels.push('Programa Sorpresa Santander');
+  if (isSuperMiercoles) programLabels.push('Súper Miércoles Santander');
+
   const noteRaw = item.additionalText?.replace(/<[^>]+>/g, '').trim();
-  const note = noteRaw ? noteRaw : undefined;
+  const note = [...programLabels, noteRaw].filter(Boolean).join(' · ') || undefined;
 
   const cardNetworks: CardNetworkWithType[] = isVisaOnly
     ? [{ network: 'VISA', type: null }]

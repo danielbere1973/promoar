@@ -61,8 +61,10 @@ type Promo = {
   specificDates?: string | null
   sourceText?: string | null
   sourceUrl?: string | null
+  salesChannel?: string | null
+  commerceNote?: string | null
   category: { name: string; color: string; icon?: string }
-  commerce: { name: string; logoUrl?: string | null }
+  commerce: { name: string; logoUrl?: string | null; instagramUrl?: string | null }
   requirements: Req[]
 }
 
@@ -179,7 +181,12 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
 
           {/* Beneficio hero */}
-          <div className="rounded-2xl overflow-hidden" style={{ background: '#1E3A5F' }}>
+          <div className="rounded-2xl overflow-hidden relative" style={{ background: '#1E3A5F' }}>
+            {promo.salesChannel && (
+              <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-br-xl">
+                {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
+              </div>
+            )}
             <div className="px-5 py-5">
               <p className="text-[10px] font-bold uppercase tracking-widest text-blue-300 mb-1">
                 {discounts.length === 1 ? 'Beneficio' : 'Mejor beneficio'}
@@ -199,6 +206,14 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
               </div>
             )}
           </div>
+
+          {/* Nota / condición especial del comercio */}
+          {promo.commerceNote && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+              <span className="text-base shrink-0">⚠️</span>
+              <p className="text-xs text-amber-800 leading-relaxed">{promo.commerceNote}</p>
+            </div>
+          )}
 
           {/* Vigencia */}
           <div className="bg-gray-50 rounded-2xl px-4 py-3 space-y-2.5">
@@ -363,6 +378,22 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
                 </p>
               </div>
               <span className="text-emerald-500 font-bold text-sm">→</span>
+            </a>
+          )}
+
+          {/* Instagram del comercio */}
+          {promo.commerce.instagramUrl && (
+            <a
+              href={promo.commerce.instagramUrl}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-pink-50 border border-pink-100 rounded-2xl px-4 py-3 hover:bg-pink-100 transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-pink-500 shrink-0"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-pink-700">Seguir en Instagram</p>
+                <p className="text-xs text-pink-500 truncate">@{promo.commerce.name}</p>
+              </div>
+              <span className="text-pink-400 font-bold text-sm">→</span>
             </a>
           )}
 

@@ -62,6 +62,8 @@ type Req = {
   cardTier?: string | null
   discountType?: string
   discountValue?: number
+  nxmN?: number | null
+  nxmM?: number | null
   cap?: number | null
   capPeriod?: string | null
   minPurchase?: number | null
@@ -83,7 +85,7 @@ type Promo = {
   salesChannel?: string | null
   commerceNote?: string | null
   category: { name: string; slug?: string; color: string; icon?: string }
-  commerce: { id?: string; name: string; logoUrl?: string | null }
+  commerce: { id?: string; name: string; logoUrl?: string | null; instagramUrl?: string | null }
   requirements: Req[]
   validFrom: string
   validUntil: string | null
@@ -103,6 +105,9 @@ type ProductCommerceResult = {
   promoCount: number
   promos: Promo[]
 }
+
+// Orden de prioridad para secciones de categorías y "Destacadas hoy"
+const PRIORITY_CAT_SLUGS = ['supermercados', 'combustible', 'transporte', 'gastronomia', 'farmacias']
 
 const DISCOUNT_RANGES = [
   { id: '0-10', label: '≤10%' },
@@ -148,8 +153,10 @@ function bestCsiReq(p: Promo): Req | null {
 function discountLabel(p: Promo) {
   // Si hay un req de porcentaje, usarlo como label principal (ignora CSI aquí — se muestra aparte)
   const pctReq = bestPercentageReq(p)
-  const req = pctReq ?? maxDiscountReq(p)
+  const nxmReq = !pctReq ? p.requirements.find(r => r.discountType === 'NXM') : null
+  const req = pctReq ?? nxmReq ?? maxDiscountReq(p)
   if (!req) return ''
+  if (req.discountType === 'NXM') return `${req.nxmN ?? 2}x${req.nxmM ?? 1}`
   const isPersonalized = !!p.userBestDiscount
   const isMaxTier = isPersonalized && p.globalMaxDiscount &&
     (p.userBestDiscount?.discountValue ?? 0) >= (p.globalMaxDiscount?.discountValue ?? 0)
@@ -1861,24 +1868,47 @@ function HomeContent() {
         {/* ── LAYOUT NETFLIX: secciones por categoría ── */}
         {!loading && !isProductSearchMode && promosFiltradas.length > 0 && (() => {
           // Agrupar por categoría
-          const catOrder: string[] = []
+          const rawCatOrder: string[] = []
           const byCat = new Map<string, { catName: string; catIcon: string; catColor: string; promos: typeof promosFiltradas }>()
           for (const p of promosFiltradas) {
             const key = p.category.slug ?? p.category.name
             if (!byCat.has(key)) {
-              catOrder.push(key)
+              rawCatOrder.push(key)
               byCat.set(key, { catName: p.category.name, catIcon: p.category.icon ?? '🏷️', catColor: p.category.color, promos: [] })
             }
             byCat.get(key)!.promos.push(p)
           }
 
-          // Destacadas: primero las marcadas como featured, luego top por descuento
-          const featuredPromos = promosFiltradas.filter(p => (p as any).isFeatured)
+          // Orden lógico: categorías prioritarias primero (en este orden fijo),
+          // luego el resto por cantidad de promos y % de descuento máximo
+          const priorityCats = PRIORITY_CAT_SLUGS.filter(slug => byCat.has(slug))
+          const remainingCats = rawCatOrder
+            .filter(key => !PRIORITY_CAT_SLUGS.includes(key))
+            .sort((a, b) => {
+              const secA = byCat.get(a)!
+              const secB = byCat.get(b)!
+              if (secB.promos.length !== secA.promos.length) return secB.promos.length - secA.promos.length
+              const maxDiscA = Math.max(0, ...secA.promos.map(p => bestPercentageReq(p)?.discountValue ?? 0))
+              const maxDiscB = Math.max(0, ...secB.promos.map(p => bestPercentageReq(p)?.discountValue ?? 0))
+              return maxDiscB - maxDiscA
+            })
+          const catOrder = [...priorityCats, ...remainingCats]
+
+          // Destacadas: primero las marcadas como featured, luego top por descuento,
+          // siempre dentro de las categorías prioritarias
+          const isPriorityCat = (p: typeof promosFiltradas[0]) => PRIORITY_CAT_SLUGS.includes(p.category.slug ?? '')
+          const featuredPromos = promosFiltradas.filter(p => (p as any).isFeatured && isPriorityCat(p))
           const topByDiscount = [...promosFiltradas]
-            .filter(p => !(p as any).isFeatured && (bestPercentageReq(p)?.discountValue ?? 0) <= 100 && bestPercentageReq(p)?.discountValue)
+            .filter(p => !(p as any).isFeatured && isPriorityCat(p) && (bestPercentageReq(p)?.discountValue ?? 0) <= 100 && bestPercentageReq(p)?.discountValue)
             .sort((a, b) => (bestPercentageReq(b)?.discountValue ?? 0) - (bestPercentageReq(a)?.discountValue ?? 0))
             .slice(0, Math.max(0, 6 - featuredPromos.length))
           const destacadas = [...featuredPromos, ...topByDiscount]
+
+          // Cerca tuyo: promos de comercios con sucursales cercanas (requiere geolocalización)
+          const cercaTuyo = [...promosFiltradas]
+            .filter(p => nearbyBranches[p.commerce.id ?? ''])
+            .sort((a, b) => nearbyBranches[a.commerce.id ?? ''].minDistKm - nearbyBranches[b.commerce.id ?? ''].minDistKm)
+            .slice(0, 12)
 
           const handlePromoClick = (promo: typeof promosFiltradas[0]) => {
             track({ type: 'PROMO_VIEW', promoId: promo.id, promoTitle: promo.title, commerceName: promo.commerce.name, categorySlug: promo.category.slug ?? '', discount: bestPercentageReq(promo)?.discountValue })
@@ -1930,6 +1960,9 @@ function HomeContent() {
             <div className="space-y-0 -mx-4">
               {destacadas.length > 0 && (
                 <Section title="⭐ Destacadas hoy" subtitle="Mejores descuentos del día" promoList={destacadas} />
+              )}
+              {cercaTuyo.length > 0 && (
+                <Section title="📍 Cerca tuyo" subtitle="Comercios con sucursales cerca de tu ubicación" promoList={cercaTuyo} />
               )}
               {catOrder.map(key => {
                 const sec = byCat.get(key)!

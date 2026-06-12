@@ -17,6 +17,31 @@ function toSlug(s: string): string {
     .replace(/^-|-$/g, '');
 }
 
+// Evita guardar placeholders de lazy-loading (data: URIs gigantes) u otras URLs
+// inv\u00e1lidas como logoUrl de un comercio.
+function isUsableLogoUrl(url?: string | null): url is string {
+  if (!url) return false;
+  if (url.length > 500) return false;
+  return /^https?:\/\//i.test(url);
+}
+
+// Detecta logos "rotos": favicons genéricos de Google o data URIs que quedaron
+// guardados de scrapes anteriores. Estos deben poder reemplazarse por un logo
+// real cuando el scraper lo encuentre, a diferencia de un logoUrl ya bueno.
+function isBrokenLogo(url?: string | null): boolean {
+  if (!url) return true;
+  return url.startsWith('data:') || url.includes('google.com/s2/favicons');
+}
+
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 interface CardNetworkWithType {
   network: string;
   type: 'CREDIT' | 'DEBIT' | null;
@@ -96,6 +121,9 @@ export async function POST(req: NextRequest) {
     let skippedNoCategory = 0;
     let skippedNoCommerce = 0;
 
+    // Cache de sucursales existentes por comercio (para no repetir queries ni duplicar pines)
+    const branchesByCommerce = new Map<string, Array<{ lat: number; lng: number }>>();
+
     // ── FASE 1: Resolver entidades + crear comercios (secuencial) ─────────────
     type ResolvedItem = { promoData: any; reqData: any[]; baseSlug: string; sourceUrl?: string | null; title: string; commerceId: string };
     const resolvedItems: ResolvedItem[] = [];
@@ -147,7 +175,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      if (comMatch && !comMatch.logoUrl && p.storeLogoUrl) {
+      if (comMatch && isBrokenLogo(comMatch.logoUrl) && isUsableLogoUrl(p.storeLogoUrl)) {
         comMatch = await prisma.commerce.update({
           where: { id: comMatch.id },
           data: { logoUrl: p.storeLogoUrl }
@@ -161,15 +189,15 @@ export async function POST(req: NextRequest) {
         const slug = toSlug(p.storeName);
         comMatch = await prisma.commerce.upsert({
           where: { slug },
-          update: { 
+          update: {
             name: p.storeName,
-            ...(p.storeLogoUrl ? { logoUrl: p.storeLogoUrl } : {})
+            ...(isUsableLogoUrl(p.storeLogoUrl) ? { logoUrl: p.storeLogoUrl } : {})
           },
-          create: { 
-            name: p.storeName, 
-            slug, 
+          create: {
+            name: p.storeName,
+            slug,
             active: true,
-            ...(p.storeLogoUrl ? { logoUrl: p.storeLogoUrl } : {})
+            ...(isUsableLogoUrl(p.storeLogoUrl) ? { logoUrl: p.storeLogoUrl } : {})
           },
         });
         commerces = [...commerces, comMatch];
@@ -177,6 +205,30 @@ export async function POST(req: NextRequest) {
       if (!comMatch) {
         skippedNoCommerce++;
         continue;
+      }
+
+      // ── Sucursales (ej. BBVA trae canalesVenta.sucursales por promo) ───────
+      if (p.branches && p.branches.length > 0) {
+        let existing = branchesByCommerce.get(comMatch.id);
+        if (!existing) {
+          existing = await prisma.commerceBranch.findMany({
+            where: { commerceId: comMatch.id },
+            select: { lat: true, lng: true },
+          });
+          branchesByCommerce.set(comMatch.id, existing);
+        }
+        for (const b of p.branches) {
+          // Evitar duplicar un pin ya existente (OSM u otra fuente) a ~100m o menos
+          const isDuplicate = existing.some(e => distanceKm(e.lat, e.lng, b.lat, b.lng) < 0.1);
+          if (isDuplicate) continue;
+          const osmId = `${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
+          await prisma.commerceBranch.upsert({
+            where: { source_osmId: { source: 'BBVA', osmId } },
+            update: { address: b.address, city: b.city, commerceId: comMatch.id },
+            create: { commerceId: comMatch.id, address: b.address, city: b.city, lat: b.lat, lng: b.lng, source: 'BBVA', osmId },
+          });
+          existing.push({ lat: b.lat, lng: b.lng });
+        }
       }
 
       // ── Redes de tarjeta con tipo (crédito/débito) ────────────────────────
@@ -257,13 +309,20 @@ export async function POST(req: NextRequest) {
       }
 
       // ── Descuentos únicos del grupo (30% reintegro + 6 CSI, etc.) ─────────
-      const uniqueDiscounts: Array<{ discountValue: number; discountType: string }> = Array.from(
-        new Map<string, { discountValue: number; discountType: string }>(
+      const uniqueDiscounts: Array<{ discountValue: number; discountType: string; nxmN?: number | null; nxmM?: number | null }> = Array.from(
+        new Map<string, { discountValue: number; discountType: string; nxmN?: number | null; nxmM?: number | null }>(
           group
             .filter((g: any) => g.discount)
-            .map((g: any): [string, { discountValue: number; discountType: string }] => {
-              const val = parseFloat(String(g.discount || '0'));
+            .map((g: any): [string, { discountValue: number; discountType: string; nxmN?: number | null; nxmM?: number | null }] => {
               const type: string = g.discountType || 'PERCENTAGE_REINTEGRO';
+              if (type === 'NXM') {
+                // "2x1", "3x2", etc. → nxmN compra, nxmM paga
+                const m = String(g.discount || '').match(/(\d+)\s*[xX]\s*(\d+)/);
+                const nxmN = m ? parseInt(m[1]) : 2;
+                const nxmM = m ? parseInt(m[2]) : 1;
+                return [`NXM-${nxmN}-${nxmM}`, { discountValue: 0, discountType: type, nxmN, nxmM }];
+              }
+              const val = parseFloat(String(g.discount || '0'));
               return [`${val}-${type}`, { discountValue: val, discountType: type }];
             })
         ).values()
@@ -312,6 +371,8 @@ export async function POST(req: NextRequest) {
                 accountType: (p.accountType as any) ?? 'ANY',
                 discountType: discount.discountType,
                 discountValue: discount.discountValue,
+                nxmN: discount.nxmN ?? null,
+                nxmM: discount.nxmM ?? null,
                 cap: p.cap != null ? parseFloat(String(p.cap)) : null,
                 capPeriod: (p.capPeriod as any) ?? null,
                 capTarget: (p.capTarget as any) ?? (p.cap ? 'USER' : null),

@@ -3,7 +3,7 @@
 // No requiere autenticación ni Playwright
 
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
-import { detectCategoria } from './bank-helpers';
+import { detectCategoria, decodeHtmlEntities } from './bank-helpers';
 
 const API_BASE  = 'https://go.bbva.com.ar/willgo/fgo/API/v3';
 const PAGE_URL  = 'https://www.bbva.com.ar/beneficios';
@@ -64,11 +64,19 @@ function extractInstallments(text: string): number | null {
   return m ? parseInt(m[1]) : null;
 }
 
-function parseItem(item: any, rubroId: number): ScrapedPromo[] {
-  const storeName = extractStoreName(item.cabecera ?? '');
+type CommunicationDetail = {
+  requisitos?: string[];
+  basesCondiciones?: string;
+  branches?: Array<{ address: string; city?: string; lat: number; lng: number }>;
+};
+
+function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): ScrapedPromo[] {
+  const cabecera = decodeHtmlEntities(item.cabecera ?? '');
+  const subcabecera = decodeHtmlEntities(item.subcabecera ?? '');
+  const storeName = extractStoreName(cabecera);
   if (!storeName || storeName.length < 2) return [];
 
-  const fullText     = `${item.cabecera ?? ''} ${item.subcabecera ?? ''}`;
+  const fullText     = `${cabecera} ${subcabecera}`;
   const discount     = extractDiscount(fullText);
   const installments = extractInstallments(fullText);
   if (!discount && !installments) return [];
@@ -89,7 +97,10 @@ function parseItem(item: any, rubroId: number): ScrapedPromo[] {
     { network: 'American Express Banco', type: cardType },
   ];
 
-  const allText = `${fullText} ${item.descripcion ?? ''}`.toUpperCase();
+  const requisitosText = decodeHtmlEntities((detail?.requisitos ?? []).join(' '));
+  const basesCondiciones = decodeHtmlEntities(detail?.basesCondiciones ?? '').replace(/<[^>]+>/g, ' ').trim();
+
+  const allText = `${fullText} ${item.descripcion ?? ''} ${requisitosText} ${basesCondiciones}`.toUpperCase();
   const paymentChannel: ScrapedPromo['paymentChannel'] =
     /\bQR\b|CODIGO\s+QR/.test(allText)        ? 'QR'  :
     /\bNFC\b|CONTACTLESS|SIN\s+CONTACTO/.test(allText) ? 'NFC' :
@@ -97,13 +108,14 @@ function parseItem(item: any, rubroId: number): ScrapedPromo[] {
   const walletNames = /\bMODO\b/.test(allText) ? ['MODO'] : undefined;
 
   const description = fullText.slice(0, 500);
-  const legalText = [item.descripcion, item.legales, item.leyendaLegal, item.textoLegal, item.terminosCondiciones].filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').trim();
+  const legalText = basesCondiciones || [item.descripcion, item.legales, item.leyendaLegal, item.textoLegal, item.terminosCondiciones].filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').trim();
   const base: Partial<ScrapedPromo> = {
     storeName, description, sourceText: legalText || description, sourceUrl: PAGE_URL,
     validFrom, validUntil, validDays, cap,
     bankNames: [BANK_NAME], cardNetworks, categoria,
     paymentChannel, walletNames,
     storeLogoUrl: item.imagen || undefined,
+    branches: detail?.branches,
   };
 
   const promos: ScrapedPromo[] = [];
@@ -149,6 +161,7 @@ export const BBVAScraper: Scraper = {
     console.log('[BBVA] Iniciando scraper (API pública, sin browser)...');
     const allPromos: ScrapedPromo[] = [];
     const seenIds  = new Set<string>();
+    const pendingItems: { item: any; rubroId: number }[] = [];
 
     // 1. Obtener rubros
     const rubrosData = await apiFetch(`${API_BASE}/rubros/filtro?filtro_padre=true`);
@@ -174,7 +187,12 @@ export const BBVAScraper: Scraper = {
         for (const item of data.data) {
           if (!item.id || seenIds.has(String(item.id))) continue;
           seenIds.add(String(item.id));
-          allPromos.push(...parseItem(item, idRubro));
+
+          // Pre-filtro: solo nos interesan items con descuento o cuotas detectables
+          const fullText = `${decodeHtmlEntities(item.cabecera ?? '')} ${decodeHtmlEntities(item.subcabecera ?? '')}`;
+          if (!extractDiscount(fullText) && !extractInstallments(fullText)) continue;
+
+          pendingItems.push({ item, rubroId: idRubro });
           rubroCount++;
         }
 
@@ -183,7 +201,36 @@ export const BBVAScraper: Scraper = {
         pager++;
       }
 
-      console.log(`[BBVA] ${nombre} (${idRubro}): ${rubroCount} comunicaciones → ${allPromos.length} promos acum`);
+      console.log(`[BBVA] ${nombre} (${idRubro}): ${rubroCount} comunicaciones con descuento/cuotas`);
+    }
+
+    // 3. Fetch del detalle de cada comunicación (requisitos completos + bases y condiciones + sucursales)
+    console.log(`[BBVA] Obteniendo detalle de ${pendingItems.length} comunicaciones...`);
+    const BATCH = 5;
+    for (let i = 0; i < pendingItems.length; i += BATCH) {
+      const batch = pendingItems.slice(i, i + BATCH);
+      await Promise.all(batch.map(async ({ item, rubroId }) => {
+        let detail: CommunicationDetail | undefined;
+        const detailRes = await apiFetch(`${API_BASE}/communication/${item.id}`);
+        const d = detailRes?.data;
+        if (d) {
+          const requisitos = (d.beneficios ?? []).flatMap((b: any) => b.requisitos ?? []);
+          const branches = (d.canalesVenta?.sucursales ?? [])
+            .map((s: any) => ({
+              address: decodeHtmlEntities(s.direccion ?? ''),
+              city: decodeHtmlEntities(s.localidad ?? ''),
+              lat: parseFloat(s.latitude),
+              lng: parseFloat(s.longitude),
+            }))
+            .filter((b: any) => b.address && Number.isFinite(b.lat) && Number.isFinite(b.lng));
+          detail = { requisitos, basesCondiciones: d.basesCondiciones, branches };
+        }
+        allPromos.push(...parseItem(item, rubroId, detail));
+      }));
+      await delay(200);
+      if ((i + BATCH) % 100 === 0 || i + BATCH >= pendingItems.length) {
+        console.log(`[BBVA] Detalle procesado: ${Math.min(i + BATCH, pendingItems.length)}/${pendingItems.length} → ${allPromos.length} promos`);
+      }
     }
 
     const seen = new Set<string>();

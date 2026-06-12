@@ -38,6 +38,7 @@ export interface ScrapedPromo {
   salesChannel?: 'ONLINE' | 'FISICA' | null;
   segment?: string;
   note?: string;
+  branches?: Array<{ address: string; city?: string; lat: number; lng: number }>;
 }
 
 export interface Scraper {

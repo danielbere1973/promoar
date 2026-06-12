@@ -17,6 +17,22 @@ export function normStr(s: string): string {
   return s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+};
+
+// Decodifica entidades HTML básicas (&amp;, &#34;, &#xE1;, etc.) que vienen
+// crudas en algunas APIs de bancos (ej. BBVA: "Dean &amp; Dennys").
+export function decodeHtmlEntities(s: string): string {
+  return s.replace(/&(#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, entity) => {
+    if (entity[0] === '#') {
+      const code = entity[1].toLowerCase() === 'x' ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+    }
+    return HTML_ENTITIES[entity] ?? match;
+  });
+}
+
 export function extractValidDays(text: string): number {
   const t = normStr(text);
   if (/TODOS\s+LOS\s+D[IÍ]AS|DIARIO|PERMANENTE/.test(t)) return 127;

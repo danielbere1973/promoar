@@ -154,7 +154,12 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
 
         {/* ── HERO ── */}
-        <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl overflow-hidden shadow-lg">
+        <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl overflow-hidden shadow-lg relative">
+          {promo.salesChannel && (
+            <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-br-xl">
+              {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
+            </div>
+          )}
           <div className="px-6 pt-6 pb-5 text-white">
             {/* Categoría */}
             <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
@@ -189,6 +194,14 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
             </div>
           )}
         </div>
+
+        {/* ── NOTA / CONDICIÓN ESPECIAL ── */}
+        {promo.commerceNote && (
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+            <span className="text-base shrink-0">⚠️</span>
+            <p className="text-xs text-amber-800 leading-relaxed">{promo.commerceNote}</p>
+          </div>
+        )}
 
         {/* ── VIGENCIA ── */}
         <div className="bg-white rounded-2xl border border-gray-100 px-5 py-4 space-y-3">

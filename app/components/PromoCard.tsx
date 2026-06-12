@@ -7,6 +7,8 @@ type Req = {
   wallet?: { name: string; slug?: string } | null
   discountType?: string
   discountValue?: number
+  nxmN?: number | null
+  nxmM?: number | null
 }
 
 type Promo = {
@@ -14,6 +16,7 @@ type Promo = {
   title: string
   slug?: string | null
   validDays: number
+  salesChannel?: string | null
   category: { name: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null }
   requirements: Req[]
@@ -43,6 +46,7 @@ function discountLabel(p: Promo): string {
   if (req.discountType === 'BONIFICACION') return `Hasta ${val}% BONIF.`
   if (req.discountType === 'FIXED_AMOUNT') return `Hasta $${val}`
   if (req.discountType === 'CUOTAS_SIN_INTERES') return `${val} CSI`
+  if (req.discountType === 'NXM') return `${req.nxmN ?? 2}x${req.nxmM ?? 1}`
   return `Hasta ${val}`
 }
 
@@ -140,12 +144,18 @@ export default function PromoCard({ promo, nearbyCount, onClick, fullWidth }: Pr
           </div>
         )}
 
+        {promo.salesChannel && (
+          <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-br-lg">
+            {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
+          </div>
+        )}
+
         {/* Share button */}
         {promo.slug && (
           <div ref={shareRef} className="absolute top-2 left-2" onClick={e => e.stopPropagation()}>
             <button
               onClick={e => { e.stopPropagation(); setShowShare(s => !s) }}
-              className="w-6 h-6 rounded-lg bg-white/80 dark:bg-slate-700/80 backdrop-blur flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+              className="w-6 h-6 rounded-lg bg-white dark:bg-slate-700/80 backdrop-blur flex items-center justify-center text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white opacity-0 group-hover:opacity-100 transition-all shadow-md border border-gray-200 dark:border-transparent"
             >
               <Share2 size={12} />
             </button>
