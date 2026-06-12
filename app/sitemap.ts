@@ -9,10 +9,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: BASE_URL,                  lastModified: now, changeFrequency: 'daily',   priority: 1.0 },
     { url: `${BASE_URL}/promos`,      lastModified: now, changeFrequency: 'hourly',  priority: 0.9 },
-    { url: `${BASE_URL}/finanzas`,    lastModified: now, changeFrequency: 'weekly',  priority: 0.7 },
     { url: `${BASE_URL}/perfil`,      lastModified: now, changeFrequency: 'weekly',  priority: 0.6 },
     { url: `${BASE_URL}/login`,       lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE_URL}/registro`,    lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+  ]
+
+  const finanzasRoutes: MetadataRoute.Sitemap = [
+    { url: `${BASE_URL}/finanzas/divisas`,      lastModified: now, changeFrequency: 'hourly', priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/cauciones`,    lastModified: now, changeFrequency: 'hourly', priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/plazo-fijo`,   lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/acciones-ar`,  lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/acciones-usa`, lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/indices`,      lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/lecaps`,       lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/bonos`,        lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/cedears`,      lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
+    { url: `${BASE_URL}/finanzas/ons`,          lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
   ]
 
   const promos = await prisma.promo.findMany({
@@ -54,5 +66,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }))
 
-  return [...staticRoutes, ...bankRoutes, ...commerceRoutes, ...promoRoutes]
+  return [...staticRoutes, ...finanzasRoutes, ...bankRoutes, ...commerceRoutes, ...promoRoutes]
 }

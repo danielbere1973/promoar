@@ -50,7 +50,7 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
     <nav className="fixed bottom-0 left-0 right-0 lg:left-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-slate-700 z-30 pb-safe">
       <div className="flex w-full justify-around items-center px-1 pt-1.5 pb-1">
         {navItems.map((item) => {
-          const active = item.href ? pathname === item.href : false
+          const active = item.href ? (pathname === item.href || pathname?.startsWith(`${item.href}/`)) : false
           const Icon = item.icon
           const isPerfil = item.href === '/perfil'
           const isCategorias = item.label === 'Categorías'
