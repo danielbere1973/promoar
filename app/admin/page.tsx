@@ -305,6 +305,11 @@ function PinGuard({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Normaliza para busqueda: minusculas + sin acentos (ej. "Pacifico" con tilde -> "pacifico")
+function normalizeSearch(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 export default function AdminPage() {
   const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
@@ -893,8 +898,8 @@ export default function AdminPage() {
             if (filterCommerce && p.commerce?.name !== filterCommerce) return false
             if (filterSource && !(p.sourceUrl || '').includes(filterSource)) return false
             if (isSearching) {
-              const q = filterText.toLowerCase()
-              return p.title.toLowerCase().includes(q) || p.commerce?.name?.toLowerCase().includes(q)
+              const q = normalizeSearch(filterText)
+              return normalizeSearch(p.title).includes(q) || (p.commerce?.name ? normalizeSearch(p.commerce.name).includes(q) : false)
             }
             return true
           })
@@ -1738,7 +1743,7 @@ function LogoSuggestionsModal({ onClose, onSaved }: { onClose: () => void; onSav
     else setSaving(false)
   }
 
-  const filtered = commerces.filter(c => !filter || c.name.toLowerCase().includes(filter.toLowerCase()))
+  const filtered = commerces.filter(c => !filter || normalizeSearch(c.name).includes(normalizeSearch(filter)))
   const readyCount = Object.values(inputs).filter(v => v.trim()).length
 
   return (
@@ -2974,8 +2979,8 @@ function ClasificarTab({ promos, categories, onAssigned }: {
 
   const filtered = promos.filter(p => {
     if (!search) return true
-    const q = search.toLowerCase()
-    return p.commerce?.name?.toLowerCase().includes(q) || p.title?.toLowerCase().includes(q)
+    const q = normalizeSearch(search)
+    return (p.commerce?.name ? normalizeSearch(p.commerce.name).includes(q) : false) || (p.title ? normalizeSearch(p.title).includes(q) : false)
   })
 
   async function assign(promoId: string, categoryId: string) {

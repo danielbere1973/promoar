@@ -126,7 +126,8 @@ export const BrubankScraper: Scraper = {
 
             const cap = extractCap(capText) || undefined;
             const validDays = parseDias(diasText);
-            const logoUrl = $(el).find('img').first().attr('src') || undefined;
+            const $img = $(el).find('img').first();
+            const logoUrl = ($img.attr('src')?.startsWith('data:') ? $img.attr('data-src') : $img.attr('src')) || undefined;
             const categoria = detectCategoria(storeName) || 'Otros';
 
             const title = discount.type === 'CUOTAS_SIN_INTERES'

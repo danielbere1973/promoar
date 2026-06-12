@@ -501,12 +501,24 @@ export default async function LandingPage() {
 
       {/* ── Footer ── */}
       <footer className="bg-[#1E3A5F] text-white py-12">
-        <div className="max-w-6xl mx-auto px-4 grid sm:grid-cols-3 gap-8">
+        <div className="max-w-6xl mx-auto px-4 grid sm:grid-cols-4 gap-8">
           <div>
             <p className="font-black text-lg mb-3">PromoAR</p>
             <p className="text-sm text-blue-200 leading-relaxed">
               El agregador de promos bancarias más completo de Argentina.
             </p>
+            <div className="flex items-center gap-3 mt-4">
+              <a href="https://www.instagram.com/promoar.com.ar" target="_blank" rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                📷
+              </a>
+              <a href="https://wa.me/541173691613" target="_blank" rel="noopener noreferrer"
+                aria-label="WhatsApp"
+                className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                💬
+              </a>
+            </div>
           </div>
           <div>
             <p className="font-bold text-sm uppercase tracking-widest text-blue-300 mb-3">App</p>
@@ -517,11 +529,17 @@ export default async function LandingPage() {
             </ul>
           </div>
           <div>
+            <p className="font-bold text-sm uppercase tracking-widest text-blue-300 mb-3">Empresa</p>
+            <ul className="space-y-2 text-sm text-blue-200">
+              <li><Link href="/quienes-somos" className="hover:text-white transition-colors">Quiénes somos</Link></li>
+              <li><Link href="/contacto" className="hover:text-white transition-colors">Contacto</Link></li>
+            </ul>
+          </div>
+          <div>
             <p className="font-bold text-sm uppercase tracking-widest text-blue-300 mb-3">Legal</p>
             <ul className="space-y-2 text-sm text-blue-200">
               <li><Link href="/privacidad" className="hover:text-white transition-colors">Privacidad</Link></li>
               <li><Link href="/terminos" className="hover:text-white transition-colors">Términos</Link></li>
-              <li><Link href="/contacto" className="hover:text-white transition-colors">Contacto</Link></li>
             </ul>
           </div>
         </div>

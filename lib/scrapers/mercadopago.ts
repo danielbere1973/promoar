@@ -103,7 +103,8 @@ async function scrapeCategoria(slug: string, nombre: string): Promise<ScrapedPro
       if (!storeName) return;
 
       // Logo
-      const logoUrl = $el.find('.kiyo__data--details-logo-img img').attr('src') || undefined;
+      const $logoImg = $el.find('.kiyo__data--details-logo-img img');
+      const logoUrl = ($logoImg.attr('src')?.startsWith('data:') ? $logoImg.attr('data-src') : $logoImg.attr('src')) || undefined;
 
       // Badges
       const badge1 = $el.find('.kiyo__cards--badge:not(.kiyo__cards--badge2) span').first().text().trim();

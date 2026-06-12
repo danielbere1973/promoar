@@ -26,6 +26,16 @@ const PUBLIC_PATHS = [
   '/favicon.ico',
   '/sitemap.xml',
   '/robots.txt',
+  '/terminos',
+  '/privacidad',
+  '/contacto',
+  '/quienes-somos',
+  '/api/contacto',
+  '/comercios',
+  '/bancos',
+  '/finanzas',
+  '/api/finanzas',
+  '/api/push',
 ]
 
 // Rutas solo para ADMIN
@@ -41,7 +51,10 @@ export async function middleware(req: NextRequest) {
     pathname.endsWith('.ico') ||
     pathname.endsWith('.png') ||
     pathname.endsWith('.svg') ||
-    pathname.endsWith('.jpg')
+    pathname.endsWith('.jpg') ||
+    pathname.endsWith('.jpeg') ||
+    pathname.endsWith('.webp') ||
+    pathname === '/sw.js'
   ) {
     return NextResponse.next()
   }

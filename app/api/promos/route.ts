@@ -58,7 +58,6 @@ export async function GET(req: NextRequest) {
     // Construct Prisma where clause
     const where: any = {
       status: 'ACTIVE',
-      category: { slug: { not: 'sin-categoria' } },
       // Time validity: simplified
       validFrom: { lte: today },
       OR: [
@@ -151,6 +150,7 @@ export async function GET(req: NextRequest) {
             name: true,
             slug: true,
             logoUrl: true,
+            instagramUrl: true,
           },
         },
         requirements: {
@@ -371,7 +371,7 @@ export async function GET(req: NextRequest) {
     if (discountRanges.length > 0) {
       filtered = filtered.filter(promo => {
         const maxVal = promo.requirements.reduce((max, r) => {
-          if (r.discountType === 'CUOTAS_SIN_INTERES') return max
+          if (r.discountType === 'CUOTAS_SIN_INTERES' || r.discountType === 'NXM') return max
           return Math.max(max, r.discountValue ?? 0)
         }, 0)
         return discountRanges.some((range: string) => {
@@ -489,18 +489,20 @@ export async function GET(req: NextRequest) {
     // 1. Métricas por promo
     const promoData = dedupedPromos.map(p => {
       const maxPct = (p as any).requirements.reduce((max: number, r: any) => {
-        if (r.discountType === 'CUOTAS_SIN_INTERES') return max
+        if (r.discountType === 'CUOTAS_SIN_INTERES' || r.discountType === 'NXM') return max
         return Math.max(max, r.discountValue ?? 0)
       }, 0)
       const maxCsi = (p as any).requirements.reduce((max: number, r: any) => {
         if (r.discountType !== 'CUOTAS_SIN_INTERES') return max
         return Math.max(max, r.discountValue ?? 0)
       }, 0)
+      const hasNxm: boolean = (p as any).requirements.some((r: any) => r.discountType === 'NXM')
       const catSlug: string = (p as any).category?.slug ?? ''
       const name: string = (p as any).commerce?.name ?? ''
       const commercePopularity: number = commercePromoCount[name] ?? 0
-      // Tipo: 1 = solo %, 2 = % + CSI, 3 = solo CSI
-      const type = maxPct > 0 && maxCsi > 0 ? 2 : maxPct > 0 ? 1 : 3
+      // Tipo: 1 = % o NXM (sin CSI), 2 = (% o NXM) + CSI, 3 = solo CSI
+      const hasMainDiscount = maxPct > 0 || hasNxm
+      const type = hasMainDiscount && maxCsi > 0 ? 2 : hasMainDiscount ? 1 : 3
       return { p, maxPct, maxCsi, catSlug, commercePopularity, name, type }
     })
 
