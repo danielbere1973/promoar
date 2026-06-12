@@ -523,9 +523,15 @@ async function searchCoto(query: string, isCategory = false): Promise<Normalized
 // ---------------------------------------------------------
 async function searchCarrefour(query: string, isCategory = false): Promise<NormalizedProduct[]> {
   try {
+    // Búsqueda por EAN/SKU: el buscador de texto libre (ft=) de Carrefour no indexa por EAN
+    // y devuelve 0 resultados. Usar el filtro fq=alternateIds_Ean: para estos casos.
+    const isEan = /^\d{8,14}$/.test(query.trim())
+
     let url = `https://www.carrefour.com.ar/api/catalog_system/pub/products/search?ft=${encodeURIComponent(query)}&_from=0&_to=14`
     if (isCategory) {
       url = `https://www.carrefour.com.ar/api/catalog_system/pub/products/search?fq=C:${query}&_from=0&_to=14&O=OrderByTopSaleDESC`
+    } else if (isEan) {
+      url = `https://www.carrefour.com.ar/api/catalog_system/pub/products/search?fq=alternateIds_Ean:${encodeURIComponent(query.trim())}&_from=0&_to=14`
     }
     
     const res = await fetch(url, { headers: HEADERS })
@@ -546,9 +552,11 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
       
       let discountText = "-"
       const highlights = offer.DiscountHighLight || []
-      const teasers = offer.Teasers?.map((t: any) => t.Name) || []
+      // offer.Teasers serializa los campos como "<Name>k__BackingField" (backing fields .NET),
+      // por eso t.Name siempre es undefined ahí. PromotionTeasers trae los mismos datos con Name limpio.
+      const teasers = offer.PromotionTeasers?.map((t: any) => t.Name) || []
       let allPromos = [...highlights, ...teasers].filter(Boolean)
-      
+
       if (priceList > price) {
         const pct = Math.round((1 - (price / priceList)) * 100)
         if (pct > 0) {
@@ -556,7 +564,7 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
           if (!allPromos.includes(t)) allPromos.unshift(t)
         }
       }
-      
+
       if (allPromos.length > 0) discountText = allPromos.join(" | ")
 
       return {
@@ -569,7 +577,7 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
         finalPrice: price,
         discountText: discountText,
         imageUrl: item.images?.[0]?.imageUrl || '',
-        url: `https://www.carrefour.com.ar${p.link || ''}`,
+        url: p.link?.startsWith('http') ? p.link : `https://www.carrefour.com.ar${p.link || ''}`,
         multiUnitPromo: parseMultiUnitPromo(discountText, priceList)
       }
     }).filter(Boolean) as NormalizedProduct[]
