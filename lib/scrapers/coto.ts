@@ -355,6 +355,7 @@ function extractWalletNames(text: string): string[] {
   if (/\bUAL[AÁ]\b/.test(t)) wallets.push('Ualá');
   if (/\bBRUBANK\b/.test(t)) wallets.push('Brubank');
   if (/\bBIIM\b/.test(t)) wallets.push('Biim');
+  if (/COMUNIDAD\s+COTO/.test(t)) wallets.push('Comunidad Coto');
   return wallets;
 }
 
