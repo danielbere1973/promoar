@@ -34,10 +34,12 @@ async function getPromos(entity: EntityInfo) {
     ? { bankId: entity.id }
     : { walletId: entity.id }
 
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   return prisma.promo.findMany({
     where: {
       status: 'ACTIVE',
       requirements: { some: where },
+      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
     },
     include: {
       commerce: { select: { id: true, name: true, slug: true, logoUrl: true } },

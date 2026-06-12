@@ -27,8 +27,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/finanzas/ons`,          lastModified: now, changeFrequency: 'daily',  priority: 0.8 },
   ]
 
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const promos = await prisma.promo.findMany({
-    where: { status: 'ACTIVE', slug: { not: null } },
+    where: {
+      status: 'ACTIVE',
+      slug: { not: null },
+      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+    },
     select: { slug: true, updatedAt: true },
     orderBy: { updatedAt: 'desc' },
     take: 5000,

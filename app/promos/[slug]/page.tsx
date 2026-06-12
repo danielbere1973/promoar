@@ -77,8 +77,13 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export async function generateStaticParams() {
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const promos = await prisma.promo.findMany({
-    where: { status: 'ACTIVE', slug: { not: null } },
+    where: {
+      status: 'ACTIVE',
+      slug: { not: null },
+      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+    },
     select: { slug: true },
     take: 1000,
   })
@@ -100,7 +105,8 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
     },
   })
 
-  if (!promo || promo.status === 'EXPIRED') notFound()
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+  if (!promo || promo.status === 'EXPIRED' || (promo.validUntil && promo.validUntil < startOfToday)) notFound()
 
   const branches = await prisma.commerceBranch.findMany({
     where: { commerceId: promo.commerce.id },

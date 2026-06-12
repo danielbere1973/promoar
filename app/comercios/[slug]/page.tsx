@@ -74,8 +74,13 @@ export default async function CommercePage({ params }: { params: { slug: string 
 
   if (!commerce || !commerce.active) notFound()
 
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const promos = await prisma.promo.findMany({
-    where: { commerceId: commerce.id, status: 'ACTIVE' },
+    where: {
+      commerceId: commerce.id,
+      status: 'ACTIVE',
+      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+    },
     include: {
       category: { select: { name: true, icon: true, color: true } },
       requirements: {

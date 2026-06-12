@@ -1,0 +1,16 @@
+name: Expirar Promos Vencidas
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # 05:00 UTC = 02:00 ART
+  workflow_dispatch:
+
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Marcar promos vencidas como EXPIRED
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" \
+            "${{ secrets.API_URL }}/api/internal/expire-promos"
