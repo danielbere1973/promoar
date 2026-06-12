@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import Providers from './providers'
 import PostHogProvider from './components/PostHogProvider'
+import SupportChat from './components/SupportChat'
+import PushNotificationPrompt from './components/PushNotificationPrompt'
 import './globals.css'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
@@ -61,6 +63,8 @@ export default function RootLayout({
         <Providers>
           <PostHogProvider>
             {children}
+            <SupportChat />
+            <PushNotificationPrompt />
           </PostHogProvider>
         </Providers>
       </body>

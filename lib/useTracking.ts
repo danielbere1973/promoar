@@ -42,6 +42,11 @@ type TrackEvent =
   | { type: 'FILTER_APPLY';   filterType: string; value: string }
   | { type: 'FOR_ME_TOGGLE';  value: boolean }
   | { type: 'TIME_FILTER';    value: 'today' | 'week' }
+  | { type: 'CHAT_QUESTION_CLICK'; question: string }
+  | { type: 'CHAT_CONTACT_FALLBACK' }
+  | { type: 'PUSH_PERMISSION_GRANTED' }
+  | { type: 'PUSH_PERMISSION_DENIED' }
+  | { type: 'PUSH_PROMPT_DISMISS' }
 
 export function useTracking() {
   const ph = usePostHog?.()
