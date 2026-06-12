@@ -61,3 +61,7 @@ scripts/fix-sql-parts.js
 # logs y reportes
 reporte_*.csv
 reporte_*.md
+*.log
+
+# datos sensibles
+recovery-codes-vercel.txt
