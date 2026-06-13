@@ -115,6 +115,108 @@ cada marca (Shopify/VTEX/TiendaNube/WooCommerce/Powla/generic) — eso es el map
 qué API de cada plataforma consultar en vivo para traer precio actualizado
 (ej. Shopify `/products.json` trae precio, VTEX tiene API de búsqueda con precio, etc.).
 
+### 10. Filtrado de promos por ubicación del usuario (sucursales por comercio)
+Objetivo: que un usuario en Buenos Aires no vea promos de comercios/sucursales que solo
+existen en Jujuy (u otra provincia lejana) — mejora de relevancia/UX, no elimina la promo,
+solo no la muestra si no aplica a la zona del usuario.
+
+Requiere llenar `CommerceBranch` (`commerceId, name, address, city, province, lat, lng,
+source, osmId`) por comercio. `lat`/`lng` son obligatorios.
+
+**Fuente Macro**: la página de detalle de cada promo
+(`https://www.macro.com.ar/beneficios/beneficio?id=<code>%7C<external-code>`) trae
+server-side, dentro de un div colapsado `.mc-map-listado`, el listado de sucursales
+adheridas (nombre + dirección, ej. `<b>ALBA MIA </b>: ALVARADO  445, ORAN`). No viene en la
+respuesta JSON de `apipublic.macro.com.ar` (campo `restricted-stores` vacío). No trae
+lat/lng — requeriría geocoding (ej. Nominatim/OSM, rate-limit 1 req/seg).
+
+**Fuente Banco Nación (Club LaNación / Semana Nación)**: el usuario encontró que la API
+trae directamente `locationData` (province, city, address, postalCode) y
+`location.coordinates` ([lng, lat]) por comercio — esto sí tiene coordenadas listas, sin
+necesidad de geocoding. Ejemplo de un item:
+```json
+{
+  "merchant": "YPF SUPER SERVICIOS",
+  "locationData": { "province": "CIUDAD AUTONOMA DE BUENOS AIRES", "city": "CABA", "address": "MAIPU 471", "postalCode": "1006" },
+  "location": { "coordinates": [-58.37661369999999, -34.6026469] }
+}
+```
+Investigar qué endpoint de `backend.activx.production.digiventures.la` devuelve esto
+(no es el mismo que usa `lib/scrapers/bna.ts` actualmente para `/promotions` y `/brands/:id`
+— puede ser un endpoint de "merchants"/"locations" separado).
+
+**Fuente Galicia — RESUELTO**: el botón "Conocer más" (junto al ícono de ubicación) en el
+detalle de una promo con `tiendaFisica: true` dispara:
+`GET https://loyalty.bff.bancogalicia.com.ar/api/portal/catalogo/v1/locales/idPromocion/{idPromocion}?page=1&pageSize=15`
+Devuelve `{ data: { list: [...], totalSize } }` con un objeto por sucursal:
+`{ id, tipoLocal: "Físico", calle, numero, aclaracion, codigoPostal, localidadNombre,
+partidoNombre, provinciaNombre, paisNombre, latitud, longitud, telefono, nombreMarca,
+tipoPromocion }`. **Trae lat/lng listos** (algunas sucursales pueden venir con `null`),
+no requiere geocoding. Paginar con `page`/`pageSize` si `totalSize` > pageSize.
+Probado con idPromocion=156200 (Supermercados El Nene, idMarca=112375) → 6 sucursales en
+La Plata/Los Hornos/San Lorenza/Tolosa, Buenos Aires.
+Hay también `GET .../locales/ubicacion/filtro?IdPromocion={id}` que devuelve solo las
+provincias/localidades disponibles (para el filtro UI), no las direcciones completas —
+usar el endpoint `/locales/idPromocion/{id}` para los datos reales.
+Nota WAF: estos endpoints solo responden con headers/sesión de navegador real
+(Referer `https://beneficios.galicia.ar/...`, cookies de sesión); llamarlos directo con
+`fetch`/`curl` sin pasar por un `page.goto` previo da `403 Request Rejected`.
+
+**Fuente Santander — parcialmente resuelto**: cada promo tiene un botón que lleva a
+`https://www.santander.com.ar/personas/beneficios#/shops?programId={programId}` (página de
+"Locales adheridos"). Los datos vienen de:
+`GET https://www.santander.com.ar/bff-benefits/publications/{programId}?brandId={brandId}`
+Devuelve el objeto completo de la promo, con `brands: [{ id, brand: {...}, establishments: [...] }]`.
+Cada `establishment`: `{ id, address, city, province, fantasyName, homePage, shopping,
+isApp, latitude, longitude }`. `address`/`city`/`province` siempre vienen completos, pero
+`latitude`/`longitude` son frecuentemente `null`. Probado con dos ejemplos:
+- programId=5636, brandId=1715 (Mostaza): 223 sucursales, solo 9 con lat/lng null.
+- programId=7166, brandId=245 (Jumbo): 41 sucursales, **las 41 con lat/lng null**.
+
+Para las que tienen `null`, requeriría geocoding por `address + city + province` (Nominatim,
+rate-limit 1 req/seg) — mismo caso que Macro pero con menos volumen porque algunos brands sí
+traen coordenadas.
+
+Nota WAF: igual que Macro, este endpoint requiere `page.goto()` con `headless: false`
+(F5/Akamai detecta automation); con `context.request.get()` o `curl` directo el request
+queda colgado/timeout sin responder.
+
+**Fuente Banco Ciudad — RESUELTO, la mejor de todas**: la página de detalle
+(`https://www.bancociudad.com.ar/beneficios/detalle/{id}`) hace:
+`POST https://www.bancociudad.com.ar/beneficios_rest/beneficios/{id}` con body
+`{"data":{"latitud": <num>, "longitud": <num>}, "header":{}}`.
+- Con `latitud`/`longitud` en `null` (sin permiso de geolocalización), la respuesta NO
+  incluye `sucursales_cercanas`.
+- Con cualquier par de coordenadas válidas (no importa cuáles — es solo el punto desde el
+  que se calcula `distancia`), `retorno.sucursales_cercanas` devuelve **TODAS** las
+  sucursales del comercio a nivel país, ordenadas por distancia — no solo las cercanas.
+  Cada item: `{ distancia, latitud, longitud, direccion, otrosDatos }`. `direccion` es
+  texto libre con calle, localidad y provincia juntos (ej. `"Av. Cabildo 1927, CABA, Buenos
+  Aires"`) — requeriría parseo simple para separar `address`/`city`/`province`.
+  También viene `retorno.comercio = { nombre, logo, web }`.
+  Probado con id=13963 (Cúspide) → 52 sucursales en todo el país, con lat/lng listos
+  (sin geocoding).
+- Sin problemas de WAF: funciona con `headless: true` y `fetch` normal desde el contexto
+  de la página (no requiere `headless: false` como Macro/Santander).
+- Una sola consulta por promo trae el universo completo de sucursales del comercio — ideal
+  para la arquitectura "una vez por comercio, usando cualquier promo activa".
+
+**Fuente BBVA — RESUELTO, sin WAF**: la página de detalle de cada promo
+(`https://www.bbva.com.ar/beneficios/beneficio?id={id}`) consume:
+`GET https://go.bbva.com.ar/willgo/fgo/API/v3/communication/{id}`
+Responde `{ code, message, data: { ..., canalesVenta: { sucursales: [...], web } } }`.
+Cada sucursal: `{ direccion, localidad, latitude, longitude }` (lat/lng vienen como string,
+parsear con `parseFloat`). Probado con id=85462 (Sarkany) → 43 sucursales en todo el país,
+**0 con lat/lng null**. Funciona con `curl`/`fetch` directo, sin sesión de navegador ni
+headless — el más simple de los 4 resueltos hasta ahora. Falta provincia (`localidad` es
+solo ciudad/partido), pero no es bloqueante.
+
+**Arquitectura propuesta**: cargar `branches` por **comercio**, no por código de promo
+(los códigos de promo cambian con cada renovación, las sucursales físicas casi no cambian).
+Para cada comercio sin `branches` cargadas, usar un código de promo activo cualquiera para
+obtener el detalle una vez. No repetir en cada corrida del scraper — script separado o con
+flag, no parte de "Ejecutar todos".
+
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
 - `'SUP,GAS,DIN,FAR'`
@@ -127,3 +229,15 @@ fallback con token). Desde GitHub Actions captura 0 rubros/0 items y termina sin
 las IPs de datacenter de los runners de GH Actions son bloqueadas por el WAF de
 `utilidades-icbc-prod.pisol.net`, no es un bug del scraper. ICBC debe correrse siempre con
 "Ejecutar todos" local desde el admin, nunca con "Ejecutar todos GH".
+
+## GitHub Actions desactivado temporalmente (hasta 1/7)
+El 13/6 se llegó al 90% de los 2000 minutos/mes de GH Actions (cuenta `danielbere1973`,
+repo privado). Se desactivaron los `schedule` (cron) de los 3 workflows en
+`.github/workflows/` (`run-scrapers.yml`, `expire-promos.yml`, `refresh-vtex-sessions.yml`),
+dejando solo `workflow_dispatch` (disparo manual). El ciclo de minutos se reinicia el
+**1 de julio** — reactivar los crons descomentando el bloque `schedule:` en cada archivo.
+Mientras tanto, scrapers y expiración de promos se corren manualmente en local.
+También se refactorizó `run-scrapers.yml`: el job `check` (sin contenedor) determina qué
+scrapers están pendientes y los jobs `run-http`/`run-playwright` solo corren (con `if` a
+nivel de job) si hay algo pendiente — evita el pull del contenedor pesado de Playwright
+en corridas sin trabajo.
