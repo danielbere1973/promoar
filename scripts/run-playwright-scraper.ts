@@ -36,7 +36,7 @@ async function main() {
     return
   }
 
-  const BATCH_SIZE = 50
+  const BATCH_SIZE = 500
   let totalProcessed = 0
   let totalFound = 0
   const batches = Math.ceil(promos.length / BATCH_SIZE)

@@ -120,3 +120,10 @@ qué API de cada plataforma consultar en vivo para traer precio actualizado
 - `'SUP,GAS,DIN,FAR'`
 - `'DEP,HOG,IND,CPE,PER'`
 - `'VIA,AUT,JUG,LIB,ESP,VAR,EDU'`
+
+## Notas ICBC scraper
+`lib/scrapers/icbc.ts` funciona perfecto corrido **localmente** (1495 promos vía intercepción +
+fallback con token). Desde GitHub Actions captura 0 rubros/0 items y termina sin promos —
+las IPs de datacenter de los runners de GH Actions son bloqueadas por el WAF de
+`utilidades-icbc-prod.pisol.net`, no es un bug del scraper. ICBC debe correrse siempre con
+"Ejecutar todos" local desde el admin, nunca con "Ejecutar todos GH".
