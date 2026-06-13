@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, ChevronRight, ChevronLeft, Check, Sparkles, Plus, Trash2 } from 'lucide-react'
+import { X, ChevronRight, ChevronLeft, Check, Sparkles } from 'lucide-react'
 
 // ── Tipos de entidades externas ──────────────────────────────────────────────
 type BankSegment = { id: string; name: string; bankId: string }
@@ -13,12 +13,9 @@ type EntityBank = {
 type EntityWallet = { id: string; name: string; logoUrl?: string | null }
 
 // ── Tipos internos del wizard ─────────────────────────────────────────────────
-type AccountEntry = {
-  localId: string
-  type: 'CA' | 'CC'
-  currency: 'ARS' | 'USD'
-  lastFive: string
-  cbu: string
+// Caja de ahorros del banco (a lo sumo una por banco)
+type AccountInfo = {
+  has: boolean
   isPayroll: boolean
   isPensioner: boolean
   inModo: boolean
@@ -35,16 +32,19 @@ type CardOption = {
   label: string         // texto a mostrar
 }
 
-type SelectedCard = CardOption & { inModo: boolean; firstSix: string; lastFour: string }
+type SelectedCard = CardOption & { inModo: boolean }
 
 type BankConfig = {
   id: string
   name: string
   logoUrl?: string | null
   segmentId?: string   // paquete bancario (Eminent, Selecta) — aplica a todas las tarjetas
-  accounts: AccountEntry[]
+  account: AccountInfo
+  wantsCards: boolean  // respuesta a "¿Tenés tarjetas?"
   cards: SelectedCard[]
 }
+
+const EMPTY_ACCOUNT: AccountInfo = { has: false, isPayroll: false, isPensioner: false, inModo: false }
 
 // ── Tipos exportables ─────────────────────────────────────────────────────────
 export type GuestCard = {
@@ -54,12 +54,6 @@ export type GuestCard = {
   cardType: 'CREDIT' | 'DEBIT' | 'ACCOUNT' | 'PREPAID'
   segmentId?: string
   cardSegmentId?: string
-  bankAccountType?: string
-  currency?: string
-  accountNumber?: string
-  cbu?: string
-  firstSix?: string
-  lastFour?: string
   isPayroll?: boolean
   isPensioner?: boolean
 }
@@ -164,12 +158,39 @@ function isStandardSegment(name: string) {
   return STANDARD_SEGMENT_NAMES.some(s => n.includes(s))
 }
 
+// Sub-pasos dentro de la configuración de un banco — cada pregunta es su propio paso,
+// nada se asume: paquete (opcional) → ¿cuenta? → sueldo/jubilación → ¿MODO? → ¿tarjetas? → tarjetas
+type BankSubStep = 'segment' | 'account_has' | 'account_payroll' | 'account_modo' | 'cards_has' | 'cards'
+function getBankSubSteps(
+  bank: EntityBank,
+  allBankSegs: BankSegment[],
+  config: BankConfig,
+  modoWalletId: string | undefined
+): BankSubStep[] {
+  const progSegs = allBankSegs.filter(s => s.bankId === bank.id && isStandardSegment(s.name))
+  const steps: BankSubStep[] = []
+  if (progSegs.length > 0) steps.push('segment')
+  steps.push('account_has')
+  if (config.account.has) {
+    steps.push('account_payroll')
+    if (modoWalletId) steps.push('account_modo')
+  }
+  steps.push('cards_has')
+  if (config.wantsCards) steps.push('cards')
+  return steps
+}
+
+// Redes universales en Argentina — fallback cuando el banco no tiene cardNetworks cargadas
+const DEFAULT_NETWORK_NAMES = ['visa', 'mastercard']
+
 // Usa las redes del banco + mapa estático para las opciones por red
 function computeCardOptions(bank: EntityBank, allNetworks: { id: string; name: string }[]): CardOption[] {
   const opts: CardOption[] = []
 
-  // Usar las redes del banco si tiene, si no usar todas las estándar como fallback
-  const nets = bank.cardNetworks.length > 0 ? bank.cardNetworks : allNetworks
+  // Usar las redes del banco si tiene cargadas; si no, fallback a Visa + Mastercard (universales)
+  const nets = bank.cardNetworks.length > 0
+    ? bank.cardNetworks
+    : allNetworks.filter(n => DEFAULT_NETWORK_NAMES.includes(n.name.toLowerCase()))
 
   for (const net of nets) {
     const key = net.name.toLowerCase()
@@ -189,13 +210,59 @@ function computeCardOptions(bank: EntityBank, allNetworks: { id: string; name: s
   return opts
 }
 
+// ── Mapa estático de tarjetas propias de billeteras ──────────────────────────
+// Las billeteras emiten tarjetas con redes que ya existen como CardNetwork
+// (Mastercard, Visa, Naranja X, Mastercard Carrefour Banco). Se resuelve el id
+// de la red contra allNetworks (lista global de CardNetwork).
+type WalletCardOption = { networkName: string; cardType: 'CREDIT' | 'DEBIT' | 'PREPAID'; label: string }
+const WALLET_CARD_OPTIONS: Record<string, WalletCardOption[]> = {
+  'mercado pago': [
+    { networkName: 'Mastercard', cardType: 'CREDIT', label: 'Mastercard Crédito' },
+    { networkName: 'Mastercard', cardType: 'DEBIT',  label: 'Mastercard Débito (en cuenta)' },
+  ],
+  'personal pay': [
+    { networkName: 'Visa', cardType: 'PREPAID', label: 'Visa Prepaga' },
+  ],
+  'ualá': [
+    { networkName: 'Mastercard', cardType: 'CREDIT', label: 'Mastercard Crédito' },
+  ],
+  'carrefour banco': [
+    { networkName: 'Mastercard Carrefour Banco', cardType: 'CREDIT',  label: 'Mastercard Crédito' },
+    { networkName: 'Mastercard Carrefour Banco', cardType: 'PREPAID', label: 'Mastercard Prepaga' },
+  ],
+  'naranja x': [
+    { networkName: 'Naranja X',  cardType: 'CREDIT', label: 'Naranja Crédito' },
+    { networkName: 'Visa',       cardType: 'CREDIT', label: 'Visa Crédito' },
+    { networkName: 'Mastercard', cardType: 'CREDIT', label: 'Mastercard Crédito' },
+    { networkName: 'Visa',       cardType: 'DEBIT',  label: 'Visa Débito' },
+  ],
+}
+
+// Resuelve las opciones de tarjeta propia de una billetera contra la lista global de redes
+function resolveWalletCardOptions(
+  walletName: string,
+  allNets: { id: string; name: string }[]
+): { networkId: string; cardType: 'CREDIT' | 'DEBIT' | 'PREPAID'; label: string }[] {
+  const opts = WALLET_CARD_OPTIONS[walletName.toLowerCase()]
+  if (!opts) return []
+  return opts
+    .map(o => ({
+      networkId: allNets.find(n => n.name.toLowerCase() === o.networkName.toLowerCase())?.id,
+      cardType: o.cardType,
+      label: o.label,
+    }))
+    .filter((o): o is { networkId: string; cardType: 'CREDIT' | 'DEBIT' | 'PREPAID'; label: string } => !!o.networkId)
+}
+
 // ── Reconstruye BankConfig desde GuestCards ───────────────────────────────────
+type WalletCardSelection = { networkId: string; cardType: 'CREDIT' | 'DEBIT' | 'PREPAID'; label: string }
+
 function reconstructConfigs(
   cards: GuestCard[],
   banks: EntityBank[],
   wallets: EntityWallet[],
   allNets: { id: string; name: string }[]
-): { bankIds: string[]; walletIds: string[]; configs: Record<string, BankConfig> } {
+): { bankIds: string[]; walletIds: string[]; configs: Record<string, BankConfig>; walletCards: Record<string, WalletCardSelection[]> } {
   const modoId = wallets.find(w => w.name.toLowerCase().includes('modo'))?.id
   const bankIdSet = new Set<string>()
   const walletIdSet = new Set<string>()
@@ -211,22 +278,16 @@ function reconstructConfigs(
     const bankCards = cards.filter(c => c.bankId === bankId)
     const opts = bank ? computeCardOptions(bank, allNets) : []
 
-    // Cuentas — incluir las que tienen walletId (MODO) como cuentas con inModo=true
-    const pureAccounts = bankCards.filter(c => c.cardType === 'ACCOUNT' && !c.walletId)
-    const modoAccounts = bankCards.filter(c => c.cardType === 'ACCOUNT' && c.walletId === modoId)
-    // Usar cuentas puras si existen, sino usar las MODO como base
-    const accountCards = pureAccounts.length > 0 ? pureAccounts : modoAccounts
-    const hasModo = modoAccounts.length > 0
-    const accounts: AccountEntry[] = accountCards.map((c, i) => ({
-      localId: `restored_${i}`,
-      type: (c.bankAccountType as 'CA' | 'CC') ?? 'CA',
-      currency: (c.currency as 'ARS' | 'USD') ?? 'ARS',
-      lastFive: c.accountNumber ?? '',
-      cbu: c.cbu ?? '',
-      isPayroll: c.isPayroll ?? false,
-      isPensioner: c.isPensioner ?? false,
-      inModo: hasModo,
-    }))
+    // Cuenta (caja de ahorros) — incluir la que tiene walletId (MODO) como inModo=true
+    const pureAccount = bankCards.find(c => c.cardType === 'ACCOUNT' && !c.walletId)
+    const modoAccount = bankCards.find(c => c.cardType === 'ACCOUNT' && c.walletId === modoId)
+    const accountCard = pureAccount ?? modoAccount
+    const account: AccountInfo = accountCard ? {
+      has: true,
+      isPayroll: accountCard.isPayroll ?? false,
+      isPensioner: accountCard.isPensioner ?? false,
+      inModo: !!modoAccount,
+    } : EMPTY_ACCOUNT
 
     // Tarjetas seleccionadas
     const selectedCards: SelectedCard[] = []
@@ -240,7 +301,7 @@ function reconstructConfigs(
         const modoLinked = bankCards.some(bc =>
           bc.walletId === modoId && bc.cardNetworkId === c.cardNetworkId && bc.cardType === c.cardType
         )
-        selectedCards.push({ ...opt, inModo: modoLinked, firstSix: '', lastFour: '' })
+        selectedCards.push({ ...opt, inModo: modoLinked })
       }
     }
 
@@ -250,58 +311,67 @@ function reconstructConfigs(
     configs[bankId] = {
       id: bankId, name: bank?.name ?? '', logoUrl: bank?.logoUrl,
       segmentId: restoredSegmentId,
-      accounts, cards: selectedCards,
+      account, wantsCards: selectedCards.length > 0, cards: selectedCards,
     }
   }
 
-  return { bankIds: Array.from(bankIdSet), walletIds: Array.from(walletIdSet), configs }
+  // Tarjetas propias de billeteras (Mercado Pago, Naranja X, etc.)
+  const walletCards: Record<string, WalletCardSelection[]> = {}
+  for (const walletId of Array.from(walletIdSet)) {
+    const wallet = wallets.find(w => w.id === walletId)
+    if (!wallet) continue
+    const opts = resolveWalletCardOptions(wallet.name, allNets)
+    if (opts.length === 0) continue
+    const entries = cards.filter(c => c.walletId === walletId && !c.bankId && c.cardNetworkId)
+    const matched = entries
+      .map(c => opts.find(o => o.networkId === c.cardNetworkId && o.cardType === c.cardType))
+      .filter((o): o is WalletCardSelection => !!o)
+    if (matched.length > 0) walletCards[walletId] = matched
+  }
+
+  // MODO se considera billetera seleccionada si algún producto bancario quedó vinculado a ella
+  const walletIds = Array.from(walletIdSet)
+  const hasAnyInModo = Object.values(configs).some(cfg => cfg.account.inModo || cfg.cards.some(c => c.inModo))
+  if (hasAnyInModo && modoId && !walletIds.includes(modoId)) walletIds.push(modoId)
+
+  return { bankIds: Array.from(bankIdSet), walletIds, configs, walletCards }
 }
 
 // ── Paso: configuración de un banco ──────────────────────────────────────────
 function BankProductStep({
-  bank, config, modoWalletId, allBankSegs, allNets, onUpdate,
+  bank, config, subStep, modoWalletId, allBankSegs, allNets, onUpdate,
 }: {
   bank: EntityBank
   config: BankConfig
+  subStep: BankSubStep
   modoWalletId: string | undefined
   allBankSegs: BankSegment[]
   allNets: { id: string; name: string }[]
   onUpdate: (u: Partial<BankConfig>) => void
 }) {
   const cardOptions = computeCardOptions(bank, allNets)
+  // Tarjeta recién seleccionada — se le pregunta por MODO en un popup
+  const [pendingModoCard, setPendingModoCard] = useState<CardOption | null>(null)
 
-  function addAccount() {
-    const newAcc: AccountEntry = {
-      localId: Date.now().toString(),
-      type: 'CA', currency: 'ARS', lastFive: '', cbu: '',
-      isPayroll: false, isPensioner: false, inModo: false,
-    }
-    onUpdate({ accounts: [...config.accounts, newAcc] })
-  }
-
-  function updateAccount(localId: string, patch: Partial<AccountEntry>) {
-    onUpdate({ accounts: config.accounts.map(a => a.localId === localId ? { ...a, ...patch } : a) })
-  }
-
-  function removeAccount(localId: string) {
-    onUpdate({ accounts: config.accounts.filter(a => a.localId !== localId) })
+  function updateAccount(patch: Partial<AccountInfo>) {
+    onUpdate({ account: { ...config.account, ...patch } })
   }
 
   function toggleCard(opt: CardOption) {
     const exists = config.cards.some(c => c.key === opt.key)
-    onUpdate({
-      cards: exists
-        ? config.cards.filter(c => c.key !== opt.key)
-        : [...config.cards, { ...opt, inModo: false, firstSix: '', lastFour: '' }],
-    })
+    if (exists) {
+      onUpdate({ cards: config.cards.filter(c => c.key !== opt.key) })
+      return
+    }
+    onUpdate({ cards: [...config.cards, { ...opt, inModo: false }] })
+    if (modoWalletId) setPendingModoCard(opt)
   }
 
-  function toggleCardModo(key: string) {
-    onUpdate({ cards: config.cards.map(c => c.key === key ? { ...c, inModo: !c.inModo } : c) })
-  }
-
-  function updateCard(key: string, patch: Partial<SelectedCard>) {
-    onUpdate({ cards: config.cards.map(c => c.key === key ? { ...c, ...patch } : c) })
+  function answerCardModo(inModo: boolean) {
+    if (!pendingModoCard) return
+    const key = pendingModoCard.key
+    onUpdate({ cards: config.cards.map(c => c.key === key ? { ...c, inModo } : c) })
+    setPendingModoCard(null)
   }
 
   const creditOpts  = cardOptions.filter(o => o.cardType === 'CREDIT')
@@ -315,7 +385,7 @@ function BankProductStep({
     <div className="space-y-6">
 
       {/* ── Paquete bancario ─────────────────────────────────────────────── */}
-      {progSegs.length > 0 && (
+      {subStep === 'segment' && progSegs.length > 0 && (
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5">¿Qué paquete tenés?</p>
           <div className="flex flex-wrap gap-2">
@@ -334,87 +404,77 @@ function BankProductStep({
         </div>
       )}
 
-      {/* ── Cuentas ─────────────────────────────────────────────────────── */}
+      {/* ── ¿Tenés cuenta? ──────────────────────────────────────────────── */}
+      {subStep === 'account_has' && (
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Cuentas bancarias</p>
-          <button onClick={addAccount} className="flex items-center gap-1 text-[10px] font-black text-indigo-500 hover:text-indigo-700">
-            <Plus size={12} /> Agregar cuenta
+        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5">¿Tenés cuenta en {bank.name}?</p>
+        <div className="flex gap-2">
+          <button onClick={() => updateAccount({ has: true })}
+            className={`flex-1 py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${config.account.has ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-500 bg-white'}`}>
+            Sí, caja de ahorros
+          </button>
+          <button onClick={() => updateAccount({ ...EMPTY_ACCOUNT })}
+            className={`flex-1 py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${!config.account.has ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-500 bg-white'}`}>
+            No, solo tarjeta
           </button>
         </div>
+      </div>
+      )}
 
-        {config.accounts.length === 0 && (
-          <button onClick={addAccount} className="w-full border-2 border-dashed border-gray-200 rounded-2xl py-4 text-xs text-gray-400 font-bold hover:border-indigo-300 hover:text-indigo-400 transition-colors">
-            + Agregar cuenta en este banco
-          </button>
-        )}
-
-        <div className="space-y-3">
-          {config.accounts.map(acc => (
-            <div key={acc.localId} className="bg-gray-50 border border-gray-100 rounded-2xl p-3 space-y-2.5">
-              {/* Tipo + Moneda */}
-              <div className="flex gap-2">
-                <div className="flex gap-1 flex-1">
-                  {(['CA', 'CC'] as const).map(t => (
-                    <button key={t} onClick={() => updateAccount(acc.localId, { type: t })}
-                      className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all ${acc.type === t ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-200 bg-white text-gray-500'}`}>
-                      {t === 'CA' ? 'Caja de Ahorros' : 'Cta. Corriente'}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-1">
-                  {(['ARS', 'USD'] as const).map(c => (
-                    <button key={c} onClick={() => updateAccount(acc.localId, { currency: c })}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${acc.currency === c ? 'bg-gray-800 border-gray-800 text-white' : 'border-gray-200 bg-white text-gray-500'}`}>
-                      {c === 'ARS' ? '$' : 'U$D'}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => removeAccount(acc.localId)} className="p-1.5 text-gray-300 hover:text-red-400 transition-colors">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-
-              {/* Número (últimos 5) y CBU */}
-              <div className="flex gap-2">
-                <input type="text" maxLength={5} placeholder="Últimos 5 (opc.)"
-                  value={acc.lastFive}
-                  onChange={e => updateAccount(acc.localId, { lastFive: e.target.value.replace(/\D/g, '').slice(0, 5) })}
-                  className="flex-1 bg-white border border-gray-200 text-xs px-3 py-2 rounded-xl outline-none focus:border-indigo-300" />
-                <input type="text" maxLength={22} placeholder="CBU (opc.)"
-                  value={acc.cbu}
-                  onChange={e => updateAccount(acc.localId, { cbu: e.target.value.replace(/\D/g, '').slice(0, 22) })}
-                  className="flex-1 bg-white border border-gray-200 text-xs px-3 py-2 rounded-xl outline-none focus:border-indigo-300" />
-              </div>
-
-              {/* Sueldo / Jubilación */}
-              <div className="flex gap-2 flex-wrap">
-                {[
-                  { label: '💼 Sueldo', key: 'isPayroll' as const },
-                  { label: '🧓 Jubilación', key: 'isPensioner' as const },
-                ].map(({ label, key }) => (
-                  <button key={key} onClick={() => updateAccount(acc.localId, { [key]: !acc[key] })}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${acc[key] ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-200 bg-white text-gray-500'}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* MODO para la cuenta */}
-              {modoWalletId && (
-                <button onClick={() => updateAccount(acc.localId, { inModo: !acc.inModo })}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border-2 transition-all ${acc.inModo ? 'border-sky-400 bg-sky-50' : 'border-gray-100 bg-white'}`}>
-                  <span className={`text-xs font-bold ${acc.inModo ? 'text-sky-700' : 'text-gray-500'}`}>📱 ¿Está vinculada a MODO?</span>
-                  <CheckBox checked={acc.inModo} />
-                </button>
-              )}
-            </div>
+      {/* ── Sueldo / Jubilación ──────────────────────────────────────────── */}
+      {subStep === 'account_payroll' && (
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5">¿Cobrás sueldo o jubilación en esta cuenta?</p>
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { label: '💼 Sueldo', key: 'isPayroll' as const },
+            { label: '🧓 Jubilación', key: 'isPensioner' as const },
+          ].map(({ label, key }) => (
+            <button key={key} onClick={() => updateAccount({ [key]: !config.account[key] })}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${config.account[key] ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-200 bg-white text-gray-500'}`}>
+              {label}
+            </button>
           ))}
         </div>
       </div>
+      )}
+
+      {/* ── ¿Cuenta vinculada a MODO? ────────────────────────────────────── */}
+      {subStep === 'account_modo' && (
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5">¿Tu caja de ahorros está vinculada a MODO?</p>
+        <div className="flex gap-2">
+          <button onClick={() => updateAccount({ inModo: true })}
+            className={`flex-1 py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${config.account.inModo ? 'bg-sky-500 border-sky-500 text-white' : 'border-gray-200 text-gray-500 bg-white'}`}>
+            Sí
+          </button>
+          <button onClick={() => updateAccount({ inModo: false })}
+            className={`flex-1 py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${!config.account.inModo ? 'bg-sky-500 border-sky-500 text-white' : 'border-gray-200 text-gray-500 bg-white'}`}>
+            No
+          </button>
+        </div>
+      </div>
+      )}
+
+      {/* ── ¿Tenés tarjetas? ─────────────────────────────────────────────── */}
+      {subStep === 'cards_has' && (
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5">¿Tenés tarjetas de {bank.name}?</p>
+        <div className="flex gap-2">
+          <button onClick={() => onUpdate({ wantsCards: true })}
+            className={`flex-1 py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${config.wantsCards ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-500 bg-white'}`}>
+            Sí
+          </button>
+          <button onClick={() => onUpdate({ wantsCards: false, cards: [] })}
+            className={`flex-1 py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${!config.wantsCards ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-500 bg-white'}`}>
+            No
+          </button>
+        </div>
+      </div>
+      )}
 
       {/* ── Tarjetas ─────────────────────────────────────────────────────── */}
-      {[
+      {subStep === 'cards' && [
         { label: 'Tarjetas de Crédito', opts: creditOpts },
         { label: 'Tarjetas de Débito', opts: debitOpts },
         { label: 'Prepagas', opts: prepaidOpts },
@@ -425,41 +485,44 @@ function BankProductStep({
             {opts.map(opt => {
               const sel = config.cards.find(c => c.key === opt.key)
               return (
-                <div key={opt.key}>
-                  <button onClick={() => toggleCard(opt)}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 transition-all ${sel ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
-                    <span className="text-base">💳</span>
-                    <span className="flex-1 text-left text-sm font-bold text-gray-800">{opt.label}</span>
-                    <CheckBox checked={!!sel} />
-                  </button>
-                  {sel && (
-                    <div className="ml-4 mt-1 space-y-1.5">
-                      {/* Primeros 6 y últimos 4 dígitos (opcional) */}
-                      <div className="flex gap-2">
-                        <input type="text" maxLength={6} placeholder="Primeros 6 (opc.)"
-                          value={sel.firstSix}
-                          onChange={e => updateCard(opt.key, { firstSix: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                          className="flex-1 bg-white border border-gray-200 text-xs px-3 py-2 rounded-xl outline-none focus:border-indigo-300" />
-                        <input type="text" maxLength={4} placeholder="Últimos 4 (opc.)"
-                          value={sel.lastFour}
-                          onChange={e => updateCard(opt.key, { lastFour: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                          className="flex-1 bg-white border border-gray-200 text-xs px-3 py-2 rounded-xl outline-none focus:border-indigo-300" />
-                      </div>
-                      {modoWalletId && (
-                        <button onClick={() => toggleCardModo(opt.key)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border-2 transition-all ${sel.inModo ? 'border-sky-400 bg-sky-50' : 'border-gray-100 bg-white'}`}>
-                          <span className={`text-xs font-bold ${sel.inModo ? 'text-sky-700' : 'text-gray-500'}`}>📱 ¿Está en MODO?</span>
-                          <CheckBox checked={sel.inModo} />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <button key={opt.key} onClick={() => toggleCard(opt)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 transition-all ${sel ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                  <span className="text-base">💳</span>
+                  <span className="flex-1 text-left text-sm font-bold text-gray-800">{opt.label}</span>
+                  {sel?.inModo && <span className="text-[9px] font-black text-sky-600 bg-sky-50 border border-sky-100 px-1.5 py-0.5 rounded-full">MODO</span>}
+                  <CheckBox checked={!!sel} />
+                </button>
               )
             })}
           </div>
         </div>
       ))}
+
+      {subStep === 'cards' && creditOpts.length === 0 && debitOpts.length === 0 && prepaidOpts.length === 0 && (
+        <p className="text-sm text-gray-400 text-center py-6">No hay tarjetas disponibles para este banco.</p>
+      )}
+
+      {/* ── Popup: ¿esta tarjeta está en MODO? ───────────────────────────── */}
+      {pendingModoCard && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-6">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setPendingModoCard(null)} />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl">
+            <div className="text-3xl mb-3 text-center">📱</div>
+            <h3 className="font-black text-sm text-gray-900 text-center mb-2">{pendingModoCard.label}</h3>
+            <p className="text-xs text-gray-500 text-center mb-5">¿Tenés esta tarjeta vinculada a MODO?</p>
+            <div className="flex gap-2">
+              <button onClick={() => answerCardModo(false)}
+                className="flex-1 py-2.5 rounded-2xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50">
+                No
+              </button>
+              <button onClick={() => answerCardModo(true)}
+                className="flex-1 py-2.5 rounded-2xl bg-sky-500 text-white text-sm font-black hover:bg-sky-600">
+                Sí
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -467,6 +530,7 @@ function BankProductStep({
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function PromoWizard({ open, onClose, onComplete, onAdd, initialProfile, inline, saveLabel, saving }: Props) {
   const [step, setStep] = useState(1)
+  const [subStep, setSubStep] = useState(0)
   const [banks, setBanks] = useState<EntityBank[]>([])
   const [wallets, setWallets] = useState<EntityWallet[]>([])
   const [allBankSegs, setAllBankSegs] = useState<BankSegment[]>([])
@@ -474,6 +538,9 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
   const [selectedBankIds, setSelectedBankIds] = useState<string[]>([])
   const [bankConfigs, setBankConfigs] = useState<Record<string, BankConfig>>({})
   const [selectedWalletIds, setSelectedWalletIds] = useState<string[]>([])
+  const [walletCards, setWalletCards] = useState<Record<string, WalletCardSelection[]>>({})
+  const [pendingWalletCardsId, setPendingWalletCardsId] = useState<string | null>(null)
+  const [pendingWalletCardSelections, setPendingWalletCardSelections] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [done, setDone] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
@@ -486,11 +553,15 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
     if (!open) return
     setLoading(true)
     setStep(1)
+    setSubStep(0)
     setDone(false)
     setIsAdding(false)
     setSelectedBankIds([])
     setBankConfigs({})
     setSelectedWalletIds([])
+    setWalletCards({})
+    setPendingWalletCardsId(null)
+    setPendingWalletCardSelections(new Set())
     fetch('/api/public/entities')
       .then(r => r.json())
       .then(data => {
@@ -502,12 +573,13 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
         setAllNetworks(data.cardNetworks || [])
 
         if (initialProfile?.cards?.length) {
-          const { bankIds, walletIds, configs } = reconstructConfigs(
+          const { bankIds, walletIds, configs, walletCards: restoredWalletCards } = reconstructConfigs(
             initialProfile.cards, fetchedBanks, fetchedWallets, data.cardNetworks || []
           )
           setSelectedBankIds(bankIds)
           setBankConfigs(configs)
           setSelectedWalletIds(walletIds)
+          setWalletCards(restoredWalletCards)
           if (inline) setDone(true)
         }
         setLoading(false)
@@ -522,7 +594,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
 
   // MODO auto-seleccionado si cualquier producto bancario tiene inModo=true
   const hasAnyProductInModo = Object.values(bankConfigs).some(
-    cfg => cfg.accounts.some(a => a.inModo) || cfg.cards.some(c => c.inModo)
+    cfg => cfg.account.inModo || cfg.cards.some(c => c.inModo)
   )
   const modoEffectivelySelected = !!modoWalletId && (
     selectedWalletIds.includes(modoWalletId) || hasAnyProductInModo
@@ -547,7 +619,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
       for (const bankId of Object.keys(next)) {
         next[bankId] = {
           ...next[bankId],
-          accounts: next[bankId].accounts.map(a => ({ ...a, inModo: false })),
+          account: { ...next[bankId].account, inModo: false },
           cards: next[bankId].cards.map(c => ({ ...c, inModo: false })),
         }
       }
@@ -561,21 +633,53 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
   const bankConfigIdx = step - 2
   const isWalletStep = step === 2 + selectedBanks.length
   const currentBank = isBankConfigStep ? selectedBanks[bankConfigIdx] : null
+  const bankSubSteps = currentBank ? getBankSubSteps(currentBank, allBankSegs, getConfig(currentBank.id), isModoBank(currentBank.name) ? modoWalletId : undefined) : []
+  const currentSubStep: BankSubStep = bankSubSteps[subStep] ?? 'account_has'
+  const subStepTitles: Record<BankSubStep, string> = {
+    segment: 'Paquete',
+    account_has: 'Cuenta',
+    account_payroll: 'Sueldo/Jubilación',
+    account_modo: 'MODO',
+    cards_has: 'Tarjetas',
+    cards: 'Tus tarjetas',
+  }
 
   function getConfig(bankId: string): BankConfig {
     if (bankConfigs[bankId]) return bankConfigs[bankId]
     const bank = banks.find(b => b.id === bankId)!
-    return { id: bankId, name: bank?.name ?? '', logoUrl: bank?.logoUrl, accounts: [], cards: [] }
+    return { id: bankId, name: bank?.name ?? '', logoUrl: bank?.logoUrl, account: { ...EMPTY_ACCOUNT, has: true }, wantsCards: false, cards: [] }
   }
 
   function updateConfig(bankId: string, update: Partial<BankConfig>) {
-    setBankConfigs(prev => ({ ...prev, [bankId]: { ...getConfig(bankId), ...update } }))
+    const next = { ...getConfig(bankId), ...update }
+    setBankConfigs(prev => ({ ...prev, [bankId]: next }))
+    // Si algún producto quedó vinculado a MODO, marcar MODO como billetera seleccionada
+    const nowInModo = next.account.inModo || next.cards.some(c => c.inModo)
+    if (nowInModo && modoWalletId) {
+      setSelectedWalletIds(prev => prev.includes(modoWalletId) ? prev : [...prev, modoWalletId])
+    }
   }
 
   function handleNext() {
-    if (step === 1) setStep(2)
-    else if (isBankConfigStep) setStep(step + 1)
+    if (step === 1) { setStep(2); setSubStep(0) }
+    else if (isBankConfigStep) {
+      if (subStep < bankSubSteps.length - 1) setSubStep(subStep + 1)
+      else { setStep(step + 1); setSubStep(0) }
+    }
     else buildAndComplete()
+  }
+
+  function handleBack() {
+    if (isBankConfigStep && subStep > 0) { setSubStep(subStep - 1); return }
+    const newStep = step - 1
+    setStep(newStep)
+    if (newStep >= 2 && newStep < 2 + selectedBanks.length) {
+      const prevBank = selectedBanks[newStep - 2]
+      const prevSubSteps = getBankSubSteps(prevBank, allBankSegs, getConfig(prevBank.id), isModoBank(prevBank.name) ? modoWalletId : undefined)
+      setSubStep(prevSubSteps.length - 1)
+    } else {
+      setSubStep(0)
+    }
   }
 
   function buildAndComplete(overrideBankIds?: string[], overrideConfigs?: Record<string, BankConfig>, overrideWalletIds?: string[]) {
@@ -593,18 +697,14 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
       const bank = banks.find(b => b.id === bankId)
       const bankSupportsModo = modoWalletId && bank && isModoBank(bank.name)
 
-      // Cuentas
-      for (const acc of cfg.accounts) {
+      // Cuenta (caja de ahorros)
+      if (cfg.account.has) {
         cards.push({
           bankId, cardType: 'ACCOUNT',
-          bankAccountType: acc.type,
-          currency: acc.currency,
-          accountNumber: acc.lastFive || undefined,
-          cbu: acc.cbu || undefined,
-          isPayroll: acc.isPayroll,
-          isPensioner: acc.isPensioner,
+          isPayroll: cfg.account.isPayroll,
+          isPensioner: cfg.account.isPensioner,
         })
-        const shouldModo = acc.inModo || (modoInWallets && bankSupportsModo)
+        const shouldModo = cfg.account.inModo || (modoInWallets && bankSupportsModo)
         const modoKey = `${bankId}|ACCOUNT|`
         if (shouldModo && modoWalletId && !modoApplied.has(modoKey)) {
           modoApplied.add(modoKey)
@@ -620,8 +720,6 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
           cardType: card.cardType,
           segmentId: cfg.segmentId ?? card.segmentId,
           cardSegmentId: card.cardSegmentId,
-          firstSix: card.firstSix || undefined,
-          lastFour: card.lastFour || undefined,
         })
         const shouldModo = card.inModo || (modoInWallets && bankSupportsModo)
         const modoKey = `${bankId}|${card.cardType}|${card.networkId}`
@@ -636,6 +734,9 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
     for (const walletId of walletIds) {
       if (walletId === modoWalletId && modoApplied.size > 0) continue // ya aplicado a bancos
       cards.push({ walletId, cardType: 'CREDIT' })
+      for (const wc of walletCards[walletId] ?? []) {
+        cards.push({ walletId, cardNetworkId: wc.networkId, cardType: wc.cardType })
+      }
     }
 
     const profile: GuestProfile = { cards }
@@ -645,7 +746,9 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
     else onComplete(profile)
   }
 
-  const stepLabel = step === 1 ? 'Tus bancos' : isBankConfigStep ? currentBank?.name : 'Billeteras'
+  const stepLabel = step === 1 ? 'Tus bancos'
+    : isBankConfigStep ? `${currentBank?.name} · ${subStepTitles[currentSubStep]} (${subStep + 1}/${bankSubSteps.length})`
+    : 'Billeteras'
 
   // ── Resumen colapsable ────────────────────────────────────────────────────
   const summary = done && !saving ? (() => {
@@ -670,6 +773,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
             setSelectedWalletIds([])
             setDone(false)
             setStep(1)
+            setSubStep(0)
           }} className="w-full py-2.5 rounded-2xl bg-indigo-600 text-white text-xs font-black tracking-wide hover:bg-indigo-700 transition-colors">
             + Agregar Producto Financiero
           </button>
@@ -681,7 +785,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
               const bank = banks.find(b => b.id === bankId)
               const cfg = getConfig(bankId)
               const isExpanded = expandedBankIds.has(bankId)
-              const totalItems = cfg.accounts.length + cfg.cards.length
+              const totalItems = (cfg.account.has ? 1 : 0) + cfg.cards.length
               return (
                 <div key={bankId} className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
                   <div className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -691,7 +795,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
                       <p className="font-black text-xs text-gray-900 truncate">{bank?.name}</p>
                       <p className="text-[10px] text-gray-400">{totalItems} producto{totalItems !== 1 ? 's' : ''}</p>
                     </div>
-                    <button onClick={e => { e.stopPropagation(); setDone(false); setStep(2 + selectedBanks.findIndex(b => b.id === bankId)) }}
+                    <button onClick={e => { e.stopPropagation(); setDone(false); setSubStep(0); setStep(2 + selectedBanks.findIndex(b => b.id === bankId)) }}
                       className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-400 hover:text-indigo-600 transition-colors" title="Editar">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
@@ -710,17 +814,16 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
 
                   {isExpanded && (
                     <div className="border-t border-gray-50 px-3 py-2 space-y-1.5">
-                      {cfg.accounts.map((acc, i) => (
-                        <div key={i} className="flex items-center gap-2">
+                      {cfg.account.has && (
+                        <div className="flex items-center gap-2">
                           <span className="text-sm">🏦</span>
                           <span className="text-xs text-gray-600 flex-1">
-                            {acc.type === 'CC' ? 'Cta. Corriente' : 'Caja de Ahorros'} {acc.currency === 'USD' ? 'USD' : '$'}
-                            {acc.isPayroll ? ' · Sueldo' : acc.isPensioner ? ' · Jubilación' : ''}
-                            {acc.lastFive ? ` · ···${acc.lastFive}` : ''}
+                            Caja de Ahorros
+                            {cfg.account.isPayroll ? ' · Sueldo' : cfg.account.isPensioner ? ' · Jubilación' : ''}
                           </span>
-                          {acc.inModo && <ModoIcon />}
+                          {cfg.account.inModo && <ModoIcon />}
                         </div>
-                      ))}
+                      )}
                       {cfg.cards.map(card => (
                         <div key={card.key} className="flex items-center gap-2">
                           <span className="text-sm">💳</span>
@@ -782,7 +885,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
             const restoredConfigs: Record<string, BankConfig> = {}
             for (const bid of existingBankIds) { if (bankConfigs[bid]) restoredConfigs[bid] = bankConfigs[bid] }
             setBankConfigs(restoredConfigs)
-            setIsAdding(false); setExistingBankIds([]); setConfirmEditBankId(null); setDone(false)
+            setIsAdding(false); setExistingBankIds([]); setConfirmEditBankId(null); setDone(false); setSubStep(0)
             const idx = existingBankIds.indexOf(confirmEditBankId!)
             setStep(2 + (idx >= 0 ? idx : 0))
           }} className="flex-1 py-2.5 rounded-2xl bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700">Editar</button>
@@ -802,7 +905,16 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
             {done ? 'Resumen' : `Paso ${step} de ${totalSteps} — ${stepLabel}`}
           </p>
           <h2 className="text-xl font-black text-gray-900 dark:text-white">
-            {done ? 'Tu perfil financiero' : step === 1 ? '¿En qué banco operás?' : isBankConfigStep ? `¿Qué tenés en ${currentBank?.name}?` : '¿Usás billeteras?'}
+            {done ? 'Tu perfil financiero'
+              : step === 1 ? '¿En qué banco operás?'
+              : isBankConfigStep
+                ? (currentSubStep === 'segment' ? `¿Qué paquete tenés en ${currentBank?.name}?`
+                  : currentSubStep === 'account_has' ? `¿Tenés cuenta en ${currentBank?.name}?`
+                  : currentSubStep === 'account_payroll' ? '¿Sueldo o jubilación?'
+                  : currentSubStep === 'account_modo' ? '¿Vinculada a MODO?'
+                  : currentSubStep === 'cards_has' ? `¿Tenés tarjetas de ${currentBank?.name}?`
+                  : `¿Qué tarjetas tenés de ${currentBank?.name}?`)
+              : '¿Usás billeteras?'}
           </h2>
         </div>
         {!inline && <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-400 transition-colors shrink-0"><X size={20} /></button>}
@@ -845,12 +957,8 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
                             ...prev,
                             [bank.id]: {
                               id: bank.id, name: bank.name, logoUrl: bank.logoUrl,
-                              accounts: [{
-                                localId: `default_${Date.now()}`,
-                                type: 'CA' as const, currency: 'ARS' as const,
-                                lastFive: '', cbu: '',
-                                isPayroll: false, isPensioner: false, inModo: false,
-                              }],
+                              account: { ...EMPTY_ACCOUNT, has: true },
+                              wantsCards: false,
                               cards: [],
                             }
                           }))
@@ -874,8 +982,10 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
         {/* Pasos 2..N: config por banco */}
         {!done && !loading && isBankConfigStep && currentBank && (
           <BankProductStep
+            key={currentBank.id}
             bank={currentBank}
             config={getConfig(currentBank.id)}
+            subStep={currentSubStep}
             modoWalletId={isModoBank(currentBank.name) ? modoWalletId : undefined}
             allBankSegs={allBankSegs}
             allNets={allNetworks}
@@ -897,18 +1007,39 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
                 const isModo = wallet.id === modoWalletId
                 const sel = isModo ? modoEffectivelySelected : selectedWalletIds.includes(wallet.id)
                 const autoModo = isModo && hasAnyProductInModo && !selectedWalletIds.includes(wallet.id)
+                const cardOpts = isModo ? [] : resolveWalletCardOptions(wallet.name, allNetworks)
+                const selectedCount = walletCards[wallet.id]?.length ?? 0
                 return (
-                  <button key={wallet.id}
-                    onClick={() => isModo
-                      ? handleModoWalletClick()
-                      : setSelectedWalletIds(prev => sel ? prev.filter(x => x !== wallet.id) : [...prev, wallet.id])
-                    }
-                    className={`relative flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${sel ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
-                    {sel && <div className="absolute top-2 right-2 w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={10} className="text-white" /></div>}
-                    {autoModo && <div className="absolute top-1.5 left-1.5 text-[8px] font-black text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-full">Auto</div>}
-                    <EntityLogo logoUrl={wallet.logoUrl} name={wallet.name} />
-                    <span className="text-[10px] font-bold text-gray-700 text-center leading-tight line-clamp-2">{wallet.name}</span>
-                  </button>
+                  <div key={wallet.id} className="flex flex-col gap-1">
+                    <button
+                      onClick={() => {
+                        if (isModo) { handleModoWalletClick(); return }
+                        if (sel) {
+                          setSelectedWalletIds(prev => prev.filter(x => x !== wallet.id))
+                          setWalletCards(prev => { const n = { ...prev }; delete n[wallet.id]; return n })
+                        } else {
+                          setSelectedWalletIds(prev => [...prev, wallet.id])
+                          if (cardOpts.length > 0) {
+                            setPendingWalletCardsId(wallet.id)
+                            setPendingWalletCardSelections(new Set())
+                          }
+                        }
+                      }}
+                      className={`relative flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all w-full ${sel ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                      {sel && <div className="absolute top-2 right-2 w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={10} className="text-white" /></div>}
+                      {autoModo && <div className="absolute top-1.5 left-1.5 text-[8px] font-black text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-full">Auto</div>}
+                      <EntityLogo logoUrl={wallet.logoUrl} name={wallet.name} />
+                      <span className="text-[10px] font-bold text-gray-700 text-center leading-tight line-clamp-2">{wallet.name}</span>
+                    </button>
+                    {sel && cardOpts.length > 0 && (
+                      <button onClick={() => {
+                        setPendingWalletCardsId(wallet.id)
+                        setPendingWalletCardSelections(new Set((walletCards[wallet.id] ?? []).map(c => `${c.networkId}_${c.cardType}`)))
+                      }} className="text-[9px] font-black text-indigo-500 hover:text-indigo-700 text-center">
+                        💳 {selectedCount > 0 ? `${selectedCount} tarjeta${selectedCount > 1 ? 's' : ''}` : 'Agregar tarjeta'}
+                      </button>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -920,7 +1051,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
       {!done && (
         <div className={`${inline ? 'pt-4' : 'px-6 pb-safe pt-4 border-t border-gray-100 dark:border-slate-800'} flex gap-3`}>
           {step > 1 && (
-            <button onClick={() => setStep(step - 1)} className="flex items-center gap-1.5 px-5 py-3.5 rounded-2xl border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-colors">
+            <button onClick={handleBack} className="flex items-center gap-1.5 px-5 py-3.5 rounded-2xl border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-colors">
               <ChevronLeft size={16} /> Atrás
             </button>
           )}
@@ -959,7 +1090,56 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
     </div>
   ) : null
 
-  if (inline) return <>{inner}{confirmPopup}{modoRemovalModal}</>
+  // ── Popup: tarjetas propias de una billetera ──────────────────────────────
+  const pendingWallet = pendingWalletCardsId ? wallets.find(w => w.id === pendingWalletCardsId) : null
+  const walletCardModal = pendingWallet ? (() => {
+    const opts = resolveWalletCardOptions(pendingWallet.name, allNetworks)
+    function toggle(key: string) {
+      setPendingWalletCardSelections(prev => {
+        const n = new Set(prev)
+        if (n.has(key)) n.delete(key); else n.add(key)
+        return n
+      })
+    }
+    function confirm() {
+      const selected = opts
+        .filter(o => pendingWalletCardSelections.has(`${o.networkId}_${o.cardType}`))
+        .map(o => ({ networkId: o.networkId, cardType: o.cardType, label: o.label }))
+      setWalletCards(prev => ({ ...prev, [pendingWallet!.id]: selected }))
+      setPendingWalletCardsId(null)
+    }
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center px-6">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setPendingWalletCardsId(null)} />
+        <div className="relative bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl">
+          <div className="flex items-center gap-3 mb-3">
+            <EntityLogo logoUrl={pendingWallet.logoUrl} name={pendingWallet.name} sm />
+            <p className="font-black text-sm text-gray-900">{pendingWallet.name}</p>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">¿Tenés alguna de estas tarjetas asociadas?</p>
+          <div className="space-y-1.5 mb-5">
+            {opts.map(o => {
+              const key = `${o.networkId}_${o.cardType}`
+              const checked = pendingWalletCardSelections.has(key)
+              return (
+                <button key={key} onClick={() => toggle(key)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 transition-all ${checked ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                  <span className="text-base">💳</span>
+                  <span className="flex-1 text-left text-sm font-bold text-gray-800">{o.label}</span>
+                  <CheckBox checked={checked} />
+                </button>
+              )
+            })}
+          </div>
+          <button onClick={confirm} className="w-full py-2.5 rounded-2xl bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700">
+            Listo
+          </button>
+        </div>
+      </div>
+    )
+  })() : null
+
+  if (inline) return <>{inner}{confirmPopup}{modoRemovalModal}{walletCardModal}</>
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -967,6 +1147,7 @@ export default function PromoWizard({ open, onClose, onComplete, onAdd, initialP
       {inner}
       {confirmPopup}
       {modoRemovalModal}
+      {walletCardModal}
     </div>
   )
 }

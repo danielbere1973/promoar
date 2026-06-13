@@ -10,12 +10,6 @@ type SyncCard = {
   cardType: 'CREDIT' | 'DEBIT' | 'ACCOUNT'
   segmentId?: string
   cardSegmentId?: string
-  bankAccountType?: string
-  currency?: string
-  accountNumber?: string
-  cbu?: string
-  firstSix?: string
-  lastFour?: string
   isPayroll?: boolean
   isPensioner?: boolean
 }
@@ -54,10 +48,7 @@ export async function POST(req: NextRequest) {
         cardType: card.cardType as any,
         segmentId: card.segmentId ?? null,
         cardSegmentId: card.cardSegmentId ?? null,
-        bankAccountType: card.bankAccountType ?? null,
-        currency: card.currency ?? null,
-        accountNumber: card.cbu ?? card.accountNumber ?? null,
-        lastFour: card.lastFour ?? null,
+        bankAccountType: card.cardType === 'ACCOUNT' ? 'CA' : null,
         isPayroll: card.isPayroll ?? false,
         isPensioner: card.isPensioner ?? false,
       },

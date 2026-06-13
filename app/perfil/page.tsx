@@ -407,9 +407,6 @@ export default function PerfilPage() {
       cardSegmentId: c.cardSegmentId ?? undefined,
       isPayroll: c.isPayroll ?? false,
       isPensioner: c.isPensioner ?? false,
-      bankAccountType: c.bankAccountType ?? undefined,
-      currency: c.currency ?? undefined,
-      accountNumber: c.accountNumber ?? undefined,
     }))
   } : null
 
