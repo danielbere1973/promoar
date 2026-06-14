@@ -104,8 +104,8 @@ export const PersonalPayScraper: Scraper = {
           const storeName: string = (item.title || '').trim();
           if (!storeName) continue;
 
-          const discountStr: string = item.discounts || '';
-          const nxmMatch = discountStr.match(/^(\d+)[xX](\d+)$/)
+          const discountStr: string = (item.discounts || '').trim();
+          const nxmMatch = discountStr.match(/^(\d+)\s*[xX]\s*(\d+)$/)
           const pct = nxmMatch ? 0 : parseInt(discountStr.replace('%', ''));
           if (!nxmMatch && (!pct || isNaN(pct))) continue;
 

@@ -64,29 +64,39 @@ Coto, Diarco, Jumbo, Disco, Vea, Changomas, Carrefour, MODO, MercadoPago, Cuenta
 
 ## Pendiente INMEDIATO — próxima sesión
 
-### 1. Quick filters predefinidos en pantalla principal
-Chips rápidos fijos en la barra (sin abrir el drawer):
-- Top 3 categorías más populares del día (ya viene `promoCount` de `/api/categories`)
-- Top 3 rangos de descuento más frecuentes entre las promos activas hoy
-Calcular en `page.tsx` a partir de las promos ya cargadas y las categorías.
+### 1. Quick filters predefinidos en pantalla principal — RESUELTO/SUPERADO
+Ya implementado en `app/promos/page.tsx`: `PRIORITY_CAT_SLUGS` (supermercados, combustible,
+transporte, gastronomia, farmacias) ordena las secciones de categorías poniendo esas 5 primero,
+y la sección "⭐ Destacadas hoy" muestra promos `isFeatured` + top por descuento dentro de esas
+categorías (cap 6). Cubre el objetivo de accesos rápidos a lo más relevante sin agregar chips
+de filtro adicionales.
 
 ### 2. Pendiente DB
 - DELETE FROM promos + re-scraping completo (hay ~20k promos con datos corruptos)
 - Antes de borrar: exportar CSV desde admin
 - Después: DELETE FROM commerces WHERE "logoUrl" IS NULL
 
-### 3. Promos con múltiples comercios ("Disco y Vea", "Supermercados Disco & Vea")
-Cuando el scraper trae storeName con " y " o " & " y ambas partes matchean comercios existentes,
-duplicar la promo asignando una a cada comercio. Actualmente se guarda como un comercio ficticio.
+### 3. Promos con múltiples comercios ("Disco y Vea", "Supermercados Disco & Vea") — RESUELTO
+En `app/api/admin/scrape/route.ts`: si el `storeName` no matchea un comercio exacto y contiene
+" y "/" & ", se separa en 2 partes; si ambas matchean comercios reales distintos (helper
+`matchCommerceByName`), se generan 2 `resolvedItems` (uno por comercio) en vez de crear un
+comercio combinado ficticio. Limpieza de datos: se eliminó "Disco y Vea" (vacío) y se dividió
+la promo de "Supermercados Disco & Vea" en Disco y Vea, borrando el comercio ficticio.
 
-### 4. Comercios Cencosud a limpiar
-"Especial Cencosud" y "CENCOSUD PRODUCTOS SELECCIONADOS" no son comercios reales —
-Cencosud no vende con esa marca al público. Identificar qué scraper los genera y filtrarlos.
-Eliminar de la DB o reasignar las promos a los comercios correctos (Jumbo/Disco/Vea).
+### 4. Comercios Cencosud a limpiar — RESUELTO
+"Especial Cencosud" (AmEx) y "CENCOSUD PRODUCTOS SELECCIONADOS" (Macro) eran promos
+genéricas de CSI/reintegro aplicables a todas las cadenas Cencosud, guardadas como
+2 comercios ficticios (7 promos en total). Se duplicaron las 7 promos en Jumbo, Disco y
+Vea (21 promos nuevas) y se borraron los 2 comercios ficticios. En `app/api/admin/scrape/route.ts`
+se agregó `CENCOSUD_GENERIC_NAMES` para que futuros scrapeos repartan estas promos entre
+Jumbo/Disco/Vea automáticamente (mismo mecanismo que el punto 3).
 
-### 5. Personal Pay promos con "2%" incorrecto
-Scraper interpreta promos "2x1" como "2%" porque detecta número seguido de símbolo.
-Agregar lógica para detectar y descartar o etiquetar correctamente promos tipo "Nx1".
+### 5. Personal Pay promos con "2%" incorrecto — RESUELTO
+La API devuelve `discounts: "2x1"`, pero la regex `^(\d+)[xX](\d+)$` no toleraba espacios
+y en 23 casos cayó al fallback `parseInt("2x1")` = 2, guardando "2% de descuento" en vez de
+"2x1". Se relajó la regex en `lib/scrapers/personalpay.ts` (`(\d+)\s*[xX]\s*(\d+)` + `.trim()`)
+y se borraron las 23 promos corruptas de la DB — el próximo "Ejecutar todos" las recrea
+correctamente como "2x1".
 
 ### 6. Logos faltantes o incorrectos
 Ver `logos-report.csv` en la raíz. 700 sin logo, 522 con favicon Google (algunos incorrectos).

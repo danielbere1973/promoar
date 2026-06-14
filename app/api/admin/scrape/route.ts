@@ -17,6 +17,34 @@ function toSlug(s: string): string {
     .replace(/^-|-$/g, '');
 }
 
+// Nombres genéricos de "Cencosud" que los scrapers traen como storeName pero
+// no son comercios reales — se reparten entre Jumbo/Disco/Vea (ver CLAUDE.md punto 4).
+const CENCOSUD_GENERIC_NAMES = new Set([
+  'cencosud productos seleccionados',
+  'especial cencosud',
+]);
+
+// Busca un comercio existente por nombre exacto, substring (con word boundary,
+// m\u00ednimo 4 chars) o alias conocido (CommerceAlias).
+function matchCommerceByName(name: string, commerces: any[], aliases: any[]): any | undefined {
+  const norm = normalizeStr(name);
+  let match = commerces.find((c: any) => normalizeStr(c.name) === norm);
+  if (!match) {
+    match = commerces.find((c: any) => {
+      const normC = normalizeStr(c.name);
+      // Requiere m\u00ednimo 4 chars y word boundary para evitar falsos positivos ("vea" en "alvear")
+      if (normC.length >= 4 && norm.includes(normC) && new RegExp(`\\b${normC}\\b`).test(norm)) return true;
+      if (norm.length >= 4 && normC.includes(norm) && new RegExp(`\\b${norm}\\b`).test(normC)) return true;
+      return false;
+    });
+  }
+  if (!match) {
+    const aliasMatch = aliases.find((a: any) => normalizeStr(a.alias) === norm);
+    if (aliasMatch) match = commerces.find((c: any) => c.id === aliasMatch.commerceId);
+  }
+  return match;
+}
+
 // Evita guardar placeholders de lazy-loading (data: URIs gigantes) u otras URLs
 // inv\u00e1lidas como logoUrl de un comercio.
 function isUsableLogoUrl(url?: string | null): url is string {
@@ -169,23 +197,37 @@ export async function POST(req: NextRequest) {
       let comMatch = commerces.find((c: any) =>
         normalizeStr(c.name) === normalizeStr(p.storeName ?? '')
       );
-      if (!comMatch && p.storeName) {
-        const normStore = normalizeStr(p.storeName);
-        comMatch = commerces.find((c: any) => {
-          const normC = normalizeStr(c.name);
-          // Requiere mínimo 4 chars y word boundary para evitar falsos positivos ("vea" en "alvear")
-          if (normC.length >= 4 && normStore.includes(normC) && new RegExp(`\\b${normC}\\b`).test(normStore)) return true;
-          if (normStore.length >= 4 && normC.includes(normStore) && new RegExp(`\\b${normStore}\\b`).test(normC)) return true;
-        });
+
+      // ── Promos genéricas "Cencosud" (no son comercios reales) ──────────────
+      // Macro/AmEx etc. traen storeName "CENCOSUD PRODUCTOS SELECCIONADOS" o
+      // "Especial Cencosud" para promos que aplican a todas las cadenas del
+      // grupo → repartir entre Jumbo/Disco/Vea en vez de crear un comercio ficticio.
+      let multiComMatches: any[] | undefined;
+      if (!comMatch && p.storeName && CENCOSUD_GENERIC_NAMES.has(normalizeStr(p.storeName))) {
+        const cencosudTargets = ['jumbo', 'disco', 'vea']
+          .map(name => commerces.find((c: any) => normalizeStr(c.name) === name))
+          .filter(Boolean) as any[];
+        if (cencosudTargets.length === 3) {
+          multiComMatches = cencosudTargets;
+        }
       }
 
-      // ── Alias conocido (normalización manual de nombres duplicados) ────────
-      if (!comMatch && p.storeName) {
-        const normStore = normalizeStr(p.storeName);
-        const aliasMatch = commerceAliases.find((a: any) => normalizeStr(a.alias) === normStore);
-        if (aliasMatch) {
-          comMatch = commerces.find((c: any) => c.id === aliasMatch.commerceId);
+      // ── Detección de promos multi-comercio ("Disco y Vea", "X & Y") ────────
+      // Si el nombre completo no matcheó un comercio exacto y ambas partes
+      // separadas por "y"/"&" matchean comercios reales distintos, duplicar
+      // la promo en cada uno en vez de crear/usar un comercio combinado ficticio.
+      if (!comMatch && !multiComMatches && p.storeName && /\s(y|&)\s/i.test(p.storeName)) {
+        const parts = p.storeName.split(/\s+(?:y|&)\s+/i).map((s: string) => s.trim()).filter(Boolean);
+        if (parts.length === 2) {
+          const matches = parts.map((part: string) => matchCommerceByName(part, commerces, commerceAliases));
+          if (matches[0] && matches[1] && matches[0].id !== matches[1].id) {
+            multiComMatches = matches;
+          }
         }
+      }
+
+      if (!comMatch && !multiComMatches && p.storeName) {
+        comMatch = matchCommerceByName(p.storeName, commerces, commerceAliases);
       }
 
       if (comMatch && isBrokenLogo(comMatch.logoUrl) && isUsableLogoUrl(p.storeLogoUrl)) {
@@ -198,7 +240,7 @@ export async function POST(req: NextRequest) {
         if (idx !== -1) commerces[idx] = comMatch;
       }
 
-      if (!comMatch && p.storeName) {
+      if (!comMatch && !multiComMatches && p.storeName) {
         const slug = toSlug(p.storeName);
         comMatch = await prisma.commerce.upsert({
           where: { slug },
@@ -215,10 +257,13 @@ export async function POST(req: NextRequest) {
         });
         commerces = [...commerces, comMatch];
       }
-      if (!comMatch) {
+
+      const commerceTargets: any[] = multiComMatches ?? (comMatch ? [comMatch] : []);
+      if (commerceTargets.length === 0) {
         skippedNoCommerce++;
         continue;
       }
+      comMatch = commerceTargets[0];
 
       // ── Sucursales (ej. BBVA trae canalesVenta.sucursales por promo) ───────
       if (p.branches && p.branches.length > 0) {
@@ -408,41 +453,42 @@ export async function POST(req: NextRequest) {
       const firstDiscount = uniqueDiscounts[0]
       const firstBank = resolvedBankIds[0] ? banks.find(b => b.id === resolvedBankIds[0])?.name : null
       const firstWallet = resolvedWalletIds[0] ? wallets.find(w => w.id === resolvedWalletIds[0])?.name : null
-      const baseSlug = generatePromoSlug({
-        storeName: p.storeName || comMatch.name,
-        discountValue: firstDiscount?.discountValue ?? 0,
-        discountType: firstDiscount?.discountType ?? 'PERCENTAGE_DESCUENTO',
-        bankName: firstBank,
-        walletName: firstWallet,
-        validDays: p.validDays,
-        title: p.title,
-      })
 
       const salesChannel = p.salesChannel
         ?? detectSalesChannel(`${p.title} ${p.description} ${p.sourceText ?? ''}`)
 
-      const promoData = {
-        title: p.title,
-        description: p.description || '',
-        stackable: p.stackable ?? false,
-        validFrom: p.validFrom ? new Date(p.validFrom) : new Date(),
-        validUntil: p.validUntil ? new Date(p.validUntil) : endOfMonth,
-        validDays: p.validDays ?? 127,
-        specificDates: p.specificDates ? JSON.stringify(p.specificDates) : null,
-        categoryId: catMatch.id,
-        commerceId: comMatch.id,
-        status: 'ACTIVE' as const,
-        sourceUrl: p.sourceUrl ?? null,
-        sourceText: p.sourceText ?? null,
-        salesChannel: salesChannel ?? null,
-        commerceNote: p.note ?? null,
-      };
+      // ── Generar slug + promoData por cada comercio destino ────────────────
+      // (normalmente 1, pero 2 si es una promo multi-comercio "Disco y Vea")
+      for (const target of commerceTargets) {
+        const baseSlug = generatePromoSlug({
+          storeName: multiComMatches ? target.name : (p.storeName || target.name),
+          discountValue: firstDiscount?.discountValue ?? 0,
+          discountType: firstDiscount?.discountType ?? 'PERCENTAGE_DESCUENTO',
+          bankName: firstBank,
+          walletName: firstWallet,
+          validDays: p.validDays,
+          title: p.title,
+        })
 
-      // ── Upsert de la promo ────────────────────────────────────────────────
+        const promoData = {
+          title: p.title,
+          description: p.description || '',
+          stackable: p.stackable ?? false,
+          validFrom: p.validFrom ? new Date(p.validFrom) : new Date(),
+          validUntil: p.validUntil ? new Date(p.validUntil) : endOfMonth,
+          validDays: p.validDays ?? 127,
+          specificDates: p.specificDates ? JSON.stringify(p.specificDates) : null,
+          categoryId: catMatch.id,
+          commerceId: target.id,
+          status: 'ACTIVE' as const,
+          sourceUrl: p.sourceUrl ?? null,
+          sourceText: p.sourceText ?? null,
+          salesChannel: salesChannel ?? null,
+          commerceNote: p.note ?? null,
+        };
 
-
-
-      resolvedItems.push({ promoData, reqData, baseSlug, sourceUrl: p.sourceUrl, title: p.title, commerceId: comMatch.id });
+        resolvedItems.push({ promoData, reqData, baseSlug, sourceUrl: p.sourceUrl, title: p.title, commerceId: target.id });
+      }
     }
 
     // ── FASE 2: Pre-cargar promos existentes ──────────────────────────────────
