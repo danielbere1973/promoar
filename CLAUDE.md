@@ -243,7 +243,7 @@ promo matcheada a su perfil, mostrar notificación/banner "soft" (sin background
 Push real en background sería fase 2, una vez que `CommerceBranch` tenga cobertura
 suficiente.
 
-### 12. Agrupar promos por comercio en una sola tarjeta expandible
+### 12. Agrupar promos por comercio en una sola tarjeta expandible — PROTOTIPO LISTO, falta integrar
 Hoy un mismo comercio (ej. Coto) puede aparecer varias veces en la grilla porque tiene
 promos de distintos bancos/billeteras/tipos. Idea (estilo Clash): agrupar todas las promos
 de un mismo `commerceId` en una sola tarjeta, mostrando la destacada (mayor descuento, ya
@@ -254,8 +254,13 @@ Dentro de esa tarjeta expandida, dividir en 2 secciones:
 - **Otros días**: el resto, colapsado por defecto con un "ver también" — al expandir, mostrar
   en fila horizontal con scroll ("tipo chorizo") las promos válidas otros días de la semana.
 
-Pendiente de definir: cómo afecta esto a la paginación/límite de la grilla principal
-(¿el límite cuenta comercios agrupados o promos individuales?) — ver punto 11 también
+Ya implementado: `app/components/CommerceGroupCard.tsx` (grid de 2 col para "Hoy" y "Otros
+días", botón "+N promos"/"Ver también") + prototipo `app/promos/grouped-demo/page.tsx`
+(probado con Changomas vía `/api/promos?commerces=Changomas&searchMode=exact&view=week`).
+
+Falta integrarlo en `app/promos/page.tsx`: reemplazar las `PromoCard` individuales de cada
+`Section` por `CommerceGroupCard` agrupando por `commerceId`, y definir el límite/paginación
+de cada sección (¿cuenta comercios agrupados o promos individuales?) — ver punto 11 también
 pendiente, ambos quedan para después del punto 10.
 
 ## Notas Santander scraper
