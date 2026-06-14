@@ -296,8 +296,19 @@ model Commerce {
   promos            Promo[]
   branches          CommerceBranch[]
   products          CommerceProduct[]
+  aliases           CommerceAlias[]
 
   @@map("commerces")
+}
+
+model CommerceAlias {
+  id         String   @id @default(cuid())
+  alias      String   @unique
+  commerceId String
+  commerce   Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@map("commerce_aliases")
 }
 
 // Catálogo de categorías/productos que vende cada comercio (scrapeado de su sitio online).

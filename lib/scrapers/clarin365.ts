@@ -80,7 +80,13 @@ function parseDias(applyDays: string[]): number {
   return mask > 0 ? mask : 127;
 }
 
+function isNxM(value: string): boolean {
+  return /^\s*\d+\s*[xX]\s*\d+\s*$/.test(value || '')
+}
+
 function parseDiscount(value: string): number {
+  // NxM (2x1, 3x2, etc.) no es un porcentaje, se maneja por separado
+  if (isNxM(value)) return 0
   const m = (value || '').match(/(\d+)/);
   return m ? parseInt(m[1]) : 0;
 }
@@ -121,12 +127,15 @@ export const Clarin365Scraper: Scraper = {
         const sourceUrl = `${SITE_BASE}/beneficio/${item.companySlug}`;
 
         for (const b of benefits) {
+          const nxm = isNxM(b.value);
           const discountValue = parseDiscount(b.value);
-          if (!discountValue) continue;
+          if (!discountValue && !nxm) continue;
 
           const isPlus = b.type === '365-plus';
 
-          const title = `${discountValue}% descuento – ${item.companyName}`;
+          const title = nxm
+            ? `${b.value} – ${item.companyName}`
+            : `${discountValue}% descuento – ${item.companyName}`;
 
           allPromos.push({
             storeName: item.companyName,
@@ -135,8 +144,8 @@ export const Clarin365Scraper: Scraper = {
             description: item.companyDescription || item.benefitDescriptions?.split(',')[0] || title,
             sourceText: `${item.benefitTitles || ''} ${item.benefitDescriptions || ''}`.trim(),
             sourceUrl,
-            discount: String(discountValue),
-            discountType: 'PERCENTAGE_DESCUENTO',
+            discount: nxm ? b.value : String(discountValue),
+            discountType: nxm ? 'NXM' : 'PERCENTAGE_DESCUENTO',
             validDays,
             paymentChannel: 'TARJETA_FISICA',
             walletNames: [isPlus ? WALLET_PLUS : WALLET_CLASSIC],

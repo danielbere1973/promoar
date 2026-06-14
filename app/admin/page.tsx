@@ -5,7 +5,8 @@ import ClassifyButton from './ClassifyButton'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
-  Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock
+  Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
+  GitMerge, Link2
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -377,7 +378,13 @@ export default function AdminPage() {
     codigoModo?: string;
     icon?: string;
     color?: string;
+    commerceId?: string;
   } | null>(null)
+
+  const [commerceAliases, setCommerceAliases] = useState<any[] | null>(null)
+  const [mergingCommerce, setMergingCommerce] = useState<{ id: string; name: string } | null>(null)
+  const [mergeTargetId, setMergeTargetId] = useState('')
+  const [merging, setMerging] = useState(false)
 
   const fetchEntities = useCallback(async () => {
     try {
@@ -420,6 +427,22 @@ export default function AdminPage() {
     fetchPromos()
     fetchUsers()
   }, [fetchEntities, fetchPromos, fetchUsers])
+
+  const fetchCommerceAliases = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/commerce-aliases')
+      if (res.ok) {
+        const data = await res.json()
+        setCommerceAliases(data.aliases)
+      }
+    } catch (e) {
+      console.error('Error fetching commerce aliases', e)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'entities' && subTab === 'aliases') fetchCommerceAliases()
+  }, [tab, subTab, fetchCommerceAliases])
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm(f => ({ ...f, [k]: v }))
@@ -683,11 +706,15 @@ export default function AdminPage() {
       if (editingEntity.type === 'accountType') url = '/api/admin/account-types'
       if (editingEntity.type === 'segment') url = '/api/admin/segments'
       if (editingEntity.type === 'cardSegment') url = '/api/admin/card-segments'
+      if (editingEntity.type === 'commerceAlias') url = '/api/admin/commerce-aliases'
 
       // Para categorías, mapear el campo code → order
-      const payload = editingEntity.type === 'category'
+      let payload: any = editingEntity.type === 'category'
         ? { ...editingEntity, order: Number(editingEntity.code ?? 99) }
         : editingEntity
+      if (editingEntity.type === 'commerceAlias') {
+        payload = { alias: editingEntity.name, commerceId: editingEntity.commerceId }
+      }
 
       const res = await fetch(url, {
         method,
@@ -697,7 +724,8 @@ export default function AdminPage() {
       if (res.ok) {
         setSuccess('✅ Entidad guardada')
         setEditingEntity(null)
-        fetchEntities()
+        if (editingEntity.type === 'commerceAlias') fetchCommerceAliases()
+        else fetchEntities()
       } else {
         const d = await res.json()
         setError(d.error || 'Error al guardar')
@@ -718,11 +746,13 @@ export default function AdminPage() {
       if (type === 'accountType') url = `/api/admin/account-types?id=${id}`
       if (type === 'segment') url = `/api/admin/segments?id=${id}`
       if (type === 'cardSegment') url = `/api/admin/card-segments?id=${id}`
+      if (type === 'commerceAlias') url = `/api/admin/commerce-aliases?id=${id}`
 
       const res = await fetch(url, { method: 'DELETE' })
       if (res.ok) {
         setSuccess('✅ Eliminado correctamente')
-        fetchEntities()
+        if (type === 'commerceAlias') fetchCommerceAliases()
+        else fetchEntities()
       } else {
         setError('No se pudo eliminar')
       }
@@ -730,6 +760,31 @@ export default function AdminPage() {
       setError('Error al eliminar')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleMergeCommerce() {
+    if (!mergingCommerce || !mergeTargetId) return
+    setMerging(true)
+    try {
+      const res = await fetch('/api/admin/commerce-merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: mergingCommerce.id, targetId: mergeTargetId })
+      })
+      const d = await res.json()
+      if (res.ok) {
+        setSuccess(`✅ Fusionado: ${d.promosMoved} promos, ${d.branchesMoved} sucursales movidas`)
+        setMergingCommerce(null)
+        setMergeTargetId('')
+        fetchEntities()
+      } else {
+        setError(d.error || 'Error al fusionar')
+      }
+    } catch {
+      setError('Error al fusionar comercios')
+    } finally {
+      setMerging(false)
     }
   }
 
@@ -1286,6 +1341,7 @@ export default function AdminPage() {
               <EntitySubTab active={subTab === 'currencies'} icon={DollarSign} onClick={() => setSubTab('currencies')}>Monedas</EntitySubTab>
               <EntitySubTab active={subTab === 'accountTypes'} icon={WalletIcon} onClick={() => setSubTab('accountTypes')}>Tipos de Cuenta</EntitySubTab>
               <EntitySubTab active={subTab === 'commerces'} icon={Tag} onClick={() => setSubTab('commerces')}>Comercios</EntitySubTab>
+              <EntitySubTab active={subTab === 'aliases'} icon={Link2} onClick={() => setSubTab('aliases')}>Alias</EntitySubTab>
             </div>
 
             {/* Content Area */}
@@ -1301,6 +1357,7 @@ export default function AdminPage() {
                   {subTab === 'currencies' && 'Monedas del Sistema'}
                   {subTab === 'accountTypes' && 'Tipos de Cuenta Admitidos'}
                   {subTab === 'commerces' && 'Base de Comercios'}
+                  {subTab === 'aliases' && 'Alias de Comercios (normalización)'}
                 </h2>
                 <button
                   onClick={() => {
@@ -1314,8 +1371,9 @@ export default function AdminPage() {
                       currencies: 'currency',
                       accountTypes: 'accountType',
                       commerces: 'commerce',
+                      aliases: 'commerceAlias',
                     }
-                    setEditingEntity({ type: typeMap[subTab] || subTab, name: '', logoUrl: '', cardNetworkIds: [], cardNetworkId: '', cardType: '' })
+                    setEditingEntity({ type: typeMap[subTab] || subTab, name: '', logoUrl: '', cardNetworkIds: [], cardNetworkId: '', cardType: '', commerceId: '' })
                   }}
                   className="flex items-center gap-1.5 text-[10px] font-bold bg-slate-900 text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-all"
                 >
@@ -1425,7 +1483,14 @@ export default function AdminPage() {
                     <EntityRow key={c.id} name={c.name} img={c.logoUrl}
                       badge={c.activePromos > 0 ? `${c.activePromos} promos` : undefined}
                       onEdit={() => setEditingEntity({ type: 'commerce', id: c.id, name: c.name, logoUrl: c.logoUrl })}
-                      onDelete={() => handleDeleteEntity('commerce', c.id)} />
+                      onDelete={() => handleDeleteEntity('commerce', c.id)}
+                      onMerge={() => { setMergingCommerce({ id: c.id, name: c.name }); setMergeTargetId('') }} />
+                  )))}
+
+                  {subTab === 'aliases' && (!commerceAliases ? <Loader message="Cargando alias..." /> : commerceAliases.length === 0 ? <EmptyState msg="No hay alias configurados" /> : commerceAliases.map((a: any) => (
+                    <EntityRow key={a.id} name={`${a.alias} → ${a.commerce?.name ?? '???'}`} img={a.commerce?.logoUrl}
+                      onDelete={() => handleDeleteEntity('commerceAlias', a.id)}
+                      hideEdit />
                   )))}
                 </div>
               </div>
@@ -1686,6 +1751,19 @@ export default function AdminPage() {
         <LogoSuggestionsModal
           onClose={() => setShowLogoSuggestions(false)}
           onSaved={() => { setShowLogoSuggestions(false); fetchEntities() }}
+        />
+      )}
+
+      {/* Modal de fusión de comercios */}
+      {mergingCommerce && (
+        <MergeCommerceModal
+          source={mergingCommerce}
+          commerces={entities?.commerces ?? []}
+          targetId={mergeTargetId}
+          setTargetId={setMergeTargetId}
+          onConfirm={handleMergeCommerce}
+          onCancel={() => { setMergingCommerce(null); setMergeTargetId('') }}
+          merging={merging}
         />
       )}
     </div>
@@ -2415,7 +2493,7 @@ function Section({ title, icon: Icon, children }: any) {
   )
 }
 
-function EntityRow({ name, img, onEdit, onDelete, badge }: any) {
+function EntityRow({ name, img, onEdit, onDelete, onMerge, badge, hideEdit }: any) {
   return (
     <div className="flex items-center justify-between px-6 py-3.5 group hover:bg-slate-50 transition-colors">
       <div className="flex items-center gap-3">
@@ -2432,7 +2510,8 @@ function EntityRow({ name, img, onEdit, onDelete, badge }: any) {
         </div>
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onEdit} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"><Pencil size={15} /></button>
+        {onMerge && <button onClick={onMerge} className="p-2 text-slate-300 hover:text-amber-500 transition-colors" title="Fusionar con otro comercio"><GitMerge size={15} /></button>}
+        {!hideEdit && <button onClick={onEdit} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"><Pencil size={15} /></button>}
         <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
       </div>
     </div>
@@ -2512,14 +2591,15 @@ function EntityModal({ entity, setEntity, onSave, onCancel, saving, allEntities 
                         entity.type === 'segment' ? 'Segmento Bancario' :
                           entity.type === 'accountType' ? 'Tipo de Cuenta' :
                             entity.type === 'wallet' ? 'Billetera' :
-                              entity.type
+                              entity.type === 'commerceAlias' ? 'Alias de Comercio' :
+                                entity.type
             }
           </h3>
           <button onClick={onCancel} className="p-2 text-slate-300 hover:text-slate-600 transition-colors"><X size={20} /></button>
         </div>
         <div className="p-8 space-y-4 overflow-y-auto flex-1">
-          {/* Para cardSegment el nombre se genera automáticamente */}
-          {entity.type !== 'cardSegment' && (
+          {/* Para cardSegment y commerceAlias el nombre se maneja con campos propios */}
+          {entity.type !== 'cardSegment' && entity.type !== 'commerceAlias' && (
             <Field label="Nombre / Etiqueta">
               <Input value={entity.name} onChange={e => setEntity({ ...entity, name: e.target.value })} autoFocus />
             </Field>
@@ -2676,11 +2756,61 @@ function EntityModal({ entity, setEntity, onSave, onCancel, saving, allEntities 
               </>
             )
           })()}
+
+          {entity.type === 'commerceAlias' && (
+            <>
+              <Field label="Alias (nombre tal cual lo trae el scraper)">
+                <Input value={entity.name} onChange={e => setEntity({ ...entity, name: e.target.value })} placeholder="Ej: HAVANNA GOOGLE PAY APPLE PAY" autoFocus />
+              </Field>
+              <Field label="Comercio canónico">
+                <Select value={entity.commerceId || ''} onChange={e => setEntity({ ...entity, commerceId: e.target.value })}>
+                  <option value="">Selección...</option>
+                  {allEntities?.commerces.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              </Field>
+            </>
+          )}
         </div>
         <div className="px-8 py-6 bg-slate-50 flex gap-3">
           <button onClick={onCancel} className="flex-1 py-3 text-xs font-bold text-slate-400 bg-white border border-slate-200 rounded-2xl">Cancelar</button>
-          <button onClick={onSave} disabled={saving || !entity.name} className="flex-1 py-3 bg-slate-900 text-white text-xs font-bold rounded-2xl shadow-xl shadow-slate-200 disabled:opacity-50">
+          <button
+            onClick={onSave}
+            disabled={saving || !entity.name || (entity.type === 'commerceAlias' && !entity.commerceId)}
+            className="flex-1 py-3 bg-slate-900 text-white text-xs font-bold rounded-2xl shadow-xl shadow-slate-200 disabled:opacity-50"
+          >
             {saving ? 'Guardando...' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MergeCommerceModal({ source, commerces, targetId, setTargetId, onConfirm, onCancel, merging }: any) {
+  const options = commerces.filter((c: any) => c.id !== source.id)
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+      <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-bold text-slate-900">Fusionar comercio</h3>
+          <button onClick={onCancel} className="p-2 text-slate-300 hover:text-slate-600 transition-colors"><X size={20} /></button>
+        </div>
+        <div className="p-8 space-y-4 overflow-y-auto flex-1">
+          <p className="text-xs text-slate-500">
+            Se moverán todas las promos, sucursales y catálogo de productos de <span className="font-bold text-slate-800">{source.name}</span> al comercio elegido,
+            se creará un alias <span className="font-bold text-slate-800">"{source.name}"</span> apuntando al destino, y se eliminará <span className="font-bold text-slate-800">{source.name}</span>.
+          </p>
+          <Field label="Fusionar con (comercio canónico destino)">
+            <Select value={targetId} onChange={e => setTargetId(e.target.value)}>
+              <option value="">Selección...</option>
+              {options.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </Field>
+        </div>
+        <div className="px-8 py-6 bg-slate-50 flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-3 text-xs font-bold text-slate-400 bg-white border border-slate-200 rounded-2xl">Cancelar</button>
+          <button onClick={onConfirm} disabled={merging || !targetId} className="flex-1 py-3 bg-amber-500 text-white text-xs font-bold rounded-2xl shadow-xl shadow-amber-100 disabled:opacity-50">
+            {merging ? 'Fusionando...' : 'Fusionar'}
           </button>
         </div>
       </div>

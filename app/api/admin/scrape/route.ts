@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
     const banks = await prisma.bank.findMany({ include: { cardNetworks: { select: { id: true } }, segments: true } });
     const wallets = await prisma.wallet.findMany();
     let commerces = await (prisma.commerce as any).findMany({ select: { id: true, name: true, slug: true, logoUrl: true, active: true, website: true, defaultCategoryId: true } });
+    const commerceAliases = await (prisma.commerceAlias as any).findMany({ select: { alias: true, commerceId: true } });
     const cardNetworks = await prisma.cardNetwork.findMany();
     const cardSegments = await prisma.cardSegment.findMany({ include: { cardNetwork: true } });
 
@@ -138,16 +139,19 @@ export async function POST(req: NextRequest) {
       if (!hasDiscount) continue;
 
       // ── Categoría ─────────────────────────────────────────────────────────
-      // 1. Categoría del scraper
-      let catMatch = categories.find(c =>
-        normalizeStr(c.name) === normalizeStr(p.categoria ?? '')
-      );
-      // 2. defaultCategoryId del comercio (aprendizaje)
-      if (!catMatch && p.storeName) {
+      // 1. defaultCategoryId del comercio (curado manualmente) — pisa lo que diga el scraper
+      let catMatch: typeof categories[number] | undefined;
+      if (p.storeName) {
         const knownCom = (commerces as any[]).find((c: any) => normalizeStr(c.name) === normalizeStr(p.storeName ?? ''));
         if (knownCom?.defaultCategoryId) {
           catMatch = categories.find(c => c.id === knownCom.defaultCategoryId) ?? undefined;
         }
+      }
+      // 2. Categoría del scraper
+      if (!catMatch) {
+        catMatch = categories.find(c =>
+          normalizeStr(c.name) === normalizeStr(p.categoria ?? '')
+        );
       }
       // 3. detectCategoria como fallback
       if (!catMatch) {
@@ -173,6 +177,15 @@ export async function POST(req: NextRequest) {
           if (normC.length >= 4 && normStore.includes(normC) && new RegExp(`\\b${normC}\\b`).test(normStore)) return true;
           if (normStore.length >= 4 && normC.includes(normStore) && new RegExp(`\\b${normStore}\\b`).test(normC)) return true;
         });
+      }
+
+      // ── Alias conocido (normalización manual de nombres duplicados) ────────
+      if (!comMatch && p.storeName) {
+        const normStore = normalizeStr(p.storeName);
+        const aliasMatch = commerceAliases.find((a: any) => normalizeStr(a.alias) === normStore);
+        if (aliasMatch) {
+          comMatch = commerces.find((c: any) => c.id === aliasMatch.commerceId);
+        }
       }
 
       if (comMatch && isBrokenLogo(comMatch.logoUrl) && isUsableLogoUrl(p.storeLogoUrl)) {

@@ -4,6 +4,24 @@ export const dynamic = 'force-dynamic'
 
 import { getServerSession } from 'next-auth/next'
 
+// Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
+// contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
+// y alias comunes de CABA / Buenos Aires.
+function normalizeProvince(s: string): string {
+  const n = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  if (['caba', 'capital federal', 'ciudad de buenos aires', 'ciudad autonoma de buenos aires', 'ciudad autonoma de bs. as.', 'ciudad autonoma de bs as'].includes(n)) {
+    return 'caba'
+  }
+  if (['buenos aires', 'bs as', 'bs. as.', 'pba', 'provincia de buenos aires', 'gba', 'gran buenos aires'].includes(n)) {
+    return 'buenos aires'
+  }
+  return n
+}
+
+// Por encima de esta cantidad de provincias distintas con sucursales, se considera
+// que el comercio tiene cobertura nacional y no se filtra por ubicación.
+const NATIONAL_COVERAGE_THRESHOLD = 4
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -151,6 +169,7 @@ export async function GET(req: NextRequest) {
             slug: true,
             logoUrl: true,
             instagramUrl: true,
+            branches: { select: { province: true }, where: { province: { not: null } } },
           },
         },
         requirements: {
@@ -195,6 +214,28 @@ export async function GET(req: NextRequest) {
       }
     })
 
+
+    // ── Filtro geográfico: comercios regionales sin sucursales en la provincia del usuario ──
+    // Solo aplica si conocemos la provincia del usuario (perfil o ?province=) y el comercio
+    // tiene sucursales con provincia cargada (CommerceBranch.province, ver punto 10 CLAUDE.md).
+    // Si no hay datos de sucursales, o si el comercio tiene presencia en muchas provincias
+    // (cadena nacional), no se filtra.
+    if (userProvince) {
+      const userProvinceNorm = normalizeProvince(userProvince)
+      filtered = filtered.filter(promo => {
+        const branches = (promo as any).commerce?.branches as { province: string | null }[] | undefined
+        if (!branches?.length) return true
+
+        const provinces = new Set(branches.map(b => normalizeProvince(b.province as string)))
+        if (provinces.size >= NATIONAL_COVERAGE_THRESHOLD) return true
+
+        return provinces.has(userProvinceNorm)
+      })
+    }
+    // Ya no se necesita `branches` en la respuesta
+    for (const p of filtered) {
+      if ((p as any).commerce) delete (p as any).commerce.branches
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // FILTRADO POR PERFIL FINANCIERO - CON BYPASS PARA ADMIN

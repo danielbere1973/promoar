@@ -23,7 +23,7 @@ App Next.js 14 (App Router) + Prisma + PostgreSQL (Neon) que agrega y muestra pr
 - `lib/scrapers/` — Scrapers individuales por entidad
 
 ## Categorías (19 + Sin Categoría)
-Supermercados, Combustible, Gastronomía, Farmacias, Indumentaria, Tecnología, Mascotas, Transporte, Heladerías, Hogar, Entretenimiento, Salud y Belleza, Deportes, Jugueterías, Librerías, Viajes y Turismo, Shoppings, Automotores, Otros, Sin Categoría
+Supermercados, Combustible, Gastronomía, Farmacias, Indumentaria, Tecnología, Petshops, Transporte, Heladerías, Hogar, Entretenimiento, Salud y Belleza, Deportes, Jugueterías, Librerías, Viajes y Turismo, Shoppings, Automotores, Otros, Sin Categoría
 
 ## Estado de scrapers — todos completos
 Coto, Diarco, Jumbo, Disco, Vea, Changomas, Carrefour, MODO, MercadoPago, CuentaDNI, VISA, AmEx, Naranja X, Cabal/Credicoop, Galicia, BBVA, Santander, Macro, BNA, Ciudad, Supervielle, Patagonia, ICBC
@@ -130,20 +130,21 @@ adheridas (nombre + dirección, ej. `<b>ALBA MIA </b>: ALVARADO  445, ORAN`). No
 respuesta JSON de `apipublic.macro.com.ar` (campo `restricted-stores` vacío). No trae
 lat/lng — requeriría geocoding (ej. Nominatim/OSM, rate-limit 1 req/seg).
 
-**Fuente Banco Nación (Club LaNación / Semana Nación)**: el usuario encontró que la API
-trae directamente `locationData` (province, city, address, postalCode) y
-`location.coordinates` ([lng, lat]) por comercio — esto sí tiene coordenadas listas, sin
-necesidad de geocoding. Ejemplo de un item:
-```json
-{
-  "merchant": "YPF SUPER SERVICIOS",
-  "locationData": { "province": "CIUDAD AUTONOMA DE BUENOS AIRES", "city": "CABA", "address": "MAIPU 471", "postalCode": "1006" },
-  "location": { "coordinates": [-58.37661369999999, -34.6026469] }
-}
-```
-Investigar qué endpoint de `backend.activx.production.digiventures.la` devuelve esto
-(no es el mismo que usa `lib/scrapers/bna.ts` actualmente para `/promotions` y `/brands/:id`
-— puede ser un endpoint de "merchants"/"locations" separado).
+**Fuente Banco Nación (Club LaNación / Semana Nación) — RESUELTO**: el buscador de
+sucursales de `semananacion.com.ar` consume:
+`GET https://backend.activx.production.digiventures.la/api/points/?bank=bna-semananacion&checkValidity=true&status=active&search={merchant}&select=merchant+locationData.province+locationData.city+locationData.address+location.coordinates+campaign&lat={lat}&lng={lng}&distance=10000000`
+Devuelve siempre los **5 puntos más cercanos** al `lat`/`lng` dado (no pagina con
+`skip`/`limit`/`page`, esos params se ignoran), con `locationData` (province, city, address)
+y `location.coordinates` ([lng, lat]) listos — sin geocoding. Sin WAF, funciona con `fetch`
+directo (sin sesión de navegador). `search` es texto libre y puede traer falsos positivos
+(ej. buscar "modo" matchea "Comodoro") — hay que filtrar resultados cuyo `merchant` no
+coincida razonablemente con el nombre del comercio.
+
+Implementado en `scripts/load-bna-branches.ts`: para cada comercio con promo BNA activa,
+limpia el nombre (saca "con MODO", "www.", ".com.ar"), consulta desde 10 puntos
+distribuidos por el país (CABA, Córdoba, Rosario, Mendoza, Salta, Bahía Blanca, Posadas,
+Comodoro Rivadavia, Mar del Plata, Resistencia) para cubrir regiones, dedupea por
+distancia y filtra por coincidencia de nombre.
 
 **Fuente Galicia — RESUELTO**: el botón "Conocer más" (junto al ícono de ubicación) en el
 detalle de una promo con `tiendaFisica: true` dispara:
@@ -216,6 +217,36 @@ solo ciudad/partido), pero no es bloqueante.
 Para cada comercio sin `branches` cargadas, usar un código de promo activo cualquiera para
 obtener el detalle una vez. No repetir en cada corrida del scraper — script separado o con
 flag, no parte de "Ejecutar todos".
+
+### 11. Notificaciones push de proximidad (post punto 10)
+Idea: avisar al usuario cuando está físicamente dentro/cerca de un comercio que tiene una
+promo aplicable a su perfil (ej. "entrás a Coto y la app te avisa que tenés 20% con tu
+tarjeta"). Depende de `CommerceBranch.lat/lng` (punto 10) como prerequisito.
+
+Requiere convertir la app en PWA con Service Worker + Web Push API, y geofencing
+(`watchPosition` comparando contra `CommerceBranch` cercanos, ej. radio 100m). Limitación
+importante: en iOS Safari el geofencing en background es muy limitado (solo notifica con
+la app abierta/recién abierta) — para iOS real haría falta app nativa.
+
+Arrancar con versión simple: al abrir la app, si el usuario está cerca de un comercio con
+promo matcheada a su perfil, mostrar notificación/banner "soft" (sin background tracking).
+Push real en background sería fase 2, una vez que `CommerceBranch` tenga cobertura
+suficiente.
+
+### 12. Agrupar promos por comercio en una sola tarjeta expandible
+Hoy un mismo comercio (ej. Coto) puede aparecer varias veces en la grilla porque tiene
+promos de distintos bancos/billeteras/tipos. Idea (estilo Clash): agrupar todas las promos
+de un mismo `commerceId` en una sola tarjeta, mostrando la destacada (mayor descuento, ya
+es la primera por el ordenamiento actual) + chip "+N promos" que expande el resto inline.
+
+Dentro de esa tarjeta expandida, dividir en 2 secciones:
+- **Hoy**: promos válidas el día actual (según `validDays`), mostradas primero/expandidas.
+- **Otros días**: el resto, colapsado por defecto con un "ver también" — al expandir, mostrar
+  en fila horizontal con scroll ("tipo chorizo") las promos válidas otros días de la semana.
+
+Pendiente de definir: cómo afecta esto a la paginación/límite de la grilla principal
+(¿el límite cuenta comercios agrupados o promos individuales?) — ver punto 11 también
+pendiente, ambos quedan para después del punto 10.
 
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
