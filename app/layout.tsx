@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { getServerSession } from 'next-auth/next'
 import Providers from './providers'
 import PostHogProvider from './components/PostHogProvider'
 import SupportChat from './components/SupportChat'
@@ -45,11 +46,12 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const session = await getServerSession()
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
@@ -69,7 +71,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <Providers>
+        <Providers session={session}>
           <PostHogProvider>
             {children}
             <SupportChat />
