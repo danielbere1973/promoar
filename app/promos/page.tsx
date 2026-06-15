@@ -1092,7 +1092,7 @@ function HomeContent() {
                     return (
                       <button key={(b as any).id} onClick={() => setActiveFilters(prev => ({ ...prev, banks: isActive ? prev.banks.filter(id => id !== (b as any).id) : [...prev.banks, (b as any).id] }))}
                         className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
-                        {b.logoUrl && <img src={b.logoUrl} className="w-5 h-5 object-contain rounded shrink-0" />}
+                        {b.logoUrl && <img src={b.logoUrl} alt="" className="w-5 h-5 object-contain rounded shrink-0" />}
                         <span className="truncate">{b.name}</span>
                       </button>
                     )
@@ -1114,7 +1114,7 @@ function HomeContent() {
                     return (
                       <button key={(w as any).id} onClick={() => setActiveFilters(prev => ({ ...prev, wallets: isActive ? prev.wallets.filter(id => id !== (w as any).id) : [...prev.wallets, (w as any).id] }))}
                         className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${isActive ? 'bg-[#EEF2F8] text-[#1E3A5F] dark:bg-[#1E3A5F]/20 dark:text-blue-300' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
-                        {w.logoUrl && <img src={w.logoUrl} className="w-5 h-5 object-contain rounded shrink-0" />}
+                        {w.logoUrl && <img src={w.logoUrl} alt="" className="w-5 h-5 object-contain rounded shrink-0" />}
                         <span className="truncate">{w.name}</span>
                       </button>
                     )
@@ -1697,7 +1697,7 @@ function HomeContent() {
                       isFiltered ? 'bg-white text-[#1E3A5F]' : 'bg-white/10 text-white/80 hover:bg-white/20'
                     }`}>
                     {c.logoUrl
-                      ? <img src={c.logoUrl} className="h-4 w-4 object-contain rounded bg-white/90 p-0.5 shrink-0" />
+                      ? <img src={c.logoUrl} alt="" className="h-4 w-4 object-contain rounded bg-white/90 p-0.5 shrink-0" />
                       : <span className="text-[9px] font-black">{c.name.slice(0,2).toUpperCase()}</span>
                     }
                     <span>{c.name}</span>
