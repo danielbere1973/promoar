@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
+export const revalidate = 3600
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
 
@@ -36,7 +38,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     select: { slug: true, updatedAt: true },
     orderBy: { updatedAt: 'desc' },
-    take: 5000,
   }).catch(() => [])
 
   const promoRoutes: MetadataRoute.Sitemap = promos.map(p => ({
@@ -47,26 +48,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
 
   const [banks, wallets] = await Promise.all([
-    prisma.bank.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }).catch(() => []),
-    prisma.wallet.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }).catch(() => []),
+    prisma.bank.findMany({ where: { active: true }, select: { slug: true } }).catch(() => []),
+    prisma.wallet.findMany({ where: { active: true }, select: { slug: true } }).catch(() => []),
   ])
 
   const bankRoutes: MetadataRoute.Sitemap = [...banks, ...wallets].map(e => ({
     url: `${BASE_URL}/bancos/${e.slug}`,
-    lastModified: e.updatedAt,
+    lastModified: now,
     changeFrequency: 'daily' as const,
     priority: 0.9,
   }))
 
   const commerces = await prisma.commerce.findMany({
-    where: { active: true, instagramUrl: { not: null } },
-    select: { slug: true, updatedAt: true },
+    where: { active: true, promos: { some: { status: 'ACTIVE' } } },
+    select: { slug: true },
     orderBy: { name: 'asc' },
   }).catch(() => [])
 
   const commerceRoutes: MetadataRoute.Sitemap = commerces.map(c => ({
     url: `${BASE_URL}/comercios/${c.slug}`,
-    lastModified: c.updatedAt,
+    lastModified: now,
     changeFrequency: 'weekly' as const,
     priority: 0.8,
   }))

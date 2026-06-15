@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { schemaItemList } from '@/lib/schema'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
@@ -108,8 +109,22 @@ export default async function BancoPage({ params }: { params: { slug: string } }
 
   const entityLabel = entity.type === 'wallet' ? 'Billetera' : 'Banco'
 
+  const jsonLd = schemaItemList({
+    name: `Promos ${entity.name} hoy`,
+    description: `Descuentos, reintegros y cuotas sin interés con ${entity.name} en Argentina`,
+    url: `${BASE_URL}/bancos/${entity.slug}`,
+    items: promos.filter(p => p.slug && p.requirements[0]).map(p => ({
+      name: `${discountBadge(p.requirements[0] as any)} en ${p.commerce.name}`,
+      url: `${BASE_URL}/promos/${p.slug}`,
+    })),
+  })
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
       {/* ── Header ── */}
       <div className="bg-[#1E3A5F] text-white">

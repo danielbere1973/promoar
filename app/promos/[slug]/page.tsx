@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
+import { schemaOffer } from '@/lib/schema'
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -71,8 +74,16 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return {
     title,
     description,
-    openGraph: { title, description, type: 'article', locale: 'es_AR' },
+    openGraph: {
+      title,
+      description,
+      type: 'article',
+      locale: 'es_AR',
+      url: `${BASE_URL}/promos/${params.slug}`,
+      images: promo.commerce.logoUrl ? [{ url: promo.commerce.logoUrl, alt: promo.commerce.name }] : undefined,
+    },
     twitter: { card: 'summary', title, description },
+    alternates: { canonical: `${BASE_URL}/promos/${params.slug}` },
   }
 }
 
@@ -153,8 +164,22 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
   const bestDiscount = discounts[0]
 
+  const jsonLd = schemaOffer({
+    name: `${discountLabel(bestDiscount)} en ${promo.commerce.name}`,
+    description: promo.title !== promo.commerce.name ? promo.title : promo.description,
+    url: `${BASE_URL}/promos/${promo.slug}`,
+    sellerName: promo.commerce.name,
+    validFrom: promo.validFrom,
+    validThrough: promo.validUntil,
+    image: promo.commerce.logoUrl,
+  })
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <BackButton label={promo.commerce.name} />
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">

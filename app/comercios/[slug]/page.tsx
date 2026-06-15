@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { schemaItemList } from '@/lib/schema'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
@@ -94,8 +95,22 @@ export default async function CommercePage({ params }: { params: { slug: string 
   const bestPromo = promos[0]
   const bestReq = bestPromo?.requirements[0]
 
+  const jsonLd = schemaItemList({
+    name: `Promos y descuentos en ${commerce.name}`,
+    description: `Descuentos, cuotas sin interés y reintegros disponibles en ${commerce.name}`,
+    url: `${BASE_URL}/comercios/${commerce.slug}`,
+    items: promos.filter(p => p.slug && p.requirements[0]).map(p => ({
+      name: discountLabel(p.requirements[0] as any),
+      url: `${BASE_URL}/promos/${p.slug}`,
+    })),
+  })
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
       {/* ── Header ── */}
       <div className="bg-[#1E3A5F] text-white">

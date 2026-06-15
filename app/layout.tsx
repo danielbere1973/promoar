@@ -3,6 +3,7 @@ import Providers from './providers'
 import PostHogProvider from './components/PostHogProvider'
 import SupportChat from './components/SupportChat'
 import PushNotificationPrompt from './components/PushNotificationPrompt'
+import { schemaOrganization, schemaWebSite } from '@/lib/schema'
 import './globals.css'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
@@ -57,6 +58,14 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `(function(){document.documentElement.classList.add('dark');})()`,
           }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaOrganization()) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaWebSite()) }}
         />
       </head>
       <body>
