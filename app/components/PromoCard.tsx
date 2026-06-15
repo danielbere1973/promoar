@@ -1,6 +1,6 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
-import { Share2, Copy, Check } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { Share2, Copy, Check, Heart } from 'lucide-react'
 
 type Req = {
   bank?: { name: string; slug?: string } | null
@@ -17,6 +17,7 @@ type Promo = {
   slug?: string | null
   validDays: number
   salesChannel?: string | null
+  isSaved?: boolean
   category: { name: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null }
   requirements: Req[]
@@ -66,10 +67,11 @@ type Props = {
   promo: Promo
   nearbyCount?: number | null
   onClick: () => void
+  onToggleSave?: (id: string, e: React.MouseEvent) => void
   fullWidth?: boolean
 }
 
-export default function PromoCard({ promo, nearbyCount, onClick, fullWidth }: Props) {
+export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, fullWidth }: Props) {
   const pctReq = bestPercentageReq(promo)
   const label = discountLabel(promo)
   const banks = Array.from(new Map(promo.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])).values())
@@ -186,7 +188,17 @@ export default function PromoCard({ promo, nearbyCount, onClick, fullWidth }: Pr
 
       {/* Body */}
       <div className="px-2.5 pt-2 pb-3 space-y-1.5">
-        <p className="text-[13px] font-bold text-gray-900 dark:text-white truncate leading-tight">{promo.commerce.name}</p>
+        <div className="flex items-start justify-between gap-1">
+          <p className="text-[13px] font-bold text-gray-900 dark:text-white truncate leading-tight">{promo.commerce.name}</p>
+          {onToggleSave && (
+            <button
+              onClick={e => onToggleSave(promo.id, e)}
+              className="shrink-0 -mt-0.5 -mr-0.5 p-0.5 hover:scale-110 active:scale-90 transition-transform"
+            >
+              <Heart size={14} className={promo.isSaved ? 'text-red-500 fill-red-500' : 'text-gray-300 dark:text-slate-600'} />
+            </button>
+          )}
+        </div>
         <p className="text-[11px] text-gray-700 dark:text-slate-400 leading-tight truncate">{promo.title !== promo.commerce.name ? promo.title : label}</p>
 
         {entities.length > 0 && (

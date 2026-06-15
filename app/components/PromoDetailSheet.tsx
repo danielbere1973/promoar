@@ -85,7 +85,16 @@ function formatDate(d: string | null | undefined): string {
   return new Date(d).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-type NearbyBranch = { count: number; minDistKm: number }
+type Branch = { address: string | null; city: string | null; province: string | null; lat: number; lng: number; distanceKm: number }
+type NearbyBranch = { count: number; minDistKm: number; branches: Branch[] }
+
+function formatBranchAddress(b: Branch): string {
+  return [b.address, b.city].filter(Boolean).join(', ') || `${b.city ?? b.province ?? 'Sucursal'}`
+}
+
+function formatDistance(km: number): string {
+  return km < 0.1 ? 'menos de 100m' : `${km}km`
+}
 
 export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { promo: Promo; nearbyBranch?: NearbyBranch; onClose: () => void }) {
   // Cerrar con Escape
@@ -152,60 +161,53 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
           <div className="w-10 h-1 bg-gray-200 rounded-full" />
         </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-          <div className="flex items-center gap-3 min-w-0">
-            {promo.commerce.logoUrl ? (
-              <img src={promo.commerce.logoUrl} alt={promo.commerce.name}
-                className="w-10 h-10 rounded-xl object-contain border border-gray-100 bg-white p-1 shrink-0" />
-            ) : (
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                style={{ background: promo.category.color + '20' }}>
-                {promo.category.icon ?? '🏷️'}
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-[#1E3A5F] truncate">{promo.commerce.name}</p>
-              <p className="text-[10px] font-semibold truncate" style={{ color: promo.category.color }}>
-                {promo.category.icon} {promo.category.name}
-              </p>
+        {/* Banner: logo grande del comercio */}
+        <div className="relative bg-[#F4F5F7] flex items-center justify-center px-10" style={{ minHeight: 140 }}>
+          {promo.salesChannel && (
+            <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-br-xl">
+              {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
             </div>
-          </div>
+          )}
+          {promo.commerce.logoUrl ? (
+            <img src={promo.commerce.logoUrl} alt={promo.commerce.name}
+              className="max-h-20 max-w-[60%] object-contain" />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
+              style={{ background: promo.category.color + '20' }}>
+              {promo.category.icon ?? '🏷️'}
+            </div>
+          )}
           <button onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center shrink-0 transition-colors ml-2">
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white shadow flex items-center justify-center transition-colors hover:bg-gray-100">
             <X size={14} className="text-gray-500" />
           </button>
         </div>
 
+        {/* Nombre + beneficio */}
+        <div className="px-5 py-4 text-center border-b border-gray-100 space-y-2">
+          <div>
+            <p className="text-base font-black text-[#1E3A5F]">{promo.commerce.name}</p>
+            <p className="text-[10px] font-semibold" style={{ color: promo.category.color }}>
+              {promo.category.icon} {promo.category.name}
+            </p>
+          </div>
+          {promo.title && promo.title !== promo.commerce.name && (
+            <p className="text-xs text-gray-500">{promo.title}</p>
+          )}
+          {discounts.length > 0 && (
+            <div className="flex flex-wrap justify-center gap-2 pt-1">
+              <span className="text-sm font-black text-amber-800 bg-amber-100 px-4 py-1.5 rounded-full">{bestLabel}</span>
+              {discounts.slice(1).map((d, i) => (
+                <span key={i} className="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
+                  {discountLabel(d)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Scrollable content */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
-
-          {/* Beneficio hero */}
-          <div className="rounded-2xl overflow-hidden relative" style={{ background: '#1E3A5F' }}>
-            {promo.salesChannel && (
-              <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-br-xl">
-                {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
-              </div>
-            )}
-            <div className="px-5 py-5">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-blue-300 mb-1">
-                {discounts.length === 1 ? 'Beneficio' : 'Mejor beneficio'}
-              </p>
-              <p className="text-4xl font-black text-white leading-none tracking-tight">{bestLabel}</p>
-              {promo.title && promo.title !== promo.commerce.name && (
-                <p className="text-sm text-blue-200 mt-2 leading-snug">{promo.title}</p>
-              )}
-            </div>
-            {discounts.length > 1 && (
-              <div className="border-t border-white/10 px-5 py-3 flex flex-wrap gap-2">
-                {discounts.slice(1).map((d, i) => (
-                  <span key={i} className="text-xs font-semibold text-blue-200 bg-white/10 px-2.5 py-1 rounded-lg">
-                    {discountLabel(d)}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* Nota / condición especial del comercio */}
           {promo.commerceNote && (
@@ -364,21 +366,35 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
           )}
 
           {/* Sucursales */}
-          {nearbyBranch && (
-            <a
-              href={`https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}`}
-              target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 hover:bg-emerald-100 transition-colors"
-            >
-              <MapPin size={18} className="text-emerald-600 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-emerald-800">Ver sucursales en Google Maps</p>
-                <p className="text-xs text-emerald-600">
-                  {nearbyBranch.count} {nearbyBranch.count === 1 ? 'sucursal' : 'sucursales'} · más cerca a {nearbyBranch.minDistKm < 0.1 ? 'menos de 100m' : `${nearbyBranch.minDistKm}km`}
-                </p>
+          {nearbyBranch && nearbyBranch.branches.length > 0 && (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 space-y-2">
+              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1.5">
+                <MapPin size={14} className="shrink-0" />
+                Sucursales cerca de tu ubicación
+              </p>
+              <div className="space-y-1.5">
+                {nearbyBranch.branches.map((b, i) => (
+                  <a
+                    key={i}
+                    href={`https://www.google.com/maps/search/?api=1&query=${b.lat},${b.lng}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-2 bg-white rounded-xl px-3 py-2 hover:bg-emerald-100 transition-colors"
+                  >
+                    <p className="text-xs font-semibold text-emerald-800 truncate">{formatBranchAddress(b)}</p>
+                    <span className="text-[11px] font-bold text-emerald-600 shrink-0">{formatDistance(b.distanceKm)}</span>
+                  </a>
+                ))}
               </div>
-              <span className="text-emerald-500 font-bold text-sm">→</span>
-            </a>
+              {nearbyBranch.count > nearbyBranch.branches.length && (
+                <a
+                  href={`https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="block text-[11px] font-semibold text-emerald-700 hover:underline"
+                >
+                  Ver las {nearbyBranch.count} sucursales cercanas en Google Maps →
+                </a>
+              )}
+            </div>
           )}
 
           {/* Instagram del comercio */}

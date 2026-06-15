@@ -11,6 +11,7 @@ import ActiveFilters from '../components/ActiveFilters'
 import EntitiesSheet, { CARD_NETWORK_LOGOS } from '../components/EntitiesSheet'
 import PromoDetailSheet from '../components/PromoDetailSheet'
 import PromoCard from '../components/PromoCard'
+import CommerceGroupCard from '../components/CommerceGroupCard'
 import PromoWizard, { GuestProfile } from '../components/PromoWizard'
 import ProvinceSelector from '../components/ProvinceSelector'
 import ThemeToggle from '../components/ThemeToggle'
@@ -93,6 +94,9 @@ type Promo = {
   globalMaxDiscount?: Req | null
   userBestDiscount?: Req | null
 }
+
+type NearbyBranch = { address: string | null; city: string | null; province: string | null; lat: number; lng: number; distanceKm: number }
+type NearbyBranches = { count: number; minDistKm: number; branches: NearbyBranch[] }
 
 type Categoria = { id: string; name: string; slug: string; icon: string; color: string; promoCount?: number }
 
@@ -432,7 +436,7 @@ function HomeContent() {
   const [favCategories, setFavCategories] = useState<string[]>([]) // slugs, max 3
   const [favCommerces, setFavCommerces] = useState<string[]>([])   // nombres, max 5
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['favorites', 'popular']))
-  const [nearbyBranches, setNearbyBranches] = useState<Record<string, { count: number; minDistKm: number }>>({})
+  const [nearbyBranches, setNearbyBranches] = useState<Record<string, NearbyBranches>>({})
 
   // Geolocalización: pedir una vez, cachear en localStorage 1h
   useEffect(() => {
@@ -441,7 +445,7 @@ function HomeContent() {
       try {
         const { lat, lng, ts } = JSON.parse(cached)
         if (Date.now() - ts < 3600000) {
-          fetch(`/api/branches/nearby?lat=${lat}&lng=${lng}&radius=5`)
+          fetch(`/api/branches/nearby?lat=${lat}&lng=${lng}&radius=10`)
             .then(r => r.json()).then(setNearbyBranches).catch(() => {})
           return
         }
@@ -451,7 +455,7 @@ function HomeContent() {
     navigator.geolocation.getCurrentPosition(pos => {
       const { latitude: lat, longitude: lng } = pos.coords
       localStorage.setItem('userLocation', JSON.stringify({ lat, lng, ts: Date.now() }))
-      fetch(`/api/branches/nearby?lat=${lat}&lng=${lng}&radius=5`)
+      fetch(`/api/branches/nearby?lat=${lat}&lng=${lng}&radius=10`)
         .then(r => r.json()).then(setNearbyBranches).catch(() => {})
     }, () => {}, { timeout: 8000 })
   }, [])
@@ -1801,7 +1805,7 @@ function HomeContent() {
                   <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 py-2" style={{ scrollbarWidth: 'none' }}>
                     {c.promos.map(p => {
                       const promo = withCommerce(c, p)
-                      return <PromoCard key={p.id} promo={promo} nearbyCount={nearbyBranches[c.id]?.count} onClick={() => handleProductPromoClick(promo)} />
+                      return <PromoCard key={p.id} promo={promo} nearbyCount={nearbyBranches[c.id]?.count} onClick={() => handleProductPromoClick(promo)} onToggleSave={toggleSave} />
                     })}
                   </div>
                   {c.promos.length > 2 && (
@@ -1919,7 +1923,22 @@ function HomeContent() {
 
           const Section = ({ title, subtitle, catKey, promoList }: { title: string; subtitle: string; catKey?: string; promoList: typeof promosFiltradas }) => {
             const isExpanded = !catKey || focusedCat === catKey
-            const shown = isExpanded ? promoList : promoList.slice(0, PREVIEW)
+
+            // Agrupar por comercio, preservando el orden de aparición (ya viene ordenado por descuento/popularidad)
+            const groups: { commerce: typeof promoList[0]['commerce']; promos: typeof promoList }[] = []
+            const groupMap = new Map<string, typeof groups[0]>()
+            for (const p of promoList) {
+              const key = p.commerce.id ?? p.commerce.name
+              let group = groupMap.get(key)
+              if (!group) {
+                group = { commerce: p.commerce, promos: [] }
+                groupMap.set(key, group)
+                groups.push(group)
+              }
+              group.promos.push(p)
+            }
+
+            const shown = isExpanded ? groups : groups.slice(0, PREVIEW)
             const scrollRef = React.useRef<HTMLDivElement>(null)
             const scroll = (dir: 'left' | 'right') => {
               scrollRef.current?.scrollBy({ left: dir === 'right' ? 180 : -180, behavior: 'smooth' })
@@ -1940,7 +1959,7 @@ function HomeContent() {
                       className="w-7 h-7 rounded-full bg-[#F0F2F5] dark:bg-slate-700 hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] dark:text-white transition-colors text-sm font-bold">
                       ›
                     </button>
-                    {catKey && promoList.length > PREVIEW && (
+                    {catKey && groups.length > PREVIEW && (
                       <button onClick={() => setFocusedCat(catKey)}
                         className="text-[11px] font-semibold text-[#D94F2B] ml-1 whitespace-nowrap">
                         Ver todas →
@@ -1949,7 +1968,16 @@ function HomeContent() {
                   </div>
                 </div>
                 <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
-                  {shown.map(p => <PromoCard key={p.id} promo={p} nearbyCount={p.commerce.id ? nearbyBranches[p.commerce.id]?.count : null} onClick={() => handlePromoClick(p)} />)}
+                  {shown.map(g => (
+                    <CommerceGroupCard
+                      key={g.commerce.id ?? g.commerce.name}
+                      commerce={g.commerce}
+                      promos={g.promos}
+                      nearbyCount={g.commerce.id ? nearbyBranches[g.commerce.id]?.count : null}
+                      onPromoClick={handlePromoClick}
+                      onToggleSave={toggleSave}
+                    />
+                  ))}
                 </div>
                 <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-4 mx-4" />
               </div>

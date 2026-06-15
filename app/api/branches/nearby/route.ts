@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
   }
 
   const deg = kmToDeg(radius)
+  const MAX_BRANCHES_PER_COMMERCE = 5
 
   // Buscar sucursales dentro del bounding box (rápido, sin trig en DB)
   const branches = await prisma.commerceBranch.findMany({
@@ -35,26 +36,29 @@ export async function GET(req: NextRequest) {
       lat: { gte: lat - deg, lte: lat + deg },
       lng: { gte: lng - deg, lte: lng + deg },
     },
-    select: { commerceId: true, lat: true, lng: true },
+    select: { commerceId: true, lat: true, lng: true, address: true, city: true, province: true },
   })
 
   // Filtrar por distancia real y agrupar por commerceId
-  const byCommerce = new Map<string, { count: number; minDist: number }>()
+  type BranchWithDist = { address: string | null; city: string | null; province: string | null; lat: number; lng: number; distanceKm: number }
+  const byCommerce = new Map<string, BranchWithDist[]>()
   for (const b of branches) {
     const dist = distanceKm(lat, lng, b.lat, b.lng)
     if (dist > radius) continue
-    const prev = byCommerce.get(b.commerceId)
-    if (!prev || dist < prev.minDist) {
-      byCommerce.set(b.commerceId, { count: (prev?.count ?? 0) + 1, minDist: prev ? Math.min(prev.minDist, dist) : dist })
-    } else {
-      byCommerce.set(b.commerceId, { ...prev, count: prev.count + 1 })
-    }
+    const arr = byCommerce.get(b.commerceId) ?? []
+    arr.push({ address: b.address, city: b.city, province: b.province, lat: b.lat, lng: b.lng, distanceKm: dist })
+    byCommerce.set(b.commerceId, arr)
   }
 
-  // Resultado: { commerceId → { count, minDistKm } }
-  const result: Record<string, { count: number; minDistKm: number }> = {}
-  for (const [id, data] of byCommerce) {
-    result[id] = { count: data.count, minDistKm: Math.round(data.minDist * 10) / 10 }
+  // Resultado: { commerceId → { count, minDistKm, branches: [...top N más cercanas] } }
+  const result: Record<string, { count: number; minDistKm: number; branches: BranchWithDist[] }> = {}
+  for (const [id, arr] of Array.from(byCommerce)) {
+    arr.sort((a, b) => a.distanceKm - b.distanceKm)
+    result[id] = {
+      count: arr.length,
+      minDistKm: Math.round(arr[0].distanceKm * 10) / 10,
+      branches: arr.slice(0, MAX_BRANCHES_PER_COMMERCE).map(b => ({ ...b, distanceKm: Math.round(b.distanceKm * 10) / 10 })),
+    }
   }
 
   return NextResponse.json(result, {

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import PromoCard from './PromoCard'
 
@@ -18,6 +18,7 @@ type Promo = {
   slug?: string | null
   validDays: number
   salesChannel?: string | null
+  isSaved?: boolean
   category: { name: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null }
   requirements: Req[]
@@ -51,9 +52,11 @@ type Props<P extends Promo> = {
   commerce: { id?: string; name: string; logoUrl?: string | null }
   promos: P[]
   onPromoClick: (p: P) => void
+  onToggleSave?: (id: string, e: React.MouseEvent) => void
+  nearbyCount?: number | null
 }
 
-export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick }: Props<P>) {
+export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, nearbyCount }: Props<P>) {
   const [expanded, setExpanded] = useState(false)
   const [showOtherDays, setShowOtherDays] = useState(false)
 
@@ -69,7 +72,7 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
   if (!expanded) {
     return (
       <div className="flex-shrink-0 relative" style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}>
-        <PromoCard promo={featured} onClick={() => onPromoClick(featured)} fullWidth />
+        <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} fullWidth />
         {promos.length > 1 && (
           <button
             onClick={() => setExpanded(true)}
@@ -109,9 +112,9 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
         <div className="px-3 pt-3">
           <p className="text-[11px] font-black text-[#1E3A5F] dark:text-white uppercase tracking-wide mb-2">Hoy</p>
           <div className="grid grid-cols-2 gap-2.5 pb-1">
-            <PromoCard promo={featured} onClick={() => onPromoClick(featured)} fullWidth />
+            <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} fullWidth />
             {restToday.map(p => (
-              <PromoCard key={p.id} promo={p} onClick={() => onPromoClick(p)} fullWidth />
+              <PromoCard key={p.id} promo={p} nearbyCount={nearbyCount} onClick={() => onPromoClick(p)} onToggleSave={onToggleSave} fullWidth />
             ))}
           </div>
         </div>
@@ -130,7 +133,7 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
           {showOtherDays && (
             <div className="grid grid-cols-2 gap-2.5 pt-2.5 pb-1">
               {others.map(p => (
-                <PromoCard key={p.id} promo={p} onClick={() => onPromoClick(p)} fullWidth />
+                <PromoCard key={p.id} promo={p} nearbyCount={nearbyCount} onClick={() => onPromoClick(p)} onToggleSave={onToggleSave} fullWidth />
               ))}
             </div>
           )}

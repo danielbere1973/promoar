@@ -222,6 +222,215 @@ parsear con `parseFloat`). Probado con id=85462 (Sarkany) → 43 sucursales en t
 headless — el más simple de los 4 resueltos hasta ahora. Falta provincia (`localidad` es
 solo ciudad/partido), pero no es bloqueante.
 
+**Fuente Club LaNación — RESUELTO, la más completa de todas**: cada promo tiene un `crmid`
+(código tipo `A05876994` o `A38832`, visible en la URL de la promo,
+ej. `https://club.lanacion.com.ar/beneficios/.../descuentos-en-la-pebeta-A05876994`).
+`GET https://api-clubv2.lanacion.com.ar/v2/accounts/{crmid}/branches?page={n}`
+Devuelve `{ data: [...], meta: { total } }`. Cada sucursal: `{ id, geolocation: { lat, lon }
+(strings), display: [direccion, "localidad, provincia"], address, number, state,
+neighborhood, city, country, cpa }`. **Trae lat/lng listos**, dirección ya separada en
+calle/número/barrio/ciudad/provincia/CP — no requiere geocoding ni parseo. Paginado fijo
+de 8 resultados por página (`limit`/`pageSize` se ignoran, hay que iterar `page=1..N` hasta
+cubrir `meta.total`). Probado con A05876994 (La Pebeta, 1 sucursal), A01560366 (Estancia Las
+Carreras, 1), A05875426 (Óptica Optilent, 1) y A38832 (Carrefour, **692 sucursales** en todo
+el país). Sin WAF, funciona con `fetch`/`curl` directo, sin sesión de navegador ni headless
+— junto con BBVA, la fuente más simple de implementar, y la única con cobertura nacional
+completa de una cadena grande (Carrefour) vista hasta ahora.
+
+**Fuente ICBC — RESUELTO (requiere el mismo bypass de WAF que el resto del scraper)**: el
+endpoint ya usado por el scraper, `GET .../api/web/v1/beneficios/detail?url={url}&segment_id=0`
+(via `prod-utilidades-icbc.pisol.net`, ver nota de scraper ICBC más abajo), devuelve además
+un campo `locations` con sucursales adheridas agrupadas por región
+(ej. `{ "Gran Buenos Aires": [{ street, city, state, shopping }, ...], "CABA": [...], ... }`).
+Probado con la promo de Coto sábado/domingo → decenas de sucursales con `street`/`city`/
+`state` pero **sin lat/lng** (requeriría geocoding). Mismo bloqueo WAF que el resto de ICBC:
+el endpoint devuelve 401 con `fetch` directo, solo responde dentro de una sesión de
+navegador real (headless está OK, no requiere `headless: false`). Debe correrse local, igual
+que "Ejecutar todos" de ICBC.
+
+**Banco Patagonia — investigado, sin datos utilizables**: las páginas de promo
+(`ahorrosybeneficios.bancopatagonia.com.ar`, Magento) tienen instalado el módulo MageWorx
+Store Locator (`store_locator/location/updatepopupcontent`, POST con `product={id}`), pero
+para todas las promos probadas (Farmacity, Carrefour, Burger King, Coto Digital) devuelve
+`{"location_ids":[]}` / "There are no stores" — el módulo existe en el theme pero no está
+poblado con sucursales para estas promos. Sin sesión de navegador headed (con `headless:
+true` ya da 200), pero no hay datos que extraer.
+
+**Banco Supervielle — investigado, sin datos utilizables**: el listado de descuentos
+(`https://www.supervielle.com.ar/personas/beneficios/descuentos`) está detrás de un WAF
+CloudFront (403 con `fetch`/`headless: true`; requiere `headless: false`). Una vez cargada,
+la grilla consume `GET /api/beneficios?rubro={rubro}&esIdentite=false`, que sí responde con
+`fetch` directo sin WAF una vez conocido el endpoint. Cada item incluye un campo `zonas`
+pensado para restricción geográfica, pero está **vacío en los ~50 items probados** (varios
+rubros, incluyendo Supermercados y Carnicerías regionales) — no hay direcciones ni lat/lng
+en ninguna parte de la respuesta.
+
+**Clarín 365 — parcialmente resuelto, sin lat/lng**: `365.clarin.com` es una app Nuxt; el
+estado `window.__NUXT__` de cualquier página de beneficio incluye objetos de comercios con
+`provinces: ["BUENOS AIRES"]` y `locations: ["PILAR","SAN ISIDRO",...]` (nombres de
+localidades, sin dirección ni lat/lng). Estos objetos vienen del endpoint
+`GET https://365.clarin.com/api/v1/search/companies?limit=N&categories=beneficio&subcategories={slug}`
+(sin WAF, `fetch` directo funciona), pero no se logró encontrar el `slug` exacto que
+devuelve el comercio de una promo puntual con `total>0` — quedó pendiente el mapeo
+promo→`companySlug`/`subcategorySlug`. Útil en el mejor caso para filtrado a nivel
+provincia/localidad (sin geocoding), no para sucursales puntuales.
+
+**Fuente Megatone (comercio, no banco) — RESUELTO, sin WAF**: la página
+`https://www.megatone.net/sucursales/` consume:
+`GET https://www.megatone.net/apirecursoswebv4/api/sucursales`
+Devuelve un array plano de **57 sucursales** con `{ idSucursalUnico, nombreCorto, horarios,
+direccion, telefono, codigoPostal, localidad, provincia, latitud, longitud }`. **Las 57 con
+lat/lng**, cubriendo 20 provincias (Santa Fe, Córdoba, Buenos Aires, Cuyo, NOA, Patagonia,
+Litoral) — exactamente el perfil "cadena del interior" que se buscaba. Sin WAF, responde con
+`fetch` directo (sin sesión de navegador, sin headless), sin necesidad de geocoding. Esto
+abre la puerta a replicar el mismo patrón con otras cadenas: buscar `/sucursales`,
+`/tiendas`, `/locales` en el sitio del comercio y revisar si exponen un endpoint JSON
+similar antes de asumir que hace falta scraping de HTML o geocoding.
+
+**Fuente Frávega (comercio) — RESUELTO, sin WAF**: la página
+`https://www.fravega.com/sucursales/` es Next.js; el `<script id="__NEXT_DATA__">` incluye
+`props.pageProps.branches`, un array de **109 sucursales** con
+`{ id, name, enabled, contactPhone, openingTime, address: { coordinates: { latitude,
+longitude }, postalCode, location, street } }`. **Las 109 con lat/lng** (`without coords: 0`),
+`address.location` cubre las **24 provincias** de Argentina (incluye CABA por separado).
+Sin WAF, basta un `fetch` directo al HTML y parsear el JSON embebido — no requiere sesión
+de navegador ni geocoding. Calidad equivalente a Club LaNación/Banco Ciudad pero para un
+comercio puntual (replicable para cualquier sitio Next.js con store locator: buscar
+`__NEXT_DATA__` → `pageProps` → array con claves `lat`/`latitude`).
+
+**Fuente ColorShop (comercio) — RESUELTO, la mejor de todas, sin WAF**: la página
+`https://www.colorshop.com.ar/stores` (VTEX) consume una GraphQL persisted query propia
+(`operationName=branchesList`, provider `iocolorshop.store-branches@0.x`):
+`GET https://www.colorshop.com.ar/_v/public/graphql/v1?workspace=master&maxAge=medium&appsEtag=remove&domain=store&locale=es-AR&operationName=branchesList&variables=%7B%7D&extensions={"persistedQuery":{"version":1,"sha256Hash":"953a9a113738e3a3f0dfa67fa62d56990e70d09ee91a2359b5211e89bc762dfd","sender":"iocolorshop.custom-apps@0.x","provider":"iocolorshop.store-branches@0.x"},"variables":"<base64 de {page,pageSize,sortBy,where}>"}`
+Devuelve `{ data: { branchesList: { data: [...], pagination } } }`. Cada sucursal:
+`{ id, name, address, isActive, city, province, schedules, postalCode,
+location: { lat, lng } (strings), contactInfo: { phone, email } }`. Con `pageSize: 500` en
+una sola llamada trae **307 sucursales, las 24 provincias, 0 sin lat/lng**. Sin WAF, sin
+sesión de navegador, `fetch` directo. El mismo patrón "io{marca}.store-branches" podría
+existir para otras tiendas VTEX del mismo desarrollador — probado en Prestigio (también
+VTEX, también tiene `/stores` con buscador de sucursales) pero no se encontró la misma
+persisted query ahí.
+
+**Fuente Havanna (comercio) — RESUELTO, sin WAF (requiere headers)**:
+`POST https://havanna.com.ar/_ajax/getLocales` con header `Referer:
+https://havanna.com.ar/nuestros-locales` y `Origin: https://havanna.com.ar` (sin estos
+headers devuelve `{"error":true,"message":"Acceso Denegado."}`) devuelve `{ data: [...] }`
+con **243 locales en Argentina** (más otros países), cada uno con `direccion`,
+`nombre_localidad`, `nombre_zona`, `tipo` (cafe/heladería/etc), `latitud_local`,
+`longitud_local`. **Las 243 con lat/lng**. Sin sesión de navegador, `fetch` directo con los
+headers correctos.
+
+**Grido — investigado, sin datos utilizables**: `https://argentina.gridohelado.com/locales/`
+es una página WordPress estática (FAQ/acordeón "¿Cómo encontrar tu local?"), sin selects,
+iframes ni links a un buscador de sucursales — solo dice "413 franquicias en Argentina" sin
+listarlas. No se encontró ningún endpoint ni mapa embebido.
+
+**Pinturerías Rex (comercio) — RESUELTO, sin WAF**: `https://somosrex.com/sucursales` (Magento,
+módulo `SummaTheme_StorePickup`) embebe en el HTML, dentro de un bloque
+`<script type="text/x-magento-init">`, un array `initialStores` con **73 sucursales**:
+`{ pickup_location_code, name, latitude, longitude, country_id, region, city, street,
+postcode, phone, schedule_id (HTML con horarios) }`. **72 de 73 con lat/lng** (1 sin),
+8 provincias (Capital Federal, Buenos Aires, Río Negro, Santa Fe, Neuquén, Córdoba, Mendoza,
+Salta). Sin WAF, `fetch` directo al HTML y parsear el JSON embebido (mismo patrón que
+Frávega/`__NEXT_DATA__` pero para Magento).
+
+**Bonafide (comercio) — RESUELTO, con limitación de cobertura**: `https://bonafide.com.ar/locales/`
+usa el plugin WordPress "WP Store Locator":
+`GET https://bonafide.com.ar/wp-admin/admin-ajax.php?action=store_search&lat={lat}&lng={lng}&max_results=500&search_radius=500&skip_cache=1`
+Devuelve un array de locales con `id`, `lat`, `lng`, `address`, `city`, `country`, etc. —
+**todos con lat/lng**. Sin WAF, `fetch` directo. Limitación: el plugin cappea **siempre a 25
+resultados** sin importar `max_results`/`search_radius` (probado con valores hasta 500/500).
+Probado desde 3 puntos: Buenos Aires → 25 (capped), Tucumán → 24, Bariloche → solo 3 (poca
+cobertura en el sur). Para cobertura nacional completa requeriría el mismo enfoque
+multi-punto + dedupe por `id` que BNA (punto 10, fuente BNA).
+
+**Centro Pinturerías TDF (comercio, Tierra del Fuego) — resuelto, sin lat/lng, bajo
+volumen**: `https://centropintureriastdf.com.ar/nuestras-sucursales/` es HTML estático sin
+API, lista exactamente **6 sucursales** (2 en Río Grande, 4 en Ushuaia) con dirección y
+teléfono, sin lat/lng. Volumen tan bajo que geocoding manual de las 6 direcciones sería
+trivial si se decide cargar este comercio.
+
+**Pinturerías Rex, Open 25hs, Big Pizza, Seitú — pendiente, dominio no identificado**: los
+dominios probados (`rex.com.ar`, `open25.com.ar`, `bigpizza.com.ar`, `seitu.com.ar`) o no
+cargaron, dieron error de certificado, o no tienen contenido relacionado (Big Pizza redirige
+a un dominio ajeno `tokoagung.store`, probablemente el dominio caducó). La URL provista por
+Pablo para "pinturerias rex" (`https://bonafide.com.ar/locales/`) parece un copy-paste
+duplicado de la de Bonafide — falta confirmar la URL real de cada cadena.
+
+**Tiendeo.com.ar — RESUELTO, agregador nacional multi-rubro, sin WAF**: Tiendeo (parte de
+Shopfully) tiene, para cada cadena con presencia en una ciudad, una página
+`https://www.tiendeo.com.ar/{ciudad-slug}/{cadena-slug}` (ej. `/buenos-aires/coto`) con una
+sección "Horarios y direcciones {Cadena}" que linkea a páginas individuales por sucursal:
+`https://www.tiendeo.com.ar/Tiendas/{ciudad-slug}/{sucursal-slug}/{storeId}` (ej.
+`/Tiendas/buenos-aires/coto-peron/50342`). Esa página de sucursal individual sí trae, en
+`__NEXT_DATA__` → `props.pageProps.pageInfo.store`, el objeto completo: `{ id, retailer_id,
+city, address, zip, province, slug, lat, lng, phone, StoreHour: [...] }` — **lat/lng listos
+como string**, más horarios por día de semana. Todo server-rendered, `fetch` directo sin
+sesión de navegador ni headless.
+
+Cobertura: `https://www.tiendeo.com.ar/ciudades` (34 páginas, `?page=1..34`) lista cientos
+de localidades del país (ej. `/buenos-aires`, `/cordoba`, `/rosario`, ...). Cada
+`/{ciudad}/{cadena}` muestra solo las ~5-6 sucursales más cercanas a la geolocalización de
+esa ciudad (`pageInfo.storesLimit = 5`), con su slug/id para visitar la página individual.
+Esto cubre **decenas de cadenas regionales y nacionales a la vez** (la lista de cadenas con
+presencia en Buenos Aires incluye Coto, Carrefour, Changomas, Vea, Makro, Maxiconsumo,
+Cordiez, Diarco, Día, Jumbo, Disco, Cooperativa Obrera, La Anónima, Easy, Hiper Libertad,
+Atomo Conviene, Farmacity, Naldo Lombardi, Tadicor, Comodín, Hipertehuelche, etc.) — varias
+de estas son cadenas que en otras fuentes (La Anónima, Atomo/Cordiez, Cooperativa Obrera)
+habían quedado sin datos o solo parcialmente resueltas.
+
+**Implementado**: `scripts/load-tiendeo-branches.ts --retailer-slug <slug-tiendeo> --commerce
+<nombre-comercio> [--dry-run] [--cities N]`. Recorre una lista curada de ~31 ciudades (1-2
+por provincia, cubriendo las 24), para cada una pide `/{ciudad}/{cadena-slug}`, extrae los
+links `/Tiendas/{ciudad}/{slug}/{id}` de la sección "Horarios y direcciones", dedupea por
+`id` y luego visita cada página individual para sacar `pageInfo.store` (lat/lng, dirección,
+ciudad, provincia, teléfono) y hacer upsert en `CommerceBranch` (`source: 'TIENDEO'`,
+`osmId: tiendeo_{storeId}`). ~31 + N_sucursales fetches, sin WAF, ~250ms de delay entre
+requests.
+
+Resultados ya cargados (resuelven definitivamente cadenas que en otras fuentes habían
+quedado sin datos o solo parcialmente resueltas):
+- **Cordiez** (`--retailer-slug cordiez --commerce "Supermercado Cordiez"`): 6 sucursales,
+  todas en Córdoba capital, todas con lat/lng.
+- **Atomo Conviene** (`--retailer-slug atomo-conviene --commerce "Atomo con MODO"`): 30
+  sucursales en CABA/Buenos Aires, Córdoba, Mendoza, Santa Fe, Tucumán, San Juan, San Luis
+  y Bariloche, todas con lat/lng.
+- **Cooperativa Obrera** (`--retailer-slug cooperativa-obrera --commerce "COOPERATIVA
+  OBRERA"`): 25 sucursales en Buenos Aires (La Plata/Mar del Plata/Bahía Blanca), Neuquén,
+  Río Negro y Chubut, todas con lat/lng — resuelve el bloqueo 401 de
+  `extranet.cooperativaobrera.coop`.
+- **Naldo Lombardi** (`--retailer-slug naldo-lombardi --commerce "NALDO"`): 29 sucursales
+  distribuidas en casi todas las provincias, todas con lat/lng.
+- **La Anónima** (`--retailer-slug la-anonima --commerce "La Anónima"`): 31 sucursales en
+  Neuquén, Río Negro, Chubut, Santa Cruz y Tierra del Fuego (Patagonia), todas con lat/lng
+  y dirección completa. `Commerce` ya existía (slug `la-anonima`, sin promos activas).
+
+**Toledo — sin datos en Tiendeo**: `supermercados-toledo` existe como retailer pero la
+página es siempre `pageType=RETAILER_NATIONAL` con 0 links a sucursales (probado en
+Mendoza, San Rafael, San Juan, La Plata, Santa Rosa, Neuquén, Bahía Blanca, Río Cuarto,
+San Luis) — Tiendeo no tiene el listado de locales de esta cadena. Sin resolver por esta
+vía.
+
+**Tiendeo vs OSM — direcciones**: para los comercios que Tiendeo cubre, sus direcciones
+(`pageInfo.store.address`, mantenidas por el propio retailer) son más completas y
+confiables que las de `scripts/import-osm-branches.ts` (que dependen de los tags
+`addr:street`/`addr:housenumber` de OSM, frecuentemente ausentes o genéricos en
+Argentina). No hace falta "reemplazar" OSM: ambas fuentes coexisten como filas separadas
+de `CommerceBranch` (`source: 'TIENDEO'` vs `source: 'OSM'`, deduplicadas por
+`source`+`osmId`). Para un comercio con cobertura Tiendeo, esa fuente es preferible; para
+los que no aparecen en Tiendeo, OSM sigue siendo el fallback.
+
+Pablo sugiere además: aunque un comercio listado en Tiendeo no tenga promos bancarias
+activas hoy, vale la pena darlo de alta en `Commerce` + cargar sus `CommerceBranch` igual
+(no depende de que tenga promo para ser útil en el filtrado por ubicación).
+
+**MODO — sin fuente de sucursales**: Pablo ya revisó la app/sitio de MODO y no encontró
+ningún endpoint o sección de "sucursales adheridas" por comercio. Las promos de MODO se
+aplican a través del comercio (QR/NFC en el POS), no hay un listado propio de MODO que
+indique qué sucursales de una cadena participan — para comercios con wallet MODO, la
+cobertura de `CommerceBranch` debe completarse vía otra fuente (ej. Club LaNación o BBVA si
+ese comercio también tiene promos ahí) o quedar sin filtro de sucursal.
+
 **Arquitectura propuesta**: cargar `branches` por **comercio**, no por código de promo
 (los códigos de promo cambian con cada renovación, las sucursales físicas casi no cambian).
 Para cada comercio sin `branches` cargadas, usar un código de promo activo cualquiera para
@@ -243,25 +452,24 @@ promo matcheada a su perfil, mostrar notificación/banner "soft" (sin background
 Push real en background sería fase 2, una vez que `CommerceBranch` tenga cobertura
 suficiente.
 
-### 12. Agrupar promos por comercio en una sola tarjeta expandible — PROTOTIPO LISTO, falta integrar
+### 12. Agrupar promos por comercio en una sola tarjeta expandible — DONE
 Hoy un mismo comercio (ej. Coto) puede aparecer varias veces en la grilla porque tiene
-promos de distintos bancos/billeteras/tipos. Idea (estilo Clash): agrupar todas las promos
-de un mismo `commerceId` en una sola tarjeta, mostrando la destacada (mayor descuento, ya
-es la primera por el ordenamiento actual) + chip "+N promos" que expande el resto inline.
+promos de distintos bancos/billeteras/tipos. Se agrupan todas las promos de un mismo
+`commerceId` en una sola tarjeta, mostrando la destacada (mayor descuento) + chip
+"+N promos" que expande el resto inline.
 
-Dentro de esa tarjeta expandida, dividir en 2 secciones:
+Dentro de esa tarjeta expandida hay 2 secciones:
 - **Hoy**: promos válidas el día actual (según `validDays`), mostradas primero/expandidas.
-- **Otros días**: el resto, colapsado por defecto con un "ver también" — al expandir, mostrar
-  en fila horizontal con scroll ("tipo chorizo") las promos válidas otros días de la semana.
+- **Otros días**: el resto, colapsado por defecto con un "ver también" — al expandir, se
+  muestran en grid de 2 columnas las promos válidas otros días de la semana.
 
-Ya implementado: `app/components/CommerceGroupCard.tsx` (grid de 2 col para "Hoy" y "Otros
-días", botón "+N promos"/"Ver también") + prototipo `app/promos/grouped-demo/page.tsx`
-(probado con Changomas vía `/api/promos?commerces=Changomas&searchMode=exact&view=week`).
-
-Falta integrarlo en `app/promos/page.tsx`: reemplazar las `PromoCard` individuales de cada
-`Section` por `CommerceGroupCard` agrupando por `commerceId`, y definir el límite/paginación
-de cada sección (¿cuenta comercios agrupados o promos individuales?) — ver punto 11 también
-pendiente, ambos quedan para después del punto 10.
+Implementado en `app/components/CommerceGroupCard.tsx` (recibe `nearbyCount` y lo propaga
+al `PromoCard` destacado/expandido para el badge "📍 N sucursales"). Integrado en
+`app/promos/page.tsx`: dentro de cada `Section` (layout Netflix por categoría), `promoList`
+se agrupa por `commerce.id ?? commerce.name` preservando el orden (ya viene ordenado por
+descuento/popularidad), y el límite `PREVIEW`/"Ver todas →" ahora cuenta **comercios
+agrupados**, no promos individuales. El prototipo `app/promos/grouped-demo/page.tsx` queda
+como referencia/demo aislada.
 
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
