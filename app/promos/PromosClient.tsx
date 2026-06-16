@@ -369,10 +369,13 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     ssrCacheSeeded.current = true
   }, [])
 
-  // Splash solo en la primera carga de la sesión
-  // Siempre true en SSR para evitar hydration mismatch — useEffect lo oculta si ya fue visto
-  const [showSplash, setShowSplash] = useState(true)
+  // Splash solo cuando no hay promos SSR disponibles (SSR falló o primer render vacío).
+  // Cuando initialPromos tiene datos, el splash se salta por completo — la imagen del
+  // splash pesa 2.86 MB y a red lenta es el LCP candidate que hacía LCP ≈ 17s.
+  // initialPromos es un prop consistente entre SSR y hydration: no hay hydration mismatch.
+  const [showSplash, setShowSplash] = useState(!initialPromos?.length)
   useEffect(() => {
+    if (initialPromos?.length) return
     if (sessionStorage.getItem('splashDone')) setShowSplash(false)
   }, [])
   const [visibleCount, setVisibleCount] = useState(20)
