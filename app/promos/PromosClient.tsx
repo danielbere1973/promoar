@@ -496,6 +496,10 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         } catch {}
       } else {
         setForMe(false)
+        // Primera visita sin perfil → sugerir wizard (después de que el preview SSR ya se ve)
+        if (!localStorage.getItem('guestWizardShown')) {
+          setTimeout(() => setWizardOpen(true), 800)
+        }
       }
     }
 
@@ -2135,13 +2139,17 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       />
       <PromoWizard
         open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
+        onClose={() => {
+          setWizardOpen(false)
+          localStorage.setItem('guestWizardShown', '1')
+        }}
         initialProfile={guestProfile}
         onComplete={(profile) => {
           setGuestProfile(profile)
           setForMe(true)
           setWizardOpen(false)
           setGuestBannerDismissed(false)
+          localStorage.setItem('guestWizardShown', '1')
         }}
       />
 
