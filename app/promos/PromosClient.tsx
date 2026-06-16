@@ -1982,7 +1982,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
           const PREVIEW = 8
 
-          const Section = ({ title, subtitle, catKey, promoList }: { title: string; subtitle: string; catKey?: string; promoList: typeof promosFiltradas }) => {
+          const Section = ({ title, subtitle, catKey, promoList, isFirst }: { title: string; subtitle: string; catKey?: string; promoList: typeof promosFiltradas; isFirst?: boolean }) => {
             const isExpanded = !catKey || focusedCat === catKey
 
             // Agrupar por comercio, preservando el orden de aparición (ya viene ordenado por descuento/popularidad)
@@ -2029,7 +2029,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   </div>
                 </div>
                 <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
-                  {shown.map(g => (
+                  {shown.map((g, gi) => (
                     <CommerceGroupCard
                       key={g.commerce.id ?? g.commerce.name}
                       commerce={g.commerce}
@@ -2037,6 +2037,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                       nearbyCount={g.commerce.id ? nearbyBranches[g.commerce.id]?.count : null}
                       onPromoClick={handlePromoClick}
                       onToggleSave={toggleSave}
+                      priority={isFirst && gi === 0}
                     />
                   ))}
                 </div>
@@ -2048,7 +2049,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           return (
             <div className="space-y-0 -mx-4">
               {destacadas.length > 0 && (
-                <Section title="⭐ Destacadas hoy" subtitle="Mejores descuentos del día" promoList={destacadas} />
+                <Section title="⭐ Destacadas hoy" subtitle="Mejores descuentos del día" promoList={destacadas} isFirst />
               )}
               {cercaTuyo.length > 0 && (
                 <Section title="📍 Cerca tuyo" subtitle="Comercios con sucursales cerca de tu ubicación" promoList={cercaTuyo} />

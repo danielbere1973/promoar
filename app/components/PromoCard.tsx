@@ -69,9 +69,10 @@ type Props = {
   onClick: () => void
   onToggleSave?: (id: string, e: React.MouseEvent) => void
   fullWidth?: boolean
+  priority?: boolean
 }
 
-export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, fullWidth }: Props) {
+export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, fullWidth, priority }: Props) {
   const pctReq = bestPercentageReq(promo)
   const label = discountLabel(promo)
   const banks = Array.from(new Map(promo.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])).values())
@@ -129,7 +130,13 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
       <div className="relative bg-[#F8F9FB] dark:bg-slate-900 border-b border-[#F0F2F5] dark:border-slate-700 flex items-center justify-center" style={{ height: 80 }}>
         {promo.commerce.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="max-h-12 max-w-[80%] object-contain p-2" />
+          <img
+            src={promo.commerce.logoUrl}
+            alt={promo.commerce.name}
+            className="max-h-12 max-w-[80%] object-contain p-2"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
+          />
         ) : (
           <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-black" style={{ background: promo.category.color + '20', color: promo.category.color }}>
             {promo.category.icon ?? '🏷️'}

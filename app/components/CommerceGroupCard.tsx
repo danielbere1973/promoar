@@ -54,9 +54,10 @@ type Props<P extends Promo> = {
   onPromoClick: (p: P) => void
   onToggleSave?: (id: string, e: React.MouseEvent) => void
   nearbyCount?: number | null
+  priority?: boolean
 }
 
-export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, nearbyCount }: Props<P>) {
+export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, nearbyCount, priority }: Props<P>) {
   const [expanded, setExpanded] = useState(false)
   const [showOtherDays, setShowOtherDays] = useState(false)
 
@@ -72,7 +73,7 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
   if (!expanded) {
     return (
       <div className="flex-shrink-0 relative" style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}>
-        <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} fullWidth />
+        <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} fullWidth priority={priority} />
         {promos.length > 1 && (
           <button
             onClick={() => setExpanded(true)}
