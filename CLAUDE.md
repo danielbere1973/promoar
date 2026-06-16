@@ -471,51 +471,42 @@ descuento/popularidad), y el límite `PREVIEW`/"Ver todas →" ahora cuenta **co
 agrupados**, no promos individuales. El prototipo `app/promos/grouped-demo/page.tsx` queda
 como referencia/demo aislada.
 
-### 13. SSR de `/promos` — fase 1 DONE, falta atacar el fetch completo de 38MB
-Rama `feature/ssr-promos` (sin commitear/pushear todavía). Fase 1 implementada y
-verificada localmente: `app/promos/page.tsx` (Server Component) llama a
-`getPromosData` con `take: 300` (constante `PREVIEW_TAKE`) + `prisma.promo.count()`
-en paralelo, y pasa `initialPromos`/`initialTotalCount` a `PromosClient.tsx` para
-seedear `useState` — esto da HTML real en el primer render (header con total
-correcto, "⭐ Destacadas hoy", logos de comercios) sin esperar el fetch completo.
-`lib/getPromos.ts` ahora acepta `take?: number` y devuelve `{ promos, totalCount }`.
+### 13. SSR + Paginación de `/promos` — DONE (rama `feature/pagination`, pendiente merge)
 
-Resultado local (Lighthouse, no comparable 1:1 con prod por ser dev mode): SEO
-0.85→**1.0**, FCP **1.1s** (a la par del benchmark de referencia). Pero LCP sigue en
-**24.8s** — el "lcp-breakdown-insight" muestra el contenido SSR pintando a los ~5.3s,
-pero el LCP final se mide a los 24.8s porque el fetch completo de `/api/promos`
-(`for_me=false`, "hoy", sin filtros → **~12600 promos / 38MB / ~25s**, el path de
-**invitados/SEO crawlers**, el de mayor volumen) termina y React re-renderiza toda la
-lista, pintando algo más grande encima del preview.
+**Fase 1 SSR** — ya mergeada a `main`: `app/promos/page.tsx` (Server Component) hace
+SSR de 300 promos (`PREVIEW_TAKE=300`) para dar HTML real al crawler. LCP en Vercel:
+**2.1s**, SEO: **1.0**. `getPromosData` acepta `take?` y devuelve `{ promos, totalCount }`.
 
-**Benchmark de referencia** (Lighthouse a `www.promoarg.com/promociones`, sitio
-similar): Performance 75%, LCP **5.1s**, Speed Index **4.9s**, FCP 1.1s, TBT 170ms,
-CLS 0. Es el objetivo realista a perseguir.
+**Fase 2 Paginación** — rama `feature/pagination`, commiteada, pendiente push y merge:
+Resuelve el fetch de 38MB por carga anónima. Resultado verificado localmente:
+**~1.3MB por carga inicial** (500 promos por página). Implementado:
 
-**Contexto urgente**: alerta de Vercel al **75% de consumo de tráfico/banda** — el
-fetch de 38MB por carga de `/promos` sin perfil es sospechoso #1.
+- **Schema** (`prisma/schema.prisma`): nuevos campos en `Promo` (`maxDiscountPct Int?`,
+  `isCSIOnly Boolean @default(false)`) y en `Commerce` (`activePromoCount Int @default(0)`).
+  Índice compuesto `@@index([status, isCSIOnly, maxDiscountPct(sort: Desc)])`. Ya aplicado
+  con `npx prisma db push` y backfill (`scripts/backfill-sort-fields.ts`,
+  `scripts/backfill-commerce-count.ts`).
 
-**Próxima sesión — dos mejoras complementarias (no excluyentes)**:
-1. **Cap + "Ver todas" on-demand**: el fetch inicial de invitados se capea agresivo
-   (ej. 1000-1500 promos), y el overlay "Ver todas" de cada categoría (hoy filtra
-   client-side sobre el array completo ya cargado, `PromosClient.tsx` ~línea 2063+)
-   pasa a hacer un fetch real a `/api/promos?categorySlugs=X` cuando se abre. Esto
-   ataca LCP y el payload de 38MB a la vez. Cuidado: no romper categorías chicas que
-   hoy se ven completas con el array sin capear.
-2. **Wizard-first para invitados**: sugerir/abrir el `PromoWizard` (perfil
-   financiero) al entrar sin sesión, antes de mostrar el catálogo completo. Si
-   completa el perfil → `for_me=true` con `guest_profile` (set chico, matched). Si
-   cancela → ve todo (comportamiento actual, sigue necesitando el punto 1 como red de
-   seguridad). Sitios de referencia (ej. promoarg) parecen usar este patrón. Ojo SEO:
-   los crawlers no completan wizards, así que el contenido sin perfil debe seguir
-   siendo SSR-renderable (ya lo es, con la fase 1).
+- **Sort DB-level** (`lib/getPromos.ts`): cuando `paginate=true`, usa
+  `orderBy: [isCSIOnly ASC, maxDiscountPct DESC NULLS LAST, id ASC]` directamente en
+  Prisma (sin el sort JS que era filter-dependent). El sort JS original se mantiene
+  para el path `paginate=false` (usuarios con perfil, filtros → set chico).
 
-**Verificación pendiente de fase 1** (antes o junto con lo anterior): commitear y
-pushear `feature/ssr-promos`, correr Lighthouse contra el preview deployment de
-Vercel para comparar contra el baseline real (LCP 29.8s, speed-index 10.7s,
-interactive 29.9s, SEO 0.85), y correr el checklist de regresión manual (filtros,
-"Para mí"/"Todas" logueado+invitado, búsqueda, guardar, wizard, sheets,
-`?cats=...`).
+- **API** (`app/api/promos/route.ts`): auto-detecta `paginate=true` cuando es invitado
+  sin filtros de banco/wallet/red/categoría. Acepta `?page=N&pageSize=500`, devuelve
+  `hasMore` en la respuesta.
+
+- **Scraper** (`app/api/admin/scrape/route.ts`): calcula `maxDiscountPct` e `isCSIOnly`
+  al hacer upsert de cada promo; actualiza `activePromoCount` en los comercios afectados
+  al final de cada run.
+
+- **Cliente** (`app/promos/PromosClient.tsx`): estado `page`/`hasMore`/`loadingMore`,
+  append de promos en page>1, reset a page=1 al cambiar filtros, botón
+  "Ver más promos →" visible cuando `hasMore=true`, overlay "Ver todas" de cada
+  categoría hace fetch on-demand `/api/promos?categories=X` en vez de filtrar el array.
+
+**Pendiente**: push de `feature/pagination` y merge a `main`, correr Lighthouse en
+Vercel para confirmar LCP ~2s y banda <2MB por carga anónima.
 
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
