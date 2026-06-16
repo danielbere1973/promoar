@@ -470,6 +470,18 @@ export async function POST(req: NextRequest) {
           title: p.title,
         })
 
+        // Desnormalizar campos de ordenamiento (mantenidos en sync con la DB)
+        const pctReqsForSort = reqData.filter(r =>
+          r.discountType !== 'CUOTAS_SIN_INTERES' &&
+          r.discountType !== 'NXM' &&
+          (r.discountValue ?? 0) > 0
+        )
+        const maxDiscountPct = pctReqsForSort.length > 0
+          ? Math.round(Math.max(...pctReqsForSort.map((r: any) => r.discountValue ?? 0)))
+          : null
+        const hasNxmReq = reqData.some((r: any) => r.discountType === 'NXM')
+        const isCSIOnly = pctReqsForSort.length === 0 && !hasNxmReq
+
         const promoData = {
           title: p.title,
           description: p.description || '',
@@ -485,6 +497,8 @@ export async function POST(req: NextRequest) {
           sourceText: p.sourceText ?? null,
           salesChannel: salesChannel ?? null,
           commerceNote: p.note ?? null,
+          maxDiscountPct,
+          isCSIOnly,
         };
 
         resolvedItems.push({ promoData, reqData, baseSlug, sourceUrl: p.sourceUrl, title: p.title, commerceId: target.id });
@@ -548,6 +562,15 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[Scrape] ✅ Procesadas: ${processedCount} | Sin categoría: ${skippedNoCategory} | Sin comercio: ${skippedNoCommerce}`);
+
+    // Actualizar activePromoCount en los comercios afectados
+    const affectedCommerceIds = Array.from(new Set(resolvedItems.map(i => i.commerceId)))
+    if (affectedCommerceIds.length > 0) {
+      await Promise.all(affectedCommerceIds.map(async (cid) => {
+        const count = await prisma.promo.count({ where: { commerceId: cid, status: 'ACTIVE' } })
+        await prisma.commerce.update({ where: { id: cid }, data: { activePromoCount: count } })
+      }))
+    }
 
     return NextResponse.json({
       message: 'Scraping completado con éxito',

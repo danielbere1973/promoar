@@ -43,8 +43,19 @@ export async function GET(req: NextRequest) {
     const session = await getServerSession()
     const email = session?.user?.email || req.headers.get('x-user-email')
     const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'MODERATOR'
+    const forMe = params.forMe ?? false
 
-    const result = await getPromosData(params, email, isAdmin)
+    // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal
+    const hasFilters = !!(
+      params.bankIds?.length || params.walletIds?.length || params.networkIds?.length ||
+      params.categorySlugs?.length || params.categorySlug || params.channels?.length ||
+      params.commerceIds?.length || params.discountRanges?.length || params.hasInstallments
+    )
+    const paginate = !forMe && !email && !hasFilters
+    const page = parseInt(searchParams.get('page') ?? '1') || 1
+    const pageSize = Math.min(parseInt(searchParams.get('pageSize') ?? '500') || 500, 1000)
+
+    const result = await getPromosData({ ...params, paginate, page, pageSize }, email, isAdmin)
     return NextResponse.json(result)
   } catch (error) {
     console.error('[GET /api/promos]', error)

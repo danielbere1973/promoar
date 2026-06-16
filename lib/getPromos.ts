@@ -43,6 +43,12 @@ export interface PromoQueryParams {
   guestProfileParam?: string | null
   /** Limita la cantidad de promos consultadas (usado para el preview SSR). */
   take?: number
+  /** Activar paginación keyset (invitados sin filtros). */
+  paginate?: boolean
+  /** Página 1-based para paginación (default 1). */
+  page?: number
+  /** Cantidad de promos por página (default 500). */
+  pageSize?: number
 }
 
 export async function getPromosData(params: PromoQueryParams, email?: string | null, isAdmin?: boolean) {
@@ -70,6 +76,9 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     province: paramProvince = null,
     guestProfileParam = null,
     take,
+    paginate = false,
+    page = 1,
+    pageSize = 500,
   } = params
 
   const today = new Date()
@@ -167,6 +176,14 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     where.requirements = { some: reqFilter }
   }
 
+  const paginateOrderBy = paginate
+    ? [
+        { isCSIOnly: 'asc' as const },
+        { maxDiscountPct: { sort: 'desc' as const, nulls: 'last' as const } },
+        { id: 'asc' as const },
+      ]
+    : undefined
+
   const [promos, totalCount] = await Promise.all([
     prisma.promo.findMany({
       where,
@@ -179,6 +196,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             slug: true,
             logoUrl: true,
             instagramUrl: true,
+            activePromoCount: true,
             branches: { select: { province: true }, where: { province: { not: null } } },
           },
         },
@@ -190,8 +208,8 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
           },
         },
       },
-      orderBy: take ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }] : { createdAt: 'desc' },
-      ...(take ? { take } : {}),
+      orderBy: paginateOrderBy ?? (take ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }] : { createdAt: 'desc' }),
+      ...(paginate ? { take: pageSize, skip: (page - 1) * pageSize } : take ? { take } : {}),
     }),
     prisma.promo.count({ where }),
   ])
@@ -531,8 +549,14 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     }
   }
 
-  // ── Ordenamiento ──────────────────────────────────────────────────────
-  // Popularidad de comercio: cantidad de promos en el resultado actual (sin _count subquery)
+  // Para el path paginado (invitados sin filtros), el orden viene de la DB y no hay dedup por tier.
+  // Solo se aplican los filtros JS de bitmask y specificDates (ya aplicados en `filtered`).
+  if (paginate) {
+    return { promos: filtered as any[], totalCount, hasMore: totalCount > page * pageSize }
+  }
+
+  // ── Ordenamiento (path no-paginado: usuarios con perfil o filtros complejos) ────────────
+  // Popularidad de comercio: cantidad de promos en el resultado actual
   const commercePromoCount: Record<string, number> = {}
   for (const p of dedupedPromos) {
     const cname = (p as any).commerce?.name ?? ''
@@ -591,5 +615,5 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     return a.name.localeCompare(b.name, 'es')
   }).map(d => d.p)
 
-  return { promos: orderedPromos, totalCount }
+  return { promos: orderedPromos, totalCount, hasMore: false }
 }
