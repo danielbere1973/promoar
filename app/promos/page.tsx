@@ -7,7 +7,7 @@ export const revalidate = 0
 // Preview chico para el primer render (SEO/LCP): el catálogo completo de "hoy sin
 // filtros" tiene ~7000 promos / 38MB y tarda ~25s — el cliente lo trae igual que hoy
 // vía el fetch normal, este preview solo evita que el HTML inicial llegue vacío.
-const PREVIEW_TAKE = 300
+const PREVIEW_TAKE = 50
 
 export default async function PromosPage({
   searchParams,

@@ -648,6 +648,19 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   useEffect(() => {
     if (status === 'loading') return;
 
+    // Para invitados en la vista por defecto (sin filtros, sin categorías), las
+    // initialPromos del SSR son suficientes para el primer render. No hacemos
+    // fetch hasta que el usuario interactúe (filtre, cambie categoría, etc.).
+    const hasActiveFilters =
+      selectedCats.length > 0 ||
+      activeFilters.banks.length > 0 || activeFilters.wallets.length > 0 ||
+      activeFilters.networks.length > 0 || activeFilters.days.length > 0 ||
+      activeFilters.channels.length > 0 || activeFilters.commerces.length > 0 ||
+      activeFilters.discountRanges.length > 0 || activeFilters.hasInstallments !== null ||
+      activeFilters.hasCap !== null
+    const isDefaultGuestView = !session?.user?.email && !forMe && !hasActiveFilters && timeFilter === 'today' && !province && page === 1
+    if (isDefaultGuestView && promos.length > 0) return
+
     const controller = new AbortController()
 
     async function load() {
