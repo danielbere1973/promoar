@@ -693,7 +693,9 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
       if (page > 1) {
         setLoadingMore(true)
-      } else {
+      } else if (promos.length === 0) {
+        // Solo mostrar spinner si no hay contenido SSR previo — evita borrar las
+        // promos del servidor mientras el cliente hace el primer fetch.
         setLoading(true)
       }
       try {
