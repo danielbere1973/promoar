@@ -357,6 +357,18 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
   const [promos, setPromos] = useState<Promo[]>(initialPromos ?? [])
   const [loading, setLoading] = useState(initialPromos === null)
+
+  // Seedear el cache con las promos del SSR para que el primer fetch del cliente
+  // sea un cache hit y no haga una llamada al API innecesaria.
+  // La clave debe coincidir con la que construye el useEffect de carga para
+  // un invitado sin filtros: for_me=false&view=today
+  const ssrCacheSeeded = useRef(false)
+  useEffect(() => {
+    if (ssrCacheSeeded.current || !initialPromos?.length) return
+    setCache('for_me=false&view=today', initialPromos)
+    ssrCacheSeeded.current = true
+  }, [])
+
   // Splash solo en la primera carga de la sesión
   // Siempre true en SSR para evitar hydration mismatch — useEffect lo oculta si ya fue visto
   const [showSplash, setShowSplash] = useState(true)
