@@ -1,6 +1,5 @@
 'use client'
 import { useCallback, useRef } from 'react'
-import { usePostHog } from 'posthog-js/react'
 
 // crypto.randomUUID() requiere contexto seguro (HTTPS o localhost) — en mobile se accede
 // por IP local (http://192.168.x.x:3000), donde no existe. Fallback con crypto.getRandomValues
@@ -49,7 +48,6 @@ type TrackEvent =
   | { type: 'PUSH_PROMPT_DISMISS' }
 
 export function useTracking() {
-  const ph = usePostHog?.()
   const sessionId = useRef<string>('')
 
   if (!sessionId.current && typeof window !== 'undefined') {
@@ -60,8 +58,11 @@ export function useTracking() {
     const { type, ...payload } = event
     const sid = sessionId.current
 
-    // 1. PostHog (si está configurado)
-    try { ph?.capture(type, payload) } catch {}
+    // PostHog via window.posthog (set by posthog.init() in PostHogProvider)
+    try {
+      const ph = typeof window !== 'undefined' ? (window as any).posthog : null
+      if (ph?.capture) ph.capture(type, payload)
+    } catch {}
 
     // 2. DB propia — fire and forget
     if (sid) {
@@ -71,7 +72,7 @@ export function useTracking() {
         body: JSON.stringify({ sessionId: sid, eventType: type, payload }),
       }).catch(() => {})
     }
-  }, [ph])
+  }, [])
 
   return { track }
 }

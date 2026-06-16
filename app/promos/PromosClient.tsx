@@ -2040,7 +2040,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                       nearbyCount={g.commerce.id ? nearbyBranches[g.commerce.id]?.count : null}
                       onPromoClick={handlePromoClick}
                       onToggleSave={toggleSave}
-                      priority={isFirst && gi === 0}
+                      priority={isFirst && gi <= 2}
                     />
                   ))}
                 </div>
