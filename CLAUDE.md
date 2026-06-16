@@ -71,10 +71,13 @@ y la sección "⭐ Destacadas hoy" muestra promos `isFeatured` + top por descuen
 categorías (cap 6). Cubre el objetivo de accesos rápidos a lo más relevante sin agregar chips
 de filtro adicionales.
 
-### 2. Pendiente DB
-- DELETE FROM promos + re-scraping completo (hay ~20k promos con datos corruptos)
-- Antes de borrar: exportar CSV desde admin
-- Después: DELETE FROM commerces WHERE "logoUrl" IS NULL
+### 2. Estado DB (verificado 16/6/2026)
+- **13.623 promos totales**: 12.790 ACTIVE, 833 EXPIRED — datos limpios
+- **26 sin requisitos** — basura a borrar: `DELETE FROM promos WHERE id NOT IN (SELECT DISTINCT "promoId" FROM "PromoRequirement")`
+- **107 activas con discountValue 0/null** en todos sus reqs — revisar qué son (probablemente CSI puras)
+- **3 activas con validUntil vencido** — el job de expiración las salteó, borrar manualmente
+- **TODO**: revisar script de expiración — hay promos con validUntil en el pasado que siguen ACTIVE, el job no las está catchando
+- La nota anterior de "20k promos corruptas" era desactualizada, ya no aplica
 
 ### 3. Promos con múltiples comercios ("Disco y Vea", "Supermercados Disco & Vea") — RESUELTO
 En `app/api/admin/scrape/route.ts`: si el `storeName` no matchea un comercio exacto y contiene

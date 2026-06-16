@@ -334,6 +334,7 @@ export default function AdminPage() {
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [filterSource, setFilterSource] = useState('')
   const [showLogoSuggestions, setShowLogoSuggestions] = useState(false)
+  const [flaggedScrapedPromos, setFlaggedScrapedPromos] = useState<Array<{ title: string; storeName: string; sourceUrl: string; description: string }>>([])
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkCategory, setBulkCategory] = useState('')
@@ -635,6 +636,7 @@ export default function AdminPage() {
     setScraperModal(false)
     setError('')
     setSuccess('')
+    setFlaggedScrapedPromos([])
     let totalFound = 0, totalProcessed = 0, errors = 0, triggered = 0
     for (const item of queue) {
       const name = SCRAPERS_CONFIG.find(s => s.id === item.id)?.name ?? item.id
@@ -660,6 +662,9 @@ export default function AdminPage() {
           if (res.ok) {
             totalFound += data.totalFound ?? 0
             totalProcessed += data.processed ?? 0
+            if (data.flagged?.length) {
+              setFlaggedScrapedPromos(prev => [...prev, ...data.flagged])
+            }
           } else {
             errors++
             console.error(`[${name}] ${data.error}`)
@@ -932,6 +937,31 @@ export default function AdminPage() {
           <div className="animate-in slide-in-from-top-4 duration-300">
             {success && <Alert type="success" onClear={() => setSuccess('')}>{success}</Alert>}
             {error && <Alert type="error" onClear={() => setError('')}>{error}</Alert>}
+          </div>
+        )}
+
+        {/* Promos flaggeadas para revisión manual */}
+        {flaggedScrapedPromos.length > 0 && (
+          <div className="mx-4 mb-4 rounded-xl border border-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-600 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-yellow-800 dark:text-yellow-300 text-sm">
+                ⚠️ {flaggedScrapedPromos.length} promo{flaggedScrapedPromos.length !== 1 ? 's' : ''} con título de descuento pero sin % detectado — revisar manualmente
+              </h3>
+              <button onClick={() => setFlaggedScrapedPromos([])} className="text-yellow-600 dark:text-yellow-400 text-xs hover:underline">Cerrar</button>
+            </div>
+            <div className="space-y-2">
+              {flaggedScrapedPromos.map((p, i) => (
+                <div key={i} className="rounded-lg bg-white dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-3">
+                  <div className="font-semibold text-sm text-gray-800 dark:text-gray-100">{p.storeName} — {p.title}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{p.description}</div>
+                  {p.sourceUrl && (
+                    <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block">
+                      Ver legales →
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1934,6 +1964,7 @@ function ScraperSchedulerTab() {
   const [running, setRunning] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [flagged, setFlagged] = useState<Array<{ title: string; storeName: string; sourceUrl: string; description: string }>>([])
 
   async function load() {
     setLoading(true)
@@ -1985,6 +2016,7 @@ function ScraperSchedulerTab() {
         const data = await res.json()
         const found = data.found ?? 0
         const processed = data.processed ?? 0
+        if (data.flagged?.length) setFlagged(data.flagged)
         const label = SCRAPERS_CONFIG.find(s => s.id === scraperId)?.name ?? scraperId
         const detail = processed === 0 ? `sin promos nuevas` : `${found} leídas · ${processed} guardadas`
         setMsg({ type: 'success', text: `✅ ${label}: ${detail}` })
@@ -2017,6 +2049,7 @@ function ScraperSchedulerTab() {
 
   async function runAllHttp() {
     setMsg(null)
+    setFlagged([])
     let ok = 0, err = 0, totalFound = 0, totalProcessed = 0
     for (const s of httpScrapers) {
       setRunning(s.id)
@@ -2030,6 +2063,7 @@ function ScraperSchedulerTab() {
         const data = await res.json().catch(() => ({}))
         totalFound += data.found ?? 0
         totalProcessed += data.processed ?? 0
+        if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
       } else err++
     }
     setRunning(null)
@@ -2056,6 +2090,7 @@ function ScraperSchedulerTab() {
 
   async function runAllLocal() {
     setMsg(null)
+    setFlagged([])
     let ok = 0, err = 0, totalFound = 0, totalProcessed = 0
     for (const s of SCRAPERS_CONFIG) {
       setRunning(s.id)
@@ -2069,6 +2104,7 @@ function ScraperSchedulerTab() {
         const data = await res.json().catch(() => ({}))
         totalFound += data.found ?? 0
         totalProcessed += data.processed ?? 0
+        if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
       } else err++
     }
     setRunning(null)
@@ -2140,6 +2176,30 @@ function ScraperSchedulerTab() {
       {msg && (
         <div className={`px-4 py-3 rounded-2xl text-sm font-medium ${msg.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
           {msg.text}
+        </div>
+      )}
+
+      {flagged.length > 0 && (
+        <div className="rounded-xl border border-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-600 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-yellow-800 dark:text-yellow-300 text-sm">
+              ⚠️ {flagged.length} promo{flagged.length !== 1 ? 's' : ''} con título de descuento pero sin % detectado — revisar manualmente
+            </h3>
+            <button onClick={() => setFlagged([])} className="text-yellow-600 dark:text-yellow-400 text-xs hover:underline">Cerrar</button>
+          </div>
+          <div className="space-y-2">
+            {flagged.map((p, i) => (
+              <div key={i} className="rounded-lg bg-white dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-3">
+                <div className="font-semibold text-sm text-gray-800 dark:text-gray-100">{p.storeName} — {p.title}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{p.description}</div>
+                {p.sourceUrl && (
+                  <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block">
+                    Ver legales →
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -551,8 +551,27 @@ export const CotoScraper: Scraper = {
         extractDiscount(title) ||
         (segmentedDiscounts.length === 1 ? segmentedDiscounts[0] : null);
 
-      // Si no tiene descuento claro lo saltamos (puede revisarse en el futuro para cuotas, etc.)
-      if (!discountInfo) continue;
+      if (!discountInfo) {
+        // Si el título sugiere que es una promo real pero no detectamos el %, la marcamos
+        // para revisión manual en lugar de descartarla silenciosamente.
+        if (/DESCUENTO|AHORRO|REINTEGRO|REEMBOLSO/i.test(title)) {
+          promos.push({
+            title: title.replace(/\s+/g, ' '),
+            description: bodyText.slice(0, 2000).trim(),
+            sourceText: bodyText.slice(0, 8000).trim(),
+            sourceUrl: SOURCE_URL,
+            discount: '0',
+            discountType: 'PENDIENTE_REVISION',
+            validFrom,
+            validUntil,
+            specificDates: specificDates?.length ? specificDates : undefined,
+            validDays,
+            storeName: 'Coto',
+            categoria: 'Supermercados',
+          });
+        }
+        continue;
+      }
 
       promos.push({
         title: title.replace(/\s+/g, ' '),

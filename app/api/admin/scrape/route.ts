@@ -120,16 +120,23 @@ export async function POST(req: NextRequest) {
       console.log(`[Scrape] Total promos encontradas: ${flatPromos.length}`);
     }
 
+    // ── Separar promos marcadas para revisión manual ──────────────────────────
+    const flaggedPromos = flatPromos.filter((p: any) => p.discountType === 'PENDIENTE_REVISION');
+    const processablePromos = flatPromos.filter((p: any) => p.discountType !== 'PENDIENTE_REVISION');
+    if (flaggedPromos.length > 0) {
+      console.log(`[Scrape] ⚠️ ${flaggedPromos.length} promo(s) sin descuento detectado: ${flaggedPromos.map((p: any) => p.title).join(', ')}`);
+    }
+
     // ── AGRUPACIÓN: title + sourceUrl → 1 Promo con N Requirements ───────────
     // Permite que "30% reintegro + 6 CSI" del mismo comercio genere
     // una sola Promo con dos PromoRequirements distintos.
     const grouped = new Map<string, any[]>();
-    for (const p of flatPromos) {
+    for (const p of processablePromos) {
       const key = `${p.title}|||${p.sourceUrl || p.storeName || 'NO_URL'}`;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(p);
     }
-    console.log(`[Scrape] ${flatPromos.length} promos → ${grouped.size} promos únicas agrupadas`);
+    console.log(`[Scrape] ${processablePromos.length} promos → ${grouped.size} promos únicas agrupadas`);
 
     // ── Fetch masivo de entidades (una sola vez) ───────────────────────────
     const categories = await prisma.category.findMany();
@@ -579,6 +586,12 @@ export async function POST(req: NextRequest) {
       processed: processedCount,
       skippedNoCategory,
       skippedNoCommerce,
+      flagged: flaggedPromos.map((p: any) => ({
+        title: p.title,
+        storeName: p.storeName,
+        sourceUrl: p.sourceUrl,
+        description: p.description,
+      })),
     });
 
   } catch (error) {

@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       await prisma.scraperSchedule.update({ where: { scraperId }, data: { nextRunAt: next } })
     }
 
-    return NextResponse.json({ ok: true, found, processed })
+    return NextResponse.json({ ok: true, found, processed, flagged: data.flagged ?? [] })
   } catch (e: any) {
     await prisma.scraperRun.update({
       where: { id: run.id },
