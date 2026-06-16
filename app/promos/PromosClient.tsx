@@ -1051,40 +1051,6 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
               <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
 
-              {/* ── MÁS POPULARES (por variedad de comercios) ── */}
-              <div>
-                <button onClick={() => toggleSection('popular')} className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Más Populares</span>
-                  <span className="text-gray-500 dark:text-slate-400 text-sm font-bold">{openSections.has('popular') ? '−' : '+'}</span>
-                </button>
-                {openSections.has('popular') && categorias.filter(c => popularCatsByCommerce.includes(c.slug)).sort((a, b) => popularCatsByCommerce.indexOf(a.slug) - popularCatsByCommerce.indexOf(b.slug)).map(cat => {
-                  // En modo búsqueda de productos, este menú filtra los resultados de la búsqueda
-                  // (productCategoryFilter, por nombre) en vez del feed general (selectedCats, por slug)
-                  const isActive = isProductSearchMode ? productCategoryFilter === cat.name : selectedCats.includes(cat.slug)
-                  const count = isProductSearchMode
-                    ? productResults.flatMap(c2 => c2.promos).filter(p => p.category.name === cat.name).length
-                    : promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === cat.slug).length
-                  const handleClick = () => {
-                    if (isProductSearchMode) {
-                      setProductCategoryFilter(prev => prev === cat.name ? null : cat.name)
-                    } else {
-                      setSelectedCats(prev => isActive ? prev.filter(s => s !== cat.slug) : [...prev, cat.slug])
-                    }
-                  }
-                  return (
-                    <div key={cat.slug} className={`flex items-center px-3 py-1.5 rounded-xl transition-all ${isActive ? 'bg-[#EEF2F8] dark:bg-[#1E3A5F]/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
-                      <button onClick={handleClick} className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="text-base">{cat.icon}</span>
-                        <span className={`text-xs font-bold truncate ${isActive ? 'text-[#1E3A5F] dark:text-blue-300' : 'text-gray-600 dark:text-slate-400'}`}>{cat.name}</span>
-                      </button>
-                      {count > 0 && <span className="text-[10px] text-gray-400 tabular-nums shrink-0">{count}</span>}
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
-
               {/* ── BANCOS ── */}
               {availableEntities.banks.length > 0 && (
                 <div>
@@ -1230,13 +1196,13 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
               <div className="h-px bg-gray-100 dark:bg-slate-800 mx-3" />
 
-              {/* ── OTRAS CATEGORÍAS ── */}
+              {/* ── CATEGORÍAS ── */}
               <div>
                 <button onClick={() => toggleSection('others')} className="w-full flex items-center justify-between px-3 py-2 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700 dark:text-slate-200">Otras Categorías</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-gray-700 dark:text-slate-200">Categorías</span>
                   <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-500 dark:group-hover:text-slate-300 text-sm">{openSections.has('others') ? '−' : '+'}</span>
                 </button>
-                {openSections.has('others') && categorias.filter(c => !(c as any).isPopular).sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
+                {openSections.has('others') && categorias.sort((a,b) => a.name.localeCompare(b.name)).map(cat => {
                   const isActive = isProductSearchMode ? productCategoryFilter === cat.name : selectedCats.includes(cat.slug)
                   const isFav = favCategories.includes(cat.slug)
                   const count = isProductSearchMode
