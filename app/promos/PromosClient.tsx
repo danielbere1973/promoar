@@ -365,6 +365,12 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   }, [])
   const [visibleCount, setVisibleCount] = useState(20)
   const [loadingAll, setLoadingAll] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [focusedCatPromos, setFocusedCatPromos] = useState<Promo[]>([])
+  const [focusedCatLoading, setFocusedCatLoading] = useState(false)
+  const prevFilterKeyRef = useRef('')
   const [showAccessDenied, setShowAccessDenied] = useState(
     searchParams.get('error') === 'no-autorizado'
   )
@@ -657,17 +663,39 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       }
       if (province) qParams.set('province', province)
 
-      const cacheKey = qParams.toString()
-
-      // Caché hit: mostrar datos inmediatamente, sin spinner
-      const cached = getCached(cacheKey)
-      if (cached) {
-        setPromos(cached)
-        setLoading(false)
-        return
+      // Detectar cambio de filtros para resetear paginación
+      const filterKey = `${status}|${forMe}|${selectedCats.join(',')}|${JSON.stringify(activeFilters)}|${timeFilter}|${province}|${session?.user?.email}`
+      const filtersChanged = filterKey !== prevFilterKeyRef.current
+      if (filtersChanged) {
+        prevFilterKeyRef.current = filterKey
+        if (page !== 1) {
+          setPage(1)  // resetea; el efecto se re-ejecuta con page=1
+          return
+        }
       }
 
-      setLoading(true)
+      if (page > 1) {
+        qParams.set('page', String(page))
+      }
+
+      const cacheKey = qParams.toString()
+
+      // Caché hit solo para page=1
+      if (page === 1) {
+        const cached = getCached(cacheKey)
+        if (cached) {
+          setPromos(cached)
+          setLoading(false)
+          setHasMore(false)
+          return
+        }
+      }
+
+      if (page > 1) {
+        setLoadingMore(true)
+      } else {
+        setLoading(true)
+      }
       try {
         const res = await fetch(`/api/promos?${cacheKey}`, {
           cache: 'no-store',
@@ -675,21 +703,56 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         })
         if (res.ok) {
           const data = await res.json()
-          setCache(cacheKey, data.promos)
-          setPromos(data.promos)
-          setVisibleCount(20)
+          if (page > 1) {
+            setPromos(prev => [...prev, ...(data.promos ?? [])])
+          } else {
+            setCache(cacheKey, data.promos)
+            setPromos(data.promos ?? [])
+            setVisibleCount(20)
+          }
+          setHasMore(data.hasMore ?? false)
         }
       } catch (e: any) {
         if (e?.name !== 'AbortError') console.error(e)
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
+          setLoadingMore(false)
         }
       }
     }
     load()
     return () => controller.abort()
-  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode])
+  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode, page])
+
+  // "Ver todas" de una categoría: fetch on-demand cuando se abre el overlay
+  useEffect(() => {
+    if (!focusedCat || status === 'loading') return
+    let cancelled = false
+    setFocusedCatLoading(true)
+    setFocusedCatPromos([])
+    const qp = new URLSearchParams()
+    qp.set('categories', focusedCat)
+    qp.set('view', timeFilter)
+    qp.set('for_me', String(forMe))
+    if (activeFilters.banks.length) qp.set('banks', activeFilters.banks.join(','))
+    if (activeFilters.wallets.length) qp.set('wallets', activeFilters.wallets.join(','))
+    if (activeFilters.networks.length) qp.set('networks', activeFilters.networks.join(','))
+    if (activeFilters.days.length) qp.set('days', activeFilters.days.join(','))
+    if (activeFilters.channels.length) qp.set('channels', activeFilters.channels.join(','))
+    if (activeFilters.discountRanges.length) qp.set('discountRanges', activeFilters.discountRanges.join(','))
+    if (activeFilters.hasInstallments !== null) qp.set('hasInstallments', String(activeFilters.hasInstallments))
+    if (forMe && guestProfile?.cards?.length && status !== 'authenticated') {
+      qp.set('guest_profile', btoa(JSON.stringify(guestProfile)))
+    }
+    if (province) qp.set('province', province)
+    fetch(`/api/promos?${qp.toString()}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setFocusedCatPromos(d.promos ?? []) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setFocusedCatLoading(false) })
+    return () => { cancelled = true }
+  }, [focusedCat, status, forMe, timeFilter, activeFilters, guestProfile, province, session?.user?.email])
 
   // Tracking de forMe y timeFilter
   const isFirstRender = useRef(true)
@@ -1975,6 +2038,19 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
       </div>
 
+      {/* ── Botón Ver más promos (paginación) ── */}
+      {hasMore && !loading && (
+        <div className="px-4 pb-6 pt-2">
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={loadingMore}
+            className="w-full py-4 text-base font-bold text-[#1E3A5F] dark:text-blue-300 border-2 border-[#1E3A5F] dark:border-blue-600 rounded-2xl hover:bg-[#EEF2F8] dark:hover:bg-[#1E3A5F]/20 transition-all disabled:opacity-50"
+          >
+            {loadingMore ? 'Cargando...' : 'Ver más promos →'}
+          </button>
+        </div>
+      )}
+
       {/* ══════════ FOOTER ══════════ */}
     <footer className="bg-slate-900 text-slate-400 pb-24">
       <div className="max-w-5xl mx-auto px-6 py-10">
@@ -2028,14 +2104,17 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
       {/* ── Overlay "Ver todas" de una categoría ── */}
       {focusedCat && (() => {
-        const sec = (() => {
-          for (const p of promosFiltradas) {
-            const key = p.category.slug ?? p.category.name
-            if (key === focusedCat) return { catName: p.category.name, catIcon: p.category.icon ?? '🏷️' }
-          }
-          return null
-        })()
-        const catPromos = promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === focusedCat)
+        const catInfo = categorias.find(c => c.slug === focusedCat)
+        const sec = catInfo
+          ? { catName: catInfo.name, catIcon: catInfo.icon ?? '🏷️' }
+          : (() => {
+              for (const p of promosFiltradas) {
+                const key = p.category.slug ?? p.category.name
+                if (key === focusedCat) return { catName: p.category.name, catIcon: p.category.icon ?? '🏷️' }
+              }
+              return null
+            })()
+        const catPromos = focusedCatPromos.length > 0 ? focusedCatPromos : promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === focusedCat)
         if (!sec) return null
         return (
           <div className="fixed inset-0 z-50 flex flex-col">
@@ -2049,11 +2128,14 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 </button>
                 <div>
                   <p className="text-[15px] font-black text-[#1E3A5F] dark:text-white">{sec.catIcon} {sec.catName}</p>
-                  <p className="text-[11px] text-[#8B96A5]">{catPromos.length} promos</p>
+                  <p className="text-[11px] text-[#8B96A5]">{focusedCatLoading ? 'Cargando...' : `${catPromos.length} promos`}</p>
                 </div>
               </div>
               {/* Grid vertical */}
               <div className="overflow-y-auto flex-1 p-4">
+                {focusedCatLoading ? (
+                  <div className="flex justify-center py-12 text-gray-400 text-sm">Cargando promos...</div>
+                ) : (
                 <div className="grid grid-cols-2 gap-3">
                   {catPromos.map(p => {
                     const pctReq = bestPercentageReq(p)
@@ -2093,6 +2175,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                     )
                   })}
                 </div>
+                )}
               </div>
             </div>
           </div>
