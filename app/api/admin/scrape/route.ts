@@ -497,7 +497,7 @@ export async function POST(req: NextRequest) {
           validUntil: p.validUntil ? new Date(p.validUntil) : endOfMonth,
           validDays: p.validDays ?? 127,
           specificDates: p.specificDates ? JSON.stringify(p.specificDates) : null,
-          categoryId: catMatch.id,
+          categoryId: target.defaultCategoryId ?? catMatch.id,
           commerceId: target.id,
           status: 'ACTIVE' as const,
           sourceUrl: p.sourceUrl ?? null,

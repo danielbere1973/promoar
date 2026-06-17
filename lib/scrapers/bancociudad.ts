@@ -193,7 +193,14 @@ function parseItem(item: any, rubroMap: Map<number, string>): ParsedItem | null 
   if (!descuento && !cuotas) return null;
 
   const rubroNombre = rubroMap.get(item.rubroId) ?? '';
-  const categoria   = mapRubro(rubroNombre) || detectCategoria(storeName);
+  const catFromRubro = mapRubro(rubroNombre);
+  const catFromName  = detectCategoria(storeName);
+  // Si el rubro dice Combustible pero el nombre no es una empresa de combustible conocida,
+  // ignorar el rubro y usar la detección por nombre (evita que comercios vecinos queden mal)
+  const FUEL_NAMES = /\bYPF\b|\bSHELL\b|\bAXION\b|\bPETROBRAS\b|\bWICO\b|\bGULF\b|\bDAPSA\b|\bPDVSA\b|\bGNC\b|\bPUMA\s+ENERGY\b|ESTACION|NAFTA|COMBUSTIBLE|SURTIDOR/i;
+  const categoria = (catFromRubro === 'Combustible' && !FUEL_NAMES.test(storeName))
+    ? (catFromName || '')
+    : (catFromRubro || catFromName);
 
   const mediosPago: any[] = Array.isArray(item.medios_pago) ? item.medios_pago : [];
   const { walletNames, cardNetworks, hasWalletOnly } = parseMediosPago(mediosPago);
