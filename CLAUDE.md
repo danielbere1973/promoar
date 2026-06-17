@@ -71,13 +71,9 @@ y la sección "⭐ Destacadas hoy" muestra promos `isFeatured` + top por descuen
 categorías (cap 6). Cubre el objetivo de accesos rápidos a lo más relevante sin agregar chips
 de filtro adicionales.
 
-### 2. Estado DB (verificado 16/6/2026)
-- **13.623 promos totales**: 12.790 ACTIVE, 833 EXPIRED — datos limpios
-- **26 sin requisitos** — basura a borrar: `DELETE FROM promos WHERE id NOT IN (SELECT DISTINCT "promoId" FROM "PromoRequirement")`
-- **107 activas con discountValue 0/null** en todos sus reqs — revisar qué son (probablemente CSI puras)
-- **3 activas con validUntil vencido** — el job de expiración las salteó, borrar manualmente
-- **TODO**: revisar script de expiración — hay promos con validUntil en el pasado que siguen ACTIVE, el job no las está catchando
-- La nota anterior de "20k promos corruptas" era desactualizada, ya no aplica
+### 2. Estado DB — RESUELTO (17/6/2026)
+Limpieza completa: se borraron promos sin requisitos, las 3 con validUntil vencido,
+y se revisó el job de expiración. DB limpia.
 
 ### 3. Promos con múltiples comercios ("Disco y Vea", "Supermercados Disco & Vea") — RESUELTO
 En `app/api/admin/scrape/route.ts`: si el `storeName` no matchea un comercio exacto y contiene
@@ -105,9 +101,9 @@ correctamente como "2x1".
 Ver `logos-report.csv` en la raíz. 700 sin logo, 522 con favicon Google (algunos incorrectos).
 Priorizar comercios con 5+ promos. Algunos favicon Google son el ícono genérico de globo.
 
-### 7. Normalización de comercios — tabla de alias permanente
-Crear tabla `CommerceAlias` para que futuros scrapeos normalicen nombres automáticamente.
-Evita que "HAVANNA GOOGLE PAY APPLE PAY" vuelva a crearse como comercio separado.
+### 7. Normalización de comercios — RESUELTO
+Modelo `CommerceAlias` implementado con ABM en admin y botón "Fusionar" en Comercios.
+El scraper ya usa alias antes de crear un comercio nuevo (commit 6aabcc0).
 
 ### 8. Búsqueda de productos — DONE (ver "Features implementados")
 Implementada: modelo `CommerceProduct`, endpoint `/api/search/products?q=` y UI `ProductSearch.tsx`.
@@ -473,6 +469,21 @@ se agrupa por `commerce.id ?? commerce.name` preservando el orden (ya viene orde
 descuento/popularidad), y el límite `PREVIEW`/"Ver todas →" ahora cuenta **comercios
 agrupados**, no promos individuales. El prototipo `app/promos/grouped-demo/page.tsx` queda
 como referencia/demo aislada.
+
+### 14. Sincronización de categorías comercio↔promo — RESUELTO (17/6/2026)
+1565 promos tenían categoría detectada por keyword (scraper) que no coincidía con la
+`defaultCategory` del comercio (ej. Farmacity en "Salud y Belleza" en vez de "Farmacias").
+Fix en DB: `UPDATE promos SET categoryId = commerce.defaultCategoryId WHERE diffieren`.
+Fix en scraper (`app/api/admin/scrape/route.ts`): en el upsert de promo usar
+`target.defaultCategoryId ?? catMatch.id` para que la categoría del comercio resuelto
+(post alias) siempre pise la detección por keywords.
+Fix en Banco Ciudad (`lib/scrapers/bancociudad.ts`): no asignar rubro "Combustible" a
+comercios cuyo nombre no es una empresa de combustible conocida.
+
+### 15. OG image dinámica `/api/og/daily` — EN PROGRESO
+Genera una imagen 1080×1080 con las mejores promos del día (top categorías prioritarias).
+Código en `app/api/og/daily/route.tsx`, sin commitear. Falta integrarlo a `<meta og:image>`
+o endpoint de generación para redes sociales.
 
 ### 13. SSR + Paginación de `/promos` — DONE (rama `feature/pagination`, pendiente merge)
 
