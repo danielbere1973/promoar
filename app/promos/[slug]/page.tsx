@@ -88,15 +88,11 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export async function generateStaticParams() {
-  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const promos = await prisma.promo.findMany({
-    where: {
-      status: 'ACTIVE',
-      slug: { not: null },
-      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
-    },
-    select: { slug: true },
-    take: 1000,
+    where: { status: { in: ['ACTIVE', 'EXPIRED'] }, slug: { not: null } },
+    select: { slug: true, status: true },
+    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+    take: 2000,
   })
   return promos.map(p => ({ slug: p.slug! }))
 }
@@ -117,7 +113,93 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   })
 
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-  if (!promo || promo.status === 'EXPIRED' || (promo.validUntil && promo.validUntil < startOfToday)) notFound()
+  if (!promo) notFound()
+
+  const isExpired = promo.status === 'EXPIRED' || (promo.validUntil != null && promo.validUntil < startOfToday)
+
+  // Promo vencida — página 200 con promos vigentes del mismo comercio
+  if (isExpired) {
+    const vigentes = await prisma.promo.findMany({
+      where: { commerceId: promo.commerce.id, status: 'ACTIVE', slug: { not: null } },
+      include: { requirements: { include: { bank: true, wallet: true }, take: 1, orderBy: { discountValue: 'desc' } } },
+      orderBy: { requirements: { _count: 'desc' } },
+      take: 6,
+    })
+    const firstReq = promo.requirements[0]
+    const entityName = firstReq?.bank?.name ?? firstReq?.wallet?.name ?? null
+    const entitySlug = firstReq?.bank?.slug ?? firstReq?.wallet?.slug ?? null
+    const entityType = firstReq?.bank ? 'bancos' : firstReq?.wallet ? 'bancos' : null
+
+    return (
+      <div className="min-h-screen bg-gray-50 pb-24">
+        <BackButton label={promo.commerce.name} />
+        <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
+
+          {/* Banner vencida */}
+          <div className="bg-gray-100 border border-gray-200 rounded-3xl px-6 py-8 text-center space-y-2">
+            <p className="text-4xl">⏰</p>
+            <p className="text-lg font-black text-gray-700">Esta promo ya venció</p>
+            <p className="text-sm text-gray-500">
+              La promoción de <span className="font-semibold">{promo.commerce.name}</span> ya no está vigente.
+            </p>
+          </div>
+
+          {/* Link a entidad */}
+          {entitySlug && entityType && (
+            <a
+              href={`/${entityType}/${entitySlug}`}
+              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
+            >
+              <div>
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
+                <p className="text-sm font-black text-gray-800">{entityName} →</p>
+              </div>
+            </a>
+          )}
+
+          {/* Promos vigentes del mismo comercio */}
+          {vigentes.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">
+                Promos vigentes en {promo.commerce.name}
+              </p>
+              {vigentes.map(v => {
+                const req = v.requirements[0]
+                const label = req ? discountLabel(req) : ''
+                const entity = req?.bank?.name ?? req?.wallet?.name ?? ''
+                return (
+                  <a
+                    key={v.id}
+                    href={`/promos/${v.slug}`}
+                    className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
+                  >
+                    <div>
+                      <p className="text-base font-black text-gray-800">{label}</p>
+                      {entity && <p className="text-xs text-gray-400 mt-0.5">con {entity}</p>}
+                    </div>
+                    <span className="text-indigo-500 font-black text-sm shrink-0 ml-3">→</span>
+                  </a>
+                )
+              })}
+            </div>
+          )}
+
+          {/* CTA general */}
+          <a
+            href="/promos"
+            className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg"
+          >
+            <div>
+              <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Querés ver tus promos?</p>
+              <p className="text-sm font-black">Ver todas las promos →</p>
+            </div>
+            <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
+          </a>
+        </div>
+        <BottomNav />
+      </div>
+    )
+  }
 
   const branches = await prisma.commerceBranch.findMany({
     where: { commerceId: promo.commerce.id },
