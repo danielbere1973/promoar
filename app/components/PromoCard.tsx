@@ -3,8 +3,8 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Share2, Copy, Check, Heart } from 'lucide-react'
 
 type Req = {
-  bank?: { name: string; slug?: string } | null
-  wallet?: { name: string; slug?: string } | null
+  bank?: { name: string; slug?: string; logoUrl?: string | null } | null
+  wallet?: { name: string; slug?: string; logoUrl?: string | null } | null
   discountType?: string
   discountValue?: number
   nxmN?: number | null
@@ -128,20 +128,29 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
 
       {/* Imagen/Logo */}
       <div className="relative bg-[#F8F9FB] dark:bg-slate-900 border-b border-[#F0F2F5] dark:border-slate-700 flex items-center justify-center" style={{ height: 80 }}>
-        {promo.commerce.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={promo.commerce.logoUrl}
-            alt={promo.commerce.name}
-            className="max-h-12 max-w-[80%] object-contain p-2"
-            loading={priority ? 'eager' : 'lazy'}
-            fetchPriority={priority ? 'high' : 'auto'}
-          />
-        ) : (
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-black" style={{ background: promo.category.color + '20', color: promo.category.color }}>
-            {promo.category.icon ?? '🏷️'}
-          </div>
-        )}
+        {(() => {
+          const logoSrc = promo.commerce.logoUrl
+            ?? promo.requirements[0]?.bank?.logoUrl
+            ?? promo.requirements[0]?.wallet?.logoUrl
+            ?? null
+          const logoAlt = promo.commerce.logoUrl
+            ? promo.commerce.name
+            : promo.requirements[0]?.bank?.name ?? promo.requirements[0]?.wallet?.name ?? promo.commerce.name
+          return logoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoSrc}
+              alt={logoAlt}
+              className="max-h-12 max-w-[80%] object-contain p-2"
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-black" style={{ background: promo.category.color + '20', color: promo.category.color }}>
+              {promo.category.icon ?? '🏷️'}
+            </div>
+          )
+        })()}
         {(pctReq?.discountValue ?? 0) <= 100 && label && (
           <div className="absolute top-2 right-2 bg-[#D94F2B] text-white text-[10px] font-black px-1.5 py-0.5 rounded-md leading-tight">
             {pctReq ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
