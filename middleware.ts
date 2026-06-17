@@ -36,6 +36,7 @@ const PUBLIC_PATHS = [
   '/finanzas',
   '/api/finanzas',
   '/api/push',
+  '/api/events',
 ]
 
 // Rutas solo para ADMIN

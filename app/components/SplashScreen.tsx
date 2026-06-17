@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 
 export default function SplashScreen({ loading, onDone }: { loading: boolean; onDone: () => void }) {
   const [progress, setProgress] = useState(0)
@@ -52,7 +53,7 @@ export default function SplashScreen({ loading, onDone }: { loading: boolean; on
     >
       <div className="flex flex-col items-center gap-8 px-8 w-full max-w-sm">
         {/* Logo */}
-        <img src="/promoar_gabi_transparente.png" alt="PromoAR" className="w-48 h-auto object-contain" />
+        <Image src="/promoar_gabi_transparente.png" alt="PromoAR" width={192} height={192} className="w-48 h-auto object-contain" priority />
 
         {/* Tagline */}
         <div className="text-center space-y-1">

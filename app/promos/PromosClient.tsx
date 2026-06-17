@@ -2,6 +2,7 @@
 import React from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -1044,7 +1045,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       <aside className="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-950 z-30 overflow-hidden">
         {/* Logo */}
         <div className="flex items-center justify-center bg-white border-b border-gray-100 dark:border-slate-700 py-6 px-6 shrink-0">
-          <img src="/promoar_gabi_transparente.png" alt="PromoAR" className="w-full h-auto object-contain" />
+          <Image src="/promoar_gabi_transparente.png" alt="PromoAR" width={240} height={240} className="w-full h-auto object-contain" />
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden px-6 pt-4">
