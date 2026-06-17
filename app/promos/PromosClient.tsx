@@ -342,7 +342,7 @@ function getSpecialBadge(p: Promo) {
   return null
 }
 
-export default function PromosClient({ initialPromos, initialCats, initialTotalCount }: { initialPromos: Promo[] | null, initialCats: string[], initialTotalCount: number }) {
+export default function PromosClient({ initialPromos, initialCats, initialTotalCount, initialProvince }: { initialPromos: Promo[] | null, initialCats: string[], initialTotalCount: number, initialProvince?: string | null }) {
   const { data: session, status } = useSession()
   const nombre = session?.user?.name || 'Invitado'
   const iniciales = (() => {
@@ -366,7 +366,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const ssrCacheSeeded = useRef(false)
   useEffect(() => {
     if (ssrCacheSeeded.current || !initialPromos?.length) return
-    setCache('for_me=false&view=today', initialPromos)
+    const ssrKey = initialProvince ? `for_me=false&view=today&province=${encodeURIComponent(initialProvince)}` : 'for_me=false&view=today'
+    setCache(ssrKey, initialPromos)
     ssrCacheSeeded.current = true
   }, [])
 
@@ -457,7 +458,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [productCategoryFilter, setProductCategoryFilter] = useState<string | null>(null)
   const productSearchRef = useRef<HTMLInputElement>(null)
   const productDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [province, setProvince] = useState<string | null>(null)
+  const [province, setProvince] = useState<string | null>(initialProvince ?? null)
   const [showProvinceSelector, setShowProvinceSelector] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [favCategories, setFavCategories] = useState<string[]>([]) // slugs, max 3
@@ -532,6 +533,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     // Cargar provincia guardada (aplica a todos)
     const savedProvince = localStorage.getItem('userProvince')
     if (savedProvince) {
+      // Sincronizar cookie para que el SSR la lea en la próxima visita
+      document.cookie = `userProvince=${encodeURIComponent(savedProvince)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
       setProvince(savedProvince)
     } else {
       setTimeout(() => setShowProvinceSelector(true), 2000)
@@ -662,7 +665,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       activeFilters.channels.length > 0 || activeFilters.commerces.length > 0 ||
       activeFilters.discountRanges.length > 0 || activeFilters.hasInstallments !== null ||
       activeFilters.hasCap !== null
-    const isDefaultGuestView = !session?.user?.email && !forMe && !hasActiveFilters && timeFilter === 'today' && !province && page === 1
+    const isDefaultGuestView = !session?.user?.email && !forMe && !hasActiveFilters && timeFilter === 'today' && page === 1
     if (isDefaultGuestView && promos.length > 0) return
 
     const controller = new AbortController()
@@ -2267,6 +2270,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           onSelect={(prov) => {
             setProvince(prov)
             localStorage.setItem('userProvince', prov)
+            document.cookie = `userProvince=${encodeURIComponent(prov)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
             setShowProvinceSelector(false)
           }}
           onDismiss={() => setShowProvinceSelector(false)}

@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth/next'
+import { cookies } from 'next/headers'
 import { getPromosData } from '@/lib/getPromos'
 import PromosClient from './PromosClient'
 
@@ -15,12 +16,16 @@ export default async function PromosPage({
   searchParams: Record<string, string | undefined>
 }) {
   const session = await getServerSession()
+  const cookieStore = await cookies()
   const initialCats = searchParams.cats?.split(',').filter(Boolean) ?? []
   const forMe = !!session?.user?.email
   const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'MODERATOR'
+  const initialProvince = cookieStore.get('userProvince')?.value
+    ? decodeURIComponent(cookieStore.get('userProvince')!.value)
+    : null
 
   const { promos: rawPromos, totalCount } = await getPromosData(
-    { forMe, view: 'today', categorySlugs: initialCats, take: PREVIEW_TAKE },
+    { forMe, view: 'today', categorySlugs: initialCats, take: PREVIEW_TAKE, province: initialProvince },
     session?.user?.email,
     isAdmin,
   ).catch(() => ({ promos: null, totalCount: 0 }))
@@ -29,5 +34,5 @@ export default async function PromosPage({
   // para que coincida con el tipo `Promo` esperado por PromosClient
   const initialPromos = rawPromos ? JSON.parse(JSON.stringify(rawPromos)) : null
 
-  return <PromosClient initialPromos={initialPromos} initialCats={initialCats} initialTotalCount={totalCount} />
+  return <PromosClient initialPromos={initialPromos} initialCats={initialCats} initialTotalCount={totalCount} initialProvince={initialProvince} />
 }
