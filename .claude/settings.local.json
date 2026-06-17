@@ -3,7 +3,9 @@
     "allow": [
       "WebFetch(domain:www.bancoprovincia.com.ar)",
       "Bash(node node_modules/typescript/bin/tsc --noEmit --skipLibCheck)",
-      "Bash(curl -s -X POST https://promoar.vercel.app/api/internal/vtex-promos -H \"Content-Type: application/json\" -H \"Authorization: Bearer promoar-vtex-2026\" -d \"{\\\\\"site\\\\\":\\\\\"test\\\\\",\\\\\"promos\\\\\":{\\\\\"123\\\\\":{\\\\\"promoCode\\\\\":\\\\\"2x1\\\\\",\\\\\"effectiveDiscount\\\\\":0.5}}}\" -w \"\\\\nHTTP %{http_code}\")"
+      "Bash(curl -s -X POST https://promoar.vercel.app/api/internal/vtex-promos -H \"Content-Type: application/json\" -H \"Authorization: Bearer promoar-vtex-2026\" -d \"{\\\\\"site\\\\\":\\\\\"test\\\\\",\\\\\"promos\\\\\":{\\\\\"123\\\\\":{\\\\\"promoCode\\\\\":\\\\\"2x1\\\\\",\\\\\"effectiveDiscount\\\\\":0.5}}}\" -w \"\\\\nHTTP %{http_code}\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const fs = require\\('fs'\\); const lines = fs.readFileSync\\('C:/Users/pablo/Proyectos/promoar/node_modules/next/dist/compiled/@vercel/og/index.node.js','utf8'\\).split\\('\\\\n'\\); console.log\\('18987:', lines[18986]?.substring\\(0,300\\)\\); console.log\\('18988:', lines[18987]?.substring\\(0,300\\)\\); console.log\\('18989:', lines[18988]?.substring\\(0,300\\)\\)\")"
     ]
   }
 }
