@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil } from 'lucide-react'
+import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil, Bell } from 'lucide-react'
 import BottomNav from '../components/BottomNav'
 import PromoWizard, { GuestProfile } from '../components/PromoWizard'
+import NotificationSettings from '../components/NotificationSettings'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type BankSegment = { id: string; name: string; bankId: string }
@@ -136,7 +137,7 @@ export default function PerfilPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
-  const [activeTab, setActiveTab] = useState<'personal' | 'finance'>('personal')
+  const [activeTab, setActiveTab] = useState<'personal' | 'finance' | 'notif'>('personal')
 
   const [showSaved, setShowSaved] = useState(false)
   const [savedPromos, setSavedPromos] = useState<any[]>([])
@@ -462,11 +463,11 @@ export default function PerfilPage() {
           </button>
         </div>
 
-        <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-2xl">
-          {(['personal', 'finance'] as const).map(tab => (
+        <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-2xl gap-1">
+          {(['personal', 'finance', 'notif'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${activeTab === tab ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-300 hover:text-gray-700 dark:hover:text-white'}`}>
-              {tab === 'personal' ? 'Datos Personales' : 'Perfil Financiero'}
+              className={`flex-1 py-2.5 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === tab ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-300 hover:text-gray-700 dark:hover:text-white'}`}>
+              {tab === 'personal' ? 'Personal' : tab === 'finance' ? 'Financiero' : <><Bell size={13} />Alertas</>}
             </button>
           ))}
         </div>
@@ -594,6 +595,10 @@ export default function PerfilPage() {
               {saving ? 'Guardando...' : 'Guardar Información Personal'}
             </button>
           </div>
+
+        ) : activeTab === 'notif' ? (
+          /* ══════════ TAB NOTIFICACIONES ══════════ */
+          <NotificationSettings />
 
         ) : (
           /* ══════════ TAB PERFIL FINANCIERO ══════════ */

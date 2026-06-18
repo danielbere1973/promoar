@@ -54,7 +54,8 @@ model User {
   sessions         Session[]
   trustedDevices   TrustedDevice[]
   events           UserEvent[]
-  pushSubscriptions PushSubscription[]
+  pushSubscriptions        PushSubscription[]
+  notificationPreferences  NotificationPreference[]
 
   @@map("users")
 }
@@ -72,6 +73,29 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+model NotificationPreference {
+  id             String     @id @default(cuid())
+  userId         String
+  type           NotifType
+  categoryId     String?
+  commerceId     String?
+  minDiscount    Int?
+  maxPerWeek     Int        @default(3)
+  sentThisWeek   Int        @default(0)
+  weekStartedAt  DateTime?
+  lastSentAt     DateTime?
+  active         Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id])
+  commerce Commerce? @relation(fields: [commerceId], references: [id])
+
+  @@unique([userId, type, categoryId, commerceId])
+  @@index([userId, active])
+  @@map("notification_preferences")
 }
 
 model UserEvent {
@@ -277,8 +301,9 @@ model Category {
   icon             String
   color            String
   order            Int        @default(0)
-  promos           Promo[]
-  defaultCommerce  Commerce[] @relation("CommerceDefaultCategory")
+  promos                   Promo[]
+  defaultCommerce          Commerce[]               @relation("CommerceDefaultCategory")
+  notificationPreferences  NotificationPreference[]
 
   @@map("categories")
 }
@@ -294,10 +319,11 @@ model Commerce {
   defaultCategoryId String?
   activePromoCount  Int              @default(0)
   defaultCategory   Category?        @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
-  promos            Promo[]
-  branches          CommerceBranch[]
-  products          CommerceProduct[]
-  aliases           CommerceAlias[]
+  promos                   Promo[]
+  branches                 CommerceBranch[]
+  products                 CommerceProduct[]
+  aliases                  CommerceAlias[]
+  notificationPreferences  NotificationPreference[]
 
   @@map("commerces")
 }
@@ -686,4 +712,11 @@ enum FinanceItemType {
   ON
   FCI_MM
   DOLAR_TIPO
+}
+
+enum NotifType {
+  CATEGORY
+  COMMERCE
+  PROXIMITY
+  DIGEST
 }

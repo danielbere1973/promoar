@@ -530,6 +530,8 @@ export async function POST(req: NextRequest) {
     const existingSlugs = new Set((await prisma.promo.findMany({ select: { slug: true } })).map(p => p.slug).filter(Boolean));
 
     // ── FASE 3: Guardar en batches paralelos de 10 ────────────────────────────
+    const newPromoIds: string[] = []
+
     const savePromo = async (item: ResolvedItem) => {
       const { promoData, reqData, baseSlug, sourceUrl, title, commerceId } = item;
       const existing = isUniqueUrl(sourceUrl)
@@ -552,7 +554,8 @@ export async function POST(req: NextRequest) {
         if (existingSlugs.has(slug)) slug = `${baseSlug}-${Date.now().toString(36)}`;
         existingSlugs.add(slug);
         try {
-          await prisma.promo.create({ data: { ...promoData, slug, requirements: { create: reqData } } });
+          const created = await prisma.promo.create({ data: { ...promoData, slug, requirements: { create: reqData } } });
+          newPromoIds.push(created.id)
         } catch (e: any) {
           if (e?.code === 'P2002') {
             // Slug duplicado — skipear silenciosamente, es una promo duplicada
@@ -577,6 +580,19 @@ export async function POST(req: NextRequest) {
         const count = await prisma.promo.count({ where: { commerceId: cid, status: 'ACTIVE' } })
         await prisma.commerce.update({ where: { id: cid }, data: { activePromoCount: count } })
       }))
+    }
+
+    // Disparar notificaciones push para las promos nuevas (fire-and-forget)
+    if (newPromoIds.length > 0) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+      fetch(`${baseUrl}/api/push/notify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.VTEX_SESSION_SECRET}`,
+        },
+        body: JSON.stringify({ promoIds: newPromoIds }),
+      }).catch((e) => console.error('[push/notify] Error:', e))
     }
 
     return NextResponse.json({

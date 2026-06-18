@@ -62,6 +62,14 @@ Coto, Diarco, Jumbo, Disco, Vea, Changomas, Carrefour, MODO, MercadoPago, Cuenta
 - Admin bypass: admins ven todas las promos sin filtro de perfil
 - En `promo.commerce` el select incluye `_count: { promos activas }` para el score de popularidad
 
+## Redes y segmentos de tarjetas — RESUELTO (18/6/2026)
+Todas las entidades financieras tienen sus `cardNetworks` y `cardSegments` configurados correctamente.
+- **Cabal**: exclusivo de Banco Credicoop (removido de los 15 bancos que lo tenían mal asignado).
+- **Segmentos**: cada banco tiene sus segmentos Visa/Mastercard/AmEx cargados manualmente.
+  Banco Macro incluye los segmentos exclusivos Selecta (Visa Signature Macro Selecta, Mastercard Black Macro Selecta, AmEx Black Macro Selecta).
+  Bancos regionales con segmentos propios: Córdoba (Cordobesa), Santiago del Estero (BSE), Corrientes (Visa Agro/Business/Corporate).
+- **Billeteras**: Cuenta DNI (Visa), Mercado Pago (Mastercard), Personal Pay (Visa), Uala (Mastercard), Brubank (Visa), Naranja X (Visa/AmEx/Naranja X), Carrefour Banco (Mastercard), CencoPay (Mastercard), BUEPP (Visa).
+
 ## Pendiente INMEDIATO — próxima sesión
 
 ### 1. Quick filters predefinidos en pantalla principal — RESUELTO/SUPERADO
