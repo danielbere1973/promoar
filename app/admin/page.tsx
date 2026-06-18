@@ -2,11 +2,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import StatsView from './StatsView'
 import ClassifyButton from './ClassifyButton'
+import NotifPrefsTab from './NotifPrefsTab'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
   Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
-  GitMerge, Link2
+  GitMerge, Link2, Bell
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -312,7 +313,7 @@ function normalizeSearch(s: string): string {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -422,6 +423,7 @@ export default function AdminPage() {
       setUsers(data.users)
     }
   }, [])
+
 
   useEffect(() => {
     fetchEntities()
@@ -904,6 +906,9 @@ export default function AdminPage() {
         <TabButton active={tab === 'scheduler'} icon={CalendarClock} onClick={() => setTab('scheduler')}>
           Scrapers
         </TabButton>
+        <TabButton active={tab === 'alertas'} icon={Bell} onClick={() => setTab('alertas')}>
+          Alertas
+        </TabButton>
         {tab === 'form' && (
           <TabButton active={true} icon={Pencil} onClick={() => { }}>
             {editingId ? 'Editando Promo' : 'Nueva Promo'}
@@ -931,6 +936,9 @@ export default function AdminPage() {
         )}
         {tab === 'stats' && <StatsView />}
         {tab === 'scheduler' && <ScraperSchedulerTab />}
+
+        {/* ══════════ TAB ALERTAS ══════════ */}
+        {tab === 'alertas' && <NotifPrefsTab />}
 
         {/* Alerts */}
         {(success || error) && (
