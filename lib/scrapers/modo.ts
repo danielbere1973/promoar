@@ -269,9 +269,22 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
       timeout: 10000,
     });
 
-    // cap_amount
-    const capMatch = html.match(/\\"cap_amount\\":\s*(\d+(?:\.\d+)?)/);
-    if (capMatch) result.cap = parseFloat(capMatch[1]);
+    // Prioridad: cap_amount_period (mensual) > cap_amount (genérico) > cap_transaction (por transacción)
+    const capPeriodMatch    = html.match(/\\"cap_amount_period\\":\s*(\d+(?:\.\d+)?)/);
+    const capAmountMatch    = html.match(/\\"cap_amount\\":\s*(\d+(?:\.\d+)?)/);
+    const capTransMatch     = html.match(/\\"cap_transaction\\":\s*(\d+(?:\.\d+)?)/);
+    const capPeriodVal      = capPeriodMatch  ? parseFloat(capPeriodMatch[1])  : 0;
+    const capAmountVal      = capAmountMatch  ? parseFloat(capAmountMatch[1])  : 0;
+    const capTransVal       = capTransMatch   ? parseFloat(capTransMatch[1])   : 0;
+    if (capPeriodVal > 0) {
+      result.cap = capPeriodVal;
+      // capPeriod se resuelve más abajo con period_type; si no viene, defaultea a MONTHLY en línea 443
+    } else if (capAmountVal > 0) {
+      result.cap = capAmountVal;
+    } else if (capTransVal > 0) {
+      result.cap = capTransVal;
+      result.capPeriod = 'PER_TRANSACTION';
+    }
 
     // period_type → capPeriod
     const periodMatch = html.match(/\\"period_type\\":\s*\\"([^"]+)\\"/);

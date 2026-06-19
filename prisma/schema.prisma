@@ -79,9 +79,22 @@ model NotificationPreference {
   id             String     @id @default(cuid())
   userId         String
   type           NotifType
+
+  // Objetivo: categoría y/o comercio específico
   categoryId     String?
   commerceId     String?
+
+  // Condiciones de entidad financiera
+  bankId         String?
+  walletId       String?
+  cardNetworkId  String?
+  cardSegmentId  String?
+
+  // Condiciones de beneficio
   minDiscount    Int?
+  discountFilter String     @default("ALL")   // ALL | DISCOUNT_ONLY | CSI_ONLY
+
+  // Periodicidad y vigencia
   maxPerWeek     Int        @default(3)
   sentThisWeek   Int        @default(0)
   weekStartedAt  DateTime?
@@ -90,11 +103,14 @@ model NotificationPreference {
   validUntil     DateTime?
   createdAt      DateTime   @default(now())
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id])
-  commerce Commerce? @relation(fields: [commerceId], references: [id])
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      Category?     @relation(fields: [categoryId], references: [id])
+  commerce      Commerce?     @relation(fields: [commerceId], references: [id])
+  bank          Bank?         @relation(fields: [bankId], references: [id])
+  wallet        Wallet?       @relation(fields: [walletId], references: [id])
+  cardNetwork   CardNetwork?  @relation(fields: [cardNetworkId], references: [id])
+  cardSegment   BankSegment?  @relation(fields: [cardSegmentId], references: [id])
 
-  @@unique([userId, type, categoryId, commerceId])
   @@index([userId, active])
   @@map("notification_preferences")
 }
@@ -229,6 +245,7 @@ model BankSegment {
   bank              Bank               @relation(fields: [bankId], references: [id], onDelete: Cascade)
   promoRequirements PromoRequirement[]
   userCards         UserCard[]
+  notifPreferences  NotificationPreference[]
 
   @@unique([bankId, name])
   @@map("bank_segments")
@@ -249,6 +266,7 @@ model Bank {
   userCards         UserCard[]
   cardNetworks      CardNetwork[]      @relation("BankToCardNetwork")
   cardSegments      CardSegment[]      @relation("BankToCardSegment")
+  notifPreferences  NotificationPreference[]
 
   @@index([codigoModo], map: "banks_codigo_modo_idx")
   @@map("banks")
@@ -264,6 +282,8 @@ model Wallet {
   userCards         UserCard[]
   userWallets       UserWallet[]
   cardNetworks      CardNetwork[]      @relation("WalletToCardNetwork")
+  cardSegments      CardSegment[]      @relation("WalletToCardSegment")
+  notifPreferences  NotificationPreference[]
 
   @@map("wallets")
 }
@@ -277,6 +297,7 @@ model CardNetwork {
   banks             Bank[]             @relation("BankToCardNetwork")
   cardSegments      CardSegment[]
   wallets           Wallet[]           @relation("WalletToCardNetwork")
+  notifPreferences  NotificationPreference[]
 
   @@map("card_networks")
 }
@@ -290,6 +311,7 @@ model CardSegment {
   promoRequirements PromoRequirement[]
   userCards         UserCard[]
   banks             Bank[]             @relation("BankToCardSegment")
+  wallets           Wallet[]           @relation("WalletToCardSegment")
 
   @@unique([cardNetworkId, cardType, name])
   @@map("card_segments")

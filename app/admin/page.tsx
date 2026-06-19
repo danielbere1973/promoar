@@ -3,16 +3,18 @@ import { useState, useEffect, useCallback } from 'react'
 import StatsView from './StatsView'
 import ClassifyButton from './ClassifyButton'
 import NotifPrefsTab from './NotifPrefsTab'
+import PendingPromosTab from './PendingPromosTab'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
   Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
-  GitMerge, Link2, Bell
+  GitMerge, Link2, Bell, ClipboardList
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
 type Entity = { id: string; name: string; active?: boolean; logoUrl?: string }
 type Bank = Entity & { segments: Entity[]; cardNetworks: Entity[]; cardSegments?: Entity[] }
+type Wallet = Entity & { cardNetworks?: Entity[]; cardSegments?: Entity[] }
 type CardNetwork = Entity & { banks: { id: string; name: string }[] }
 type CardSegment = { id: string; name: string; cardNetworkId: string; cardType: string; cardNetwork: { name: string } }
 type User = { id: string; name: string | null; email: string; role: string; active: boolean; createdAt: string; image?: string }
@@ -21,7 +23,7 @@ type Entities = {
   categories: Entity[]
   commerces: Entity[]
   banks: Bank[]
-  wallets: (Entity & { cardNetworks?: Entity[] })[]
+  wallets: Wallet[]
   cardNetworks: CardNetwork[]
   segments: (Entity & { bankId: string })[]
   cardSegments: CardSegment[]
@@ -313,7 +315,7 @@ function normalizeSearch(s: string): string {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -909,6 +911,9 @@ export default function AdminPage() {
         <TabButton active={tab === 'alertas'} icon={Bell} onClick={() => setTab('alertas')}>
           Alertas
         </TabButton>
+        <TabButton active={tab === 'pending'} icon={ClipboardList} onClick={() => setTab('pending')}>
+          Pendientes
+        </TabButton>
         {tab === 'form' && (
           <TabButton active={true} icon={Pencil} onClick={() => { }}>
             {editingId ? 'Editando Promo' : 'Nueva Promo'}
@@ -939,6 +944,7 @@ export default function AdminPage() {
 
         {/* ══════════ TAB ALERTAS ══════════ */}
         {tab === 'alertas' && <NotifPrefsTab />}
+        {tab === 'pending' && <PendingPromosTab />}
 
         {/* Alerts */}
         {(success || error) && (
@@ -1446,9 +1452,9 @@ export default function AdminPage() {
                       key={w.id}
                       name={w.name}
                       img={w.logoUrl}
-                      onEdit={() => setEditingEntity({ type: 'wallet', ...w, cardNetworkIds: w.cardNetworks?.map(n => n.id) || [] })}
+                      onEdit={() => setEditingEntity({ type: 'wallet', ...w, cardNetworkIds: w.cardNetworks?.map((n: any) => n.id) || [], cardSegmentIds: w.cardSegments?.map((s: any) => s.id) || [] })}
                       onDelete={() => handleDeleteEntity('wallet', w.id)}
-                      badge={`${w.cardNetworks?.length || 0} redes`}
+                      badge={`${w.cardNetworks?.length || 0} redes · ${w.cardSegments?.length || 0} tarjetas`}
                     />
                   )))}
 
@@ -2743,7 +2749,7 @@ function EntityModal({ entity, setEntity, onSave, onCancel, saving, allEntities 
             </Field>
           )}
 
-          {entity.type === 'bank' && !!entity.cardNetworkIds?.length && (
+          {(entity.type === 'bank' || entity.type === 'wallet') && !!entity.cardNetworkIds?.length && (
             <Field label="Segmentos de Tarjeta Ofrecidos">
               <div className="max-h-48 overflow-y-auto custom-scrollbar border border-slate-200 rounded-2xl bg-slate-50 p-2 flex flex-col gap-1 mt-2">
                 {allEntities?.cardSegments?.filter((cs: any) => entity.cardNetworkIds?.includes(cs.cardNetworkId)).map((cs: any) => (

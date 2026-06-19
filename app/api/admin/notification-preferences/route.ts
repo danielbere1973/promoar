@@ -17,6 +17,10 @@ const prefInclude = {
   user: { select: { id: true, name: true, email: true } },
   category: { select: { id: true, name: true, icon: true } },
   commerce: { select: { id: true, name: true } },
+  bank: { select: { id: true, name: true, logoUrl: true } },
+  wallet: { select: { id: true, name: true, logoUrl: true } },
+  cardNetwork: { select: { id: true, name: true } },
+  cardSegment: { select: { id: true, name: true, bankId: true } },
 }
 
 // GET /api/admin/notification-preferences
@@ -31,12 +35,16 @@ export async function GET() {
   return NextResponse.json({ preferences: prefs })
 }
 
-// POST /api/admin/notification-preferences — alta
+// POST /api/admin/notification-preferences
 export async function POST(req: NextRequest) {
   if (!await isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { userId, type, categoryId, commerceId, minDiscount, maxPerWeek, active, validUntil } = body
+  const {
+    userId, type, categoryId, commerceId,
+    bankId, walletId, cardNetworkId, cardSegmentId,
+    minDiscount, discountFilter, maxPerWeek, active, validUntil,
+  } = body
 
   if (!userId || !type) return NextResponse.json({ error: 'userId y type son requeridos' }, { status: 400 })
 
@@ -46,7 +54,12 @@ export async function POST(req: NextRequest) {
       type,
       categoryId: categoryId || null,
       commerceId: commerceId || null,
+      bankId: bankId || null,
+      walletId: walletId || null,
+      cardNetworkId: cardNetworkId || null,
+      cardSegmentId: cardSegmentId || null,
       minDiscount: minDiscount ? Number(minDiscount) : null,
+      discountFilter: discountFilter || 'ALL',
       maxPerWeek: maxPerWeek ? Number(maxPerWeek) : 3,
       active: active !== undefined ? active : true,
       validUntil: validUntil ? new Date(validUntil) : null,
@@ -57,22 +70,32 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ preference: pref }, { status: 201 })
 }
 
-// PATCH /api/admin/notification-preferences — edición completa
+// PATCH /api/admin/notification-preferences
 export async function PATCH(req: NextRequest) {
   if (!await isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { id, active, maxPerWeek, minDiscount, validUntil, resetWeek, categoryId, commerceId, type } = body
+  const {
+    id, type, categoryId, commerceId,
+    bankId, walletId, cardNetworkId, cardSegmentId,
+    active, maxPerWeek, minDiscount, discountFilter, validUntil, resetWeek,
+  } = body
+
   if (!id) return NextResponse.json({ error: 'Falta id' }, { status: 400 })
 
   const data: Record<string, any> = {}
   if (active !== undefined) data.active = active
-  if (maxPerWeek !== undefined) data.maxPerWeek = Number(maxPerWeek)
-  if (minDiscount !== undefined) data.minDiscount = minDiscount === '' ? null : Number(minDiscount)
-  if (validUntil !== undefined) data.validUntil = validUntil ? new Date(validUntil) : null
+  if (type !== undefined) data.type = type
   if (categoryId !== undefined) data.categoryId = categoryId || null
   if (commerceId !== undefined) data.commerceId = commerceId || null
-  if (type !== undefined) data.type = type
+  if (bankId !== undefined) data.bankId = bankId || null
+  if (walletId !== undefined) data.walletId = walletId || null
+  if (cardNetworkId !== undefined) data.cardNetworkId = cardNetworkId || null
+  if (cardSegmentId !== undefined) data.cardSegmentId = cardSegmentId || null
+  if (maxPerWeek !== undefined) data.maxPerWeek = Number(maxPerWeek)
+  if (minDiscount !== undefined) data.minDiscount = minDiscount === '' ? null : Number(minDiscount)
+  if (discountFilter !== undefined) data.discountFilter = discountFilter
+  if (validUntil !== undefined) data.validUntil = validUntil ? new Date(validUntil) : null
   if (resetWeek) { data.sentThisWeek = 0; data.weekStartedAt = null }
 
   const updated = await prisma.notificationPreference.update({

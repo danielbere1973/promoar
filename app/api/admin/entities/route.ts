@@ -12,10 +12,10 @@ export async function GET() {
         include: { segments: true, cardNetworks: true, cardSegments: true },
         orderBy: { name: 'asc' } 
       }),
-      prisma.wallet.findMany({ 
-        include: { cardNetworks: true },
-        where: { active: true }, 
-        orderBy: { name: 'asc' } 
+      prisma.wallet.findMany({
+        include: { cardNetworks: true, cardSegments: true },
+        where: { active: true },
+        orderBy: { name: 'asc' }
       }),
       prisma.cardNetwork.findMany({ 
         include: { 
@@ -195,6 +195,11 @@ export async function PUT(req: Request) {
       if (data.cardNetworkIds?.length) {
         updateData.cardNetworks = {
           set: data.cardNetworkIds.map((cid: string) => ({ id: cid }))
+        }
+      }
+      if (data.cardSegmentIds !== undefined) {
+        updateData.cardSegments = {
+          set: (data.cardSegmentIds as string[]).map(csid => ({ id: csid }))
         }
       }
       const wallet = await prisma.wallet.update({

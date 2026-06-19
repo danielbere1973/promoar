@@ -543,7 +543,7 @@ export async function POST(req: NextRequest) {
           await prisma.promoRequirement.deleteMany({ where: { promoId: existing.id } });
           let slug = baseSlug;
           if (existingSlugs.has(slug) && existing.slug !== slug) slug = `${baseSlug}-${existing.id.slice(-4)}`;
-          await prisma.promo.update({ where: { id: existing.id }, data: { ...promoData, slug, requirements: { create: reqData } } });
+          await prisma.promo.update({ where: { id: existing.id }, data: { ...promoData, slug, status: existing.status, requirements: { create: reqData } } });
         } catch (e: any) {
           if (e?.code === 'P2002') {
             // Slug duplicado al actualizar — skipear, ya existe una promo con ese slug
@@ -554,7 +554,7 @@ export async function POST(req: NextRequest) {
         if (existingSlugs.has(slug)) slug = `${baseSlug}-${Date.now().toString(36)}`;
         existingSlugs.add(slug);
         try {
-          const created = await prisma.promo.create({ data: { ...promoData, slug, requirements: { create: reqData } } });
+          const created = await prisma.promo.create({ data: { ...promoData, slug, status: 'DRAFT', requirements: { create: reqData } } });
           newPromoIds.push(created.id)
         } catch (e: any) {
           if (e?.code === 'P2002') {

@@ -1,15 +1,21 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, X, Check, RefreshCw, ChevronDown, Search } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Plus, Pencil, Trash2, X, Check, RefreshCw, Search } from 'lucide-react'
 
 type User = { id: string; name: string | null; email: string }
 type Category = { id: string; name: string; icon: string }
 type Commerce = { id: string; name: string }
+type Bank = { id: string; name: string; logoUrl: string | null; segments?: { id: string; name: string }[] }
+type Wallet = { id: string; name: string; logoUrl: string | null }
+type CardNetwork = { id: string; name: string }
+type BankSegment = { id: string; name: string; bankId: string }
+
 type Pref = {
   id: string
   type: string
   active: boolean
   minDiscount: number | null
+  discountFilter: string
   maxPerWeek: number
   sentThisWeek: number
   lastSentAt: string | null
@@ -18,44 +24,42 @@ type Pref = {
   user: User
   category: Category | null
   commerce: Commerce | null
+  bank: { id: string; name: string } | null
+  wallet: { id: string; name: string } | null
+  cardNetwork: { id: string; name: string } | null
+  cardSegment: { id: string; name: string } | null
 }
 
 const NOTIF_TYPES = ['CATEGORY', 'COMMERCE', 'DIGEST', 'PROXIMITY']
-
 const TYPE_LABELS: Record<string, string> = {
-  CATEGORY: 'Categoría',
-  COMMERCE: 'Comercio',
-  DIGEST: 'Digest diario',
-  PROXIMITY: 'Proximidad',
+  CATEGORY: 'Categoría', COMMERCE: 'Comercio', DIGEST: 'Digest diario', PROXIMITY: 'Proximidad',
 }
-
 const TYPE_COLORS: Record<string, string> = {
   CATEGORY: 'bg-blue-50 text-blue-600',
   COMMERCE: 'bg-emerald-50 text-emerald-600',
   DIGEST: 'bg-amber-50 text-amber-600',
   PROXIMITY: 'bg-purple-50 text-purple-600',
 }
+const DISCOUNT_FILTERS = [
+  { value: 'ALL', label: '% y CSI' },
+  { value: 'DISCOUNT_ONLY', label: 'Solo % descuento' },
+  { value: 'CSI_ONLY', label: 'Solo CSI' },
+]
 
 type FormState = {
-  userId: string
-  type: string
-  categoryId: string
-  commerceId: string
-  minDiscount: string
-  maxPerWeek: string
-  active: boolean
-  validUntil: string
+  userId: string; type: string
+  categoryId: string; commerceId: string; commerceSearch: string
+  bankId: string; walletId: string; cardNetworkId: string; cardSegmentId: string
+  minDiscount: string; discountFilter: string; maxPerWeek: string
+  active: boolean; validUntil: string
 }
 
 const emptyForm = (): FormState => ({
-  userId: '',
-  type: 'CATEGORY',
-  categoryId: '',
-  commerceId: '',
-  minDiscount: '',
-  maxPerWeek: '3',
-  active: true,
-  validUntil: '',
+  userId: '', type: 'CATEGORY',
+  categoryId: '', commerceId: '', commerceSearch: '',
+  bankId: '', walletId: '', cardNetworkId: '', cardSegmentId: '',
+  minDiscount: '', discountFilter: 'ALL', maxPerWeek: '3',
+  active: true, validUntil: '',
 })
 
 export default function NotifPrefsTab() {
@@ -63,10 +67,14 @@ export default function NotifPrefsTab() {
   const [users, setUsers] = useState<User[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [commerces, setCommerces] = useState<Commerce[]>([])
+  const [banks, setBanks] = useState<Bank[]>([])
+  const [wallets, setWallets] = useState<Wallet[]>([])
+  const [cardNetworks, setCardNetworks] = useState<CardNetwork[]>([])
+  const [bankSegments, setBankSegments] = useState<BankSegment[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Filters
+  // Table filters
   const [searchUser, setSearchUser] = useState('')
   const [filterType, setFilterType] = useState('')
   const [filterCat, setFilterCat] = useState('')
@@ -79,28 +87,38 @@ export default function NotifPrefsTab() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const [prefsRes, usersRes, catsRes, comRes] = await Promise.all([
+    const [prefsRes, usersRes, catsRes, entRes, comRes] = await Promise.all([
       fetch('/api/admin/notification-preferences').then(r => r.json()),
       fetch('/api/admin/users').then(r => r.json()),
       fetch('/api/categories').then(r => r.json()),
       fetch('/api/public/entities').then(r => r.json()),
+      fetch('/api/admin/commerces-list').then(r => r.json()),
     ])
     setPrefs(prefsRes.preferences ?? [])
     setUsers(usersRes.users ?? [])
-    setCategories(catsRes.categories ?? catsRes ?? [])
-    // extract commerces from entities
-    const ents = comRes
-    const all: Commerce[] = [
-      ...(ents.banks ?? []),
-      ...(ents.wallets ?? []),
-      ...(ents.networks ?? []),
-      ...(ents.commerces ?? []),
-    ]
-    setCommerces(all)
+    const cats: Category[] = catsRes.categories ?? catsRes ?? []
+    setCategories(cats.slice().sort((a, b) => a.name.localeCompare(b.name, 'es')))
+    setBanks(entRes.banks ?? [])
+    setWallets(entRes.wallets ?? [])
+    setCardNetworks(entRes.cardNetworks ?? [])
+    setBankSegments(entRes.segments ?? [])
+    setCommerces(comRes.commerces ?? [])
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  // Filtered commerces for the search box
+  const filteredCommerces = useMemo(() => {
+    if (!form.commerceSearch) return commerces.slice(0, 50)
+    const q = form.commerceSearch.toLowerCase()
+    return commerces.filter(c => c.name.toLowerCase().includes(q)).slice(0, 50)
+  }, [commerces, form.commerceSearch])
+
+  // Segments for selected bank
+  const availableSegments = useMemo(() =>
+    form.bankId ? bankSegments.filter(s => s.bankId === form.bankId) : []
+  , [bankSegments, form.bankId])
 
   function openCreate() {
     setEditingId(null)
@@ -115,7 +133,13 @@ export default function NotifPrefsTab() {
       type: p.type,
       categoryId: p.category?.id ?? '',
       commerceId: p.commerce?.id ?? '',
+      commerceSearch: p.commerce?.name ?? '',
+      bankId: p.bank?.id ?? '',
+      walletId: p.wallet?.id ?? '',
+      cardNetworkId: p.cardNetwork?.id ?? '',
+      cardSegmentId: p.cardSegment?.id ?? '',
       minDiscount: p.minDiscount !== null ? String(p.minDiscount) : '',
+      discountFilter: p.discountFilter ?? 'ALL',
       maxPerWeek: String(p.maxPerWeek),
       active: p.active,
       validUntil: p.validUntil ? p.validUntil.slice(0, 10) : '',
@@ -123,24 +147,31 @@ export default function NotifPrefsTab() {
     setPanelOpen(true)
   }
 
+  function setF(patch: Partial<FormState>) { setForm(f => ({ ...f, ...patch })) }
+
   async function save() {
     if (!form.userId || !form.type) return
     setSaving(true)
     try {
+      const payload = {
+        userId: form.userId, type: form.type,
+        categoryId: form.categoryId || null,
+        commerceId: form.commerceId || null,
+        bankId: form.bankId || null,
+        walletId: form.walletId || null,
+        cardNetworkId: form.cardNetworkId || null,
+        cardSegmentId: form.cardSegmentId || null,
+        minDiscount: form.minDiscount || null,
+        discountFilter: form.discountFilter,
+        maxPerWeek: form.maxPerWeek,
+        active: form.active,
+        validUntil: form.validUntil || null,
+      }
       if (editingId) {
         const res = await fetch('/api/admin/notification-preferences', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: editingId,
-            type: form.type,
-            categoryId: form.categoryId,
-            commerceId: form.commerceId,
-            minDiscount: form.minDiscount,
-            maxPerWeek: form.maxPerWeek,
-            active: form.active,
-            validUntil: form.validUntil,
-          }),
+          body: JSON.stringify({ id: editingId, ...payload }),
         })
         if (res.ok) {
           const data = await res.json()
@@ -150,16 +181,7 @@ export default function NotifPrefsTab() {
         const res = await fetch('/api/admin/notification-preferences', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: form.userId,
-            type: form.type,
-            categoryId: form.categoryId,
-            commerceId: form.commerceId,
-            minDiscount: form.minDiscount,
-            maxPerWeek: form.maxPerWeek,
-            active: form.active,
-            validUntil: form.validUntil,
-          }),
+          body: JSON.stringify(payload),
         })
         if (res.ok) {
           const data = await res.json()
@@ -167,16 +189,13 @@ export default function NotifPrefsTab() {
         }
       }
       setPanelOpen(false)
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   async function deletePref(id: string) {
     if (!confirm('¿Eliminar esta preferencia?')) return
     const res = await fetch('/api/admin/notification-preferences', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
     if (res.ok) setPrefs(p => p.filter(x => x.id !== id))
@@ -184,31 +203,21 @@ export default function NotifPrefsTab() {
 
   async function toggleActive(pref: Pref) {
     const res = await fetch('/api/admin/notification-preferences', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: pref.id, active: !pref.active }),
     })
-    if (res.ok) {
-      const data = await res.json()
-      setPrefs(p => p.map(x => x.id === pref.id ? data.preference : x))
-    }
+    if (res.ok) { const d = await res.json(); setPrefs(p => p.map(x => x.id === pref.id ? d.preference : x)) }
   }
 
   async function resetWeek(pref: Pref) {
     const res = await fetch('/api/admin/notification-preferences', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: pref.id, resetWeek: true }),
     })
-    if (res.ok) {
-      const data = await res.json()
-      setPrefs(p => p.map(x => x.id === pref.id ? data.preference : x))
-    }
+    if (res.ok) { const d = await res.json(); setPrefs(p => p.map(x => x.id === pref.id ? d.preference : x)) }
   }
 
-  function isExpired(p: Pref) {
-    return p.validUntil && new Date(p.validUntil) < new Date()
-  }
+  function isExpired(p: Pref) { return !!(p.validUntil && new Date(p.validUntil) < new Date()) }
 
   const filtered = prefs.filter(p => {
     if (searchUser && !p.user.email.toLowerCase().includes(searchUser.toLowerCase()) &&
@@ -221,48 +230,32 @@ export default function NotifPrefsTab() {
     return true
   })
 
+  const descFilterLabel = (v: string) => DISCOUNT_FILTERS.find(d => d.value === v)?.label ?? v
+
   return (
-    <div className="flex gap-4 h-full">
-      {/* Main panel */}
-      <div className="flex-1 bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-1 flex-wrap">
-            {/* Search user */}
+    <div className="flex gap-4 items-start">
+      {/* ── Main table ── */}
+      <div className="flex-1 bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm min-w-0">
+        {/* Header / filters */}
+        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-2 justify-between">
+          <div className="flex flex-wrap gap-2 items-center">
             <div className="relative">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchUser}
-                onChange={e => setSearchUser(e.target.value)}
-                placeholder="Usuario..."
-                className="pl-8 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-100 w-40"
-              />
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={searchUser} onChange={e => setSearchUser(e.target.value)}
+                placeholder="Usuario..." className="pl-7 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-100 w-36" />
             </div>
-            {/* Filter type */}
-            <select
-              value={filterType}
-              onChange={e => setFilterType(e.target.value)}
-              className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-slate-100"
-            >
+            <select value={filterType} onChange={e => setFilterType(e.target.value)}
+              className="text-xs bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none">
               <option value="">Todos los tipos</option>
               {NOTIF_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
             </select>
-            {/* Filter category */}
-            <select
-              value={filterCat}
-              onChange={e => setFilterCat(e.target.value)}
-              className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-slate-100"
-            >
+            <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+              className="text-xs bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none">
               <option value="">Todas las categorías</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
             </select>
-            {/* Filter status */}
-            <select
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-              className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-slate-100"
-            >
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="text-xs bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none">
               <option value="">Todos los estados</option>
               <option value="active">Activas</option>
               <option value="paused">Pausadas</option>
@@ -270,20 +263,15 @@ export default function NotifPrefsTab() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 whitespace-nowrap">{filtered.length} resultados</span>
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-700 transition-colors"
-            >
-              <Plus size={14} /> Nueva
+            <span className="text-[10px] text-slate-400">{filtered.length} resultados</span>
+            <button onClick={openCreate}
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-700 transition-colors">
+              <Plus size={13} /> Nueva
             </button>
-            <button onClick={fetchAll} className="p-2 text-slate-400 hover:text-slate-700 transition-colors">
-              <RefreshCw size={15} />
-            </button>
+            <button onClick={fetchAll} className="p-1.5 text-slate-400 hover:text-slate-700"><RefreshCw size={14} /></button>
           </div>
         </div>
 
-        {/* Table */}
         {loading ? (
           <div className="py-16 text-center text-slate-400 text-sm">Cargando...</div>
         ) : filtered.length === 0 ? (
@@ -293,83 +281,75 @@ export default function NotifPrefsTab() {
             <table className="w-full text-left">
               <thead>
                 <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                  <th className="px-5 py-3">Usuario</th>
-                  <th className="px-5 py-3">Tipo</th>
-                  <th className="px-5 py-3">Objetivo</th>
-                  <th className="px-5 py-3">Desc. mín.</th>
-                  <th className="px-5 py-3">Periodicidad</th>
-                  <th className="px-5 py-3">Vigencia</th>
-                  <th className="px-5 py-3">Semana</th>
-                  <th className="px-5 py-3">Último envío</th>
-                  <th className="px-5 py-3">Estado</th>
-                  <th className="px-5 py-3 text-right">Acciones</th>
+                  <th className="px-4 py-3">Usuario</th>
+                  <th className="px-4 py-3">Tipo</th>
+                  <th className="px-4 py-3">Objetivo</th>
+                  <th className="px-4 py-3">Entidad</th>
+                  <th className="px-4 py-3">Beneficio</th>
+                  <th className="px-4 py-3">Periodicidad</th>
+                  <th className="px-4 py-3">Vigencia</th>
+                  <th className="px-4 py-3">Semana</th>
+                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map(p => {
                   const expired = isExpired(p)
+                  const entityParts = [p.bank?.name, p.wallet?.name, p.cardNetwork?.name, p.cardSegment?.name].filter(Boolean)
                   return (
-                    <tr key={p.id} className={`hover:bg-slate-50/50 transition-colors ${expired ? 'opacity-50' : ''}`}>
-                      <td className="px-5 py-3">
-                        <p className="text-xs font-bold text-slate-900 max-w-[120px] truncate">{p.user.name || p.user.email.split('@')[0]}</p>
-                        <p className="text-[10px] text-slate-400 max-w-[120px] truncate">{p.user.email}</p>
+                    <tr key={p.id} className={`hover:bg-slate-50/40 transition-colors ${expired ? 'opacity-50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <p className="text-xs font-bold text-slate-900 max-w-[110px] truncate">{p.user.name ?? p.user.email.split('@')[0]}</p>
+                        <p className="text-[10px] text-slate-400 max-w-[110px] truncate">{p.user.email}</p>
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${TYPE_COLORS[p.type] ?? 'bg-slate-100 text-slate-500'}`}>
                           {TYPE_LABELS[p.type] ?? p.type}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-700 max-w-[130px] truncate">
+                      <td className="px-4 py-3 text-xs text-slate-700 max-w-[130px] truncate">
                         {p.category ? `${p.category.icon} ${p.category.name}` : p.commerce?.name ?? '—'}
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-500">
-                        {p.minDiscount !== null ? `${p.minDiscount}%` : '—'}
+                      <td className="px-4 py-3 text-[10px] text-slate-500 max-w-[130px] truncate">
+                        {entityParts.length ? entityParts.join(' · ') : '—'}
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-500">
-                        {p.maxPerWeek}/sem
+                      <td className="px-4 py-3 text-[10px] text-slate-500">
+                        <div>{descFilterLabel(p.discountFilter)}</div>
+                        {p.minDiscount !== null && <div className="text-slate-400">≥ {p.minDiscount}%</div>}
                       </td>
-                      <td className="px-5 py-3 text-xs">
+                      <td className="px-4 py-3 text-xs text-slate-500">{p.maxPerWeek}/sem</td>
+                      <td className="px-4 py-3 text-xs">
                         {p.validUntil ? (
                           <span className={expired ? 'text-red-500 font-bold' : 'text-slate-500'}>
                             {new Date(p.validUntil).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                             {expired && ' ✗'}
                           </span>
-                        ) : <span className="text-slate-300">Sin venc.</span>}
+                        ) : <span className="text-slate-300 text-[10px]">Sin venc.</span>}
                       </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-1.5">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
                           <span className="text-xs text-slate-500">{p.sentThisWeek}/{p.maxPerWeek}</span>
-                          <button
-                            onClick={() => resetWeek(p)}
-                            title="Resetear contador"
-                            className="text-slate-300 hover:text-amber-500 transition-colors"
-                          >
-                            <RefreshCw size={11} />
+                          <button onClick={() => resetWeek(p)} title="Resetear" className="text-slate-300 hover:text-amber-500">
+                            <RefreshCw size={10} />
                           </button>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-[10px] text-slate-400">
-                        {p.lastSentAt
-                          ? new Date(p.lastSentAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-                          : '—'}
-                      </td>
-                      <td className="px-5 py-3">
-                        <button
-                          onClick={() => toggleActive(p)}
-                          className={`text-[10px] font-bold px-2 py-1 rounded-full transition-colors ${
+                      <td className="px-4 py-3">
+                        <button onClick={() => toggleActive(p)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${
                             p.active && !expired ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                          }`}
-                        >
+                          }`}>
                           {p.active && !expired ? 'ACTIVA' : expired ? 'VENCIDA' : 'PAUSADA'}
                         </button>
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(p)} className="p-1.5 text-slate-400 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100">
-                            <Pencil size={13} />
+                          <button onClick={() => openEdit(p)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">
+                            <Pencil size={12} />
                           </button>
-                          <button onClick={() => deletePref(p.id)} className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50">
-                            <Trash2 size={13} />
+                          <button onClick={() => deletePref(p.id)} className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50">
+                            <Trash2 size={12} />
                           </button>
                         </div>
                       </td>
@@ -382,135 +362,182 @@ export default function NotifPrefsTab() {
         )}
       </div>
 
-      {/* Side form panel */}
+      {/* ── Side form panel ── */}
       {panelOpen && (
-        <div className="w-80 bg-white border border-slate-200 rounded-3xl shadow-sm p-5 space-y-4 shrink-0 self-start">
+        <div className="w-80 bg-white border border-slate-200 rounded-3xl shadow-sm p-5 space-y-4 shrink-0">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-800">{editingId ? 'Editar alerta' : 'Nueva alerta'}</h3>
-            <button onClick={() => setPanelOpen(false)} className="p-1 text-slate-400 hover:text-slate-700">
-              <X size={16} />
-            </button>
+            <button onClick={() => setPanelOpen(false)} className="p-1 text-slate-400 hover:text-slate-700"><X size={16} /></button>
           </div>
 
-          <label className="block">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Usuario</span>
-            <select
-              value={form.userId}
-              onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}
+          {/* ── Usuario ── */}
+          <Field label="Usuario">
+            <select value={form.userId} onChange={e => setF({ userId: e.target.value })}
               disabled={!!editingId}
-              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
-            >
+              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50">
               <option value="">Seleccioná un usuario...</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name ?? u.email}</option>
-              ))}
+              {users.map(u => <option key={u.id} value={u.id}>{u.name ?? u.email}</option>)}
             </select>
-          </label>
+          </Field>
 
-          <label className="block">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tipo</span>
-            <select
-              value={form.type}
-              onChange={e => setForm(f => ({ ...f, type: e.target.value, categoryId: '', commerceId: '' }))}
-              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200"
-            >
+          {/* ── Tipo ── */}
+          <Field label="Tipo">
+            <select value={form.type} onChange={e => setF({ type: e.target.value, categoryId: '', commerceId: '', commerceSearch: '' })}
+              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200">
               {NOTIF_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
             </select>
-          </label>
+          </Field>
 
+          {/* ── Objetivo ── */}
           {form.type === 'CATEGORY' && (
-            <label className="block">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Categoría</span>
-              <select
-                value={form.categoryId}
-                onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
-                className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200"
-              >
-                <option value="">Sin especificar</option>
+            <Field label="Categoría">
+              <select value={form.categoryId} onChange={e => setF({ categoryId: e.target.value })}
+                className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200">
+                <option value="">Todas las categorías</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
               </select>
-            </label>
+            </Field>
           )}
 
           {form.type === 'COMMERCE' && (
-            <label className="block">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Comercio</span>
+            <Field label="Comercio">
+              <div className="relative mt-1">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={form.commerceSearch}
+                  onChange={e => setF({ commerceSearch: e.target.value, commerceId: '' })}
+                  placeholder="Buscar comercio..."
+                  className="w-full pl-8 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-t-xl outline-none focus:ring-2 focus:ring-slate-200"
+                />
+              </div>
               <select
+                size={6}
                 value={form.commerceId}
-                onChange={e => setForm(f => ({ ...f, commerceId: e.target.value }))}
-                className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200"
-              >
-                <option value="">Sin especificar</option>
-                {commerces.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                onChange={e => {
+                  const opt = e.target.options[e.target.selectedIndex]
+                  setF({ commerceId: e.target.value, commerceSearch: opt.text })
+                }}
+                className="w-full text-xs bg-slate-50 border border-x-slate-200 border-b-slate-200 rounded-b-xl px-3 py-1 outline-none focus:ring-2 focus:ring-slate-200">
+                {filteredCommerces.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-            </label>
+            </Field>
           )}
 
+          <hr className="border-slate-100" />
+
+          {/* ── Entidad financiera ── */}
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entidad financiera (opcional)</p>
+
+          <Field label="Banco">
+            <select value={form.bankId} onChange={e => setF({ bankId: e.target.value, cardSegmentId: '' })}
+              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200">
+              <option value="">Cualquier banco</option>
+              {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </Field>
+
+          {form.bankId && availableSegments.length > 0 && (
+            <Field label="Segmento de tarjeta">
+              <select value={form.cardSegmentId} onChange={e => setF({ cardSegmentId: e.target.value })}
+                className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200">
+                <option value="">Cualquier segmento</option>
+                {availableSegments.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </Field>
+          )}
+
+          <Field label="Billetera">
+            <select value={form.walletId} onChange={e => setF({ walletId: e.target.value })}
+              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200">
+              <option value="">Cualquier billetera</option>
+              {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </Field>
+
+          <Field label="Red de tarjeta">
+            <select value={form.cardNetworkId} onChange={e => setF({ cardNetworkId: e.target.value })}
+              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200">
+              <option value="">Cualquier red</option>
+              {cardNetworks.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+            </select>
+          </Field>
+
+          <hr className="border-slate-100" />
+
+          {/* ── Beneficio ── */}
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tipo de beneficio</p>
+
+          <Field label="Aplica para">
+            <div className="mt-1 flex gap-2 flex-wrap">
+              {DISCOUNT_FILTERS.map(d => (
+                <button key={d.value} type="button"
+                  onClick={() => setF({ discountFilter: d.value })}
+                  className={`text-xs px-3 py-1.5 rounded-xl font-medium border transition-colors ${
+                    form.discountFilter === d.value
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-400'
+                  }`}>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <Field label="Descuento mínimo (%)">
+            <input type="number" min={0} max={100} value={form.minDiscount}
+              onChange={e => setF({ minDiscount: e.target.value })}
+              placeholder="Sin mínimo"
+              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200" />
+          </Field>
+
+          <hr className="border-slate-100" />
+
+          {/* ── Periodicidad y vigencia ── */}
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Periodicidad y vigencia</p>
+
           <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Desc. mínimo (%)</span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={form.minDiscount}
-                onChange={e => setForm(f => ({ ...f, minDiscount: e.target.value }))}
-                placeholder="Sin mínimo"
-                className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200"
-              />
-            </label>
-            <label className="block">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Máx./semana</span>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={form.maxPerWeek}
-                onChange={e => setForm(f => ({ ...f, maxPerWeek: e.target.value }))}
-                className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200"
-              />
-            </label>
+            <Field label="Máx. notif./semana">
+              <input type="number" min={1} max={20} value={form.maxPerWeek}
+                onChange={e => setF({ maxPerWeek: e.target.value })}
+                className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200" />
+            </Field>
+            <Field label="Vigencia hasta">
+              <input type="date" value={form.validUntil}
+                onChange={e => setF({ validUntil: e.target.value })}
+                className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200" />
+            </Field>
           </div>
 
-          <label className="block">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vigencia hasta</span>
-            <input
-              type="date"
-              value={form.validUntil}
-              onChange={e => setForm(f => ({ ...f, validUntil: e.target.value }))}
-              className="mt-1 w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200"
-            />
-          </label>
-
           <label className="flex items-center gap-3 cursor-pointer">
-            <button
-              type="button"
-              onClick={() => setForm(f => ({ ...f, active: !f.active }))}
-              className={`relative w-10 h-5 rounded-full transition-all ${form.active ? 'bg-emerald-500' : 'bg-slate-200'}`}
-            >
+            <button type="button" onClick={() => setF({ active: !form.active })}
+              className={`relative w-10 h-5 rounded-full transition-all ${form.active ? 'bg-emerald-500' : 'bg-slate-200'}`}>
               <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${form.active ? 'left-5' : 'left-0.5'}`} />
             </button>
             <span className="text-xs font-medium text-slate-700">Activa</span>
           </label>
 
           <div className="flex gap-2 pt-1">
-            <button
-              onClick={save}
-              disabled={saving || !form.userId || !form.type}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl disabled:opacity-40 hover:bg-slate-700 transition-colors"
-            >
+            <button onClick={save} disabled={saving || !form.userId || !form.type}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl disabled:opacity-40 hover:bg-slate-700 transition-colors">
               <Check size={13} />
               {saving ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Crear alerta'}
             </button>
-            <button
-              onClick={() => setPanelOpen(false)}
-              className="px-4 py-2.5 bg-slate-100 text-slate-500 text-xs font-bold rounded-xl hover:bg-slate-200 transition-colors"
-            >
+            <button onClick={() => setPanelOpen(false)}
+              className="px-4 py-2.5 bg-slate-100 text-slate-500 text-xs font-bold rounded-xl hover:bg-slate-200 transition-colors">
               Cancelar
             </button>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
+      {children}
+    </label>
   )
 }
