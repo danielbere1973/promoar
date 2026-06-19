@@ -543,6 +543,19 @@ export async function POST(req: NextRequest) {
     const byKey = new Map(existingPromos.map(p => [`${p.title}|${p.commerceId}`, p]));
     const existingSlugs = new Set((await prisma.promo.findMany({ select: { slug: true } })).map(p => p.slug).filter(Boolean));
 
+    // Deduplicar resolvedItems: si el mismo (commerceId, título normalizado) aparece
+    // varias veces (distintos slots MODO para el mismo comercio), quedarse con el primero.
+    {
+      const seen = new Set<string>();
+      const deduped: typeof resolvedItems = [];
+      for (const item of resolvedItems) {
+        const key = `${item.commerceId}|${item.title.toLowerCase().trim()}`;
+        if (!seen.has(key)) { seen.add(key); deduped.push(item); }
+      }
+      resolvedItems.length = 0;
+      resolvedItems.push(...deduped);
+    }
+
     // ── FASE 3: Guardar en batches paralelos de 10 ────────────────────────────
     const newPromoIds: string[] = []
 
