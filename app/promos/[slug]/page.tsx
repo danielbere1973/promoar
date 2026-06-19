@@ -242,6 +242,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
   // Cap y mínimo del mejor requirement
   const capReq = reqs.find(r => r.cap)
+  const capUnlimited = !capReq && reqs.some(r => (r as any).capUnlimited)
   const minReq = reqs.find(r => r.minPurchase)
 
   const bestDiscount = discounts[0]
@@ -362,8 +363,14 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
           )}
 
           {/* Tope y mínimo */}
-          {(capReq || minReq) && (
+          {(capReq || capUnlimited || minReq) && (
             <div className="flex flex-wrap gap-2 pt-1">
+              {capUnlimited && (
+                <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl border border-emerald-200">
+                  <span className="text-sm">✅</span>
+                  <p className="text-[11px] font-black">Sin tope de reintegro</p>
+                </div>
+              )}
               {capReq && (
                 <div className="flex items-center gap-1.5 bg-red-50 text-red-700 px-3 py-1.5 rounded-xl">
                   <span className="text-sm">🔒</span>

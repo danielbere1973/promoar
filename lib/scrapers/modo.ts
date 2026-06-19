@@ -132,6 +132,7 @@ interface ModoApiResponse {
 
 interface CapDetails {
   cap: number | null;
+  capUnlimited: boolean;
   capPeriod: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'PER_TRANSACTION' | null;
   banks: Array<{ name: string; bcraCode?: string }>;
   paymentChannel: 'QR' | 'NFC' | 'DINERO_EN_CUENTA' | 'TARJETA_FISICA' | 'ANY';
@@ -263,7 +264,7 @@ function extractStoreName(card: ModoCard): string {
 // ─── Fetch individual promo (solo cap + bcra_code de bancos) ──────────────────
 
 async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
-  const result: CapDetails = { cap: null, capPeriod: null, banks: [], paymentChannel: 'ANY', legalText: '' };
+  const result: CapDetails = { cap: null, capUnlimited: false, capPeriod: null, banks: [], paymentChannel: 'ANY', legalText: '' };
   try {
     const { data: html } = await axios.get(promoUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
@@ -279,12 +280,14 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
     const capTransVal       = capTransMatch   ? parseFloat(capTransMatch[1])   : 0;
     if (capPeriodVal > 0) {
       result.cap = capPeriodVal;
-      // capPeriod se resuelve más abajo con period_type; si no viene, defaultea a MONTHLY en línea 443
     } else if (capAmountVal > 0) {
       result.cap = capAmountVal;
     } else if (capTransVal > 0) {
       result.cap = capTransVal;
       result.capPeriod = 'PER_TRANSACTION';
+    } else if (capPeriodMatch || capAmountMatch || capTransMatch) {
+      // Campos presentes pero todos en 0 → sin tope explícito
+      result.capUnlimited = true;
     }
 
     // period_type → capPeriod
@@ -436,7 +439,7 @@ export const ModoScraper: Scraper = {
       const cardNetworks = extractNetworks(card);
       const cardTier = extractCardTier(card);
       const storeName = extractStoreName(card);
-      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capPeriod: null, banks: [], paymentChannel: 'ANY' as const, legalText: '' };
+      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capUnlimited: false, capPeriod: null, banks: [], paymentChannel: 'ANY' as const, legalText: '' };
       const storeNames = capDetails.extraStoreNames && capDetails.extraStoreNames.length >= 2
         ? capDetails.extraStoreNames
         : [storeName];
@@ -471,6 +474,7 @@ export const ModoScraper: Scraper = {
             discount: String(discountInfo.value),
             discountType: discountInfo.type,
             cap: capDetails.cap,
+            capUnlimited: capDetails.capUnlimited,
             capPeriod: capDetails.capPeriod ?? (capDetails.cap ? 'MONTHLY' : undefined),
             capTarget: capDetails.cap ? 'USER' : null,
             minPurchase: card.minimum_amount > 0 ? card.minimum_amount : null,

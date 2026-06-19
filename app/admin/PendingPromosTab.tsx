@@ -7,6 +7,7 @@ type Requirement = {
   discountType: string
   discountValue: number
   cap: number | null
+  capUnlimited: boolean
   capPeriod: string | null
   minPurchase: number | null
   paymentChannel: string
@@ -120,11 +121,15 @@ function ReqRow({ r, idx, total }: { r: Requirement; idx: number; total: number 
         {benefitLabel}{benefitVal ? ` · ${benefitVal}` : ''}
       </span>
       {/* Tope */}
-      {r.cap != null && r.cap > 0 && (
+      {r.cap != null && r.cap > 0 ? (
         <span className="text-[11px] text-slate-600 whitespace-nowrap shrink-0 font-medium">
           tope <span className="font-bold text-slate-700">{fmtMoney(r.cap)}</span>{r.capPeriod ? ' ' + CAP_LABELS[r.capPeriod] : ''}
         </span>
-      )}
+      ) : r.capUnlimited ? (
+        <span className="text-[11px] text-emerald-700 whitespace-nowrap shrink-0 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+          Sin tope
+        </span>
+      ) : null}
       {/* Mínimo */}
       {r.minPurchase != null && r.minPurchase > 0 && (
         <span className="text-[11px] text-slate-600 whitespace-nowrap shrink-0 font-medium">
@@ -311,9 +316,11 @@ function PromoRow({
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 {entity && <span className="text-xs text-slate-500 font-medium">{entity}</span>}
                 {val && <span className={`text-xs font-bold ${isCSI ? 'text-purple-700' : 'text-blue-700'}`}>{val}</span>}
-                {r.cap != null && r.cap > 0 && (
+                {r.cap != null && r.cap > 0 ? (
                   <span className="text-xs text-slate-500">tope <span className="font-semibold text-slate-700">{fmtMoney(r.cap)}</span></span>
-                )}
+                ) : r.capUnlimited ? (
+                  <span className="text-xs font-bold text-emerald-700">Sin tope</span>
+                ) : null}
                 {r.minPurchase != null && r.minPurchase > 0 && (
                   <span className="text-xs text-slate-500">mín <span className="font-semibold text-slate-700">{fmtMoney(r.minPurchase)}</span></span>
                 )}

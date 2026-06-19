@@ -458,6 +458,7 @@ model PromoRequirement {
   accountType     AccountType           @default(ANY)
   paymentChannel  PaymentChannel        @default(ANY)
   cap             Float?
+  capUnlimited    Boolean               @default(false)
   capPeriod       CapPeriod?
   discountType    DiscountType          @default(PERCENTAGE_REINTEGRO)
   discountValue   Float                 @default(0)

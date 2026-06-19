@@ -439,6 +439,7 @@ export async function POST(req: NextRequest) {
                 nxmN: discount.nxmN ?? null,
                 nxmM: discount.nxmM ?? null,
                 cap: p.cap != null ? parseFloat(String(p.cap)) : null,
+                capUnlimited: p.capUnlimited ?? false,
                 capPeriod: (p.capPeriod as any) ?? null,
                 capTarget: (p.capTarget as any) ?? (p.cap ? 'USER' : null),
                 minPurchase: p.minPurchase != null ? parseFloat(String(p.minPurchase)) : null,
