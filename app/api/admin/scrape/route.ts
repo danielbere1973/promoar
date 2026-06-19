@@ -520,7 +520,7 @@ export async function POST(req: NextRequest) {
           ...resolvedItems.map(i => ({ title: i.title, commerceId: i.commerceId }))
         ]
       },
-      select: { id: true, title: true, commerceId: true, sourceUrl: true, slug: true }
+      select: { id: true, title: true, commerceId: true, sourceUrl: true, slug: true, status: true }
     });
     // Una URL es clave única si tiene # (fragmento) O si contiene /detalle/ con un ID numérico
     const isUniqueUrl = (url?: string | null) =>

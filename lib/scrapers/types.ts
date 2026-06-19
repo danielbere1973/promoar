@@ -15,7 +15,7 @@ export interface ScrapedPromo {
   discount: string;
   discountType: string;
   cap?: number | null;
-  capPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
+  capPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'PER_TRANSACTION' | null;
   capTarget?: 'USER' | 'CARD' | 'ACCOUNT' | 'TRANSACCION' | null;
   minPurchase?: number | null;
   stackable?: boolean | null;

@@ -132,10 +132,11 @@ interface ModoApiResponse {
 
 interface CapDetails {
   cap: number | null;
-  capPeriod: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
+  capPeriod: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'PER_TRANSACTION' | null;
   banks: Array<{ name: string; bcraCode?: string }>;
   paymentChannel: 'QR' | 'NFC' | 'DINERO_EN_CUENTA' | 'TARJETA_FISICA' | 'ANY';
   legalText: string;
+  extraStoreNames?: string[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -316,6 +317,19 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
         .slice(0, 3000);
     }
 
+    // múltiples comercios desde og:description ("en YPF, SHELL Y AXION con Ciudad")
+    const ogDescMatch = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]+)"/i)
+      ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:description"/i);
+    if (ogDescMatch) {
+      const storesMatch = ogDescMatch[1].match(/\ben\s+([A-Za-zÁ-ÿ\s,&]+?)\s+con\s+/i);
+      if (storesMatch) {
+        const names = storesMatch[1].split(/\s+y\s+|,\s*/i)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length >= 2);
+        if (names.length >= 2) result.extraStoreNames = names;
+      }
+    }
+
     // payment channel
     const lowerHtml = html.toLowerCase();
     if (lowerHtml.includes('dinero en cuenta') || lowerHtml.includes('dinero de la cuenta')) {
@@ -422,6 +436,10 @@ export const ModoScraper: Scraper = {
       const cardNetworks = extractNetworks(card);
       const cardTier = extractCardTier(card);
       const storeName = extractStoreName(card);
+      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capPeriod: null, banks: [], paymentChannel: 'ANY' as const, legalText: '' };
+      const storeNames = capDetails.extraStoreNames && capDetails.extraStoreNames.length >= 2
+        ? capDetails.extraStoreNames
+        : [storeName];
       const detectedCategoria = categoria ?? detectModoCategory(card);
       const salesChannel: 'ONLINE' | 'FISICA' | null =
         card.payment_flow === 'online' ? 'ONLINE' :
@@ -433,7 +451,6 @@ export const ModoScraper: Scraper = {
         .replace(/\s*·\s*·\s*/g, ' · ').replace(/\s+/g, ' ').trim();
 
       const promoUrl = `${PROMO_BASE_URL}/${card.slug}`;
-      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capPeriod: null, banks: [], paymentChannel: 'ANY' as const, legalText: '' };
 
       const allBanks = capDetails.banks.length > 0
         ? capDetails.banks
@@ -444,35 +461,37 @@ export const ModoScraper: Scraper = {
       if (/no\s+(?:es\s+)?acumulable/i.test(conditionsText)) stackable = false;
       else if (/(?:es\s+)?acumulable/i.test(conditionsText)) stackable = true;
 
-      for (const discountInfo of discountInfoArray) {
-        promos.push({
-          title: card.title.trim(),
-          description,
-          sourceText: capDetails.legalText || conditionsText,
-          sourceUrl: promoUrl,
-          discount: String(discountInfo.value),
-          discountType: discountInfo.type,
-          cap: capDetails.cap,
-          capPeriod: capDetails.capPeriod ?? (capDetails.cap ? 'MONTHLY' : undefined),
-          capTarget: capDetails.cap ? 'USER' : null,
-          minPurchase: card.minimum_amount > 0 ? card.minimum_amount : null,
-          stackable,
-          singleUse: undefined,
-          validFrom,
-          validUntil,
-          specificDates: undefined,
-          validDays,
-          bankNames: allBanks.length > 0 ? allBanks : undefined,
-          walletNames: ['MODO'],
-          cardNetworks: cardNetworks.length > 0 ? cardNetworks : undefined,
-          cardType: null,
-          cardTier,
-          paymentChannel: capDetails.paymentChannel,
-          accountType: 'ANY',
-          storeName,
-          categoria: detectedCategoria,
-          salesChannel,
-        });
+      for (const sName of storeNames) {
+        for (const discountInfo of discountInfoArray) {
+          promos.push({
+            title: card.title.trim(),
+            description,
+            sourceText: capDetails.legalText || conditionsText,
+            sourceUrl: promoUrl,
+            discount: String(discountInfo.value),
+            discountType: discountInfo.type,
+            cap: capDetails.cap,
+            capPeriod: capDetails.capPeriod ?? (capDetails.cap ? 'MONTHLY' : undefined),
+            capTarget: capDetails.cap ? 'USER' : null,
+            minPurchase: card.minimum_amount > 0 ? card.minimum_amount : null,
+            stackable,
+            singleUse: undefined,
+            validFrom,
+            validUntil,
+            specificDates: undefined,
+            validDays,
+            bankNames: allBanks.length > 0 ? allBanks : undefined,
+            walletNames: ['MODO'],
+            cardNetworks: cardNetworks.length > 0 ? cardNetworks : undefined,
+            cardType: null,
+            cardTier,
+            paymentChannel: capDetails.paymentChannel,
+            accountType: 'ANY',
+            storeName: sName,
+            categoria: detectedCategoria,
+            salesChannel,
+          });
+        }
       }
     }
 
