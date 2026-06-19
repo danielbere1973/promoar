@@ -457,6 +457,19 @@ export async function POST(req: NextRequest) {
         console.log(`[Route DEBUG] reqData para "${p.title}":`, JSON.stringify(reqData.slice(0, 3), null, 2));
       }
 
+      // Deduplicar requirements por combinación única de entidad + descuento
+      // (evita duplicados cuando un scraper genera la misma entidad por múltiples variantes de tarjeta)
+      {
+        const seen = new Set<string>();
+        const deduped: any[] = [];
+        for (const r of reqData) {
+          const key = [r.bankId, r.walletId, r.cardNetworkId, r.cardSegmentId, r.discountType, r.discountValue].join('|');
+          if (!seen.has(key)) { seen.add(key); deduped.push(r); }
+        }
+        reqData.length = 0;
+        reqData.push(...deduped);
+      }
+
       // Generar slug descriptivo para SEO
       const firstDiscount = uniqueDiscounts[0]
       const firstBank = resolvedBankIds[0] ? banks.find(b => b.id === resolvedBankIds[0])?.name : null

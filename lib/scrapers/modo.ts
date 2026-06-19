@@ -209,6 +209,23 @@ function extractDiscount(card: ModoCard): Array<{ value: number; type: string }>
     if (cuotasMatch) raw.push({ value: parseInt(cuotasMatch[1]), type: 'CUOTAS_SIN_INTERES' });
   }
 
+  // Fallback: extraer desde slug cuando los campos principales no tienen descuento
+  // Patrones: "30off", "25off-12csi", "10-comercio-banco-mes26" (número al inicio)
+  if (raw.length === 0) {
+    const slugOff = card.slug.match(/(?:^|-)(\d+)off(?:-|$)/i);
+    if (slugOff) raw.push({ value: parseInt(slugOff[1]), type: 'PERCENTAGE_DESCUENTO' });
+    const slugCsi = card.slug.match(/(?:^|-)(\d+)csi(?:-|$)/i);
+    if (slugCsi) raw.push({ value: parseInt(slugCsi[1]), type: 'CUOTAS_SIN_INTERES' });
+    // Patrón "N-comercio-banco": número al inicio del slug seguido de letra (ej: "10-simmons-credicoop")
+    if (raw.length === 0) {
+      const slugLeading = card.slug.match(/^(\d+)-[a-z]/i);
+      if (slugLeading) {
+        const v = parseInt(slugLeading[1]);
+        if (v > 0 && v <= 100) raw.push({ value: v, type: 'PERCENTAGE_DESCUENTO' });
+      }
+    }
+  }
+
   // Deduplicar: REINTEGRO gana sobre DESCUENTO para mismo valor
   const pctMap = new Map<number, string>();
   const cuotasSet = new Set<number>();
@@ -486,7 +503,7 @@ export const ModoScraper: Scraper = {
             validDays,
             bankNames: allBanks.length > 0 ? allBanks : undefined,
             walletNames: ['MODO'],
-            cardNetworks: cardNetworks.length > 0 ? cardNetworks : undefined,
+            cardNetworks: undefined,
             cardType: null,
             cardTier,
             paymentChannel: capDetails.paymentChannel,

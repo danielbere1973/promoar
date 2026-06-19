@@ -49,7 +49,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // Actualizar requirements si vienen
   if (requirements?.length) {
     for (const req of requirements) {
-      const { reqId, bankId, walletId, cardNetworkId, cardSegmentId, paymentChannel } = req
+      const { reqId, bankId, walletId, cardNetworkId, cardSegmentId, paymentChannel,
+              cap, capPeriod, capUnlimited, minPurchase } = req
       if (!reqId) continue
       const reqData: Record<string, any> = {}
       if (bankId !== undefined) reqData.bankId = bankId || null
@@ -57,6 +58,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (cardNetworkId !== undefined) reqData.cardNetworkId = cardNetworkId || null
       if (cardSegmentId !== undefined) reqData.cardSegmentId = cardSegmentId || null
       if (paymentChannel !== undefined) reqData.paymentChannel = paymentChannel
+      if (cap !== undefined) reqData.cap = cap != null && cap !== '' ? Number(cap) : null
+      if (capPeriod !== undefined) reqData.capPeriod = capPeriod || null
+      if (capUnlimited !== undefined) reqData.capUnlimited = Boolean(capUnlimited)
+      if (minPurchase !== undefined) reqData.minPurchase = minPurchase != null && minPurchase !== '' ? Number(minPurchase) : null
       if (Object.keys(reqData).length) {
         await prisma.promoRequirement.update({ where: { id: reqId }, data: reqData })
       }
