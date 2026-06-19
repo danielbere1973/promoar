@@ -488,6 +488,40 @@ Fix en scraper (`app/api/admin/scrape/route.ts`): en el upsert de promo usar
 Fix en Banco Ciudad (`lib/scrapers/bancociudad.ts`): no asignar rubro "Combustible" a
 comercios cuyo nombre no es una empresa de combustible conocida.
 
+### 16. Auto-validador de DRAFTs — DONE (19/6/2026)
+`POST /api/admin/auto-validate`: corre 7 reglas sobre cada DRAFT y aprueba automáticamente
+los que pasan. Los problemáticos quedan en DRAFT con el motivo visible en el panel.
+
+**Reglas (en orden):**
+1. Sin requirements → "Sin requisitos de pago"
+2. Requisito con banco+wallet+red todos null → "Requisito sin entidad financiera"
+3. `cap === 0 && !capUnlimited` → "Tope en $0 — verificar si es sin tope"
+4. `discountValue === 0` → "Descuento en 0"
+5. `validDays === 0` → "Sin días válidos"
+6. Requirements duplicados (mismo bankId|walletId|discountType|discountValue) → "Requisitos duplicados"
+7. Ya existe ACTIVE con mismo commerceId + título (normalizado) → "Ya existe activa con mismo comercio y título"
+
+**UI**: botón "Auto-validar" (azul con escudo) en toolbar de pendientes. Banner de resultado
+post-ejecución. Chips amarillos por promo flaggeada con el motivo exacto.
+**Resultado típico**: ~90% aprobadas automáticamente, ~10% quedan para revisión manual.
+**Próximo paso**: correr automáticamente post-scraper una vez validado que las reglas son suficientes.
+
+### 17. Mejoras scraper MODO — DONE (19/6/2026)
+- **cardNetworks eliminados**: pagos MODO van por la wallet, no por la red de tarjeta.
+  Antes generaba 4-8 requirements por promo (banco+MODO, banco+Visa, banco+Mastercard, banco+null),
+  ahora solo banco+MODO. Fix: `cardNetworks: undefined` cuando hay `walletNames`.
+- **Dedup de reqData** en `app/api/admin/scrape/route.ts`: antes de upsert, filtra requirements
+  con clave idéntica `(bankId|walletId|cardNetworkId|cardSegmentId|discountType|discountValue)`.
+- **Fallback de descuento desde slug**: si `discount_info`/`title`/`short_description` no tienen "%",
+  extrae desde el slug (`30off` → 30%, `12csi` → 12 CSI, `10-comercio-banco` → 10%).
+  La API de MODO no siempre incluye el símbolo % en los campos textuales.
+
+### 18. Panel edición pendientes — rediseño como modal — DONE (19/6/2026)
+`EditPanel` (sidebar 288px) → `EditModal`: overlay centrado max-w-4xl, cierre con backdrop.
+- Requirements en tabla con todas las columnas editables: Banco | Billetera | Red | Canal | Tope ($) | Período | Mínimo ($)
+- `buildForm` y API PATCH ahora incluyen `cap`, `capPeriod`, `capUnlimited`, `minPurchase` por requirement.
+- Promo fields en grilla 2 columnas.
+
 ### 15. OG image dinámica `/api/og/daily` — EN PROGRESO
 Genera una imagen 1080×1080 con las mejores promos del día (top categorías prioritarias).
 Código en `app/api/og/daily/route.tsx`, sin commitear. Falta integrarlo a `<meta og:image>`
