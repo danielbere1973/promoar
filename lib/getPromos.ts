@@ -250,8 +250,8 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   // Solo aplica si conocemos la provincia del usuario (perfil o ?province=) y el comercio
   // tiene sucursales con provincia cargada (CommerceBranch.province, ver punto 10 CLAUDE.md).
   // Si no hay datos de sucursales, o si el comercio tiene presencia en muchas provincias
-  // (cadena nacional), no se filtra.
-  if (userProvince) {
+  // (cadena nacional), no se filtra. Admins ven todo sin filtro geográfico.
+  if (userProvince && !isAdmin) {
     const userProvinceNorm = normalizeProvince(userProvince)
     filtered = filtered.filter(promo => {
       const branches = (promo as any).commerce?.branches as { province: string | null }[] | undefined

@@ -81,10 +81,10 @@ export default function ProvinceSelector({ onSelect, onDismiss, currentProvince 
         {/* Footer */}
         <div className="px-5 pb-6 pt-3 border-t border-gray-100 flex gap-2">
           <button
-            onClick={onDismiss}
+            onClick={() => onSelect('')}
             className="flex-1 py-3 rounded-2xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50"
           >
-            Ahora no
+            Todo el país
           </button>
           <button
             onClick={() => selected && onSelect(selected)}

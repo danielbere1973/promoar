@@ -53,7 +53,8 @@ export async function GET(req: NextRequest) {
     )
     const paginate = !forMe && !email && !hasFilters
     const page = parseInt(searchParams.get('page') ?? '1') || 1
-    const pageSize = Math.min(parseInt(searchParams.get('pageSize') ?? '500') || 500, 1000)
+    const defaultPageSize = params.view === 'week' ? 3000 : 1500
+    const pageSize = Math.min(parseInt(searchParams.get('pageSize') ?? String(defaultPageSize)) || defaultPageSize, 5000)
 
     const result = await getPromosData({ ...params, paginate, page, pageSize }, email, isAdmin)
     return NextResponse.json(result)

@@ -665,8 +665,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       activeFilters.channels.length > 0 || activeFilters.commerces.length > 0 ||
       activeFilters.discountRanges.length > 0 || activeFilters.hasInstallments !== null ||
       activeFilters.hasCap !== null
-    const isDefaultGuestView = !session?.user?.email && !forMe && !hasActiveFilters && timeFilter === 'today' && page === 1
-    if (isDefaultGuestView && promos.length > 0) return
+    // No cortocircuitamos el fetch aunque haya promos del SSR: las 50 del SSR son
+    // solo para el primer paint. El cliente siempre trae el set completo paginado.
 
     const controller = new AbortController()
 
@@ -1372,7 +1372,15 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               <div className="flex flex-col min-w-0">
                 {/* Desktop: fecha + saludo */}
                 <div className="hidden lg:flex items-center gap-2">
-                  <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">{fechaHoy()}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">{fechaHoy()}</p>
+                    <button
+                      onClick={() => setShowProvinceSelector(true)}
+                      className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#1E3A5F] text-white dark:bg-white dark:text-[#1E3A5F] leading-none"
+                    >
+                      {province ? province.split(' ').map((w: string) => w[0]).join('').slice(0, 4).toUpperCase() : '📍 Ubicación'}
+                    </button>
+                  </div>
                   {status === 'authenticated' && (
                     <p className="text-[11px] text-[#1E3A5F] font-bold">Hola, {nombre.split(' ')[0]} 👋</p>
                   )}
@@ -1464,7 +1472,15 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   <p className="text-[12px] font-black text-gray-900 dark:text-white truncate">
                     {status === 'authenticated' ? `Hola, ${nombre.split(' ')[0]}` : 'Invitado'}
                   </p>
-                  <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold">{fechaCorta()}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold">{fechaCorta()}</p>
+                    <button
+                      onClick={() => setShowProvinceSelector(true)}
+                      className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-[#1E3A5F] text-white dark:bg-white dark:text-[#1E3A5F] leading-none"
+                    >
+                      {province ? province.split(' ').map((w: string) => w[0]).join('').slice(0, 4).toUpperCase() : '📍'}
+                    </button>
+                  </div>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                   <ThemeToggle />
@@ -2268,9 +2284,15 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         <ProvinceSelector
           currentProvince={province || undefined}
           onSelect={(prov) => {
-            setProvince(prov)
-            localStorage.setItem('userProvince', prov)
-            document.cookie = `userProvince=${encodeURIComponent(prov)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
+            if (prov) {
+              setProvince(prov)
+              localStorage.setItem('userProvince', prov)
+              document.cookie = `userProvince=${encodeURIComponent(prov)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
+            } else {
+              setProvince(null)
+              localStorage.removeItem('userProvince')
+              document.cookie = 'userProvince=;path=/;max-age=0'
+            }
             setShowProvinceSelector(false)
           }}
           onDismiss={() => setShowProvinceSelector(false)}
