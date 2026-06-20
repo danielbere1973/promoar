@@ -197,7 +197,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             logoUrl: true,
             instagramUrl: true,
             activePromoCount: true,
-            branches: { select: { province: true }, where: { province: { not: null } } },
+            ...(userProvince && !isAdmin ? { branches: { select: { province: true }, where: { province: { not: null } } } } : {}),
           },
         },
         requirements: {
