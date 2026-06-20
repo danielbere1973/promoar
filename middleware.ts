@@ -21,7 +21,6 @@ const PUBLIC_PATHS = [
   '/api/internal',
   '/api/r',
   '/promos',
-  '/api/admin/scrape',
   '/precios',
   '/favicon.ico',
   '/sitemap.xml',
