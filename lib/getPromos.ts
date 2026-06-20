@@ -1,5 +1,17 @@
 import { prisma } from '@/lib/prisma'
 
+// Cache del count total de promos activas — se recalcula cada 5 minutos
+let cachedTotalCount: number | null = null
+let cachedTotalCountAt: number = 0
+async function getActiveTotalCount(): Promise<number> {
+  if (cachedTotalCount !== null && Date.now() - cachedTotalCountAt < 5 * 60 * 1000) {
+    return cachedTotalCount
+  }
+  cachedTotalCount = await prisma.promo.count({ where: { status: 'ACTIVE' } })
+  cachedTotalCountAt = Date.now()
+  return cachedTotalCount
+}
+
 // Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
 // contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
 // y alias comunes de CABA / Buenos Aires.
@@ -211,7 +223,8 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       orderBy: paginateOrderBy ?? (take ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }] : { createdAt: 'desc' }),
       ...(paginate ? { take: pageSize, skip: (page - 1) * pageSize } : take ? { take } : {}),
     }),
-    prisma.promo.count({ where }),
+    // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
+    paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
   ])
 
   // Day bitmask filtering
