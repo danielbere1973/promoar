@@ -53,8 +53,22 @@ export async function GET(req: NextRequest) {
     )
     const paginate = !forMe && !email && !hasFilters
     const page = parseInt(searchParams.get('page') ?? '1') || 1
-    const defaultPageSize = params.view === 'week' ? 3000 : 1500
-    const pageSize = Math.min(parseInt(searchParams.get('pageSize') ?? String(defaultPageSize)) || defaultPageSize, 5000)
+
+    // Fechas clave: buscar si hoy está dentro del window de alguna fecha especial
+    const isWeekend = [5, 6, 0].includes(new Date().getDay())
+    const windowMax = new Date(); windowMax.setDate(windowMax.getDate() + 30)
+    const keyDate = paginate ? await prisma.promoCalendar.findFirst({
+      where: { date: { gte: new Date(), lte: windowMax } },
+      orderBy: { date: 'asc' },
+    }) : null
+    const isKeyDate = keyDate
+      ? Math.ceil((keyDate.date.getTime() - Date.now()) / 86400000) <= keyDate.windowDays
+      : false
+
+    const baseToday = isKeyDate ? keyDate!.pageSizeToday : isWeekend ? 2000 : 1500
+    const baseWeek  = isKeyDate ? keyDate!.pageSizeWeek  : isWeekend ? 4000 : 3000
+    const defaultPageSize = params.view === 'week' ? baseWeek : baseToday
+    const pageSize = Math.min(parseInt(searchParams.get('pageSize') ?? String(defaultPageSize)) || defaultPageSize, 7000)
 
     const result = await getPromosData({ ...params, paginate, page, pageSize }, email, isAdmin)
     return NextResponse.json(result)

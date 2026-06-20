@@ -648,6 +648,19 @@ model bank_modo_codes {
   @@index([modoCode], map: "bank_modo_codes_code_idx")
 }
 
+model PromoCalendar {
+  id            String   @id @default(cuid())
+  date          DateTime
+  label         String
+  windowDays    Int      @default(5)
+  pageSizeToday Int      @default(2000)
+  pageSizeWeek  Int      @default(5000)
+  createdAt     DateTime @default(now())
+
+  @@index([date])
+  @@map("promo_calendar")
+}
+
 enum Role {
   USER
   MODERATOR
