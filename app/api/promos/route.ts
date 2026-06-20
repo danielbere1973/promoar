@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
-import { getToken } from 'next-auth/jwt'
+import { getServerSession } from 'next-auth/next'
 import { getPromosData, PromoQueryParams } from '@/lib/getPromos'
 
 export async function GET(req: NextRequest) {
@@ -40,9 +40,13 @@ export async function GET(req: NextRequest) {
       guestProfileParam: searchParams.get('guest_profile'),
     }
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    const email = (token?.email as string | undefined) || req.headers.get('x-user-email')
-    const isAdmin = token?.role === 'ADMIN' || token?.role === 'MODERATOR'
+    const session = await getServerSession()
+    const email = session?.user?.email || req.headers.get('x-user-email')
+    let isAdmin = false
+    if (email) {
+      const u = await prisma.user.findUnique({ where: { email }, select: { role: true } })
+      isAdmin = u?.role === 'ADMIN' || u?.role === 'MODERATOR'
+    }
     const forMe = params.forMe ?? false
 
     // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal
