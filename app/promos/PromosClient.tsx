@@ -526,7 +526,11 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       localStorage.setItem('userLocation', JSON.stringify({ lat, lng, ts: Date.now() }))
       fetch(`/api/branches/nearby?lat=${lat}&lng=${lng}&radius=10`)
         .then(r => r.json()).then(setNearbyBranches).catch(() => {})
-    }, () => {}, { timeout: 8000 })
+    }, () => {
+      // Ubicación bloqueada o no disponible: limpiar cache y badges
+      localStorage.removeItem('userLocation')
+      setNearbyBranches({})
+    }, { timeout: 8000 })
   }, [])
 
   useEffect(() => {
