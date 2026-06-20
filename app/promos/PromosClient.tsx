@@ -342,6 +342,47 @@ function getSpecialBadge(p: Promo) {
   return null
 }
 
+const NOMINATIM_MAP: Record<string, string> = {
+  'ciudad autónoma de buenos aires': 'CABA',
+  'buenos aires': 'Buenos Aires',
+  'córdoba': 'Córdoba',
+  'cordoba': 'Córdoba',
+  'santa fe': 'Santa Fe',
+  'mendoza': 'Mendoza',
+  'tucumán': 'Tucumán',
+  'tucuman': 'Tucumán',
+  'entre ríos': 'Entre Ríos',
+  'entre rios': 'Entre Ríos',
+  'salta': 'Salta',
+  'misiones': 'Misiones',
+  'chaco': 'Chaco',
+  'corrientes': 'Corrientes',
+  'santiago del estero': 'Santiago del Estero',
+  'san juan': 'San Juan',
+  'jujuy': 'Jujuy',
+  'río negro': 'Río Negro',
+  'rio negro': 'Río Negro',
+  'neuquén': 'Neuquén',
+  'neuquen': 'Neuquén',
+  'formosa': 'Formosa',
+  'chubut': 'Chubut',
+  'san luis': 'San Luis',
+  'catamarca': 'Catamarca',
+  'la rioja': 'La Rioja',
+  'la pampa': 'La Pampa',
+  'santa cruz': 'Santa Cruz',
+  'tierra del fuego': 'Tierra del Fuego',
+}
+
+function mapNominatimToProvince(state: string): string | null {
+  const key = state.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/provincia de |provincia del /g, '').trim()
+  for (const [k, v] of Object.entries(NOMINATIM_MAP)) {
+    if (key.includes(k.normalize('NFD').replace(/[̀-ͯ]/g, ''))) return v
+  }
+  return null
+}
+
 export default function PromosClient({ initialPromos, initialCats, initialTotalCount, initialProvince }: { initialPromos: Promo[] | null, initialCats: string[], initialTotalCount: number, initialProvince?: string | null }) {
   const { data: session, status } = useSession()
   const nombre = session?.user?.name || 'Invitado'
@@ -533,9 +574,34 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     // Cargar provincia guardada (aplica a todos)
     const savedProvince = localStorage.getItem('userProvince')
     if (savedProvince) {
-      // Sincronizar cookie para que el SSR la lea en la próxima visita
       document.cookie = `userProvince=${encodeURIComponent(savedProvince)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
       setProvince(savedProvince)
+    } else if (navigator.geolocation) {
+      // Intentar detectar provincia por GPS antes de mostrar el selector manual
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=es`,
+              { headers: { 'User-Agent': 'PromoAR/1.0' } }
+            )
+            const data = await res.json()
+            const nominatimState: string = data.address?.state || ''
+            const mapped = mapNominatimToProvince(nominatimState)
+            if (mapped) {
+              setProvince(mapped)
+              localStorage.setItem('userProvince', mapped)
+              document.cookie = `userProvince=${encodeURIComponent(mapped)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
+            } else {
+              setTimeout(() => setShowProvinceSelector(true), 2000)
+            }
+          } catch {
+            setTimeout(() => setShowProvinceSelector(true), 2000)
+          }
+        },
+        () => setTimeout(() => setShowProvinceSelector(true), 2000),
+        { timeout: 5000 }
+      )
     } else {
       setTimeout(() => setShowProvinceSelector(true), 2000)
     }

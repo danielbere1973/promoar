@@ -581,10 +581,23 @@ export default function PerfilPage() {
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Provincia">
-                    <input value={pf.addressState} onChange={e => setPf(p => ({ ...p, addressState: e.target.value }))} className={inp} />
+                    <select value={pf.addressState} onChange={e => setPf(p => ({ ...p, addressState: e.target.value }))} className={sel}>
+                      <option value="">— Seleccioná —</option>
+                      {['Buenos Aires','CABA','Catamarca','Chaco','Chubut','Córdoba','Corrientes','Entre Ríos','Formosa','Jujuy','La Pampa','La Rioja','Mendoza','Misiones','Neuquén','Río Negro','Salta','San Juan','San Luis','Santa Cruz','Santa Fe','Santiago del Estero','Tierra del Fuego','Tucumán'].map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="País">
-                    <input value={pf.addressCountry} onChange={e => setPf(p => ({ ...p, addressCountry: e.target.value }))} className={inp} />
+                    <select value={pf.addressCountry} onChange={e => setPf(p => ({ ...p, addressCountry: e.target.value }))} className={sel}>
+                      <option value="Argentina">Argentina</option>
+                      <option value="Uruguay">Uruguay</option>
+                      <option value="Chile">Chile</option>
+                      <option value="Brasil">Brasil</option>
+                      <option value="Paraguay">Paraguay</option>
+                      <option value="Bolivia">Bolivia</option>
+                      <option value="Otro">Otro</option>
+                    </select>
                   </Field>
                 </div>
               </div>
