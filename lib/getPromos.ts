@@ -131,8 +131,8 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       }
     })
     userProvince = paramProvince || userObj?.addressState || null
-    // Pre-asignar si forMe y no admin (evita segunda query más adelante)
-    if (forMe && !isAdmin && userObj?.financialProfile) {
+    // Pre-asignar si forMe (evita segunda query más adelante)
+    if (forMe && userObj?.financialProfile) {
       fetchedUser = userObj as any
     }
   } else {
@@ -282,7 +282,9 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // FILTRADO POR PERFIL FINANCIERO - CON BYPASS PARA ADMIN
+  // FILTRADO POR PERFIL FINANCIERO
+  // Admins también filtran por perfil cuando piden "Para mí" — el bypass
+  // geográfico ya está arriba. La vista "Todas" no manda forMe=true.
   // ═══════════════════════════════════════════════════════════════════════
   let userProfile = null
 
@@ -295,10 +297,9 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     } catch {}
   }
 
-  // ADMIN BYPASS: Si es admin, NO filtrar por perfil financiero
   // Mapa cardTier → segmentId: para matchear tiers (Selecta, Eminent) con segmentos del perfil
   const tierToSegmentId = new Map<string, string>()
-  if (forMe && email && !isAdmin) {
+  if (forMe && email) {
     // fetchedUser ya fue cargado arriba junto con la provincia (evita segunda query)
     if (!fetchedUser) {
       fetchedUser = await prisma.user.findUnique({
@@ -331,7 +332,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     cardTier: null, isPayroll: false, isPensioner: false,
   }))
 
-  const hasProfile = forMe && !isAdmin && (effectiveCards || walletVirtualCards.length > 0)
+  const hasProfile = forMe && !!(effectiveCards || walletVirtualCards.length > 0)
 
   if (hasProfile) {
     const userCards = [...(effectiveCards ?? []), ...walletVirtualCards]
