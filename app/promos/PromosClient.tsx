@@ -1700,6 +1700,25 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           </div>
         )}
 
+        {/* Banner filtro geográfico activo */}
+        {province && (
+          <div className="mb-3 flex items-center justify-between bg-blue-50 dark:bg-slate-800 border border-blue-100 dark:border-slate-700 rounded-2xl px-4 py-2.5 shadow-sm">
+            <p className="text-[12px] text-blue-700 dark:text-blue-300 font-medium">
+              📍 Mostrando promos disponibles en <span className="font-black">{province}</span>
+            </p>
+            <button
+              onClick={() => {
+                setProvince(null)
+                localStorage.removeItem('userProvince')
+                document.cookie = 'userProvince=;path=/;max-age=0'
+              }}
+              className="text-[11px] text-blue-500 dark:text-blue-400 font-bold ml-3 shrink-0 hover:underline"
+            >
+              Ver todo el país
+            </button>
+          </div>
+        )}
+
         {/* Banner acceso denegado */}
         {showAccessDenied && (
           <div className="mb-4 flex items-center justify-between bg-red-50 border border-red-100 rounded-2xl px-4 py-3 shadow-sm">
