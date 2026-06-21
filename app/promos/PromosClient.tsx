@@ -804,6 +804,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         const res = await fetch(`/api/promos?${cacheKey}`, {
           cache: 'no-store',
           signal: controller.signal,
+          headers: session?.user?.email ? { 'x-user-email': session.user.email } : {},
         })
         if (res.ok) {
           const data = await res.json()
@@ -850,7 +851,10 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       qp.set('guest_profile', btoa(JSON.stringify(guestProfile)))
     }
     if (province) qp.set('province', province)
-    fetch(`/api/promos?${qp.toString()}`, { cache: 'no-store' })
+    fetch(`/api/promos?${qp.toString()}`, {
+      cache: 'no-store',
+      headers: session?.user?.email ? { 'x-user-email': session.user.email } : {},
+    })
       .then(r => r.json())
       .then(d => { if (!cancelled) setFocusedCatPromos(d.promos ?? []) })
       .catch(() => {})
