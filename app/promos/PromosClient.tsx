@@ -1076,7 +1076,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       .sort((a, b) => b.count !== a.count ? b.count - a.count : b.bestDiscount - a.bestDiscount)
       .slice(0, 5)
 
-    return { totalPromos: Math.max(promos.length, initialTotalCount), maxDiscount, dayCounts, catList, commList }
+    return { totalPromos: promos.length, maxDiscount, dayCounts, catList, commList }
   }, [promos, selectedCats, favCategories, favCommerces, activeFilters.commerces, initialTotalCount])
 
   // Ordenar: favoritos primero (categoría o comercio en favoritos), luego el resto
