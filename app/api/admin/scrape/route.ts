@@ -96,6 +96,8 @@ export async function POST(req: NextRequest) {
       'jumbo', 'disco', 'vea', 'amex', 'cabal', 'changomas',
       'banco galicia', 'icbc', 'banco macro', 'naranjax', 'banco provincia',
       'banco santander', 'banco supervielle', 'banco ciudad', 'visa', 'banco patagonia',
+      // BNA: digiventures.la bloquea IPs de datacenter de AWS/Vercel
+      'banco nación argentina',
     ])
 
     const flatPromos: any[] = [];
