@@ -97,7 +97,7 @@ const MODO_CAT_MAP: Record<string, string> = {
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
-interface ContentRow { text: string; }
+interface ContentRow { text: string; type?: string; icon?: string; extra_data?: any[] }
 
 interface ModoCard {
   id: string;
@@ -108,8 +108,8 @@ interface ModoCard {
   start_date: string;
   stop_date: string;
   days_of_week: string;
-  payment_flow: string;
-  trigger_type: string;
+  payment_flow: string;      // "online" | "instore" | "trip"
+  trigger_type: string;      // "qr" | "nfc" | "qr_nfc" | "app" | ...
   status: string;
   calculated_status: string;
   search_tags: string;
@@ -119,6 +119,13 @@ interface ModoCard {
   banks: string[];
   credit_list: string[] | null;
   debit_list: string[] | null;
+  trigger_params?: {
+    apply_to_credit?: boolean;
+    apply_to_debit?: boolean;
+    credit_list?: string[];
+    debit_list?: string[];
+    payment_type?: string[];   // ["qr"], ["nfc"], ["qr","nfc"], ...
+  };
   categories_whitelist?: {
     categories: Array<{ map_category: number; sub_categories: number[] }>;
   };
@@ -130,13 +137,15 @@ interface ModoApiResponse {
   metadata?: { pagination?: { page: number; page_results: number; total_pages: number; total_results: number } };
 }
 
+type ModoPaymentChannel = 'QR' | 'NFC' | 'DINERO_EN_CUENTA' | 'TARJETA_FISICA' | 'ANY';
+
 interface CapDetails {
   cap: number | null;
   capUnlimited: boolean;
   capPeriod: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'PER_TRANSACTION' | null;
   banks: Array<{ name: string; bcraCode?: string }>;
   cardNetworks: CardNetworkWithType[];
-  paymentChannel: 'QR' | 'NFC' | 'DINERO_EN_CUENTA' | 'TARJETA_FISICA' | 'ANY';
+  paymentChannels: ModoPaymentChannel[];  // puede ser [QR, NFC] simultáneamente
   legalText: string;
   extraStoreNames?: string[];
 }
@@ -282,7 +291,7 @@ function extractStoreName(card: ModoCard): string {
 // ─── Fetch individual promo (solo cap + bcra_code de bancos) ──────────────────
 
 async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
-  const result: CapDetails = { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [], paymentChannel: 'ANY', legalText: '' };
+  const result: CapDetails = { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [], paymentChannels: [], legalText: '' };
   try {
     const { data: html } = await axios.get(promoUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
@@ -388,17 +397,16 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
       }
     }
 
-    // payment channel
+    // Medios de pago: detecta QR y NFC simultáneamente desde el HTML
     const lowerHtml = html.toLowerCase();
-    if (lowerHtml.includes('dinero en cuenta') || lowerHtml.includes('dinero de la cuenta')) {
-      result.paymentChannel = 'DINERO_EN_CUENTA';
-    } else if (lowerHtml.includes('pagando con qr') || lowerHtml.includes('escaneando')) {
-      result.paymentChannel = 'QR';
-    } else if (lowerHtml.includes('sin contacto') || lowerHtml.includes('nfc') || lowerHtml.includes('contactless')) {
-      result.paymentChannel = 'NFC';
-    } else if (lowerHtml.includes('tarjeta física') || lowerHtml.includes('con tarjeta')) {
-      result.paymentChannel = 'TARJETA_FISICA';
-    }
+    const hasQR = lowerHtml.includes('qr') || lowerHtml.includes('escaneando') || lowerHtml.includes('pagando con qr');
+    const hasNFC = lowerHtml.includes('sin contacto') || lowerHtml.includes('nfc') || lowerHtml.includes('contactless') || lowerHtml.includes('acercando');
+    const hasDinero = lowerHtml.includes('dinero en cuenta') || lowerHtml.includes('dinero de la cuenta');
+    const hasTarjeta = lowerHtml.includes('tarjeta física') || lowerHtml.includes('pagan con tarjeta');
+    if (hasDinero) result.paymentChannels.push('DINERO_EN_CUENTA');
+    if (hasQR) result.paymentChannels.push('QR');
+    if (hasNFC) result.paymentChannels.push('NFC');
+    if (hasTarjeta && !hasQR && !hasNFC) result.paymentChannels.push('TARJETA_FISICA');
   } catch (e) {
     console.error(`[MODO] Error fetching cap/banks for ${promoUrl}:`, e);
   }
@@ -494,7 +502,7 @@ export const ModoScraper: Scraper = {
       const cardNetworks = extractNetworks(card);
       const cardTier = extractCardTier(card);
       const storeName = extractStoreName(card);
-      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [] as CardNetworkWithType[], paymentChannel: 'ANY' as const, legalText: '' };
+      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [] as CardNetworkWithType[], paymentChannels: [] as ModoPaymentChannel[], legalText: '' };
       const storeNames = capDetails.extraStoreNames && capDetails.extraStoreNames.length >= 2
         ? capDetails.extraStoreNames
         : [storeName];
@@ -502,6 +510,24 @@ export const ModoScraper: Scraper = {
       const salesChannel: 'ONLINE' | 'FISICA' | null =
         card.payment_flow === 'online' ? 'ONLINE' :
         card.payment_flow === 'instore' || card.payment_flow === 'trip' ? 'FISICA' : null;
+
+      // Medios de pago: derivar desde trigger_type/trigger_params del slots API
+      // y combinar con lo detectado en la página individual
+      let effectiveChannels: ModoPaymentChannel[] = [...capDetails.paymentChannels];
+      const ttype = (card.trigger_type ?? '').toLowerCase();
+      const tparams = card.trigger_params?.payment_type ?? [];
+      const hasQR_api  = ttype.includes('qr')  || tparams.some(p => p.toLowerCase().includes('qr'));
+      const hasNFC_api = ttype.includes('nfc') || tparams.some(p => p.toLowerCase().includes('nfc'));
+      if (hasQR_api  && !effectiveChannels.includes('QR'))  effectiveChannels.push('QR');
+      if (hasNFC_api && !effectiveChannels.includes('NFC')) effectiveChannels.push('NFC');
+      if (!['qr','nfc','tarjeta','dinero'].some(k => ttype.includes(k)) && effectiveChannels.length === 0) {
+        // trigger_type desconocido — logueamos para mejorar el mapeo en el futuro
+        if (ttype && ttype !== 'app' && ttype !== 'modo') {
+          console.log(`[MODO] trigger_type desconocido: "${card.trigger_type}" (slug: ${card.slug})`);
+        }
+      }
+      // Si no detectamos nada específico, ANY (sin restricción de canal)
+      if (effectiveChannels.length === 0) effectiveChannels = ['ANY'];
 
       let description = card.content?.row?.map(r => r.text).filter(Boolean).join(' · ') || card.title;
       description = description
@@ -527,35 +553,37 @@ export const ModoScraper: Scraper = {
 
       for (const sName of storeNames) {
         for (const discountInfo of discountInfoArray) {
-          promos.push({
-            title: card.title.trim(),
-            description,
-            sourceText: capDetails.legalText || conditionsText,
-            sourceUrl: promoUrl,
-            discount: String(discountInfo.value),
-            discountType: discountInfo.type,
-            cap: capDetails.cap,
-            capUnlimited: capDetails.capUnlimited,
-            capPeriod: capDetails.capPeriod ?? (capDetails.cap ? 'MONTHLY' : undefined),
-            capTarget: capDetails.cap ? 'USER' : null,
-            minPurchase: card.minimum_amount > 0 ? card.minimum_amount : null,
-            stackable,
-            singleUse: undefined,
-            validFrom,
-            validUntil,
-            specificDates: undefined,
-            validDays,
-            bankNames: allBanks,
-            walletNames: ['MODO'],
-            cardNetworks: capDetails.cardNetworks.length > 0 ? capDetails.cardNetworks : undefined,
-            cardType: null,
-            cardTier,
-            paymentChannel: capDetails.paymentChannel,
-            accountType: 'ANY',
-            storeName: sName,
-            categoria: detectedCategoria,
-            salesChannel,
-          });
+          for (const pChannel of effectiveChannels) {
+            promos.push({
+              title: card.title.trim(),
+              description,
+              sourceText: capDetails.legalText || conditionsText,
+              sourceUrl: promoUrl,
+              discount: String(discountInfo.value),
+              discountType: discountInfo.type,
+              cap: capDetails.cap,
+              capUnlimited: capDetails.capUnlimited,
+              capPeriod: capDetails.capPeriod ?? (capDetails.cap ? 'MONTHLY' : undefined),
+              capTarget: capDetails.cap ? 'USER' : null,
+              minPurchase: card.minimum_amount > 0 ? card.minimum_amount : null,
+              stackable,
+              singleUse: undefined,
+              validFrom,
+              validUntil,
+              specificDates: undefined,
+              validDays,
+              bankNames: allBanks,
+              walletNames: ['MODO'],
+              cardNetworks: capDetails.cardNetworks.length > 0 ? capDetails.cardNetworks : undefined,
+              cardType: null,
+              cardTier,
+              paymentChannel: pChannel,
+              accountType: 'ANY',
+              storeName: sName,
+              categoria: detectedCategoria,
+              salesChannel,
+            });
+          }
         }
       }
     }
