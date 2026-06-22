@@ -316,7 +316,7 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
       else if (p === 'monthly') result.capPeriod = 'MONTHLY';
     }
 
-    // banks con bcra_code
+    // Método 1: banks[] con bcra_code (promos de banco único)
     const banksMatch = html.match(/\\"banks\\":\s*(\[[\s\S]*?\])/);
     if (banksMatch) {
       try {
@@ -326,6 +326,15 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
           if (bank.name) result.banks.push({ name: bank.name, bcraCode: bank.bcra_code });
         }
       } catch {}
+    }
+
+    // Método 2: name_bank en extra_data (promos multi-banco como ChangoMás)
+    // Aparece en card.content.row[N].extra_data cuando hay "Bancos adheridos"
+    if (result.banks.length === 0) {
+      const nameBankMatches = [...html.matchAll(/\\"name_bank\\":\s*\\"([^"\\]+)\\"/g)];
+      for (const m of nameBankMatches) {
+        result.banks.push({ name: m[1] });
+      }
     }
 
     // legal text — capturar bloques en mayúsculas (texto legal típico de MODO)
@@ -481,6 +490,12 @@ export const ModoScraper: Scraper = {
       if (/no\s+(?:es\s+)?acumulable/i.test(conditionsText)) stackable = false;
       else if (/(?:es\s+)?acumulable/i.test(conditionsText)) stackable = true;
 
+      // Toda promo MODO debe tener al menos un banco — sin banco no existe en la práctica
+      if (allBanks.length === 0) {
+        console.log(`[MODO] Promo sin banco detectado, saltando: ${card.title} (${promoUrl})`);
+        continue;
+      }
+
       for (const sName of storeNames) {
         for (const discountInfo of discountInfoArray) {
           promos.push({
@@ -501,7 +516,7 @@ export const ModoScraper: Scraper = {
             validUntil,
             specificDates: undefined,
             validDays,
-            bankNames: allBanks.length > 0 ? allBanks : undefined,
+            bankNames: allBanks,
             walletNames: ['MODO'],
             cardNetworks: undefined,
             cardType: null,
