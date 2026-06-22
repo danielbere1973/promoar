@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Scraper, ScrapedPromo } from './types';
+import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
 
 const SLOTS_API = 'https://www.modo.com.ar/promos/api/rewards/slots';
 const PROMO_BASE_URL = 'https://www.modo.com.ar/promos';
@@ -135,6 +135,7 @@ interface CapDetails {
   capUnlimited: boolean;
   capPeriod: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'PER_TRANSACTION' | null;
   banks: Array<{ name: string; bcraCode?: string }>;
+  cardNetworks: CardNetworkWithType[];
   paymentChannel: 'QR' | 'NFC' | 'DINERO_EN_CUENTA' | 'TARJETA_FISICA' | 'ANY';
   legalText: string;
   extraStoreNames?: string[];
@@ -281,7 +282,7 @@ function extractStoreName(card: ModoCard): string {
 // ─── Fetch individual promo (solo cap + bcra_code de bancos) ──────────────────
 
 async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
-  const result: CapDetails = { cap: null, capUnlimited: false, capPeriod: null, banks: [], paymentChannel: 'ANY', legalText: '' };
+  const result: CapDetails = { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [], paymentChannel: 'ANY', legalText: '' };
   try {
     const { data: html } = await axios.get(promoUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
@@ -335,6 +336,34 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
       for (const m of nameBankMatches) {
         result.banks.push({ name: m[1] });
       }
+    }
+
+    // Medios de pago: paymentMethodListWithTags → cardNetworks con tipo
+    // id tiene formato "visa_Crédito_Débito", "american_express_Crédito", etc.
+    const MODO_NETWORK_MAP: Record<string, string> = {
+      'visa': 'Visa',
+      'master': 'Mastercard',
+      'american_express': 'American Express',
+      'cabal': 'Cabal',
+      'diners': 'Diners',
+      'dinners_club': 'Diners',
+      'confiable': 'Confiable',
+      'maestro': 'Maestro',
+    };
+    const pmIdMatches = [...html.matchAll(/\\"id\\":\s*\\"((?:visa|master|american_express|cabal|diners|dinners_club|confiable|maestro)[^"\\]+)\\"/g)];
+    for (const m of pmIdMatches) {
+      const parts = m[1].split('_');
+      // El nombre de red puede ser de 1 o 2 palabras (american_express)
+      const isAmex = m[1].startsWith('american_express');
+      const netKey = isAmex ? 'american_express' : parts[0];
+      const netName = MODO_NETWORK_MAP[netKey];
+      if (!netName) continue;
+      const rest = isAmex ? m[1].replace('american_express_', '') : parts.slice(1).join('_');
+      const hasCredit = rest.includes('Cr') || rest.includes('cr');
+      const hasDebit  = rest.includes('D') && (rest.includes('bito') || rest.includes('ebit'));
+      if (hasCredit) result.cardNetworks.push({ network: netName, type: 'CREDIT' });
+      if (hasDebit)  result.cardNetworks.push({ network: netName, type: 'DEBIT' });
+      if (!hasCredit && !hasDebit) result.cardNetworks.push({ network: netName, type: null });
     }
 
     // legal text — capturar bloques en mayúsculas (texto legal típico de MODO)
@@ -465,7 +494,7 @@ export const ModoScraper: Scraper = {
       const cardNetworks = extractNetworks(card);
       const cardTier = extractCardTier(card);
       const storeName = extractStoreName(card);
-      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capUnlimited: false, capPeriod: null, banks: [], paymentChannel: 'ANY' as const, legalText: '' };
+      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [] as CardNetworkWithType[], paymentChannel: 'ANY' as const, legalText: '' };
       const storeNames = capDetails.extraStoreNames && capDetails.extraStoreNames.length >= 2
         ? capDetails.extraStoreNames
         : [storeName];
@@ -518,7 +547,7 @@ export const ModoScraper: Scraper = {
             validDays,
             bankNames: allBanks,
             walletNames: ['MODO'],
-            cardNetworks: undefined,
+            cardNetworks: capDetails.cardNetworks.length > 0 ? capDetails.cardNetworks : undefined,
             cardType: null,
             cardTier,
             paymentChannel: capDetails.paymentChannel,
