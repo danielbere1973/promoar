@@ -325,12 +325,17 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   // Usar guest profile si no hay usuario logueado con perfil en DB
   const effectiveCards = userProfile?.cards ?? (guestCards && forMe ? guestCards : null)
 
-  // Tarjetas virtuales desde UserWallet (para matching cuando el usuario solo tiene wallets)
-  const walletVirtualCards = (userProfile?.wallets ?? []).map((w: any) => ({
-    walletId: w.walletId, bankId: null, cardNetworkId: null,
-    cardType: 'ACCOUNT', cardSegmentId: null, segmentId: null,
-    cardTier: null, isPayroll: false, isPensioner: false,
-  }))
+  // Tarjetas virtuales desde UserWallet — excluye MODO porque toda promo MODO
+  // requiere un banco asociado; MODO sin banco no existe en la práctica.
+  // MODO matchea solo via cards reales (bankId + walletId=MODO).
+  const MODO_WALLET_ID = 'cmnulzh04000aqlkk8mnpzo46'
+  const walletVirtualCards = (userProfile?.wallets ?? [])
+    .filter((w: any) => w.walletId !== MODO_WALLET_ID)
+    .map((w: any) => ({
+      walletId: w.walletId, bankId: null, cardNetworkId: null,
+      cardType: 'ACCOUNT', cardSegmentId: null, segmentId: null,
+      cardTier: null, isPayroll: false, isPensioner: false,
+    }))
 
   const hasProfile = forMe && !!(effectiveCards || walletVirtualCards.length > 0)
 
