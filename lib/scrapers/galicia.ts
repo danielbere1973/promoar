@@ -253,10 +253,12 @@ function parseItem(item: any, categoriaNombre: string, detail?: any, catId?: num
   const proximSuffix = item.proximamente ? ' (Próximamente)' : '';
   const eminentSuffix = isEminent ? ' (Eminent)' : '';
 
+  const hasBoth = !!(discount && installments);
   const promos: ScrapedPromo[] = [];
   if (discount) {
     promos.push({
       ...base,
+      sourceUrl: hasBoth ? `${promoSourceUrl}-pct` : promoSourceUrl,
       title: `${discount.value}% ${discount.type.includes('REINTEGRO') ? 'reintegro' : 'descuento'} – ${storeName}${eminentSuffix}${proximSuffix}`,
       discount: String(discount.value),
       discountType: discount.type,
@@ -265,6 +267,7 @@ function parseItem(item: any, categoriaNombre: string, detail?: any, catId?: num
   if (installments) {
     promos.push({
       ...base,
+      sourceUrl: hasBoth ? `${promoSourceUrl}-csi` : promoSourceUrl,
       title: `${installments} cuotas sin interés – ${storeName}${eminentSuffix}${proximSuffix}`,
       discount: String(installments),
       discountType: 'CUOTAS_SIN_INTERES',

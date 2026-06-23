@@ -600,8 +600,12 @@ export async function POST(req: NextRequest) {
 
     const savePromo = async (item: ResolvedItem) => {
       const { promoData, reqData, baseSlug, sourceUrl, title, commerceId } = item;
-      const existing = isUniqueUrl(sourceUrl)
-        ? byUrl.get(sourceUrl!)
+      // byUrl puede mapear a una promo con distinto título si el scraper genera
+      // múltiples promos del mismo item (misma URL, distinto discountType).
+      // En ese caso ignorar byUrl y caer en byKey.
+      const byUrlMatch = isUniqueUrl(sourceUrl) ? byUrl.get(sourceUrl!) : undefined;
+      const existing = (byUrlMatch && byUrlMatch.title === title)
+        ? byUrlMatch
         : byKey.get(`${title}|${commerceId}`);
 
       if (existing) {
