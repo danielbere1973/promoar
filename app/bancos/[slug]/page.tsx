@@ -30,6 +30,8 @@ async function getEntity(slug: string): Promise<EntityInfo | null> {
   return null
 }
 
+const SSR_TAKE = 200
+
 async function getPromos(entity: EntityInfo) {
   const where = entity.type === 'bank'
     ? { bankId: entity.id }
@@ -51,7 +53,8 @@ async function getPromos(entity: EntityInfo) {
         take: 1,
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ maxDiscountPct: 'desc' }, { createdAt: 'desc' }],
+    take: SSR_TAKE,
   })
 }
 
@@ -113,7 +116,7 @@ export default async function BancoPage({ params }: { params: { slug: string } }
     name: `Promos ${entity.name} hoy`,
     description: `Descuentos, reintegros y cuotas sin interés con ${entity.name} en Argentina`,
     url: `${BASE_URL}/bancos/${entity.slug}`,
-    items: promos.filter(p => p.slug && p.requirements[0]).map(p => ({
+    items: promos.filter(p => p.slug && p.requirements[0]).slice(0, 50).map(p => ({
       name: `${discountBadge(p.requirements[0] as any)} en ${p.commerce.name}`,
       url: `${BASE_URL}/promos/${p.slug}`,
     })),
@@ -230,6 +233,14 @@ export default async function BancoPage({ params }: { params: { slug: string } }
           </section>
         ))}
       </div>
+
+      {/* ── Ver todas ── */}
+      {promos.length >= SSR_TAKE && (
+        <div className="max-w-3xl mx-auto px-4 pb-4 text-center">
+          <p className="text-xs text-gray-400">Mostrando las {SSR_TAKE} mejores promos.</p>
+          <Link href="/promos" className="text-xs font-bold text-[#1E3A5F] hover:underline">Ver todas con filtro personalizado →</Link>
+        </div>
+      )}
 
       {/* ── CTA ── */}
       <div className="max-w-3xl mx-auto px-4 pb-10">
