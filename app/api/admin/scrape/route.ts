@@ -83,7 +83,7 @@ interface CardNetworkWithType {
 // - validUntil se redondea a semana (÷7 días) para tolerar el default "fin de mes" que cambia cada mes
 function promoFingerprint(data: any, reqs: any[]): string {
   const sortedReqs = [...reqs]
-    .map(r => [r.bankId ?? '', r.walletId ?? '', r.cardNetworkId ?? '', r.cardSegmentId ?? '',
+    .map(r => [r.bankId ?? '', r.walletId ?? '', r.cardNetworkId ?? '',
                r.discountType, r.discountValue, r.paymentChannel ?? '', r.cardType ?? '',
                r.cap ?? '', r.capPeriod ?? '', r.minPurchase ?? ''].join('|'))
     .sort()
@@ -611,6 +611,10 @@ export async function POST(req: NextRequest) {
           skippedUnchanged++;
           processedCount++;
           return; // sin cambios, no tocar la DB
+        }
+        if (skippedUnchanged + processedCount < 5) {
+          // Log primeras diferencias para diagnóstico
+          console.log(`[FP DIFF] "${title}": new=${newFp} | old=${existingFp}`)
         }
         changedCommerceIds.add(commerceId);
         try {
