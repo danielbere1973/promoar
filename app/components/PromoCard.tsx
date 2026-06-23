@@ -2,18 +2,17 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Share2, Copy, Check, Heart } from 'lucide-react'
 
-const DAY_BITS = [
-  { l: 'L', bit: 2 }, { l: 'M', bit: 4 }, { l: 'X', bit: 8 },
-  { l: 'J', bit: 16 }, { l: 'V', bit: 32 }, { l: 'S', bit: 64 }, { l: 'D', bit: 1 },
-]
-
-function formatDays(mask: number): { text: string | null; bits: boolean[] } {
-  if (!mask || mask === 127) return { text: 'Todos los días', bits: [] }
-  const active = DAY_BITS.map(d => (mask & d.bit) !== 0)
-  const count = active.filter(Boolean).length
-  if (count === 5 && !active[5] && !active[6]) return { text: 'Lun – Vie', bits: [] }
-  if (count === 2 && active[5] && active[6]) return { text: 'Fin de semana', bits: [] }
-  return { text: null, bits: active }
+function formatDays(mask: number): string {
+  if (!mask || mask === 127) return 'Todos los días'
+  const names = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+  const active: string[] = []
+  for (let i = 0; i < 7; i++) {
+    if (mask & (1 << i)) active.push(names[i])
+  }
+  if (active.length === 5 && !(mask & 1) && !(mask & 64)) return 'Lun – Vie'
+  if (active.length === 2 && (mask & 64) && (mask & 1)) return 'Fin de semana'
+  if (active.length <= 3) return active.join(' y ')
+  return active.join(', ')
 }
 
 type Req = {
@@ -53,17 +52,17 @@ function bestDiscountReq(reqs: Req[]): Req | null {
   return reqs[0] ?? null
 }
 
-function discountDisplay(req: Req | null): { num: string; unit: string; label: string } {
-  if (!req) return { num: '', unit: '', label: '' }
+function discountDisplay(req: Req | null): { num: string; unit: string; label: string; isCsi: boolean } {
+  if (!req) return { num: '', unit: '', label: '', isCsi: false }
   const v = req.discountValue ?? 0
   switch (req.discountType) {
-    case 'PERCENTAGE_REINTEGRO': return { num: `${v}`, unit: '%', label: 'reintegro' }
-    case 'PERCENTAGE_DESCUENTO': return { num: `${v}`, unit: '%', label: 'descuento' }
-    case 'BONIFICACION':         return { num: `${v}`, unit: '%', label: 'bonif.' }
-    case 'FIXED_AMOUNT':         return { num: `$${v.toLocaleString('es-AR')}`, unit: '', label: 'descuento' }
-    case 'CUOTAS_SIN_INTERES':   return { num: `${v}`, unit: '', label: `cuota${v !== 1 ? 's' : ''} s/int.` }
-    case 'NXM':                  return { num: `${req.nxmN ?? 2}x${req.nxmM ?? 1}`, unit: '', label: 'prom.' }
-    default:                     return { num: `${v}`, unit: '%', label: '' }
+    case 'PERCENTAGE_REINTEGRO': return { num: `${v}`, unit: '%', label: 'reintegro', isCsi: false }
+    case 'PERCENTAGE_DESCUENTO': return { num: `${v}`, unit: '%', label: 'descuento', isCsi: false }
+    case 'BONIFICACION':         return { num: `${v}`, unit: '%', label: 'bonif.', isCsi: false }
+    case 'FIXED_AMOUNT':         return { num: `$${v.toLocaleString('es-AR')}`, unit: '', label: 'descuento', isCsi: false }
+    case 'CUOTAS_SIN_INTERES':   return { num: `${v}`, unit: '', label: `cuota${v !== 1 ? 's' : ''} s/int.`, isCsi: true }
+    case 'NXM':                  return { num: `${req.nxmN ?? 2}x${req.nxmM ?? 1}`, unit: '', label: 'prom.', isCsi: false }
+    default:                     return { num: `${v}`, unit: '%', label: '', isCsi: false }
   }
 }
 
@@ -78,8 +77,7 @@ type Props = {
 
 export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, fullWidth, priority }: Props) {
   const bestReq = bestDiscountReq(promo.requirements)
-  const { num, unit, label } = discountDisplay(bestReq)
-  const isCsi = bestReq?.discountType === 'CUOTAS_SIN_INTERES'
+  const { num, unit, label, isCsi } = discountDisplay(bestReq)
 
   const banks = Array.from(new Map(
     promo.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])
@@ -87,7 +85,10 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
   const wallets = Array.from(new Map(
     promo.requirements.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])
   ).values())
-  const entities = [...banks, ...wallets].slice(0, 3)
+  const networks = Array.from(new Map(
+    promo.requirements.filter(r => r.cardNetwork?.slug).map(r => [r.cardNetwork!.slug, r.cardNetwork!])
+  ).values())
+  const entities = [...banks, ...wallets].slice(0, 2)
 
   const hasSinTope = promo.requirements.some(r => r.capUnlimited)
   const segments = promo.requirements.map(r => r.cardSegment?.name).filter(Boolean)
@@ -112,7 +113,6 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
     const base = typeof window !== 'undefined' ? window.location.origin : 'https://promoar.com.ar'
     return promo.slug ? `${base}/promos/${promo.slug}` : `${base}/promos`
   }
-
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation()
     navigator.clipboard.writeText(getShareUrl()).then(() => {
@@ -120,7 +120,6 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
       setTimeout(() => { setCopied(false); setShowShare(false) }, 1500)
     })
   }
-
   const handleWhatsapp = (e: React.MouseEvent) => {
     e.stopPropagation()
     const entity = entities[0]?.name || ''
@@ -129,34 +128,46 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
     setShowShare(false)
   }
 
+  const CARD_NETWORK_LOGOS: Record<string, string> = {
+    'visa': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/800px-Visa_Inc._logo.svg.png',
+    'mastercard': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/800px-Mastercard-logo.svg.png',
+    'amex': 'https://www.americanexpress.com/favicon.ico',
+    'american-express-banco': 'https://www.americanexpress.com/favicon.ico',
+    'naranja-x': 'https://www.google.com/s2/favicons?sz=64&domain=naranjax.com',
+    'cabal': 'https://www.google.com/s2/favicons?sz=64&domain=cabal.com.ar',
+  }
+
   return (
     <div
       onClick={onClick}
-      className={`group relative bg-white dark:bg-[#0F2040] rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-[0_8px_24px_rgba(29,61,110,0.13)] hover:-translate-y-0.5 active:scale-[0.97] ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
+      className={`group relative bg-white dark:bg-[#0F2040] rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-[0_6px_20px_rgba(29,61,110,0.14)] hover:-translate-y-0.5 active:scale-[0.97] flex flex-col ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
       style={{
         ...(fullWidth ? undefined : { width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }),
-        boxShadow: '0 1px 4px rgba(29,61,110,0.08), 0 0 0 1px rgba(29,61,110,0.06)',
+        boxShadow: '0 1px 3px rgba(29,61,110,0.08), 0 0 0 1px rgba(29,61,110,0.05)',
       }}
     >
-      {/* ── Logo area ── */}
-      <div className="relative bg-[#F8F9FB] dark:bg-[#0A1628] flex items-center justify-center" style={{ height: 88 }}>
+      {/* ── Logo area con tinte de categoría ── */}
+      <div
+        className="relative flex items-center justify-center shrink-0"
+        style={{ height: 88, background: promo.category.color + '14' }}
+      >
         {promo.commerce.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={promo.commerce.logoUrl}
             alt={promo.commerce.name}
-            className="max-h-[56px] max-w-[78%] object-contain"
+            className="max-h-[58px] max-w-[80%] object-contain"
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
           />
         ) : (
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black"
-            style={{ background: promo.category.color + '18', color: promo.category.color }}>
+            style={{ background: promo.category.color + '25', color: promo.category.color }}>
             {promo.category.icon ?? '🏷️'}
           </div>
         )}
 
-        {/* Canal exclusivo — top-left */}
+        {/* Canal exclusivo */}
         {promo.salesChannel && (
           <span className={`absolute top-0 left-0 text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-br-xl ${
             promo.salesChannel === 'ONLINE' ? 'bg-[#E8471C] text-white' : 'bg-amber-400 text-amber-900'
@@ -165,26 +176,19 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
           </span>
         )}
 
-        {/* Segmento — top-left si no hay canal */}
-        {exclusiveSegment && !promo.salesChannel && (
-          <span className="absolute top-0 left-0 text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-br-xl bg-purple-600 text-white truncate max-w-[80%]">
-            {exclusiveSegment}
-          </span>
-        )}
-
-        {/* Sucursales — bottom-left */}
+        {/* Sucursales */}
         {!!nearbyCount && (
           <span className="absolute bottom-2 left-2 text-[9px] font-semibold bg-emerald-600/90 text-white px-1.5 py-0.5 rounded-lg">
             📍 {nearbyCount}
           </span>
         )}
 
-        {/* Share — top-right, solo al hover */}
+        {/* Share */}
         {promo.slug && (
           <div ref={shareRef} className="absolute top-2 right-2 z-10" onClick={e => e.stopPropagation()}>
             <button
               onClick={e => { e.stopPropagation(); setShowShare(s => !s) }}
-              className="w-6 h-6 rounded-lg bg-white/90 dark:bg-white/10 backdrop-blur-sm flex items-center justify-center text-gray-400 hover:text-[#1D3D6E] opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+              className="w-6 h-6 rounded-lg bg-white/80 dark:bg-black/30 backdrop-blur-sm flex items-center justify-center text-gray-400 hover:text-[#1D3D6E] opacity-0 group-hover:opacity-100 transition-all shadow-sm"
             >
               <Share2 size={11} />
             </button>
@@ -204,35 +208,11 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
         )}
       </div>
 
-      {/* ── Franja de descuento ── */}
-      {num && (
-        <div className={`flex items-center gap-1.5 px-3 py-2 border-t ${
-          isCsi
-            ? 'bg-[#F0F4FF] dark:bg-[#1A2F55] border-[#D8E2F8] dark:border-[#2A4070]'
-            : 'bg-[#EEF2F8] dark:bg-[#162440] border-[#D8E2F0] dark:border-[#1E3055]'
-        }`}>
-          <span className={`text-[22px] font-black leading-none tabular-nums ${isCsi ? 'text-[#2A5298]' : 'text-[#1D3D6E]'} dark:text-white`}>
-            {num}
-          </span>
-          {unit && (
-            <span className="text-[13px] font-black leading-none text-[#E8471C]">{unit}</span>
-          )}
-          {label && (
-            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 truncate">{label}</span>
-          )}
-          {hasSinTope && (
-            <span className="ml-auto text-[8px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 px-1 py-0.5 rounded shrink-0">
-              sin tope
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* ── Info ── */}
-      <div className="px-3 pt-2 pb-3 space-y-1.5">
+      {/* ── Cuerpo ── */}
+      <div className="px-3 pt-2.5 pb-2 flex flex-col gap-2 flex-1">
         {/* Nombre + favorito */}
         <div className="flex items-start justify-between gap-1">
-          <p className="text-[13px] font-bold text-[#0D1B2E] dark:text-white leading-tight truncate">{promo.commerce.name}</p>
+          <p className="text-[13px] font-bold text-[#0D1B2E] dark:text-white leading-tight line-clamp-1">{promo.commerce.name}</p>
           {onToggleSave && (
             <button onClick={e => onToggleSave(promo.id, e)} className="shrink-0 -mt-0.5 p-0.5 hover:scale-110 active:scale-90 transition-transform">
               <Heart size={14} className={promo.isSaved ? 'text-[#E8471C] fill-[#E8471C]' : 'text-gray-300 dark:text-slate-600'} />
@@ -240,8 +220,26 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
           )}
         </div>
 
-        {/* Entidades */}
-        {entities.length > 0 && (
+        {/* Descuento pill */}
+        {num && (
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-flex items-baseline gap-0.5 rounded-full px-3 py-1 ${
+              isCsi
+                ? 'bg-[#EEF4FF] dark:bg-[#1A2F55] text-[#2A5298] dark:text-[#8AADD4]'
+                : 'bg-[#1D3D6E] dark:bg-[#3A6BC4] text-white'
+            }`}>
+              <span className="text-[17px] font-black leading-none tabular-nums">{num}</span>
+              {unit && <span className="text-[11px] font-black ml-0.5" style={{ color: isCsi ? '#2A5298' : '#E8471C' }}>{unit}</span>}
+            </span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{label}</span>
+            {hasSinTope && (
+              <span className="ml-auto text-[8px] font-black uppercase text-emerald-600 dark:text-emerald-400 shrink-0">sin tope</span>
+            )}
+          </div>
+        )}
+
+        {/* Entidades + redes */}
+        {(entities.length > 0 || networks.length > 0) && (
           <div className="flex flex-wrap items-center gap-1">
             {entities.map((e, i) => (
               e.slug ? (
@@ -257,16 +255,31 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
                 </span>
               )
             ))}
+            {networks.slice(0, 2).map(n => (
+              CARD_NETWORK_LOGOS[n.slug] ? (
+                <img key={n.slug} src={CARD_NETWORK_LOGOS[n.slug]} alt={n.name}
+                  className="w-5 h-4 object-contain opacity-70" />
+              ) : (
+                <span key={n.slug} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-gray-100 dark:bg-[#1E3055] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-[#2A4070]">
+                  {n.name.substring(0, 6)}
+                </span>
+              )
+            ))}
           </div>
         )}
 
-        {/* Días — solo si NO es todos los días */}
-        {!days.text && days.bits.length > 0 && (
-          <p className="text-[10px] text-gray-400 dark:text-gray-500">
-            {DAY_BITS.filter((_, i) => days.bits[i]).map(d => d.l).join(' · ')}
-          </p>
+        {/* Días */}
+        {days !== 'Todos los días' && (
+          <p className="text-[10px] text-gray-400 dark:text-gray-500">{days}</p>
         )}
       </div>
+
+      {/* ── Barra inferior: exclusivo segmento ── */}
+      {exclusiveSegment && (
+        <div className="bg-[#1D3D6E] dark:bg-[#3A6BC4] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 text-center shrink-0">
+          Exclusivo {exclusiveSegment}
+        </div>
+      )}
     </div>
   )
 }
