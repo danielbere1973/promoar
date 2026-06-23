@@ -151,6 +151,34 @@ export async function POST(req: NextRequest) {
       console.log(`[Scrape] ⚠️ ${flaggedPromos.length} promo(s) sin descuento detectado: ${flaggedPromos.map((p: any) => p.title).join(', ')}`);
     }
 
+    // ── PRE-PROCESAMIENTO: combinar % + CSI del mismo item de API ────────────
+    // Cuando un scraper genera 2 ScrapedPromos del mismo item (misma sourceUrl
+    // única) con distinto discountType (ej: 20% + 3 CSI), las renombra con un
+    // título combinado para que el agrupador las fusione en una sola promo DB.
+    const isUniqueSourceUrl = (url?: string) =>
+      !!url && (url.includes('#') || /\/detalle\/\d+/.test(url));
+    const bySourceUrl = new Map<string, any[]>();
+    for (const p of processablePromos) {
+      if (!isUniqueSourceUrl(p.sourceUrl)) continue;
+      if (!bySourceUrl.has(p.sourceUrl!)) bySourceUrl.set(p.sourceUrl!, []);
+      bySourceUrl.get(p.sourceUrl!)!.push(p);
+    }
+    for (const [, grp] of bySourceUrl) {
+      if (grp.length < 2) continue;
+      const types = new Set(grp.map((g: any) => g.discountType));
+      const hasCSI = types.has('CUOTAS_SIN_INTERES');
+      const hasPct = types.has('PERCENTAGE_DESCUENTO') || types.has('PERCENTAGE_REINTEGRO');
+      if (!hasCSI || !hasPct) continue;
+      const pctItem = grp.find((g: any) => g.discountType !== 'CUOTAS_SIN_INTERES');
+      const csiItem = grp.find((g: any) => g.discountType === 'CUOTAS_SIN_INTERES');
+      if (!pctItem || !csiItem) continue;
+      // Extraer la parte del título después del " – " (nombre del comercio + sufijos)
+      const storePart = pctItem.title.split(' – ').slice(1).join(' – ');
+      const pctLabel = pctItem.discountType === 'PERCENTAGE_REINTEGRO' ? 'reintegro' : 'descuento';
+      const combinedTitle = `${parseFloat(pctItem.discount)}% ${pctLabel} + ${parseFloat(csiItem.discount)} cuotas sin interés – ${storePart}`;
+      for (const p of grp) p.title = combinedTitle;
+    }
+
     // ── AGRUPACIÓN: title + sourceUrl → 1 Promo con N Requirements ───────────
     // Permite que "30% reintegro + 6 CSI" del mismo comercio genere
     // una sola Promo con dos PromoRequirements distintos.
