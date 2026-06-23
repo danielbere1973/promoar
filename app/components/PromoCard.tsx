@@ -197,7 +197,18 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </span>
         )}
 
-        {/* Share */}
+        {/* Estrella favorito comercio — top-right logo area */}
+        {onToggleSaveCommerce && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggleSaveCommerce(promo.commerce.name, e) }}
+            className="absolute top-2 right-2 w-6 h-6 rounded-lg bg-white/80 dark:bg-black/30 backdrop-blur-sm flex items-center justify-center transition-all hover:scale-110 active:scale-90 shadow-sm"
+            title={isCommerceSaved ? 'Quitar comercio favorito' : 'Guardar comercio'}
+          >
+            <Star size={12} className={isCommerceSaved ? 'text-amber-400 fill-amber-400' : 'text-gray-400 dark:text-gray-500'} />
+          </button>
+        )}
+
+        {/* Share — top-right, solo hover, cubre la estrella */}
         {promo.slug && (
           <div ref={shareRef} className="absolute top-2 right-2 z-10" onClick={e => e.stopPropagation()}>
             <button
@@ -224,21 +235,14 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
 
       {/* ── Cuerpo ── */}
       <div className="px-3 pt-2.5 pb-2 flex flex-col gap-2 flex-1">
-        {/* Nombre + favoritos */}
+        {/* Nombre + favorito promo */}
         <div className="flex items-start justify-between gap-1">
           <p className="text-[13px] font-bold text-[#0D1B2E] dark:text-white leading-tight line-clamp-1">{promo.commerce.name}</p>
-          <div className="flex items-center gap-1 shrink-0 -mt-0.5">
-            {onToggleSaveCommerce && (
-              <button onClick={e => onToggleSaveCommerce(promo.commerce.name, e)} className="p-0.5 hover:scale-110 active:scale-90 transition-transform" title={isCommerceSaved ? 'Quitar comercio favorito' : 'Guardar comercio'}>
-                <Star size={13} className={isCommerceSaved ? 'text-amber-400 fill-amber-400' : 'text-gray-300 dark:text-slate-600 hover:text-amber-400'} />
-              </button>
-            )}
-            {onToggleSave && (
-              <button onClick={e => onToggleSave(promo.id, e)} className="p-0.5 hover:scale-110 active:scale-90 transition-transform" title={promo.isSaved ? 'Quitar de guardados' : 'Guardar promo'}>
-                <Heart size={13} className={promo.isSaved ? 'text-[#E8471C] fill-[#E8471C]' : 'text-gray-300 dark:text-slate-600 hover:text-[#E8471C]'} />
-              </button>
-            )}
-          </div>
+          {onToggleSave && (
+            <button onClick={e => onToggleSave(promo.id, e)} className="shrink-0 -mt-0.5 p-0.5 hover:scale-110 active:scale-90 transition-transform" title={promo.isSaved ? 'Quitar de guardados' : 'Guardar promo'}>
+              <Heart size={13} className={promo.isSaved ? 'text-[#E8471C] fill-[#E8471C]' : 'text-gray-300 dark:text-slate-600 hover:text-[#E8471C]'} />
+            </button>
+          )}
         </div>
 
         {/* Descuento pill */}
