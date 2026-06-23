@@ -261,17 +261,29 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
         {(entities.length > 0 || networks.length > 0) && (
           <div className="flex flex-wrap items-center gap-1">
             {entities.map((e, i) => (
-              e.slug ? (
-                <a key={i} href={`/bancos/${e.slug}`} onClick={ev => ev.stopPropagation()}
-                  className="flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-[#EEF2F8] dark:bg-[#1E3055] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#2A4070] hover:bg-[#1D3D6E] hover:text-white hover:border-[#1D3D6E] transition-colors">
-                  {e.logoUrl && <img src={e.logoUrl} alt="" className="w-3 h-3 rounded object-contain" />}
-                  {e.name.split(' ').slice(-1)[0].substring(0, 9)}
-                </a>
+              e.logoUrl ? (
+                e.slug ? (
+                  <a key={i} href={`/bancos/${e.slug}`} onClick={ev => ev.stopPropagation()}
+                    className="w-6 h-6 rounded-lg bg-white dark:bg-[#1E3055] border border-[#D0DBF0] dark:border-[#2A4070] flex items-center justify-center hover:border-[#1D3D6E] hover:shadow-sm transition-all overflow-hidden"
+                    title={e.name}>
+                    <img src={e.logoUrl} alt={e.name} className="w-5 h-5 object-contain" />
+                  </a>
+                ) : (
+                  <span key={i} className="w-6 h-6 rounded-lg bg-white dark:bg-[#1E3055] border border-[#D0DBF0] dark:border-[#2A4070] flex items-center justify-center overflow-hidden" title={e.name}>
+                    <img src={e.logoUrl} alt={e.name} className="w-5 h-5 object-contain" />
+                  </span>
+                )
               ) : (
-                <span key={i} className="flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-[#EEF2F8] dark:bg-[#1E3055] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#2A4070]">
-                  {e.logoUrl && <img src={e.logoUrl} alt="" className="w-3 h-3 rounded object-contain" />}
-                  {e.name.split(' ').slice(-1)[0].substring(0, 9)}
-                </span>
+                e.slug ? (
+                  <a key={i} href={`/bancos/${e.slug}`} onClick={ev => ev.stopPropagation()}
+                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-[#EEF2F8] dark:bg-[#1E3055] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#2A4070] hover:bg-[#1D3D6E] hover:text-white transition-colors">
+                    {e.name.split(' ').slice(-1)[0].substring(0, 9)}
+                  </a>
+                ) : (
+                  <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-[#EEF2F8] dark:bg-[#1E3055] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#2A4070]">
+                    {e.name.split(' ').slice(-1)[0].substring(0, 9)}
+                  </span>
+                )
               )
             ))}
             {networks.slice(0, 2).map(n => (
