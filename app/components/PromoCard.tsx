@@ -181,12 +181,17 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </div>
         )}
 
-        {/* Canal exclusivo */}
+        {/* Canal exclusivo — ícono compacto top-left */}
         {promo.salesChannel && (
-          <span className={`absolute top-0 left-0 text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-br-xl ${
-            promo.salesChannel === 'ONLINE' ? 'bg-[#E8471C] text-white' : 'bg-amber-400 text-amber-900'
-          }`}>
-            {promo.salesChannel === 'ONLINE' ? 'Online' : 'Físico'}
+          <span
+            title={promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
+            className={`absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center text-sm shadow-sm ${
+              promo.salesChannel === 'ONLINE'
+                ? 'bg-[#E8471C] text-white'
+                : 'bg-amber-400 text-amber-900'
+            }`}
+          >
+            {promo.salesChannel === 'ONLINE' ? '🌐' : '🏪'}
           </span>
         )}
 
