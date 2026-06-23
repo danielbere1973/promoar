@@ -190,12 +190,6 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </span>
         )}
 
-        {/* Sucursales */}
-        {!!nearbyCount && (
-          <span className="absolute bottom-2 left-2 text-[9px] font-semibold bg-emerald-600/90 text-white px-1.5 py-0.5 rounded-lg">
-            📍 {nearbyCount}
-          </span>
-        )}
 
         {/* Estrella favorito comercio — top-right logo area */}
         {onToggleSaveCommerce && (
@@ -313,6 +307,16 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           <p className="text-[10px] text-gray-400 dark:text-gray-500">{days}</p>
         )}
       </div>
+
+      {/* ── Sucursales cercanas ── */}
+      {!!nearbyCount && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 border-t border-emerald-100 dark:border-emerald-800/30 shrink-0">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 dark:text-emerald-400 shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+            {nearbyCount} sucursal{nearbyCount !== 1 ? 'es' : ''} cerca
+          </span>
+        </div>
+      )}
 
       {/* ── Barra inferior: exclusivo segmento ── */}
       {exclusiveSegment && (
