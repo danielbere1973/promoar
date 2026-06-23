@@ -19,7 +19,7 @@ function normalizeTitle(t: string) {
 
 function validatePromo(
   promo: any,
-  activeTitles: Map<string, Set<string>>, // commerceId → Set<normalizedTitle>
+  activeTitles: Map<string, Array<{ title: string; bankIds: Set<string>; walletIds: Set<string> }>>,
 ): string[] {
   const issues: string[] = []
 
@@ -52,10 +52,18 @@ function validatePromo(
   )
   if (new Set(reqKeys).size < reqKeys.length) issues.push('Requisitos duplicados')
 
-  // 6. Duplicado de promo activa (mismo comercio + título)
+  // 6. Duplicado de promo activa (mismo comercio + título + al menos una entidad en común)
   const normTitle = normalizeTitle(promo.title)
-  const activesForCommerce = activeTitles.get(promo.commerceId)
-  if (activesForCommerce?.has(normTitle)) issues.push('Ya existe activa con mismo comercio y título')
+  const activesForCommerce = activeTitles.get(promo.commerceId) ?? []
+  const draftBankIds = new Set(promo.requirements.map((r: any) => r.bankId).filter(Boolean))
+  const draftWalletIds = new Set(promo.requirements.map((r: any) => r.walletId).filter(Boolean))
+  const isDupe = activesForCommerce.some(a => {
+    if (a.title !== normTitle) return false
+    const sharedBank   = Array.from(draftBankIds).some(id => a.bankIds.has(id as string))
+    const sharedWallet = Array.from(draftWalletIds).some(id => a.walletIds.has(id as string))
+    return sharedBank || sharedWallet
+  })
+  if (isDupe) issues.push('Ya existe activa con mismo comercio, título y entidad')
 
   return issues
 }
@@ -73,6 +81,7 @@ export async function POST() {
           id: true, discountType: true, discountValue: true,
           cap: true, capUnlimited: true,
           bankId: true, walletId: true, cardNetworkId: true,
+          cardSegmentId: true, paymentChannel: true,
         },
       },
     },
@@ -82,15 +91,23 @@ export async function POST() {
     return NextResponse.json({ approved: 0, flagged: [] })
   }
 
-  // Cargar títulos de promos activas para detectar duplicados
+  // Cargar promos activas con entidades para detectar duplicados reales
   const actives = await prisma.promo.findMany({
     where: { status: 'ACTIVE' },
-    select: { commerceId: true, title: true },
+    select: {
+      commerceId: true, title: true,
+      requirements: { select: { bankId: true, walletId: true } },
+    },
   })
-  const activeTitles = new Map<string, Set<string>>()
+  // Map: commerceId → lista de { title normalizado, bankIds, walletIds }
+  const activeTitles = new Map<string, Array<{ title: string; bankIds: Set<string>; walletIds: Set<string> }>>()
   for (const a of actives) {
-    if (!activeTitles.has(a.commerceId)) activeTitles.set(a.commerceId, new Set())
-    activeTitles.get(a.commerceId)!.add(normalizeTitle(a.title))
+    if (!activeTitles.has(a.commerceId)) activeTitles.set(a.commerceId, [])
+    activeTitles.get(a.commerceId)!.push({
+      title: normalizeTitle(a.title),
+      bankIds: new Set(a.requirements.map(r => r.bankId).filter(Boolean) as string[]),
+      walletIds: new Set(a.requirements.map(r => r.walletId).filter(Boolean) as string[]),
+    })
   }
 
   const toApprove: string[] = []
