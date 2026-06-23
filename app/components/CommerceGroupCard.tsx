@@ -53,11 +53,13 @@ type Props<P extends Promo> = {
   promos: P[]
   onPromoClick: (p: P) => void
   onToggleSave?: (id: string, e: React.MouseEvent) => void
+  onToggleSaveCommerce?: (name: string, e: React.MouseEvent) => void
+  isCommerceSaved?: boolean
   nearbyCount?: number | null
   priority?: boolean
 }
 
-export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, nearbyCount, priority }: Props<P>) {
+export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, nearbyCount, priority }: Props<P>) {
   const [expanded, setExpanded] = useState(false)
   const [showOtherDays, setShowOtherDays] = useState(false)
 
@@ -73,7 +75,7 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
   if (!expanded) {
     return (
       <div className="flex-shrink-0 relative" style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}>
-        <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} fullWidth priority={priority} />
+        <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} onToggleSaveCommerce={onToggleSaveCommerce} isCommerceSaved={isCommerceSaved} fullWidth priority={priority} />
         {promos.length > 1 && (
           <button
             onClick={() => setExpanded(true)}
@@ -115,7 +117,7 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
           <div className="grid grid-cols-2 gap-2.5 pb-1">
             <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} fullWidth />
             {restToday.map(p => (
-              <PromoCard key={p.id} promo={p} nearbyCount={nearbyCount} onClick={() => onPromoClick(p)} onToggleSave={onToggleSave} fullWidth />
+              <PromoCard key={p.id} promo={p} nearbyCount={nearbyCount} onClick={() => onPromoClick(p)} onToggleSave={onToggleSave} onToggleSaveCommerce={onToggleSaveCommerce} isCommerceSaved={isCommerceSaved} fullWidth />
             ))}
           </div>
         </div>
@@ -134,7 +136,7 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
           {showOtherDays && (
             <div className="grid grid-cols-2 gap-2.5 pt-2.5 pb-1">
               {others.map(p => (
-                <PromoCard key={p.id} promo={p} nearbyCount={nearbyCount} onClick={() => onPromoClick(p)} onToggleSave={onToggleSave} fullWidth />
+                <PromoCard key={p.id} promo={p} nearbyCount={nearbyCount} onClick={() => onPromoClick(p)} onToggleSave={onToggleSave} onToggleSaveCommerce={onToggleSaveCommerce} isCommerceSaved={isCommerceSaved} fullWidth />
               ))}
             </div>
           )}

@@ -2153,6 +2153,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                       nearbyCount={g.commerce.id ? nearbyBranches[g.commerce.id]?.count : null}
                       onPromoClick={handlePromoClick}
                       onToggleSave={toggleSave}
+                      onToggleSaveCommerce={toggleFavCommerce}
+                      isCommerceSaved={favCommerces.includes(g.commerce.name)}
                       priority={isFirst && gi <= 2}
                     />
                   ))}

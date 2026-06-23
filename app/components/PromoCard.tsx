@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react'
-import { Share2, Copy, Check, Heart } from 'lucide-react'
+import { Share2, Copy, Check, Heart, Star } from 'lucide-react'
 
 function formatDays(mask: number): string {
   if (!mask || mask === 127) return 'Todos los días'
@@ -26,6 +26,7 @@ type Req = {
   cap?: number | null
   capUnlimited?: boolean | null
   cardSegment?: { name: string } | null
+  paymentChannel?: string | null
 }
 
 type Promo = {
@@ -66,16 +67,25 @@ function discountDisplay(req: Req | null): { num: string; unit: string; label: s
   }
 }
 
+const CHANNEL_CHIPS: Record<string, { label: string; color: string }> = {
+  NFC:            { label: 'NFC', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  QR:             { label: 'QR', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  TARJETA_FISICA: { label: 'Físico', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  TRANSFERENCIA:  { label: 'Transfer.', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+}
+
 type Props = {
   promo: Promo
   nearbyCount?: number | null
   onClick: () => void
   onToggleSave?: (id: string, e: React.MouseEvent) => void
+  onToggleSaveCommerce?: (name: string, e: React.MouseEvent) => void
+  isCommerceSaved?: boolean
   fullWidth?: boolean
   priority?: boolean
 }
 
-export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, fullWidth, priority }: Props) {
+export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, fullWidth, priority }: Props) {
   const bestReq = bestDiscountReq(promo.requirements)
   const { num, unit, label, isCsi } = discountDisplay(bestReq)
 
@@ -93,6 +103,10 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
   const hasSinTope = promo.requirements.some(r => r.capUnlimited)
   const segments = promo.requirements.map(r => r.cardSegment?.name).filter(Boolean)
   const exclusiveSegment = segments.length > 0 && new Set(segments).size === 1 ? segments[0] : null
+
+  const channels = [...new Set(
+    promo.requirements.map(r => r.paymentChannel).filter((c): c is string => !!c && c !== 'ANY')
+  )]
 
   const days = formatDays(promo.validDays)
 
@@ -210,14 +224,21 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
 
       {/* ── Cuerpo ── */}
       <div className="px-3 pt-2.5 pb-2 flex flex-col gap-2 flex-1">
-        {/* Nombre + favorito */}
+        {/* Nombre + favoritos */}
         <div className="flex items-start justify-between gap-1">
           <p className="text-[13px] font-bold text-[#0D1B2E] dark:text-white leading-tight line-clamp-1">{promo.commerce.name}</p>
-          {onToggleSave && (
-            <button onClick={e => onToggleSave(promo.id, e)} className="shrink-0 -mt-0.5 p-0.5 hover:scale-110 active:scale-90 transition-transform">
-              <Heart size={14} className={promo.isSaved ? 'text-[#E8471C] fill-[#E8471C]' : 'text-gray-300 dark:text-slate-600'} />
-            </button>
-          )}
+          <div className="flex items-center gap-1 shrink-0 -mt-0.5">
+            {onToggleSaveCommerce && (
+              <button onClick={e => onToggleSaveCommerce(promo.commerce.name, e)} className="p-0.5 hover:scale-110 active:scale-90 transition-transform" title={isCommerceSaved ? 'Quitar comercio favorito' : 'Guardar comercio'}>
+                <Star size={13} className={isCommerceSaved ? 'text-amber-400 fill-amber-400' : 'text-gray-300 dark:text-slate-600 hover:text-amber-400'} />
+              </button>
+            )}
+            {onToggleSave && (
+              <button onClick={e => onToggleSave(promo.id, e)} className="p-0.5 hover:scale-110 active:scale-90 transition-transform" title={promo.isSaved ? 'Quitar de guardados' : 'Guardar promo'}>
+                <Heart size={13} className={promo.isSaved ? 'text-[#E8471C] fill-[#E8471C]' : 'text-gray-300 dark:text-slate-600 hover:text-[#E8471C]'} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Descuento pill */}
@@ -265,6 +286,21 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, f
                 </span>
               )
             ))}
+          </div>
+        )}
+
+        {/* Canales exclusivos (NFC, QR, etc.) */}
+        {channels.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {channels.map(ch => {
+              const chip = CHANNEL_CHIPS[ch]
+              if (!chip) return null
+              return (
+                <span key={ch} className={`text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-lg border ${chip.color} dark:bg-opacity-20`}>
+                  {chip.label}
+                </span>
+              )
+            })}
           </div>
         )}
 
