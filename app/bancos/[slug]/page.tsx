@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
+const PAGE_SIZE = 200
 
 function validDaysLabel(mask: number | null): string {
   if (!mask || mask === 127) return 'Todos los días'
@@ -30,32 +31,43 @@ async function getEntity(slug: string): Promise<EntityInfo | null> {
   return null
 }
 
-const SSR_TAKE = 200
-
-async function getPromos(entity: EntityInfo) {
+async function getPromos(entity: EntityInfo, page: number) {
   const where = entity.type === 'bank'
     ? { bankId: entity.id }
     : { walletId: entity.id }
 
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-  return prisma.promo.findMany({
-    where: {
-      status: 'ACTIVE',
-      requirements: { some: where },
-      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
-    },
-    include: {
-      commerce: { select: { id: true, name: true, slug: true, logoUrl: true } },
-      category: { select: { name: true, icon: true, color: true, slug: true } },
-      requirements: {
-        where,
-        orderBy: { discountValue: 'desc' },
-        take: 1,
+
+  const [promos, total] = await Promise.all([
+    prisma.promo.findMany({
+      where: {
+        status: 'ACTIVE',
+        requirements: { some: where },
+        OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
       },
-    },
-    orderBy: [{ maxDiscountPct: 'desc' }, { createdAt: 'desc' }],
-    take: SSR_TAKE,
-  })
+      include: {
+        commerce: { select: { id: true, name: true, slug: true, logoUrl: true } },
+        category: { select: { name: true, icon: true, color: true, slug: true } },
+        requirements: {
+          where,
+          orderBy: { discountValue: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: [{ maxDiscountPct: 'desc' }, { createdAt: 'desc' }],
+      take: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
+    }),
+    prisma.promo.count({
+      where: {
+        status: 'ACTIVE',
+        requirements: { some: where },
+        OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+      },
+    }),
+  ])
+
+  return { promos, total, totalPages: Math.ceil(total / PAGE_SIZE) }
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
@@ -88,11 +100,12 @@ export async function generateStaticParams() {
   return [...banks, ...wallets].map(e => ({ slug: e.slug }))
 }
 
-export default async function BancoPage({ params }: { params: { slug: string } }) {
+export default async function BancoPage({ params, searchParams }: { params: { slug: string }, searchParams: { page?: string } }) {
   const entity = await getEntity(params.slug)
   if (!entity) notFound()
 
-  const promos = await getPromos(entity)
+  const page = Math.max(1, parseInt(searchParams.page ?? '1') || 1)
+  const { promos, total, totalPages } = await getPromos(entity, page)
 
   // Agrupar por categoría
   const byCategory = new Map<string, { name: string; icon: string; color: string; promos: typeof promos }>()
@@ -111,6 +124,7 @@ export default async function BancoPage({ params }: { params: { slug: string } }
   }, 0)
 
   const entityLabel = entity.type === 'wallet' ? 'Billetera' : 'Banco'
+  const baseUrl = `/bancos/${entity.slug}`
 
   const jsonLd = schemaItemList({
     name: `Promos ${entity.name} hoy`,
@@ -156,7 +170,7 @@ export default async function BancoPage({ params }: { params: { slug: string } }
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3 mt-6">
             <div className="bg-white/10 rounded-2xl px-4 py-3 text-center">
-              <p className="text-2xl font-black">{promos.length}</p>
+              <p className="text-2xl font-black">{total}</p>
               <p className="text-blue-200 text-[11px] font-bold mt-0.5">Promos activas</p>
             </div>
             <div className="bg-white/10 rounded-2xl px-4 py-3 text-center">
@@ -234,11 +248,26 @@ export default async function BancoPage({ params }: { params: { slug: string } }
         ))}
       </div>
 
-      {/* ── Ver todas ── */}
-      {promos.length >= SSR_TAKE && (
-        <div className="max-w-3xl mx-auto px-4 pb-4 text-center">
-          <p className="text-xs text-gray-400">Mostrando las {SSR_TAKE} mejores promos.</p>
-          <Link href="/promos" className="text-xs font-bold text-[#1E3A5F] hover:underline">Ver todas con filtro personalizado →</Link>
+      {/* ── Paginación ── */}
+      {totalPages > 1 && (
+        <div className="max-w-3xl mx-auto px-4 pb-6 flex items-center justify-between gap-3">
+          <p className="text-xs text-gray-400">
+            Página {page} de {totalPages} · {total} promos en total
+          </p>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link href={`${baseUrl}?page=${page - 1}`}
+                className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-xs font-bold text-[#1E3A5F] hover:bg-[#1E3A5F] hover:text-white hover:border-[#1E3A5F] transition-colors">
+                ← Anterior
+              </Link>
+            )}
+            {page < totalPages && (
+              <Link href={`${baseUrl}?page=${page + 1}`}
+                className="px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-xs font-bold hover:bg-[#162d54] transition-colors">
+                Siguiente →
+              </Link>
+            )}
+          </div>
         </div>
       )}
 
