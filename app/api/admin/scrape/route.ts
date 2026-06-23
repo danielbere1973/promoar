@@ -79,15 +79,18 @@ interface CardNetworkWithType {
 
 // Fingerprint de promo: serializa los campos que el scraper puede cambiar.
 // Si el fingerprint coincide con el existente en DB, se skippea el write.
+// - validFrom se excluye: defaultea a new Date() cuando el scraper no lo provee → siempre difiere
+// - validUntil se redondea a semana (÷7 días) para tolerar el default "fin de mes" que cambia cada mes
 function promoFingerprint(data: any, reqs: any[]): string {
   const sortedReqs = [...reqs]
     .map(r => [r.bankId ?? '', r.walletId ?? '', r.cardNetworkId ?? '', r.cardSegmentId ?? '',
                r.discountType, r.discountValue, r.paymentChannel ?? '', r.cardType ?? '',
                r.cap ?? '', r.capPeriod ?? '', r.minPurchase ?? ''].join('|'))
     .sort()
+  const validUntilMs = data.validUntil instanceof Date ? data.validUntil.getTime() : (data.validUntil ? new Date(data.validUntil).getTime() : 0)
+  const validUntilWeek = validUntilMs ? String(Math.floor(validUntilMs / (7 * 24 * 3600 * 1000))) : ''
   return [
-    String(data.validFrom instanceof Date ? data.validFrom.toISOString().slice(0, 10) : (data.validFrom ?? '')),
-    String(data.validUntil instanceof Date ? data.validUntil.toISOString().slice(0, 10) : (data.validUntil ?? '')),
+    validUntilWeek,
     String(data.validDays ?? ''),
     String(data.maxDiscountPct ?? ''),
     String(data.isCSIOnly ?? ''),
