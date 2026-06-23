@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
     let skippedNoCategory = 0;
     let skippedNoCommerce = 0;
     let skippedUnchanged = 0;
+    const changedCommerceIds = new Set<string>();
 
     // Cache de sucursales existentes por comercio (para no repetir queries ni duplicar pines)
     const branchesByCommerce = new Map<string, Array<{ lat: number; lng: number }>>();
@@ -611,6 +612,7 @@ export async function POST(req: NextRequest) {
           processedCount++;
           return; // sin cambios, no tocar la DB
         }
+        changedCommerceIds.add(commerceId);
         try {
           await prisma.promoRequirement.deleteMany({ where: { promoId: existing.id } });
           let slug = baseSlug;
@@ -627,7 +629,8 @@ export async function POST(req: NextRequest) {
         existingSlugs.add(slug);
         try {
           const created = await prisma.promo.create({ data: { ...promoData, slug, status: 'DRAFT', requirements: { create: reqData } } });
-          newPromoIds.push(created.id)
+          newPromoIds.push(created.id);
+          changedCommerceIds.add(commerceId);
         } catch (e: any) {
           if (e?.code === 'P2002') {
             // Slug duplicado — skipear silenciosamente, es una promo duplicada
@@ -645,10 +648,10 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Scrape] ✅ Procesadas: ${processedCount} | Sin cambios (skip): ${skippedUnchanged} | Sin categoría: ${skippedNoCategory} | Sin comercio: ${skippedNoCommerce}`);
 
-    // Actualizar activePromoCount en los comercios afectados
-    const affectedCommerceIds = Array.from(new Set(resolvedItems.map(i => i.commerceId)))
-    if (affectedCommerceIds.length > 0) {
-      await Promise.all(affectedCommerceIds.map(async (cid) => {
+    // Actualizar activePromoCount solo en comercios que realmente cambiaron, en batches
+    const affectedCommerceIds = Array.from(changedCommerceIds)
+    for (let i = 0; i < affectedCommerceIds.length; i += 5) {
+      await Promise.all(affectedCommerceIds.slice(i, i + 5).map(async (cid) => {
         const count = await prisma.promo.count({ where: { commerceId: cid, status: 'ACTIVE' } })
         await prisma.commerce.update({ where: { id: cid }, data: { activePromoCount: count } })
       }))
