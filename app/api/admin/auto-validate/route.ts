@@ -128,11 +128,34 @@ export async function POST() {
   }
 
   // Aprobar los limpios
+  let approvedSlugs: string[] = []
   if (toApprove.length > 0) {
     await prisma.promo.updateMany({
       where: { id: { in: toApprove } },
       data: { status: 'ACTIVE' },
     })
+    // Obtener slugs para IndexNow
+    const approved = await prisma.promo.findMany({
+      where: { id: { in: toApprove }, slug: { not: null } },
+      select: { slug: true },
+    })
+    approvedSlugs = approved.map(p => p.slug!).filter(Boolean)
+  }
+
+  // Notificar IndexNow (fire-and-forget, no bloquea la respuesta)
+  if (approvedSlugs.length > 0) {
+    const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
+    const INDEXNOW_KEY = '218059e4ea38492aa43715204a12cde4'
+    fetch('https://api.indexnow.org/indexnow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({
+        host: new URL(BASE_URL).hostname,
+        key: INDEXNOW_KEY,
+        keyLocation: `${BASE_URL}/${INDEXNOW_KEY}.txt`,
+        urlList: approvedSlugs.map(s => `${BASE_URL}/promos/${s}`),
+      }),
+    }).catch(() => {}) // silencioso si falla
   }
 
   return NextResponse.json({ approved: toApprove.length, flagged })
