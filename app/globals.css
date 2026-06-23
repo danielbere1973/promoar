@@ -2,38 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #F4F7FB;
+  --foreground: #0D1B2E;
   --card: #ffffff;
-  --card-foreground: #0f172a;
-  --primary: #4f46e5;
+  --card-foreground: #0D1B2E;
+  --primary: #1D3D6E;
   --primary-foreground: #ffffff;
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --border: #e2e8f0;
-  --ring: rgba(79, 70, 229, 0.2);
+  --accent: #E8471C;
+  --accent-foreground: #ffffff;
+  --border: #E2E8F0;
+  --ring: rgba(29, 61, 110, 0.2);
+  --navy: #1D3D6E;
+  --orange: #E8471C;
 }
 
 html.dark {
-  --background: #020617;
-  --foreground: #f8fafc;
-  --card: #0f172a;
-  --card-foreground: #f8fafc;
-  --primary: #6366f1;
+  --background: #0A1628;
+  --foreground: #E8EDF5;
+  --card: #0F2040;
+  --card-foreground: #E8EDF5;
+  --primary: #3A6BC4;
   --primary-foreground: #ffffff;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --border: #1e293b;
-  --ring: rgba(99, 102, 241, 0.4);
+  --accent: #E8471C;
+  --accent-foreground: #ffffff;
+  --border: #1E3055;
+  --ring: rgba(58, 107, 196, 0.3);
+  --navy: #3A6BC4;
+  --orange: #E8471C;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

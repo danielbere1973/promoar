@@ -1,14 +1,10 @@
 'use client'
-import { X, MapPin } from 'lucide-react'
+import { X, MapPin, ExternalLink } from 'lucide-react'
 import { useEffect } from 'react'
 
-const DAYS_ROW = [
-  { label: 'L', bit: 2 },
-  { label: 'M', bit: 4 },
-  { label: 'X', bit: 8 },
-  { label: 'J', bit: 16 },
-  { label: 'V', bit: 32 },
-  { label: 'S', bit: 64 },
+const DAY_BITS = [
+  { label: 'L', bit: 2 }, { label: 'M', bit: 4 }, { label: 'X', bit: 8 },
+  { label: 'J', bit: 16 }, { label: 'V', bit: 32 }, { label: 'S', bit: 64 },
   { label: 'D', bit: 1 },
 ]
 
@@ -28,12 +24,12 @@ const CAP_PERIOD: Record<string, string> = {
 }
 
 const CARD_LOGOS: Record<string, string> = {
-  'visa':                   'https://www.visa.com/favicon.ico',
-  'mastercard':             'https://www.google.com/s2/favicons?sz=64&domain=mastercard.com',
-  'amex':                   'https://www.americanexpress.com/favicon.ico',
+  'visa': 'https://www.visa.com/favicon.ico',
+  'mastercard': 'https://www.google.com/s2/favicons?sz=64&domain=mastercard.com',
+  'amex': 'https://www.americanexpress.com/favicon.ico',
   'american-express-banco': 'https://www.americanexpress.com/favicon.ico',
-  'naranja-x':              'https://www.google.com/s2/favicons?sz=64&domain=naranjax.com',
-  'cabal':                  'https://www.google.com/s2/favicons?sz=64&domain=cabal.com.ar',
+  'naranja-x': 'https://www.google.com/s2/favicons?sz=64&domain=naranjax.com',
+  'cabal': 'https://www.google.com/s2/favicons?sz=64&domain=cabal.com.ar',
 }
 
 type Req = {
@@ -44,7 +40,10 @@ type Req = {
   paymentChannel?: string | null
   discountType?: string
   discountValue?: number
+  nxmN?: number | null
+  nxmM?: number | null
   cap?: number | null
+  capUnlimited?: boolean | null
   capPeriod?: string | null
   minPurchase?: number | null
   segment?: string | null
@@ -68,15 +67,16 @@ type Promo = {
   requirements: Req[]
 }
 
-function discountLabel(req: Req): string {
+function discountDisplay(req: Req): { num: string; unit: string; label: string } {
   const v = req.discountValue ?? 0
   switch (req.discountType) {
-    case 'PERCENTAGE_REINTEGRO': return `${v}% reintegro`
-    case 'PERCENTAGE_DESCUENTO': return `${v}% descuento`
-    case 'CUOTAS_SIN_INTERES':   return `${v} cuotas sin interés`
-    case 'BONIFICACION':         return `${v}% bonificación`
-    case 'FIXED_AMOUNT':         return `$${v.toLocaleString('es-AR')} descuento`
-    default: return `${v}%`
+    case 'PERCENTAGE_REINTEGRO': return { num: `${v}`, unit: '%', label: 'reintegro' }
+    case 'PERCENTAGE_DESCUENTO': return { num: `${v}`, unit: '%', label: 'descuento' }
+    case 'BONIFICACION': return { num: `${v}`, unit: '%', label: 'bonificación' }
+    case 'FIXED_AMOUNT': return { num: `$${v.toLocaleString('es-AR')}`, unit: '', label: 'descuento fijo' }
+    case 'CUOTAS_SIN_INTERES': return { num: `${v}`, unit: 'CSI', label: 'cuotas sin interés' }
+    case 'NXM': return { num: `${req.nxmN ?? 2}x${req.nxmM ?? 1}`, unit: '', label: 'promoción' }
+    default: return { num: `${v}`, unit: '%', label: '' }
   }
 }
 
@@ -89,22 +89,24 @@ type Branch = { address: string | null; city: string | null; province: string | 
 type NearbyBranch = { count: number; minDistKm: number; branches: Branch[] }
 
 function formatBranchAddress(b: Branch): string {
-  return [b.address, b.city].filter(Boolean).join(', ') || `${b.city ?? b.province ?? 'Sucursal'}`
+  return [b.address, b.city].filter(Boolean).join(', ') || b.province || 'Sucursal'
 }
 
 function formatDistance(km: number): string {
-  return km < 0.1 ? 'menos de 100m' : `${km}km`
+  return km < 0.1 ? '<100m' : `${km}km`
 }
 
-export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { promo: Promo; nearbyBranch?: NearbyBranch; onClose: () => void }) {
-  // Cerrar con Escape
+export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: {
+  promo: Promo
+  nearbyBranch?: NearbyBranch
+  onClose: () => void
+}) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  // Bloquear scroll del body
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
@@ -120,13 +122,25 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
     if (!discountMap.has(key)) discountMap.set(key, r)
   }
   const discounts = Array.from(discountMap.values())
-    .sort((a, b) => (b.discountValue ?? 0) - (a.discountValue ?? 0))
+    .sort((a, b) => {
+      const score = (r: Req) => {
+        if (r.discountType === 'PERCENTAGE_REINTEGRO' || r.discountType === 'PERCENTAGE_DESCUENTO') return (r.discountValue ?? 0) + 1000
+        if (r.discountType === 'CUOTAS_SIN_INTERES') return r.discountValue ?? 0
+        return 0
+      }
+      return score(b) - score(a)
+    })
 
   // Entidades únicas
   const banksMap = new Map<string, { name: string; logoUrl?: string | null }>()
   const walletsMap = new Map<string, { name: string; logoUrl?: string | null }>()
   const networksMap = new Map<string, { name: string; slug: string; types: Set<string> }>()
   const channelsSet = new Set<string>()
+  const capReq = reqs.find(r => r.cap && r.cap > 0)
+  const sinTope = reqs.some(r => r.capUnlimited)
+  const minReq = reqs.find(r => r.minPurchase)
+  const segments = [...new Set(reqs.map(r => r.segment).filter(Boolean))]
+
   for (const r of reqs) {
     if (r.bank?.name) banksMap.set(r.bank.name, r.bank)
     if (r.wallet?.name) walletsMap.set(r.wallet.name, r.wallet)
@@ -141,109 +155,150 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
   const wallets = Array.from(walletsMap.values())
   const networks = Array.from(networksMap.values())
   const channels = Array.from(channelsSet)
-  const capReq = reqs.find(r => r.cap)
-  const minReq = reqs.find(r => r.minPurchase)
 
-  // Mejor descuento para el hero
   const bestDiscount = discounts[0]
-  const bestLabel = bestDiscount ? discountLabel(bestDiscount) : ''
+  const hero = bestDiscount ? discountDisplay(bestDiscount) : null
 
   return (
-    <div className="fixed inset-0 z-[110] flex flex-col justify-end sm:justify-center sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
-      {/* Sheet */}
-      <div className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+      {/* Modal */}
+      <div
+        className="relative bg-white dark:bg-[#0F2040] w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+        style={{ maxHeight: 'min(92vh, 720px)', animation: 'modalIn 0.2s ease-out' }}
+      >
+        {/* ─── Hero: gradient navy + logo + descuento ─── */}
+        <div
+          className="relative flex flex-col items-center px-6 pt-5 pb-8 shrink-0"
+          style={{ background: 'linear-gradient(145deg, #1D3D6E 0%, #2A5298 100%)' }}
+        >
+          {/* Close */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors"
+          >
+            <X size={15} className="text-white" />
+          </button>
 
-        {/* Handle (mobile) */}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden">
-          <div className="w-10 h-1 bg-gray-200 rounded-full" />
-        </div>
-
-        {/* Banner: logo grande del comercio */}
-        <div className="relative bg-[#F4F5F7] flex items-center justify-center px-10" style={{ minHeight: 140 }}>
+          {/* Canal */}
           {promo.salesChannel && (
-            <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-br-xl">
+            <div className={`absolute top-4 left-4 text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-xl ${
+              promo.salesChannel === 'ONLINE'
+                ? 'bg-[#E8471C] text-white'
+                : 'bg-amber-400 text-amber-900'
+            }`}>
               {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
             </div>
           )}
-          {promo.commerce.logoUrl ? (
-            <img src={promo.commerce.logoUrl} alt={promo.commerce.name}
-              className="max-h-20 max-w-[60%] object-contain" />
-          ) : (
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
-              style={{ background: promo.category.color + '20' }}>
-              {promo.category.icon ?? '🏷️'}
+
+          {/* Logo */}
+          <div className="w-[72px] h-[72px] rounded-2xl bg-white shadow-lg flex items-center justify-center mt-2 mb-3">
+            {promo.commerce.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={promo.commerce.logoUrl}
+                alt={promo.commerce.name}
+                className="max-w-[80%] max-h-[80%] object-contain"
+              />
+            ) : (
+              <span className="text-2xl">{promo.category.icon ?? '🏷️'}</span>
+            )}
+          </div>
+
+          {/* Nombre comercio */}
+          <p className="text-white font-black text-[17px] text-center leading-tight">
+            {promo.commerce.name}
+          </p>
+          <p className="text-white/60 text-[11px] mt-0.5">
+            {promo.category.icon} {promo.category.name}
+          </p>
+
+          {/* Descuento hero */}
+          {hero && (
+            <div className="mt-4 flex items-baseline gap-1.5">
+              <span className="text-[52px] font-black text-white leading-none tabular-nums" style={{ letterSpacing: '-2px' }}>
+                {hero.num}
+              </span>
+              {hero.unit && (
+                <span className="text-[28px] font-black leading-none" style={{ color: '#E8471C' }}>
+                  {hero.unit}
+                </span>
+              )}
+              {hero.label && (
+                <span className="text-white/60 text-[13px] font-medium ml-1 self-end mb-2">
+                  {hero.label}
+                </span>
+              )}
             </div>
           )}
-          <button onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white shadow flex items-center justify-center transition-colors hover:bg-gray-100">
-            <X size={14} className="text-gray-500" />
-          </button>
-        </div>
 
-        {/* Nombre + beneficio */}
-        <div className="px-5 py-4 text-center border-b border-gray-100 space-y-2">
-          <div>
-            <p className="text-base font-black text-[#1E3A5F]">{promo.commerce.name}</p>
-            <p className="text-[10px] font-semibold" style={{ color: promo.category.color }}>
-              {promo.category.icon} {promo.category.name}
-            </p>
-          </div>
-          {promo.title && promo.title !== promo.commerce.name && (
-            <p className="text-xs text-gray-500">{promo.title}</p>
+          {/* Descuentos adicionales */}
+          {discounts.length > 1 && (
+            <div className="flex flex-wrap justify-center gap-1.5 mt-3">
+              {discounts.slice(1).map((d, i) => {
+                const { num: n, unit: u, label: l } = discountDisplay(d)
+                return (
+                  <span key={i} className="text-[11px] font-bold text-white/80 bg-white/15 px-3 py-1 rounded-full">
+                    {n}{u} {l}
+                  </span>
+                )
+              })}
+            </div>
           )}
-          {discounts.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-2 pt-1">
-              <span className="text-sm font-black text-amber-800 bg-amber-100 px-4 py-1.5 rounded-full">{bestLabel}</span>
-              {discounts.slice(1).map((d, i) => (
-                <span key={i} className="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
-                  {discountLabel(d)}
+
+          {/* Segmentos */}
+          {segments.length > 0 && (
+            <div className="flex flex-wrap justify-center gap-1.5 mt-2">
+              {segments.map((s, i) => (
+                <span key={i} className="text-[10px] font-bold text-purple-200 bg-purple-500/30 border border-purple-400/30 px-2.5 py-0.5 rounded-full">
+                  Exclusivo {s}
                 </span>
               ))}
             </div>
           )}
         </div>
 
-        {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+        {/* ─── Body scrollable ─── */}
+        <div className="overflow-y-auto flex-1 px-5 py-5 space-y-4">
 
-          {/* Nota / condición especial del comercio */}
+          {/* Nota especial */}
           {promo.commerceNote && (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+            <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl px-4 py-3">
               <span className="text-base shrink-0">⚠️</span>
-              <p className="text-xs text-amber-800 leading-relaxed">{promo.commerceNote}</p>
+              <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{promo.commerceNote}</p>
             </div>
           )}
 
           {/* Vigencia */}
-          <div className="bg-gray-50 rounded-2xl px-4 py-3 space-y-2.5">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Vigencia</p>
-
+          <Section title="Vigencia">
             {specificDates.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {specificDates.map(d => {
                   const [y, m, day] = d.split('-')
                   return (
-                    <span key={d} className="bg-[#1E3A5F] text-white text-xs font-bold px-3 py-1.5 rounded-xl">
-                      {day}/{m}/{y}
+                    <span key={d} className="bg-[#1D3D6E] text-white text-xs font-bold px-3 py-1.5 rounded-xl">
+                      {day}/{m}/{y.slice(2)}
                     </span>
                   )
                 })}
               </div>
             ) : (
               <>
-                {/* Días visuales */}
                 <div className="flex gap-1.5">
-                  {DAYS_ROW.map(({ label, bit }) => {
+                  {DAY_BITS.map(({ label, bit }) => {
                     const active = !promo.validDays || promo.validDays === 127 || (promo.validDays & bit) !== 0
                     return (
                       <div key={label}
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-black transition-colors ${
-                          active ? 'text-white' : 'bg-white text-gray-300 border border-gray-200'
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-black ${
+                          active
+                            ? 'bg-[#1D3D6E] dark:bg-[#3A6BC4] text-white'
+                            : 'bg-gray-100 dark:bg-[#1E3055] text-gray-300 dark:text-gray-600'
                         }`}
-                        style={active ? { background: '#1E3A5F' } : {}}
                       >
                         {label}
                       </div>
@@ -251,7 +306,7 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
                   })}
                 </div>
                 {(promo.validFrom || promo.validUntil) && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">
                     {promo.validFrom && `Desde ${formatDate(promo.validFrom)}`}
                     {promo.validFrom && promo.validUntil && ' · '}
                     {promo.validUntil && `Vence ${formatDate(promo.validUntil)}`}
@@ -260,78 +315,51 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
               </>
             )}
 
-            {/* Tope y mínimo */}
-            {(capReq || minReq) && (
+            {/* Tope / Sin tope / Mínimo */}
+            {(capReq || sinTope || minReq) && (
               <div className="flex flex-wrap gap-2 pt-1">
+                {sinTope && (
+                  <Pill color="emerald">✓ Sin tope</Pill>
+                )}
                 {capReq && (
-                  <div className="flex items-center gap-1.5 bg-red-50 text-red-700 px-3 py-1.5 rounded-xl">
-                    <span className="text-sm">🔒</span>
-                    <div>
-                      <p className="text-[11px] font-black">Tope ${capReq.cap!.toLocaleString('es-AR')}</p>
-                      {capReq.capPeriod && <p className="text-[10px] opacity-70">{CAP_PERIOD[capReq.capPeriod] ?? ''}</p>}
-                    </div>
-                  </div>
+                  <Pill color="red">
+                    🔒 Tope ${capReq.cap!.toLocaleString('es-AR')}
+                    {capReq.capPeriod && ` ${CAP_PERIOD[capReq.capPeriod] ?? ''}`}
+                  </Pill>
                 )}
                 {minReq && (
-                  <div className="flex items-center gap-1.5 bg-orange-50 text-orange-700 px-3 py-1.5 rounded-xl">
-                    <span className="text-sm">🛒</span>
-                    <div>
-                      <p className="text-[11px] font-black">Mín. ${minReq.minPurchase!.toLocaleString('es-AR')}</p>
-                      <p className="text-[10px] opacity-70">de compra</p>
-                    </div>
-                  </div>
+                  <Pill color="amber">
+                    🛒 Mín. ${minReq.minPurchase!.toLocaleString('es-AR')}
+                  </Pill>
                 )}
               </div>
             )}
-          </div>
+          </Section>
 
           {/* Con qué pagás */}
           {(banks.length > 0 || wallets.length > 0 || networks.length > 0 || channels.length > 0) && (
-            <div className="bg-gray-50 rounded-2xl px-4 py-3 space-y-3">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Con qué pagás</p>
-
-              {banks.length > 0 && (
-                <div className="space-y-2">
-                  {banks.map(b => (
-                    <div key={b.name} className="flex items-center gap-2.5">
-                      {b.logoUrl ? (
-                        <img src={b.logoUrl} alt={b.name} className="w-7 h-7 rounded-lg object-contain border border-gray-200 bg-white p-0.5 shrink-0" />
-                      ) : (
-                        <div className="w-7 h-7 rounded-lg bg-[#1E3A5F] flex items-center justify-center text-[9px] font-black text-white shrink-0">
-                          {b.name[0]}
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-semibold text-[#1E3A5F]">{b.name}</p>
-                        <p className="text-[10px] text-gray-400">Banco</p>
-                      </div>
+            <Section title="Con qué pagás">
+              {[...banks.map(e => ({ ...e, type: 'Banco' })), ...wallets.map(e => ({ ...e, type: 'Billetera' }))].map((e, i) => (
+                <div key={i} className="flex items-center gap-3 py-1">
+                  {e.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={e.logoUrl} alt={e.name}
+                      className="w-8 h-8 rounded-xl object-contain border border-gray-100 dark:border-[#1E3055] bg-white dark:bg-[#0A1628] p-0.5 shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-black text-white shrink-0"
+                      style={{ background: '#1D3D6E' }}>
+                      {e.name[0]}
                     </div>
-                  ))}
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold text-[#0D1B2E] dark:text-white">{e.name}</p>
+                    <p className="text-[10px] text-gray-400">{e.type}</p>
+                  </div>
                 </div>
-              )}
-
-              {wallets.length > 0 && (
-                <div className="space-y-2">
-                  {wallets.map(w => (
-                    <div key={w.name} className="flex items-center gap-2.5">
-                      {w.logoUrl ? (
-                        <img src={w.logoUrl} alt={w.name} className="w-7 h-7 rounded-lg object-contain border border-gray-200 bg-white p-0.5 shrink-0" />
-                      ) : (
-                        <div className="w-7 h-7 rounded-lg bg-[#D94F2B] flex items-center justify-center text-[9px] font-black text-white shrink-0">
-                          {w.name[0]}
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-semibold text-[#1E3A5F]">{w.name}</p>
-                        <p className="text-[10px] text-gray-400">Billetera digital</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              ))}
 
               {networks.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 pt-1">
                   {networks.map(n => {
                     const types = Array.from(n.types)
                     const typeLabel = types.includes('CREDIT') && types.includes('DEBIT') ? 'Crédito y débito'
@@ -339,12 +367,13 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
                       : types.includes('DEBIT') ? 'Débito'
                       : types[0] === 'PREPAID' ? 'Prepaga' : ''
                     return (
-                      <div key={n.slug} className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-1.5">
+                      <div key={n.slug} className="flex items-center gap-2 bg-gray-50 dark:bg-[#1E3055] border border-gray-200 dark:border-[#2A4070] rounded-xl px-3 py-1.5">
                         {CARD_LOGOS[n.slug] && (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={CARD_LOGOS[n.slug]} alt={n.name} className="w-4 h-4 object-contain" />
                         )}
                         <div>
-                          <p className="text-xs font-bold text-[#1E3A5F]">{n.name}</p>
+                          <p className="text-xs font-bold text-[#1D3D6E] dark:text-white">{n.name}</p>
                           {typeLabel && <p className="text-[9px] text-gray-400">{typeLabel}</p>}
                         </div>
                       </div>
@@ -354,74 +383,60 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
               )}
 
               {channels.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 pt-1">
                   {channels.map(ch => (
-                    <span key={ch} className="text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-xl">
+                    <span key={ch} className="text-[11px] font-semibold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700/40 px-3 py-1.5 rounded-xl">
                       {CHANNEL_LABEL[ch] ?? ch}
                     </span>
                   ))}
                 </div>
               )}
-            </div>
+            </Section>
           )}
 
           {/* Sucursales */}
           {nearbyBranch && nearbyBranch.branches.length > 0 && (
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 space-y-2">
-              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1.5">
-                <MapPin size={14} className="shrink-0" />
-                Sucursales cerca de tu ubicación
-              </p>
+            <Section title="Sucursales cercanas" icon={<MapPin size={13} className="text-emerald-600 shrink-0" />} accent="emerald">
               <div className="space-y-1.5">
                 {nearbyBranch.branches.map((b, i) => (
-                  <a
-                    key={i}
+                  <a key={i}
                     href={`https://www.google.com/maps/search/?api=1&query=${b.lat},${b.lng}`}
                     target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-2 bg-white rounded-xl px-3 py-2 hover:bg-emerald-100 transition-colors"
+                    className="flex items-center justify-between gap-2 bg-emerald-50 dark:bg-emerald-900/15 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-xl px-3 py-2 transition-colors"
                   >
-                    <p className="text-xs font-semibold text-emerald-800 truncate">{formatBranchAddress(b)}</p>
-                    <span className="text-[11px] font-bold text-emerald-600 shrink-0">{formatDistance(b.distanceKm)}</span>
+                    <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 truncate">{formatBranchAddress(b)}</p>
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0 tabular-nums">{formatDistance(b.distanceKm)}</span>
                   </a>
                 ))}
               </div>
               {nearbyBranch.count > nearbyBranch.branches.length && (
-                <a
-                  href={`https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}`}
+                <a href={`https://www.google.com/maps/search/${encodeURIComponent(promo.commerce.name)}`}
                   target="_blank" rel="noopener noreferrer"
-                  className="block text-[11px] font-semibold text-emerald-700 hover:underline"
-                >
-                  Ver las {nearbyBranch.count} sucursales cercanas en Google Maps →
+                  className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline pt-1">
+                  Ver las {nearbyBranch.count} sucursales en Google Maps →
                 </a>
               )}
-            </div>
+            </Section>
           )}
 
-          {/* Instagram del comercio */}
+          {/* Instagram */}
           {promo.commerce.instagramUrl && (
-            <a
-              href={promo.commerce.instagramUrl}
-              target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 bg-pink-50 border border-pink-100 rounded-2xl px-4 py-3 hover:bg-pink-100 transition-colors"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-pink-500 shrink-0"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-pink-700">Seguir en Instagram</p>
-                <p className="text-xs text-pink-500 truncate">@{promo.commerce.name}</p>
-              </div>
-              <span className="text-pink-400 font-bold text-sm">→</span>
+            <a href={promo.commerce.instagramUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/15 dark:to-purple-900/15 border border-pink-100 dark:border-pink-800/30 rounded-2xl px-4 py-3 hover:opacity-90 transition-opacity">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-pink-500 shrink-0"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
+              <p className="text-sm font-semibold text-pink-700 dark:text-pink-400">Instagram</p>
+              <span className="ml-auto text-pink-400 dark:text-pink-500"><ExternalLink size={14} /></span>
             </a>
           )}
 
           {/* Legales */}
-          <div className="bg-gray-50 rounded-2xl px-4 py-3 space-y-2">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Legales</p>
+          <Section title="Términos y condiciones">
             {promo.sourceText ? (
               <details>
-                <summary className="text-xs font-semibold text-[#1E3A5F] cursor-pointer select-none list-none flex items-center gap-1">
-                  Ver términos y condiciones <span className="text-gray-300">▾</span>
+                <summary className="text-xs font-semibold text-[#1D3D6E] dark:text-[#8AADD4] cursor-pointer select-none list-none flex items-center gap-1">
+                  Ver texto completo <span className="text-gray-400">▾</span>
                 </summary>
-                <p className="text-[10px] text-gray-500 leading-relaxed mt-2 whitespace-pre-line">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed mt-2 whitespace-pre-line">
                   {promo.sourceText.slice(0, 2000)}{promo.sourceText.length > 2000 ? '…' : ''}
                 </p>
               </details>
@@ -430,22 +445,57 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: { pro
             )}
             {promo.sourceUrl && (
               <a href={promo.sourceUrl} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs font-semibold text-[#D94F2B] hover:underline">
-                🔗 Ver fuente oficial
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#E8471C] hover:underline mt-2">
+                <ExternalLink size={12} /> Ver fuente oficial
               </a>
             )}
-          </div>
+          </Section>
 
-          {/* Link compartir */}
+          {/* Link página completa */}
           {promo.slug && (
             <a href={`/promos/${promo.slug}`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 text-xs font-semibold text-[#1E3A5F] bg-gray-100 hover:bg-gray-200 px-4 py-2.5 rounded-2xl transition-colors">
-              🔗 Ver página completa · compartir
+              className="flex items-center justify-center gap-2 text-xs font-semibold text-[#1D3D6E] dark:text-[#8AADD4] bg-[#EEF2F8] dark:bg-[#1E3055] hover:bg-[#1D3D6E] hover:text-white dark:hover:bg-[#3A6BC4] px-4 py-3 rounded-2xl transition-colors">
+              <ExternalLink size={13} /> Ver página completa · compartir
             </a>
           )}
-
         </div>
       </div>
+
+      <style>{`
+        @keyframes modalIn {
+          from { opacity: 0; transform: scale(0.96) translateY(8px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function Section({ title, icon, accent, children }: {
+  title: string
+  icon?: React.ReactNode
+  accent?: 'emerald' | 'default'
+  children: React.ReactNode
+}) {
+  return (
+    <div className="bg-gray-50 dark:bg-[#0A1628] rounded-2xl px-4 py-3.5 space-y-2.5">
+      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
+        {icon}{title}
+      </p>
+      {children}
+    </div>
+  )
+}
+
+function Pill({ color, children }: { color: 'emerald' | 'red' | 'amber'; children: React.ReactNode }) {
+  const cls = {
+    emerald: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700/40',
+    red: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-700/40',
+    amber: 'bg-amber-50 dark:bg-amber-900/20 text-orange-700 dark:text-amber-400 border-amber-200 dark:border-amber-700/40',
+  }[color]
+  return (
+    <div className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl border ${cls}`}>
+      {children}
     </div>
   )
 }
