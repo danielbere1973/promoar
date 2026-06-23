@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
     let skippedNoCategory = 0;
     let skippedNoCommerce = 0;
     let skippedUnchanged = 0;
+    let fpMismatchCount = 0;
     const changedCommerceIds = new Set<string>();
 
     // Cache de sucursales existentes por comercio (para no repetir queries ni duplicar pines)
@@ -553,12 +554,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── FASE 2: Pre-cargar promos existentes con fingerprint ──────────────────
+    // Cargamos todas las promos de los comercios involucrados (IN es mucho más eficiente
+    // que un OR con 1000+ condiciones individuales que puede truncar o fallar en Neon)
+    const involvedCommerceIds = [...new Set(resolvedItems.map(i => i.commerceId))]
     const existingPromos = await prisma.promo.findMany({
       where: {
-        OR: [
-          { sourceUrl: { in: resolvedItems.map(i => i.sourceUrl).filter(Boolean) as string[] } },
-          ...resolvedItems.map(i => ({ title: i.title, commerceId: i.commerceId }))
-        ]
+        commerceId: { in: involvedCommerceIds }
       },
       select: {
         id: true, title: true, commerceId: true, sourceUrl: true, slug: true, status: true,
@@ -612,10 +613,10 @@ export async function POST(req: NextRequest) {
           processedCount++;
           return; // sin cambios, no tocar la DB
         }
-        if (skippedUnchanged + processedCount < 5) {
-          // Log primeras diferencias para diagnóstico
+        if (fpMismatchCount < 3) {
           console.log(`[FP DIFF] "${title}": new=${newFp} | old=${existingFp}`)
         }
+        fpMismatchCount++;
         changedCommerceIds.add(commerceId);
         try {
           await prisma.promoRequirement.deleteMany({ where: { promoId: existing.id } });
