@@ -77,6 +77,25 @@ interface CardNetworkWithType {
   segmentName?: string;
 }
 
+// Fingerprint de promo: serializa los campos que el scraper puede cambiar.
+// Si el fingerprint coincide con el existente en DB, se skippea el write.
+function promoFingerprint(data: any, reqs: any[]): string {
+  const sortedReqs = [...reqs]
+    .map(r => [r.bankId ?? '', r.walletId ?? '', r.cardNetworkId ?? '', r.cardSegmentId ?? '',
+               r.discountType, r.discountValue, r.paymentChannel ?? '', r.cardType ?? '',
+               r.cap ?? '', r.capPeriod ?? '', r.minPurchase ?? ''].join('|'))
+    .sort()
+  return [
+    String(data.validFrom instanceof Date ? data.validFrom.toISOString().slice(0, 10) : (data.validFrom ?? '')),
+    String(data.validUntil instanceof Date ? data.validUntil.toISOString().slice(0, 10) : (data.validUntil ?? '')),
+    String(data.validDays ?? ''),
+    String(data.maxDiscountPct ?? ''),
+    String(data.isCSIOnly ?? ''),
+    String(data.salesChannel ?? ''),
+    sortedReqs.join(';'),
+  ].join('||')
+}
+
 export async function POST(req: NextRequest) {
   try {
     let scraperFilter: string | undefined;
@@ -158,6 +177,7 @@ export async function POST(req: NextRequest) {
     let processedCount = 0;
     let skippedNoCategory = 0;
     let skippedNoCommerce = 0;
+    let skippedUnchanged = 0;
 
     // Cache de sucursales existentes por comercio (para no repetir queries ni duplicar pines)
     const branchesByCommerce = new Map<string, Array<{ lat: number; lng: number }>>();
@@ -528,7 +548,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── FASE 2: Pre-cargar promos existentes ──────────────────────────────────
+    // ── FASE 2: Pre-cargar promos existentes con fingerprint ──────────────────
     const existingPromos = await prisma.promo.findMany({
       where: {
         OR: [
@@ -536,8 +556,20 @@ export async function POST(req: NextRequest) {
           ...resolvedItems.map(i => ({ title: i.title, commerceId: i.commerceId }))
         ]
       },
-      select: { id: true, title: true, commerceId: true, sourceUrl: true, slug: true, status: true }
+      select: {
+        id: true, title: true, commerceId: true, sourceUrl: true, slug: true, status: true,
+        validFrom: true, validUntil: true, validDays: true, maxDiscountPct: true, isCSIOnly: true,
+        salesChannel: true,
+        requirements: {
+          select: {
+            bankId: true, walletId: true, cardNetworkId: true, cardSegmentId: true,
+            discountType: true, discountValue: true, paymentChannel: true, cardType: true,
+            cap: true, capPeriod: true, minPurchase: true,
+          }
+        }
+      }
     });
+
     // Una URL es clave única si tiene # (fragmento) O si contiene /detalle/ con un ID numérico
     const isUniqueUrl = (url?: string | null) =>
       !!url && (url.includes('#') || /\/detalle\/\d+/.test(url));
@@ -568,6 +600,14 @@ export async function POST(req: NextRequest) {
         : byKey.get(`${title}|${commerceId}`);
 
       if (existing) {
+        // Comparar fingerprint — si nada cambió, skip total (0 queries)
+        const newFp = promoFingerprint(promoData, reqData);
+        const existingFp = promoFingerprint(existing, (existing as any).requirements ?? []);
+        if (newFp === existingFp) {
+          skippedUnchanged++;
+          processedCount++;
+          return; // sin cambios, no tocar la DB
+        }
         try {
           await prisma.promoRequirement.deleteMany({ where: { promoId: existing.id } });
           let slug = baseSlug;
@@ -600,7 +640,7 @@ export async function POST(req: NextRequest) {
       console.log(`[Scrape] Batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(resolvedItems.length / BATCH)} — ${Math.min(i + BATCH, resolvedItems.length)}/${resolvedItems.length}`);
     }
 
-    console.log(`[Scrape] ✅ Procesadas: ${processedCount} | Sin categoría: ${skippedNoCategory} | Sin comercio: ${skippedNoCommerce}`);
+    console.log(`[Scrape] ✅ Procesadas: ${processedCount} | Sin cambios (skip): ${skippedUnchanged} | Sin categoría: ${skippedNoCategory} | Sin comercio: ${skippedNoCommerce}`);
 
     // Actualizar activePromoCount en los comercios afectados
     const affectedCommerceIds = Array.from(new Set(resolvedItems.map(i => i.commerceId)))
