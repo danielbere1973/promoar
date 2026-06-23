@@ -29,8 +29,10 @@ function validatePromo(
     return issues // sin requirements no hay más que chequear
   }
 
-  // 2. Cap en 0 sin capUnlimited
-  const hasBadCap = promo.requirements.some((r: any) => r.cap === 0 && !r.capUnlimited)
+  // 2. Cap en 0 sin capUnlimited (excluir CSI — el tope no aplica)
+  const hasBadCap = promo.requirements.some((r: any) =>
+    r.cap === 0 && !r.capUnlimited && r.discountType !== 'CUOTAS_SIN_INTERES'
+  )
   if (hasBadCap) issues.push('Tope en $0 — verificar si es sin tope')
 
   // 3. Requisito sin entidad financiera (banco, wallet y red todos null)
@@ -44,9 +46,9 @@ function validatePromo(
   // 4. Sin días
   if (!promo.validDays || promo.validDays === 0) issues.push('Sin días válidos')
 
-  // 5. Requirements duplicados (mismo banco+wallet+tipo+valor)
+  // 5. Requirements duplicados (mismo banco+wallet+red+canal+tipo+valor)
   const reqKeys = promo.requirements.map((r: any) =>
-    [r.bankId ?? '', r.walletId ?? '', r.discountType, r.discountValue].join('|')
+    [r.bankId ?? '', r.walletId ?? '', r.cardNetworkId ?? '', r.paymentChannel ?? '', r.discountType, r.discountValue].join('|')
   )
   if (new Set(reqKeys).size < reqKeys.length) issues.push('Requisitos duplicados')
 
