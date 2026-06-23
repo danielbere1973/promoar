@@ -196,26 +196,17 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
         )}
 
 
-        {/* Estrella favorito comercio — top-right logo area */}
-        {onToggleSaveCommerce && (
-          <button
-            onClick={e => { e.stopPropagation(); onToggleSaveCommerce(promo.commerce.name, e) }}
-            className="absolute top-2 right-2 w-6 h-6 rounded-lg bg-white/80 dark:bg-black/30 backdrop-blur-sm flex items-center justify-center transition-all hover:scale-110 active:scale-90 shadow-sm"
-            title={isCommerceSaved ? 'Quitar comercio favorito' : 'Guardar comercio'}
-          >
-            <Star size={12} className={isCommerceSaved ? 'text-amber-400 fill-amber-400' : 'text-gray-400 dark:text-gray-500'} />
-          </button>
-        )}
-
-        {/* Share — top-right, solo hover, cubre la estrella */}
-        {promo.slug && (
-          <div ref={shareRef} className="absolute top-2 right-2 z-10" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={e => { e.stopPropagation(); setShowShare(s => !s) }}
-              className="w-6 h-6 rounded-lg bg-white/80 dark:bg-black/30 backdrop-blur-sm flex items-center justify-center text-gray-400 hover:text-[#1D3D6E] opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-            >
-              <Share2 size={11} />
-            </button>
+        {/* Estrella + Share — top-right en fila, sin pisarse */}
+        <div className="absolute top-2 right-2 flex items-center gap-1 z-10" onClick={e => e.stopPropagation()}>
+          {/* Share — solo en hover */}
+          {promo.slug && (
+            <div ref={shareRef}>
+              <button
+                onClick={e => { e.stopPropagation(); setShowShare(s => !s) }}
+                className="w-6 h-6 rounded-lg bg-white/80 dark:bg-black/30 backdrop-blur-sm flex items-center justify-center text-gray-400 hover:text-[#1D3D6E] opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+              >
+                <Share2 size={11} />
+              </button>
             {showShare && (
               <div className="absolute top-8 right-0 z-50 bg-[#0D1B2E] rounded-2xl shadow-2xl overflow-hidden w-44">
                 <button onClick={handleCopy} className="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
@@ -229,7 +220,19 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
               </div>
             )}
           </div>
-        )}
+          )}
+
+          {/* Estrella favorito comercio */}
+          {onToggleSaveCommerce && (
+            <button
+              onClick={e => { e.stopPropagation(); onToggleSaveCommerce(promo.commerce.name, e) }}
+              className="w-6 h-6 rounded-lg bg-white/80 dark:bg-black/30 backdrop-blur-sm flex items-center justify-center transition-all hover:scale-110 active:scale-90 shadow-sm"
+              title={isCommerceSaved ? 'Quitar comercio favorito' : 'Guardar comercio'}
+            >
+              <Star size={12} className={isCommerceSaved ? 'text-amber-400 fill-amber-400' : 'text-gray-400 dark:text-gray-500'} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Cuerpo ── */}
