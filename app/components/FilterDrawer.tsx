@@ -73,7 +73,7 @@ function Chip({ active, label, onClick }: { active: boolean; label: string; onCl
       className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
         active
           ? 'bg-[#1D3D6E] border-[#1D3D6E] text-white shadow-sm'
-          : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:border-[#1D3D6E]/40 hover:text-[#1D3D6E]'
+          : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:border-[#1D3D6E]/40 hover:text-[#1D3D6E] dark:hover:border-blue-400/40 dark:hover:text-blue-300'
       }`}
     >
       {active && <Check size={10} strokeWidth={3} className="shrink-0" />}
@@ -181,7 +181,7 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
               selected.includes(item.id)
                 ? 'bg-[#1D3D6E] border-[#1D3D6E] text-white shadow-sm'
-                : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:border-[#1D3D6E]/40 hover:text-[#1D3D6E]'
+                : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:border-[#1D3D6E]/40 hover:text-[#1D3D6E] dark:hover:border-blue-400/40 dark:hover:text-blue-300'
             }`}
           >
             {item.logoUrl && (
@@ -345,7 +345,7 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
                 placeholder="Buscar comercio..."
                 value={commerceSearch}
                 onChange={e => setCommerceSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:bg-white dark:focus:bg-slate-600 focus:border-[#1D3D6E] outline-none transition-all dark:text-white"
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:bg-white dark:focus:bg-slate-600 focus:border-[#1D3D6E] dark:focus:border-blue-400 outline-none transition-all dark:text-white"
               />
             </div>
             {!commerceSearch && <GroupLabel>Top comercios</GroupLabel>}
@@ -374,14 +374,14 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
                 <input type="number" placeholder="0"
                   value={f.capMin ?? ''}
                   onChange={e => setF(p => ({ ...p, capMin: e.target.value ? parseFloat(e.target.value) : null }))}
-                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1D3D6E] focus:bg-white dark:text-white transition-all" />
+                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1D3D6E] dark:focus:border-blue-400 focus:bg-white dark:text-white transition-all" />
               </div>
               <div>
                 <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Máximo $</label>
                 <input type="number" placeholder="∞"
                   value={f.capMax ?? ''}
                   onChange={e => setF(p => ({ ...p, capMax: e.target.value ? parseFloat(e.target.value) : null }))}
-                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1D3D6E] focus:bg-white dark:text-white transition-all" />
+                  className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1D3D6E] dark:focus:border-blue-400 focus:bg-white dark:text-white transition-all" />
               </div>
             </div>
           </Section>
