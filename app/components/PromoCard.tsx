@@ -156,13 +156,13 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
       className={`group relative bg-white dark:bg-[#0F2040] rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-[0_6px_20px_rgba(29,61,110,0.14)] hover:-translate-y-0.5 active:scale-[0.97] flex flex-col ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
       style={{
         ...(fullWidth ? undefined : { width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }),
-        boxShadow: '0 1px 3px rgba(29,61,110,0.08), 0 0 0 1px rgba(29,61,110,0.05)',
+        boxShadow: '0 2px 8px rgba(29,61,110,0.10), 0 0 0 1px rgba(29,61,110,0.07)',
       }}
     >
       {/* ── Logo area con tinte de categoría ── */}
       <div
         className="relative flex items-center justify-center shrink-0"
-        style={{ height: 88, background: promo.category.color + '14' }}
+        style={{ height: 88, background: promo.category.color + '14', boxShadow: 'inset 0 -1px 0 rgba(29,61,110,0.06)' }}
       >
         {promo.commerce.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -235,7 +235,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
       </div>
 
       {/* ── Cuerpo ── */}
-      <div className="px-3 pt-2.5 pb-2 flex flex-col gap-2 flex-1">
+      <div className="px-3 pt-2.5 pb-2 flex flex-col gap-1.5 flex-1">
         {/* Nombre + favorito promo */}
         <div className="flex items-start justify-between gap-1">
           <p className="text-[13px] font-bold text-[#0D1B2E] dark:text-white leading-tight line-clamp-1">{promo.commerce.name}</p>
@@ -248,18 +248,22 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
 
         {/* Descuento pill */}
         {num && (
-          <div className="flex items-center gap-1.5">
-            <span className={`inline-flex items-baseline gap-0.5 rounded-full px-3 py-1 ${
-              isCsi
-                ? 'bg-[#EEF4FF] dark:bg-[#1A2F55] text-[#2A5298] dark:text-[#8AADD4]'
-                : 'bg-[#1D3D6E] dark:bg-[#3A6BC4] text-white'
-            }`}>
-              <span className="text-[17px] font-black leading-none tabular-nums">{num}</span>
-              {unit && <span className="text-[11px] font-black ml-0.5" style={{ color: isCsi ? '#2A5298' : '#E8471C' }}>{unit}</span>}
-            </span>
-            <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{label}</span>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-flex items-baseline gap-0.5 rounded-full px-3 py-1 ${
+                isCsi
+                  ? 'bg-[#EEF4FF] dark:bg-[#1A2F55] text-[#2A5298] dark:text-[#8AADD4]'
+                  : 'bg-[#1D3D6E] dark:bg-[#3A6BC4] text-white'
+              }`}>
+                <span className="text-[17px] font-black leading-none tabular-nums">{num}</span>
+                {unit && <span className="text-[11px] font-black ml-0.5" style={{ color: isCsi ? '#2A5298' : '#E8471C' }}>{unit}</span>}
+              </span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{label}</span>
+            </div>
             {hasSinTope && (
-              <span className="ml-auto text-[8px] font-black uppercase text-emerald-600 dark:text-emerald-400 shrink-0">sin tope</span>
+              <span className="inline-flex items-center gap-0.5 self-start text-[9px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 rounded-md px-1.5 py-0.5">
+                ∞ sin tope
+              </span>
             )}
           </div>
         )}
