@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const commerce = await prisma.commerce.findUnique({
     where: { slug: params.slug },
     include: { defaultCategory: true },
-  })
+  }).catch(() => null)
   if (!commerce) return { title: 'Comercio no encontrado — PromoAR' }
 
   const title = `Promos y descuentos en ${commerce.name} | PromoAR`
@@ -73,7 +73,7 @@ export default async function CommercePage({ params }: { params: { slug: string 
       defaultCategory: true,
       _count: { select: { branches: true } },
     },
-  })
+  }).catch(() => null)
 
   if (!commerce || !commerce.active) notFound()
 
