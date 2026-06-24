@@ -142,7 +142,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   }
 
   const CARD_NETWORK_LOGOS: Record<string, string> = {
-    'visa': 'https://www.visa.com/favicon.ico',
+    'visa': 'https://www.google.com/s2/favicons?sz=64&domain=visa.com',
     'mastercard': 'https://www.google.com/s2/favicons?sz=64&domain=mastercard.com',
     'amex': 'https://www.americanexpress.com/favicon.ico',
     'american-express-banco': 'https://www.americanexpress.com/favicon.ico',
