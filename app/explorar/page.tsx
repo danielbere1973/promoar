@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { LayoutGrid, TrendingUp, ChevronRight } from 'lucide-react'
 import BottomNav from '../components/BottomNav'
 
@@ -18,11 +19,14 @@ export default function Explorar() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const { status } = useSession()
 
   useEffect(() => {
+    if (status === 'loading') return
     async function load() {
       try {
-        const res = await fetch('/api/categories')
+        const forMe = status === 'authenticated'
+        const res = await fetch(`/api/categories?for_me=${forMe}`)
         if (res.ok) {
           const data = await res.json()
           setCategories(data.categories)
@@ -34,14 +38,15 @@ export default function Explorar() {
       }
     }
     load()
-  }, [])
+  }, [status])
 
   function handleCategoryClick(slug: string) {
-    router.push(`/?categoria=${slug}`)
+    router.push(`/promos?cats=${slug}`)
   }
 
   const promosActivas = categories.reduce((sum, c) => sum + c.promoCount, 0)
   const categoriasActivas = categories.filter(c => c.promoCount > 0).length
+  const isPersonalized = status === 'authenticated'
 
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-slate-950">
@@ -67,9 +72,9 @@ export default function Explorar() {
           <div className="mb-4 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl px-4 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
               <TrendingUp size={16} className="text-indigo-500 dark:text-indigo-400 shrink-0" />
-              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 shrink-0">Hoy:</span>
+              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 shrink-0">{isPersonalized ? 'Para vos:' : 'Hoy:'}</span>
               <span className="text-lg font-black text-indigo-700 dark:text-indigo-300 shrink-0">{promosActivas}</span>
-              <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium shrink-0">promos activas</span>
+              <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium shrink-0">promos{isPersonalized ? ' para tu perfil' : ' activas'}</span>
             </div>
             <span className="text-[11px] text-indigo-500 dark:text-indigo-400 font-bold shrink-0">en {categoriasActivas} cats.</span>
           </div>

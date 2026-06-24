@@ -9,8 +9,8 @@ export const revalidate = 3600
 export async function generateSitemaps() {
   const count = await prisma.promo.count({
     where: { slug: { not: null }, status: { in: ['ACTIVE', 'EXPIRED'] } },
-  })
-  const promoBatches = Math.ceil(count / BATCH_SIZE)
+  }).catch(() => 0)
+  const promoBatches = Math.max(1, Math.ceil(count / BATCH_SIZE))
   return [
     { id: 0 }, // estáticas + bancos + comercios
     ...Array.from({ length: promoBatches }, (_, i) => ({ id: i + 1 })),

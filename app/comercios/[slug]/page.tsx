@@ -6,6 +6,8 @@ import { schemaItemList } from '@/lib/schema'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
+export const revalidate = 3600
+
 const DAYS_LABELS: Record<number, string> = {
   127: 'Todos los días',
   62:  'Lun–Vie',
@@ -58,9 +60,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
 export async function generateStaticParams() {
   const commerces = await prisma.commerce.findMany({
-    where: { active: true, instagramUrl: { not: null } },
+    where: { active: true, promos: { some: { status: 'ACTIVE' } } },
     select: { slug: true },
-  })
+  }).catch(() => [])
   return commerces.map(c => ({ slug: c.slug }))
 }
 
