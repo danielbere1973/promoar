@@ -24,6 +24,7 @@ const PUBLIC_PATHS = [
   '/precios',
   '/favicon.ico',
   '/sitemap.xml',
+  '/sitemap',
   '/robots.txt',
   '/terminos',
   '/privacidad',
