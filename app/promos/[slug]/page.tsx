@@ -37,6 +37,33 @@ const DAYS_ROW = [
   { label: 'D', bit: 1 },
 ]
 
+function buildDaysLabel(mask: number | null): string {
+  if (!mask || mask === 127) return 'todos los días'
+  if (mask === 62) return 'de lunes a viernes'
+  if (mask === 65) return 'los fines de semana'
+  if (mask === 97) return 'los viernes, sábados y domingos'
+  if (mask === 96) return 'los viernes y sábados'
+  if (mask === 126) return 'de lunes a sábado'
+  if (mask === 63) return 'de domingo a viernes'
+  const names = ['domingos','lunes','martes','miércoles','jueves','viernes','sábados']
+  const active = Array.from({ length: 7 }, (_, i) => (mask & (1 << i)) ? names[i] : null).filter(Boolean) as string[]
+  if (active.length === 1) return `los ${active[0]}`
+  return `los ${active.slice(0, -1).join(', ')} y ${active[active.length - 1]}`
+}
+
+function buildSeoDescription(promo: { commerce: { name: string }; category: { name: string }; validDays: number | null; validUntil: Date | null }, discount: string, bankWallet: string, networkNames: string[]): string {
+  const parts: string[] = []
+  let lead = `${promo.commerce.name} ofrece ${discount}`
+  if (bankWallet) lead += ` con ${bankWallet}`
+  parts.push(lead + '.')
+  if (networkNames.length > 0) parts.push(`Pagá con tarjeta ${networkNames.join(' o ')}.`)
+  const days = buildDaysLabel(promo.validDays)
+  if (days !== 'todos los días') parts.push(`Válido ${days}.`)
+  if (promo.validUntil) parts.push(`Vigente hasta el ${formatDate(promo.validUntil)}.`)
+  parts.push(`Categoría: ${promo.category.name}.`)
+  return parts.join(' ')
+}
+
 const CHANNEL_LABEL: Record<string, string> = {
   QR: 'QR / MODO',
   NFC: 'Sin contacto',
@@ -62,15 +89,16 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     include: {
       commerce: true,
       category: true,
-      requirements: { include: { bank: true, wallet: true }, take: 1, orderBy: { discountValue: 'desc' } },
+      requirements: { include: { bank: true, wallet: true, cardNetwork: true }, orderBy: { discountValue: 'desc' } },
     },
   })
-  if (!promo) return { title: 'Promoción no encontrada — PromoAR' }
+  if (!promo) return { title: 'Promoción no encontrada' }
   const bestReq = promo.requirements[0]
   const discount = bestReq ? discountLabel(bestReq) : ''
   const bankWallet = bestReq?.bank?.name || bestReq?.wallet?.name || ''
-  const title = `${discount} en ${promo.commerce.name}${bankWallet ? ` con ${bankWallet}` : ''} — PromoAR`
-  const description = promo.description || `Aprovechá ${discount} en ${promo.commerce.name}.`
+  const networkNames = [...new Set(promo.requirements.flatMap(r => r.cardNetwork ? [r.cardNetwork.name] : []))]
+  const title = `${discount} en ${promo.commerce.name}${bankWallet ? ` con ${bankWallet}` : ''}`
+  const description = buildSeoDescription(promo, discount, bankWallet, networkNames)
   return {
     title,
     description,
@@ -308,6 +336,16 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
             </div>
           )}
         </div>
+
+        {/* ── PÁRRAFO SEO ── */}
+        <p className="text-sm text-gray-600 leading-relaxed px-1">
+          {buildSeoDescription(
+            { commerce: promo.commerce, category: promo.category, validDays: promo.validDays, validUntil: promo.validUntil },
+            discountLabel(bestDiscount),
+            banks[0]?.name ?? wallets[0]?.name ?? '',
+            networks.map(n => n.name),
+          )}
+        </p>
 
         {/* ── NOTA / CONDICIÓN ESPECIAL ── */}
         {promo.commerceNote && (
