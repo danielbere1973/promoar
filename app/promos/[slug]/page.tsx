@@ -338,7 +338,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
         </div>
 
         {/* ── PÁRRAFO SEO ── */}
-        <p className="text-sm text-gray-600 leading-relaxed px-1">
+        <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed px-1 text-justify">
           {buildSeoDescription(
             { commerce: promo.commerce, category: promo.category, validDays: promo.validDays, validUntil: promo.validUntil },
             discountLabel(bestDiscount),

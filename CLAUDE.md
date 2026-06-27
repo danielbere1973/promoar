@@ -1,11 +1,11 @@
 # PromoAR — Contexto del proyecto
 
-App Next.js 14 (App Router) + Prisma + PostgreSQL (Neon) que agrega y muestra promociones bancarias de Argentina.
+App Next.js 14 (App Router) + Prisma + PostgreSQL (CockroachDB) que agrega y muestra promociones bancarias de Argentina.
 
 ## Stack
 - **Frontend**: Next.js 14, Tailwind CSS, NextAuth
 - **Backend**: API Routes (App Router), Prisma ORM
-- **DB**: PostgreSQL en Neon
+- **DB**: PostgreSQL en CockroachDB (Serverless)
 - **Scrapers**: Playwright + custom fetchers en `lib/scrapers/`
 
 ## Estructura clave
@@ -563,6 +563,81 @@ Resuelve el fetch de 38MB por carga anónima. Resultado verificado localmente:
 
 **Pendiente**: push de `feature/pagination` y merge a `main`, correr Lighthouse en
 Vercel para confirmar LCP ~2s y banda <2MB por carga anónima.
+
+## Sesión 27/6/2026 — Hecho y pendiente
+
+### Hecho
+
+**Favacard scraper — DONE**
+- `lib/scrapers/favacard.ts`: POST a `promosfavacard.com.ar`, parsea ~2773 promos de ~1988 comercios locales del interior de Bs As (Mar del Plata, Bahía Blanca, Necochea, etc.)
+- Wallet `Favacard` + CardNetwork `FAVA` + 5 CardSegments (Trayectoria, Beca, Recargable, Cabal, FAVA)
+- Integrado en `lib/scrapers/index.ts` (TARJETA_SCRAPERS + ALL_SCRAPERS)
+- Integrado en `app/admin/page.tsx` (SCRAPERS_CONFIG, reporte banco, SOURCE_LABELS)
+- Integrado en `app/api/admin/stats/route.ts` (scraperDomains + SCRAPER_DOMAINS)
+
+**SEO páginas de promo — DONE** (`app/promos/[slug]/page.tsx`)
+- Title sin duplicado: se quitó "— PromoAR" del título generado; el template del layout agrega "| PromoAR" una sola vez
+- Meta description generada desde datos estructurados (comercio, descuento, banco, redes, días, vencimiento) en lugar del texto crudo del scraper
+- Párrafo SEO visible en el body (`text-justify`, `dark:text-slate-400`) con el mismo contenido natural
+- Helper `buildDaysLabel()` con patrones comunes (lun-vie, finde, lun-sáb, etc.)
+
+**Páginas informativas — DONE**
+- `app/como-funciona/page.tsx`: guía paso a paso (4 pasos + features grid + disclaimer + CTA)
+- `app/faq/page.tsx`: 14 preguntas frecuentes con `<details>` expandible, incluye Comunidad, Finanzas y Favacard
+
+### Pendiente inmediato — próxima sesión
+
+**Migración CockroachDB → Neon**
+Motivo: billing de CockroachDB confuso (RUs), Neon más predecible.
+Estado: Neon activa (`ep-fragrant-bird-am3uvyq5`), desactualizada (le faltan ~12 tablas vs Cockroach).
+`pg_dump.exe` disponible en `C:\Program Files\PostgreSQL\18\bin\pg_dump.exe` (ya en PATH).
+
+Pasos:
+1. `pg_dump` de CockroachDB → archivo `.dump`
+   ```
+   pg_dump "postgresql://danielbere:YLiz1r4WbVxPTpebwOuYhA@newer-newfie-26605.j77.aws-us-east-1.cockroachlabs.cloud:26257/defaultdb?sslmode=require" --no-owner --no-acl -Fc -f promoar_backup.dump
+   ```
+2. `pg_restore` en Neon (limpiar tablas existentes primero si hay conflicto)
+   ```
+   pg_restore "postgresql://neondb_owner:npg_3NnDXmfLcI8W@ep-fragrant-bird-am3uvyq5.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require" --no-owner --no-acl -d neondb promoar_backup.dump
+   ```
+3. Cambiar provider en `prisma/schema.prisma`: `cockroachdb` → `postgresql`
+4. Cambiar `DATABASE_URL` y `DIRECTURL` en `.env` a las URLs de Neon
+5. Cambiar variables de entorno en Vercel (Settings → Environment Variables)
+6. Verificar en local antes de pushear
+
+**Logos faltantes — pendiente**
+Ver `logos-report.csv` en la raíz. 700 comercios sin logo, 522 con favicon Google (algunos son el ícono genérico de globo).
+Priorizar comercios con 5+ promos activas.
+
+**SSR + Paginación — pendiente merge** (rama `feature/pagination`)
+Fase 1 SSR ya mergeada. Fase 2 paginación: reduce la carga anónima de 38MB a ~1.3MB (500 promos por página).
+Rama commiteada localmente, nunca pusheada ni mergeada a main.
+Después del merge: correr Lighthouse en Vercel para confirmar LCP ~2s y <2MB por carga anónima.
+
+**OG image dinámica — pendiente commitear**
+`app/api/og/daily/route.tsx`: genera imagen 1080×1080 con las mejores promos del día para compartir en redes.
+Código existe pero sin commitear. Falta integrarlo al `<meta og:image>` del sitio.
+
+**Filtrado por ubicación del usuario — parcialmente implementado**
+Scripts listos para cargar sucursales desde: BNA, Galicia, Ciudad, BBVA, Club LaNación, ICBC, Tiendeo.
+Falta: cargar sucursales de más comercios y conectar el filtrado real en `/api/promos`.
+Depende de `CommerceBranch` con lat/lng completos por comercio.
+
+**Título dinámico "DISPONIBLES HOY/SEMANA/TODOS" — pendiente**
+El cuadro superior de promos siempre dice "DISPONIBLES HOY" aunque el usuario haya filtrado por semana o todos los días.
+El título debe cambiar dinámicamente según el filtro de día seleccionado:
+- Filtro "Hoy" → "DISPONIBLES HOY"
+- Filtro "Semana" → "DISPONIBLES ESTA SEMANA"
+- Sin filtro / todos → "DISPONIBLES TODOS LOS DÍAS"
+
+**Post Reddit — pendiente**
+Draft listo para r/descuentosargentina. Flair: Información. Sin tags.
+Título sugerido: "Hice un agregador de promos bancarias con búsqueda de productos (sabés en qué comercios con descuento conseguís lo que buscás)"
+Esperar a que Vercel/GitHub estén estables antes de publicar.
+
+**GitHub Actions — reactivar el 1/7**
+Descomentar bloque `schedule:` en `.github/workflows/run-scrapers.yml`, `expire-promos.yml` y `refresh-vtex-sessions.yml`.
 
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
