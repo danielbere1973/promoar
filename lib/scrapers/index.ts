@@ -19,6 +19,9 @@ import { ClubLaNacionScraper } from './clublanacion';
 import { Clarin365Scraper } from './clarin365';
 import { PersonalPayScraper } from './personalpay';
 
+// ─── Tarjetas regionales ──────────────────────────────────────────────────────
+import { FavacardScraper } from './favacard';
+
 // ─── Tarjetas de crédito ───────────────────────────────────────────────────────
 import { VisaScraper } from './visa';
 import { AmexScraper } from './amex';
@@ -64,6 +67,7 @@ export const TARJETA_SCRAPERS: Scraper[] = [
   AmexScraper,
   NaranjaXScraper,
   CabalScraper,
+  FavacardScraper,
 ];
 
 export const BANCO_SCRAPERS: Scraper[] = [
@@ -95,6 +99,7 @@ export const ALL_SCRAPERS: Scraper[] = [
   SupervielleScraper,
   PatagoniaScraper,
   ICBCScraper,
+  FavacardScraper,
 ];
 
 export * from './types';

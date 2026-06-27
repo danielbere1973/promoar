@@ -234,6 +234,7 @@ const SCRAPERS_CONFIG: ScraperConfig[] = [
   { id: 'amex',            name: 'AmEx',            group: 'tarjeta',      description: 'Playwright — 7 categorías' },
   { id: 'naranjax',        name: 'Naranja X',       group: 'tarjeta',      description: 'Playwright — anti-Cloudflare' },
   { id: 'cabal',           name: 'Cabal / Credicoop', group: 'tarjeta',    description: 'Playwright — días por clases CSS' },
+  { id: 'favacard',        name: 'Favacard',          group: 'tarjeta',    description: 'Tarjeta regional Bs As — ~2800 comercios locales' },
   // Bancos
   { id: 'brubank',         name: 'Brubank',         group: 'banco',        description: 'Webflow — cheerio · 3 planes' },
   { id: 'banco galicia',   name: 'Galicia',         group: 'banco',        description: 'React SPA — intercepción API' },
@@ -1249,7 +1250,7 @@ export default function AdminPage() {
                     'Banco Macro', 'Banco Ciudad', 'Banco Supervielle', 'Banco Patagonia',
                     'Banco Credicoop', 'ICBC', 'Banco Provincia',
                     'Carrefour Banco', 'MODO', 'Mercado Pago', 'Cuenta DNI',
-                    'Visa', 'Mastercard', 'American Express', 'Naranja X', 'Cabal',
+                    'Visa', 'Mastercard', 'American Express', 'Naranja X', 'Cabal', 'Favacard',
                   ].map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
                 <button
@@ -2413,6 +2414,7 @@ const SOURCE_LABELS: { label: string; value: string }[] = [
   { label: 'Provincia',     value: 'bancoprovincia.com.ar' },
   { label: 'Santander',     value: 'santander.com.ar' },
   { label: 'Supervielle',   value: 'supervielle.com.ar' },
+  { label: 'Favacard',      value: 'promosfavacard.com.ar' },
   { label: 'Vea',           value: 'vea.com.ar' },
   { label: 'VISA',          value: 'visa.com.ar' },
 ]
