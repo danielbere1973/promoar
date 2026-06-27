@@ -71,11 +71,7 @@ function LoginForm() {
   return (
     <div className="w-full max-w-sm mx-auto">
       <div className="text-center mb-8 flex flex-col items-center">
-        <div className="bg-gradient-to-br from-green-400 to-green-600 w-16 h-16 rounded-[20px] flex items-center justify-center text-white mb-4 shadow-lg shadow-green-200">
-           <Zap size={32} />
-        </div>
-        <h1 className="text-3xl font-black tracking-tight text-gray-900">PromoAR</h1>
-        <p className="text-sm text-gray-500 mt-2 font-medium">Gestioná tus ahorros inteligentemente</p>
+        <img src="/promoar_logo_transparent.png" alt="PromoAR" className="w-4/5 h-auto object-contain mb-2" />
       </div>
 
       <div className="bg-white border text-left border-gray-100 rounded-[32px] p-7 shadow-sm shadow-black/[0.02]">
