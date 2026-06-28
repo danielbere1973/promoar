@@ -5,7 +5,7 @@ App Next.js 14 (App Router) + Prisma + PostgreSQL (CockroachDB) que agrega y mue
 ## Stack
 - **Frontend**: Next.js 14, Tailwind CSS, NextAuth
 - **Backend**: API Routes (App Router), Prisma ORM
-- **DB**: PostgreSQL en CockroachDB (Serverless)
+- **DB**: PostgreSQL en Neon (migrado desde CockroachDB el 27/6/2026)
 - **Scrapers**: Playwright + custom fetchers en `lib/scrapers/`
 
 ## Estructura clave
@@ -564,9 +564,50 @@ Resuelve el fetch de 38MB por carga anónima. Resultado verificado localmente:
 **Pendiente**: push de `feature/pagination` y merge a `main`, correr Lighthouse en
 Vercel para confirmar LCP ~2s y banda <2MB por carga anónima.
 
-## Sesión 27/6/2026 — Hecho y pendiente
+## Sesión 28/6/2026 — Hecho y pendiente
 
 ### Hecho
+
+**Migración CockroachDB → Neon — DONE**
+- `scripts/neon-drop-all.ts`: borra todas las tablas y enums del schema público de Neon (para limpiar antes de migrar)
+- `scripts/migrate-to-neon.ts`: migra tabla por tabla respetando FKs, batch de 500 filas, fallback fila a fila en caso de FK violation, `ON CONFLICT DO NOTHING` para rerun seguro
+- Resultado: 12826 promos, 42855 requirements, 7939 comercios, 18701 branches, 3228 vtex_promo_cache migrados
+- `prisma/schema.prisma`: provider cambiado de `cockroachdb` a `postgresql`
+- `.env` y Vercel apuntan a Neon. CockroachDB en standby (no eliminado, para referencia de billing)
+- Impacto en storage: CockroachDB ~604MB → Neon ~0.05GB (compresión/encoding diferente)
+
+**Logo login actualizado — DONE**
+- `public/promoar_logo_transparent.png`: fondo blanco removido con Python/PIL (umbral R,G,B > 230 → alpha 0)
+- `app/login/page.tsx`: reemplaza el ícono verde con rayo por el logo nuevo transparente; se eliminó el texto "Gestioná tus ahorros inteligentemente"
+
+**Badge "Última actualización" en cartel de promos — DONE**
+- Modelo `SiteConfig` en Prisma (key/value), tabla `site_config` creada con `db push`
+- `app/api/admin/site-config/route.ts`: POST (admin only) para guardar config
+- `app/api/site-config/route.ts`: GET público para leer config (agregado a `PUBLIC_PATHS` en middleware)
+- Admin → tab Stats: campo editable + botón Guardar para setear el texto
+- `PromosClient`: badge naranja `absolute top-3 right-4` en el cartel azul, visible cuando hay valor en DB
+- Layout desktop rediseñado: días de la semana movidos a la fila de categorías (junto a los chips), liberando el espacio arriba a la derecha para el badge
+
+**Tour guiado de funciones — DONE**
+- `app/components/TourOverlay.tsx`: overlay con spotlight SVG (recorte sobre el elemento), tooltip con flechas, dots de progreso, botones Siguiente/Atrás/Saltar
+- 2 flujos: invitado (8 pasos) y logueado (10 pasos)
+- Pasos: bienvenida, etiquetas de tarjetas, Todas/Para Mí (con explicación del perfil financiero), Hoy/Semana, Filtros avanzados, Buscador de comercios y productos, Favoritos (solo logueado), Finanzas, Perfil, CTA registro
+- IDs agregados: `#tour-todas-parami`, `#tour-hoy-semana`, `#tour-favoritos`, `#tour-filtros`, `#tour-buscador`, `#tour-nav-{label}` en BottomNav, clase `promo-card` en PromoCard
+- Arranca 3.5s después del mount (para no chocar con el popup de ubicación que arranca a 2s)
+- Bloqueado mientras `showProvinceSelector=true`
+- Botón `?` fijo en esquina inferior derecha para relanzarlo manualmente
+- `localStorage.promoar_tour_done` marca si ya fue visto
+
+**Refresh Cencosud local — DOCUMENTADO**
+- El botón "Refresh Cencosud" del admin dispara `refresh-vtex-sessions.yml` en GH Actions (consume minutos)
+- Alternativa local: `VTEX_SESSION_SECRET="promoar-vtex-2026" node scripts/refresh-vtex-sessions.js` (requiere `npm run dev` corriendo)
+
+**Primer usuario registrado y tracción SEO**
+- Google Search Console: 1230 impresiones / 22 clics en 24hs, posición media 10.2 (primera página)
+- 2 usuarios registrados
+- Post publicado en r/descuentosargentina
+
+### Sesión 27/6/2026 — Hecho
 
 **Favacard scraper — DONE**
 - `lib/scrapers/favacard.ts`: POST a `promosfavacard.com.ar`, parsea ~2773 promos de ~1988 comercios locales del interior de Bs As (Mar del Plata, Bahía Blanca, Necochea, etc.)
@@ -587,33 +628,32 @@ Vercel para confirmar LCP ~2s y banda <2MB por carga anónima.
 
 ### Pendiente inmediato — próxima sesión
 
-**Migración CockroachDB → Neon**
-Motivo: billing de CockroachDB confuso (RUs), Neon más predecible.
-Estado: Neon activa (`ep-fragrant-bird-am3uvyq5`), desactualizada (le faltan ~12 tablas vs Cockroach).
-`pg_dump.exe` disponible en `C:\Program Files\PostgreSQL\18\bin\pg_dump.exe` (ya en PATH).
+**GitHub Actions — reactivar el 1/7 (HOY)**
+Descomentar bloque `schedule:` en `.github/workflows/run-scrapers.yml`, `expire-promos.yml` y `refresh-vtex-sessions.yml`.
 
-Pasos:
-1. `pg_dump` de CockroachDB → archivo `.dump`
-   ```
-   pg_dump "postgresql://danielbere:YLiz1r4WbVxPTpebwOuYhA@newer-newfie-26605.j77.aws-us-east-1.cockroachlabs.cloud:26257/defaultdb?sslmode=require" --no-owner --no-acl -Fc -f promoar_backup.dump
-   ```
-2. `pg_restore` en Neon (limpiar tablas existentes primero si hay conflicto)
-   ```
-   pg_restore "postgresql://neondb_owner:npg_3NnDXmfLcI8W@ep-fragrant-bird-am3uvyq5.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require" --no-owner --no-acl -d neondb promoar_backup.dump
-   ```
-3. Cambiar provider en `prisma/schema.prisma`: `cockroachdb` → `postgresql`
-4. Cambiar `DATABASE_URL` y `DIRECTURL` en `.env` a las URLs de Neon
-5. Cambiar variables de entorno en Vercel (Settings → Environment Variables)
-6. Verificar en local antes de pushear
+**Domain promoar.com.ar — migrar a nuevo Vercel**
+El viejo Vercel (bloqueado por bandwidth) tiene el dominio. El nuevo Vercel tiene el código actualizado.
+Opciones: esperar reset del 1/7 y actualizar env vars, o hacer la migración a las 3am (poco tráfico).
+Ambos Vercel son espejo del mismo código en GitHub.
 
-**Logos faltantes — pendiente**
-Ver `logos-report.csv` en la raíz. 700 comercios sin logo, 522 con favicon Google (algunos son el ícono genérico de globo).
-Priorizar comercios con 5+ promos activas.
+**Tour guiado — mejoras pendientes**
+- Videos cortos interactivos explicativos por funcionalidad (fase 2 del tour)
+- Instructivo del perfil financiero (tour propio separado del tour general)
 
 **SSR + Paginación — pendiente merge** (rama `feature/pagination`)
 Fase 1 SSR ya mergeada. Fase 2 paginación: reduce la carga anónima de 38MB a ~1.3MB (500 promos por página).
 Rama commiteada localmente, nunca pusheada ni mergeada a main.
 Después del merge: correr Lighthouse en Vercel para confirmar LCP ~2s y <2MB por carga anónima.
+
+**Título dinámico "DISPONIBLES HOY/SEMANA/TODOS" — pendiente**
+El cuadro superior de promos siempre dice "DISPONIBLES HOY" aunque el usuario haya filtrado por semana o todos los días.
+- Filtro "Hoy" → "DISPONIBLES HOY"
+- Filtro "Semana" → "DISPONIBLES ESTA SEMANA"
+- Sin filtro / todos → "DISPONIBLES TODOS LOS DÍAS"
+
+**Logos faltantes — pendiente**
+Ver `logos-report.csv` en la raíz. 700 comercios sin logo, 522 con favicon Google (algunos son el ícono genérico de globo).
+Priorizar comercios con 5+ promos activas.
 
 **OG image dinámica — pendiente commitear**
 `app/api/og/daily/route.tsx`: genera imagen 1080×1080 con las mejores promos del día para compartir en redes.
@@ -624,20 +664,8 @@ Scripts listos para cargar sucursales desde: BNA, Galicia, Ciudad, BBVA, Club La
 Falta: cargar sucursales de más comercios y conectar el filtrado real en `/api/promos`.
 Depende de `CommerceBranch` con lat/lng completos por comercio.
 
-**Título dinámico "DISPONIBLES HOY/SEMANA/TODOS" — pendiente**
-El cuadro superior de promos siempre dice "DISPONIBLES HOY" aunque el usuario haya filtrado por semana o todos los días.
-El título debe cambiar dinámicamente según el filtro de día seleccionado:
-- Filtro "Hoy" → "DISPONIBLES HOY"
-- Filtro "Semana" → "DISPONIBLES ESTA SEMANA"
-- Sin filtro / todos → "DISPONIBLES TODOS LOS DÍAS"
-
-**Post Reddit — pendiente**
-Draft listo para r/descuentosargentina. Flair: Información. Sin tags.
-Título sugerido: "Hice un agregador de promos bancarias con búsqueda de productos (sabés en qué comercios con descuento conseguís lo que buscás)"
-Esperar a que Vercel/GitHub estén estables antes de publicar.
-
-**GitHub Actions — reactivar el 1/7**
-Descomentar bloque `schedule:` en `.github/workflows/run-scrapers.yml`, `expire-promos.yml` y `refresh-vtex-sessions.yml`.
+**Post Reddit — DONE (r/descuentosargentina)**
+Publicado. 500+ vistas, tracción SEO visible en Google Search Console.
 
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
