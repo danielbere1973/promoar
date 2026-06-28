@@ -74,6 +74,7 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
           if (item.action || !item.href) {
             return (
               <button key={item.label}
+                id={`tour-nav-${item.label.toLowerCase()}`}
                 type="button"
                 onClick={item.action}
                 className="flex flex-col items-center gap-0 py-1 px-1 min-w-0 flex-1 cursor-pointer">
@@ -84,6 +85,7 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
 
           return (
             <Link key={item.label} href={item.href}
+              id={`tour-nav-${item.label.toLowerCase()}`}
               className="flex flex-col items-center gap-0 py-1 px-1 min-w-0 flex-1">
               {content}
             </Link>

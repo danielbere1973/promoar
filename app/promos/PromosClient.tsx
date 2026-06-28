@@ -23,6 +23,7 @@ const EntitiesSheet = dynamic(() => import('../components/EntitiesSheet'), { ssr
 const PromoDetailSheet = dynamic(() => import('../components/PromoDetailSheet'), { ssr: false })
 const PromoWizard = dynamic(() => import('../components/PromoWizard'), { ssr: false })
 const ProvinceSelector = dynamic(() => import('../components/ProvinceSelector'), { ssr: false })
+const TourOverlay = dynamic(() => import('../components/TourOverlay'), { ssr: false })
 
 // Caché de módulo: sobrevive navegaciones internas, se limpia con F5
 // TTL de 5 minutos para la carga por defecto (sin filtros complejos)
@@ -1135,7 +1136,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         <div className="flex-1 flex flex-col overflow-hidden px-6 pt-4">
           <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar pr-2">
             <p className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-4 px-3">Explorar</p>
-            <div className="flex gap-1 px-3 mb-6">
+            <div id="tour-todas-parami" className="flex gap-1 px-3 mb-6">
               <button
                 onClick={() => setForMe(false)}
                 className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
@@ -1163,7 +1164,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               </button>
             </div>
 
-            <div className="flex gap-1 px-3 mb-6">
+            <div id="tour-hoy-semana" className="flex gap-1 px-3 mb-6">
               {(['today', 'week'] as const).map(f => (
                 <button
                   key={f}
@@ -1180,7 +1181,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             <div className="space-y-1">
 
               {/* ── MIS FAVORITOS ── */}
-              <div>
+              <div id="tour-favoritos">
                 <button onClick={() => toggleSection('favorites')} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-colors group">
                   <span className="text-sm font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">Mis Favoritos</span>
                   <span className="text-gray-500 dark:text-slate-400 group-hover:text-gray-700 dark:group-hover:text-slate-300 text-base font-bold">{openSections.has('favorites') ? '−' : '+'}</span>
@@ -1472,7 +1473,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               </div>
 
               <div className="flex items-center gap-3 flex-1 justify-end">
-                <div className="hidden md:flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10 w-96">
+                <div id="tour-buscador" className="hidden md:flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10 w-96">
                   <button onClick={() => setSearchTab('comercios')}
                     className={`px-3 h-full text-[10px] font-black uppercase whitespace-nowrap border-r border-gray-200 dark:border-slate-600 transition-all ${
                       searchTab === 'comercios' ? 'bg-gray-900 text-white' : 'text-gray-400 dark:text-slate-400 hover:text-gray-600'
@@ -1516,6 +1517,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 </div>
 
                 <button
+                  id="tour-filtros"
                   onClick={() => setIsFilterOpen(true)}
                   type="button"
                   className={`hidden md:flex items-center gap-2 px-4 py-3 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer relative z-10 ${
@@ -2407,6 +2409,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           onDismiss={() => setShowProvinceSelector(false)}
         />
       )}
+
+      <TourOverlay isAuthenticated={status === 'authenticated'} blocked={showProvinceSelector} />
     </div>
     </>
   )

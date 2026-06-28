@@ -153,7 +153,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   return (
     <div
       onClick={onClick}
-      className={`group relative bg-white dark:bg-[#0F2040] rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-[0_6px_20px_rgba(29,61,110,0.14)] hover:-translate-y-0.5 active:scale-[0.97] flex flex-col ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
+      className={`promo-card group relative bg-white dark:bg-[#0F2040] rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-[0_6px_20px_rgba(29,61,110,0.14)] hover:-translate-y-0.5 active:scale-[0.97] flex flex-col ${fullWidth ? 'w-full' : 'flex-shrink-0'}`}
       style={{
         ...(fullWidth ? undefined : { width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }),
         boxShadow: '0 2px 8px rgba(29,61,110,0.10), 0 0 0 1px rgba(29,61,110,0.07)',
