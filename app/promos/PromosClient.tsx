@@ -506,8 +506,15 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [favCommerces, setFavCommerces] = useState<string[]>([])   // nombres, max 5
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['favorites', 'popular']))
   const [nearbyBranches, setNearbyBranches] = useState<Record<string, NearbyBranches>>({})
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   // Geolocalización: pedir una vez, cachear en localStorage 1h
+  useEffect(() => {
+    fetch('/api/site-config').then(r => r.json()).then(d => {
+      if (d.last_updated) setLastUpdated(d.last_updated)
+    }).catch(() => {})
+  }, [])
+
   useEffect(() => {
     const cached = localStorage.getItem('userLocation')
     if (cached) {
@@ -1784,7 +1791,12 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
       {/* ── Dashboard de resumen ── */}
       {!loading && todayDashboard && (
-        <div className="mb-4 bg-[#1E3A5F] dark:bg-slate-800 rounded-2xl p-4 text-white">
+        <div className="mb-4 bg-[#1E3A5F] dark:bg-slate-800 rounded-2xl p-4 text-white relative">
+          {lastUpdated && (
+            <span className="absolute top-3 right-3 bg-[#D94F2B] text-white text-[10px] font-black px-2 py-1 rounded-lg leading-none">
+              {lastUpdated}
+            </span>
+          )}
           {/* Mobile: título + stats en una línea, días en fila scrolleable abajo */}
           <div className="lg:hidden mb-2">
             <p className="text-[9px] font-bold text-blue-200 uppercase tracking-widest leading-none mb-1">

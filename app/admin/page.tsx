@@ -341,6 +341,8 @@ export default function AdminPage() {
   const [flaggedScrapedPromos, setFlaggedScrapedPromos] = useState<Array<{ title: string; storeName: string; sourceUrl: string; description: string }>>([])
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [lastUpdatedText, setLastUpdatedText] = useState('')
+  const [savingConfig, setSavingConfig] = useState(false)
   const [bulkCategory, setBulkCategory] = useState('')
   const [bulkSaving, setBulkSaving] = useState(false)
 
@@ -432,6 +434,9 @@ export default function AdminPage() {
     fetchEntities()
     fetchPromos()
     fetchUsers()
+    fetch('/api/admin/site-config').then(r => r.json()).then(d => {
+      if (d.last_updated) setLastUpdatedText(d.last_updated)
+    }).catch(() => {})
   }, [fetchEntities, fetchPromos, fetchUsers])
 
   const fetchCommerceAliases = useCallback(async () => {
@@ -940,7 +945,38 @@ export default function AdminPage() {
             </button>
           </div>
         )}
-        {tab === 'stats' && <StatsView />}
+        {tab === 'stats' && (
+          <>
+            <div className="mb-6 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Última actualización de promos</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={lastUpdatedText}
+                  onChange={e => setLastUpdatedText(e.target.value)}
+                  placeholder="ej: Actualizado hoy 10:00hs"
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                />
+                <button
+                  onClick={async () => {
+                    setSavingConfig(true)
+                    await fetch('/api/admin/site-config', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ last_updated: lastUpdatedText }),
+                    })
+                    setSavingConfig(false)
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-colors"
+                >
+                  {savingConfig ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1.5">Se muestra en el cartel azul de la pantalla principal.</p>
+            </div>
+            <StatsView />
+          </>
+        )}
         {tab === 'scheduler' && <ScraperSchedulerTab />}
 
         {/* ══════════ TAB ALERTAS ══════════ */}

@@ -757,3 +757,10 @@ enum NotifType {
   PROXIMITY
   DIGEST
 }
+
+model SiteConfig {
+  key   String @id
+  value String
+
+  @@map("site_config")
+}
