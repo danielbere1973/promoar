@@ -181,23 +181,38 @@ function Tooltip({ step, rect, onNext, onPrev, onSkip, current, total }: {
   current: number
   total: number
 }) {
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024
-  const isCenter = step.position === 'center' || !rect || step.targetId === null || isMobile
+  const isCenter = step.position === 'center' || !rect || step.targetId === null
   const isLast = current === total - 1
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024
 
-  let style: React.CSSProperties = {}
   const pad = 16
   const tooltipW = 300
 
+  let style: React.CSSProperties = {}
+
   if (!isCenter && rect) {
-    if (step.position === 'right') {
-      style = { top: rect.top + rect.height / 2, left: rect.left + rect.width + pad, transform: 'translateY(-50%)' }
-    } else if (step.position === 'left') {
-      style = { top: rect.top + rect.height / 2, left: rect.left - tooltipW - pad, transform: 'translateY(-50%)' }
-    } else if (step.position === 'bottom') {
-      style = { top: rect.top + rect.height + pad, left: rect.left + rect.width / 2, transform: 'translateX(-50%)' }
+    if (isMobile) {
+      // En mobile: siempre arriba o abajo del elemento, centrado horizontalmente
+      const screenH = window.innerHeight
+      const spaceBelow = screenH - (rect.top + rect.height)
+      const spaceAbove = rect.top
+      if (spaceBelow >= 220 || spaceBelow >= spaceAbove) {
+        // Tooltip debajo
+        style = { top: rect.top + rect.height + pad, left: '50%', transform: 'translateX(-50%)' }
+      } else {
+        // Tooltip arriba
+        style = { bottom: screenH - rect.top + pad, left: '50%', transform: 'translateX(-50%)' }
+      }
     } else {
-      style = { top: rect.top - pad, left: rect.left + rect.width / 2, transform: 'translate(-50%, -100%)' }
+      if (step.position === 'right') {
+        style = { top: rect.top + rect.height / 2, left: rect.left + rect.width + pad, transform: 'translateY(-50%)' }
+      } else if (step.position === 'left') {
+        style = { top: rect.top + rect.height / 2, left: rect.left - tooltipW - pad, transform: 'translateY(-50%)' }
+      } else if (step.position === 'bottom') {
+        style = { top: rect.top + rect.height + pad, left: rect.left + rect.width / 2, transform: 'translateX(-50%)' }
+      } else {
+        style = { top: rect.top - pad, left: rect.left + rect.width / 2, transform: 'translate(-50%, -100%)' }
+      }
     }
   }
 
