@@ -1793,19 +1793,22 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       {!loading && todayDashboard && (
         <div className="mb-4 bg-[#1E3A5F] dark:bg-slate-800 rounded-2xl p-4 text-white relative">
           {lastUpdated && (
-            <span className="absolute top-3 right-3 bg-[#D94F2B] text-white text-[10px] font-black px-2 py-1 rounded-lg leading-none">
+            <span className="absolute top-3 right-4 bg-[#D94F2B] text-white text-[12px] font-black px-2.5 py-1.5 rounded-lg leading-none">
               {lastUpdated}
             </span>
           )}
-          {/* Mobile: título + stats en una línea, días en fila scrolleable abajo */}
+          {/* Mobile: título + días scrolleables */}
           <div className="lg:hidden mb-2">
             <p className="text-[9px] font-bold text-blue-200 uppercase tracking-widest leading-none mb-1">
               {forMe ? 'Para tu perfil' : 'Disponibles hoy'}
             </p>
-            <p className="text-sm font-black leading-none">
-              {todayDashboard.totalPromos} promos
-              {todayDashboard.maxDiscount > 0 && <span className="text-[#D94F2B] ml-1.5">· hasta {todayDashboard.maxDiscount}%</span>}
-            </p>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <p className="text-sm font-black leading-none">
+                {todayDashboard.totalPromos} promos
+                {todayDashboard.maxDiscount > 0 && <span className="text-[#D94F2B] ml-1.5">· hasta {todayDashboard.maxDiscount}%</span>}
+              </p>
+              {lastUpdated && <span className="text-[9px] text-white/50 font-medium">{lastUpdated}</span>}
+            </div>
           </div>
           <div className="lg:hidden flex gap-1.5 overflow-x-auto no-scrollbar mb-3">
             {todayDashboard.dayCounts.map(({ label, count, isToday, dayIdx }) => {
@@ -1823,35 +1826,18 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             })}
           </div>
 
-          {/* Desktop: héroe + días en la misma fila */}
-          <div className="hidden lg:flex items-center justify-between gap-3 mb-3">
-            <div>
-              <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest leading-none mb-0.5">
-                {forMe ? 'Para tu perfil' : 'Disponibles hoy'}
-              </p>
-              <p className="text-2xl font-black leading-none">
-                {todayDashboard.totalPromos} promos
-                {todayDashboard.maxDiscount > 0 && <span className="text-[#D94F2B] text-lg ml-2">hasta {todayDashboard.maxDiscount}%</span>}
-              </p>
-            </div>
-            <div className="flex gap-1 shrink-0">
-              {todayDashboard.dayCounts.map(({ label, count, isToday, dayIdx }) => {
-                const isActive = activeFilters.days.includes(dayIdx)
-                return (
-                  <button key={label + dayIdx}
-                    onClick={() => setActiveFilters(prev => ({ ...prev, days: isActive ? prev.days.filter(d => d !== dayIdx) : [...prev.days, dayIdx] }))}
-                    className={`w-7 h-7 rounded-full flex flex-col items-center justify-center transition-all ${
-                      isActive ? 'bg-white text-[#1E3A5F]' : isToday ? 'bg-[#D94F2B] text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
-                    }`}>
-                    <span className="text-[9px] font-black leading-none">{label}</span>
-                    <span className="text-[8px] leading-none opacity-70">{count}</span>
-                  </button>
-                )
-              })}
-            </div>
+          {/* Desktop: héroe solo, sin días */}
+          <div className="hidden lg:block mb-3">
+            <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest leading-none mb-0.5">
+              {forMe ? 'Para tu perfil' : 'Disponibles hoy'}
+            </p>
+            <p className="text-2xl font-black leading-none">
+              {todayDashboard.totalPromos} promos
+              {todayDashboard.maxDiscount > 0 && <span className="text-[#D94F2B] text-lg ml-2">hasta {todayDashboard.maxDiscount}%</span>}
+            </p>
           </div>
 
-          {/* Fila 2: top categorías */}
+          {/* Fila 2: top categorías + días (desktop) */}
           {todayDashboard.catList.length > 0 && (
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar mb-2">
               {todayDashboard.catList.map(cat => {
@@ -1868,6 +1854,22 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   </button>
                 )
               })}
+              {/* Días al final de la fila de categorías — solo desktop */}
+              <div className="hidden lg:flex gap-1 shrink-0 ml-auto pl-2 border-l border-white/20">
+                {todayDashboard.dayCounts.map(({ label, count, isToday, dayIdx }) => {
+                  const isActive = activeFilters.days.includes(dayIdx)
+                  return (
+                    <button key={label + dayIdx}
+                      onClick={() => setActiveFilters(prev => ({ ...prev, days: isActive ? prev.days.filter(d => d !== dayIdx) : [...prev.days, dayIdx] }))}
+                      className={`w-7 h-7 rounded-full flex flex-col items-center justify-center transition-all shrink-0 ${
+                        isActive ? 'bg-white text-[#1E3A5F]' : isToday ? 'bg-[#D94F2B] text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      }`}>
+                      <span className="text-[9px] font-black leading-none">{label}</span>
+                      <span className="text-[8px] leading-none opacity-70">{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )}
 
