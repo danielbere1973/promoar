@@ -1794,8 +1794,9 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       {/* ── Dashboard de resumen ── */}
       {!loading && todayDashboard && (
         <div className="mb-4 bg-[#1E3A5F] dark:bg-slate-800 rounded-2xl p-4 text-white relative">
+          {/* Badge actualización — solo desktop (absolute top-right) */}
           {lastUpdated && (
-            <span className="absolute top-3 right-4 bg-[#D94F2B] text-white text-[12px] font-black px-2.5 py-1.5 rounded-lg leading-none">
+            <span className="hidden lg:block absolute top-3 right-4 bg-[#D94F2B] text-white text-[12px] font-black px-2.5 py-1.5 rounded-lg leading-none">
               {lastUpdated}
             </span>
           )}
@@ -1804,13 +1805,11 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             <p className="text-[9px] font-bold text-blue-200 uppercase tracking-widest leading-none mb-1">
               {forMe ? 'Para tu perfil' : 'Disponibles hoy'}
             </p>
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <p className="text-sm font-black leading-none">
-                {todayDashboard.totalPromos} promos
-                {todayDashboard.maxDiscount > 0 && <span className="text-[#D94F2B] ml-1.5">· hasta {todayDashboard.maxDiscount}%</span>}
-              </p>
-              {lastUpdated && <span className="text-[9px] text-white/50 font-medium">{lastUpdated}</span>}
-            </div>
+            <p className="text-sm font-black leading-none">
+              {todayDashboard.totalPromos} promos
+              {todayDashboard.maxDiscount > 0 && <span className="text-[#D94F2B] ml-1.5">· hasta {todayDashboard.maxDiscount}%</span>}
+            </p>
+            {lastUpdated && <p className="text-[9px] text-white/50 font-medium mt-0.5">{lastUpdated}</p>}
           </div>
           <div className="lg:hidden flex gap-1.5 overflow-x-auto no-scrollbar mb-3">
             {todayDashboard.dayCounts.map(({ label, count, isToday, dayIdx }) => {

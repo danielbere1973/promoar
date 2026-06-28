@@ -181,12 +181,13 @@ function Tooltip({ step, rect, onNext, onPrev, onSkip, current, total }: {
   current: number
   total: number
 }) {
-  const isCenter = step.position === 'center' || !rect || step.targetId === null
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024
+  const isCenter = step.position === 'center' || !rect || step.targetId === null || isMobile
   const isLast = current === total - 1
 
   let style: React.CSSProperties = {}
   const pad = 16
-  const tooltipW = 280
+  const tooltipW = 300
 
   if (!isCenter && rect) {
     if (step.position === 'right') {
