@@ -199,6 +199,94 @@ export async function GET(req: NextRequest) {
       name = `banco_${banco.replace(/\s+/g, '_').toLowerCase()}`
     }
 
+    else if (type === 'por-vencer') {
+      const horas = parseInt(new URL(req.url).searchParams.get('horas') || '24')
+      const now = new Date()
+      const limite = new Date(now.getTime() + horas * 60 * 60 * 1000)
+      const promos = await prisma.promo.findMany({
+        where: {
+          status: 'ACTIVE',
+          validUntil: { gte: now, lte: limite },
+        },
+        include: {
+          commerce: true,
+          category: true,
+          requirements: { include: { bank: { select: { name: true } }, wallet: { select: { name: true } } } },
+        },
+        orderBy: { validUntil: 'asc' },
+      })
+      const rows = promos.map(p => ({
+        comercio: p.commerce.name,
+        categoria: p.category.name,
+        titulo: p.title,
+        bancos: Array.from(new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))).join(' / '),
+        wallets: Array.from(new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))).join(' / '),
+        validUntil: p.validUntil?.toISOString().slice(0, 10) || '',
+        fuente: p.sourceUrl || '',
+      }))
+      csv = toCSV(rows, ['comercio', 'categoria', 'titulo', 'bancos', 'wallets', 'validUntil', 'fuente'])
+      name = `vencen_en_${horas}hs`
+    }
+
+    else if (type === 'proximas') {
+      const now = new Date()
+      const promos = await prisma.promo.findMany({
+        where: {
+          status: 'ACTIVE',
+          validFrom: { gt: now },
+        },
+        include: {
+          commerce: true,
+          category: true,
+          requirements: { include: { bank: { select: { name: true } }, wallet: { select: { name: true } } } },
+        },
+        orderBy: { validFrom: 'asc' },
+      })
+      const rows = promos.map(p => ({
+        comercio: p.commerce.name,
+        categoria: p.category.name,
+        titulo: p.title,
+        bancos: Array.from(new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))).join(' / '),
+        wallets: Array.from(new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))).join(' / '),
+        validFrom: p.validFrom?.toISOString().slice(0, 10) || '',
+        validUntil: p.validUntil?.toISOString().slice(0, 10) || '',
+        fuente: p.sourceUrl || '',
+      }))
+      csv = toCSV(rows, ['comercio', 'categoria', 'titulo', 'bancos', 'wallets', 'validFrom', 'validUntil', 'fuente'])
+      name = 'proximas'
+    }
+
+    else if (type === 'por-fechas') {
+      const desde = new URL(req.url).searchParams.get('desde')
+      const hasta = new URL(req.url).searchParams.get('hasta')
+      if (!desde || !hasta) return NextResponse.json({ error: 'Parámetros desde y hasta requeridos' }, { status: 400 })
+      const promos = await prisma.promo.findMany({
+        where: {
+          status: 'ACTIVE',
+          validFrom: { gte: new Date(desde) },
+          validUntil: { lte: new Date(hasta + 'T23:59:59Z') },
+        },
+        include: {
+          commerce: true,
+          category: true,
+          requirements: { include: { bank: { select: { name: true } }, wallet: { select: { name: true } } } },
+        },
+        orderBy: [{ validFrom: 'asc' }, { commerce: { name: 'asc' } }],
+      })
+      const rows = promos.map(p => ({
+        comercio: p.commerce.name,
+        categoria: p.category.name,
+        titulo: p.title,
+        bancos: Array.from(new Set(p.requirements.map(r => r.bank?.name).filter(Boolean))).join(' / '),
+        wallets: Array.from(new Set(p.requirements.map(r => r.wallet?.name).filter(Boolean))).join(' / '),
+        validFrom: p.validFrom?.toISOString().slice(0, 10) || '',
+        validUntil: p.validUntil?.toISOString().slice(0, 10) || '',
+        fuente: p.sourceUrl || '',
+      }))
+      csv = toCSV(rows, ['comercio', 'categoria', 'titulo', 'bancos', 'wallets', 'validFrom', 'validUntil', 'fuente'])
+      name = `fechas_${desde}_${hasta}`
+    }
+
     else {
       return NextResponse.json({ error: 'Tipo de reporte inválido' }, { status: 400 })
     }

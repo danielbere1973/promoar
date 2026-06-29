@@ -1300,6 +1300,73 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+
+            <div className="border-t border-slate-100 pt-4 mt-2">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">Fechas y vencimientos</p>
+            </div>
+
+            {/* Vencen en 24hs / 48hs */}
+            {[
+              { horas: 24, label: 'Vencen en 24 hs', desc: 'Promos activas que expiran en las próximas 24 horas' },
+              { horas: 48, label: 'Vencen en 48 hs', desc: 'Promos activas que expiran en las próximas 48 horas' },
+            ].map(r => (
+              <div key={r.horas} className="bg-white border border-slate-100 rounded-2xl px-5 py-4 flex items-center justify-between shadow-sm">
+                <div>
+                  <p className="font-bold text-slate-900 text-sm">{r.label}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{r.desc}</p>
+                </div>
+                <a
+                  href={`/api/admin/reports?type=por-vencer&horas=${r.horas}`}
+                  download
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 text-white text-xs font-black hover:bg-orange-600 transition-colors shrink-0 ml-4"
+                >
+                  ↓ CSV
+                </a>
+              </div>
+            ))}
+
+            {/* Próximas promos */}
+            <div className="bg-white border border-slate-100 rounded-2xl px-5 py-4 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="font-bold text-slate-900 text-sm">Próximas promos</p>
+                <p className="text-xs text-slate-400 mt-0.5">Promos scrapeadas con fecha de inicio futura</p>
+              </div>
+              <a
+                href="/api/admin/reports?type=proximas"
+                download
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 transition-colors shrink-0 ml-4"
+              >
+                ↓ CSV
+              </a>
+            </div>
+
+            {/* Por rango de fechas */}
+            <div className="bg-white border border-slate-100 rounded-2xl px-5 py-4 shadow-sm">
+              <p className="font-bold text-slate-900 text-sm mb-1">Promos entre fechas</p>
+              <p className="text-xs text-slate-400 mb-3">Promos activas con validFrom ≥ desde y validUntil ≤ hasta</p>
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  id="report-desde"
+                  type="date"
+                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+                <input
+                  id="report-hasta"
+                  type="date"
+                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+                <button
+                  onClick={() => {
+                    const desde = (document.getElementById('report-desde') as HTMLInputElement)?.value
+                    const hasta = (document.getElementById('report-hasta') as HTMLInputElement)?.value
+                    if (desde && hasta) window.location.href = `/api/admin/reports?type=por-fechas&desde=${desde}&hasta=${hasta}`
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black hover:bg-indigo-700 transition-colors shrink-0"
+                >
+                  ↓ CSV
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
