@@ -644,6 +644,12 @@ Vercel para confirmar LCP ~2s y banda <2MB por carga anónima.
 
 ### Pendiente inmediato — próxima sesión
 
+**Detección de cambios en scrapers — PRIORITARIO**
+El scraper hace upsert de promos que ya existen y no cambiaron nada (Galicia: ~1100 promos innecesarias por run).
+Fix: antes del upsert, cargar existentes por banco/scraper en un Map (commerceId+title → promo), comparar campos clave
+(title, validFrom, validUntil, description, requirements discountValue+discountType+cap). Si nada cambió → skip.
+Reduce carga en Neon y evita writes al pedo que enlentecen todo.
+
 **Restyling version mobile — PRIORITARIO**
 La UI mobile necesita una revisión de diseño completa. Ver con Pablo qué aspectos mejorar.
 

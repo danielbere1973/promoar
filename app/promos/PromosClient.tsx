@@ -384,6 +384,87 @@ function mapNominatimToProvince(state: string): string | null {
   return null
 }
 
+function LoadingIcon({ src, alt }: { src: string; alt: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={alt} className="h-16 w-16 object-contain" style={{ borderRadius: 8 }} />
+}
+
+const FILTER_LOADING_MSGS: { icon: React.ReactNode; text: string }[] = [
+  { icon: <LoadingIcon src="/pelota.jpg" alt="Pelota" />, text: 'Buscando como Messi busca el arco...' },
+  { icon: <LoadingIcon src="/copa.jpg" alt="Copa del Mundo" />, text: 'Campeones del mundo, campeones...' },
+  { icon: <LoadingIcon src="/messi.jpg" alt="Messi" />, text: 'Aguantá que llegamos...' },
+  { icon: <LoadingIcon src="/arco.jpg" alt="Arco" />, text: 'Estamos en el área chica...' },
+]
+
+function FilterLoadingOverlay() {
+  const [idx, setIdx] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setIdx(i => (i + 1) % FILTER_LOADING_MSGS.length), 1400)
+    return () => clearInterval(t)
+  }, [])
+  const msg = FILTER_LOADING_MSGS[idx]
+  return (
+    <div className="fixed inset-0 z-40 pointer-events-none flex items-center justify-center">
+      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-3xl shadow-2xl px-8 py-6 flex flex-col items-center gap-3" style={{ animation: 'promoFadeIn 0.2s ease-out' }}>
+        <div className="h-16 flex items-center justify-center animate-bounce" key={idx}>
+          {msg.icon}
+        </div>
+        <p className="text-sm font-black text-[#1E3A5F] dark:text-white tracking-wide">{msg.text}</p>
+        <div className="flex gap-1.5">
+          {FILTER_LOADING_MSGS.map((_, i) => (
+            <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === idx ? 'w-5 bg-[#74ACDF]' : 'w-1.5 bg-gray-200 dark:bg-slate-700'}`} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Confetti celeste y blanco — explota cuando termina la carga
+const CONFETTI_COLORS = ['#FFFFFF', '#74ACDF', '#FFFFFF', '#74ACDF', '#F6B40E']
+
+function ConfettiBurst() {
+  const particles = useMemo(() =>
+    Array.from({ length: 60 }, (_, i) => {
+      const angle = (i / 60) * 360 + (Math.random() * 20 - 10)
+      const dist = 120 + Math.random() * 180
+      const isStreamer = i % 4 === 0
+      return {
+        id: i,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        tx: Math.cos((angle * Math.PI) / 180) * dist,
+        ty: Math.sin((angle * Math.PI) / 180) * dist - 80,
+        delay: Math.random() * 0.35,
+        w: isStreamer ? 3 + Math.random() * 2 : 6 + Math.random() * 5,
+        h: isStreamer ? 14 + Math.random() * 10 : 6 + Math.random() * 5,
+        duration: 1.1 + Math.random() * 0.8,
+      }
+    })
+  , [])
+  return (
+    <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
+      {particles.map(p => (
+        <div
+          key={p.id}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '45%',
+            width: `${p.w}px`,
+            height: `${p.h}px`,
+            backgroundColor: p.color,
+            borderRadius: p.h > 10 ? '3px' : '50%',
+            border: p.color === '#FFFFFF' ? '1px solid #74ACDF55' : 'none',
+            ['--tx' as string]: `${p.tx}px`,
+            ['--ty' as string]: `${p.ty}px`,
+            animation: `confettiBurst ${p.duration}s ${p.delay}s ease-out forwards`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 export default function PromosClient({ initialPromos, initialCats, initialTotalCount, initialProvince }: { initialPromos: Promo[] | null, initialCats: string[], initialTotalCount: number, initialProvince?: string | null }) {
   const { data: session, status } = useSession()
   const nombre = session?.user?.name || 'Invitado'
@@ -399,7 +480,19 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const DIAS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
   const [promos, setPromos] = useState<Promo[]>(initialPromos ?? [])
-  const [loading, setLoading] = useState(initialPromos === null)
+  // loading=true cuando no hay nada que mostrar (null o []) — el splash espera esto
+  const [loading, setLoading] = useState(!initialPromos?.length)
+  const [filterLoading, setFilterLoading] = useState(false)
+  const [showConfetti, setShowConfetti] = useState(false)
+  const prevFilterLoadingRef = useRef(false)
+  useEffect(() => {
+    if (prevFilterLoadingRef.current && !filterLoading) {
+      setShowConfetti(true)
+      const t = setTimeout(() => setShowConfetti(false), 2000)
+      return () => clearTimeout(t)
+    }
+    prevFilterLoadingRef.current = filterLoading
+  }, [filterLoading])
 
   // Seedear el cache con las promos del SSR para que el primer fetch del cliente
   // sea un cache hit y no haga una llamada al API innecesaria.
@@ -413,20 +506,30 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     ssrCacheSeeded.current = true
   }, [])
 
-  // Splash solo cuando no hay promos SSR disponibles (SSR falló o primer render vacío).
-  // Cuando initialPromos tiene datos, el splash se salta por completo — la imagen del
-  // splash pesa 2.86 MB y a red lenta es el LCP candidate que hacía LCP ≈ 17s.
-  // initialPromos es un prop consistente entre SSR y hydration: no hay hydration mismatch.
-  const [showSplash, setShowSplash] = useState(!initialPromos?.length)
+  // Splash siempre en la primera visita de la sesión (logo ahora webp ~45KB, no afecta LCP).
+  // splashLoading se mantiene true mínimo 2s para que la animación llegue al 70% antes de completar.
+  const [showSplash, setShowSplash] = useState(false)
+  const [splashLoading, setSplashLoading] = useState(true)
+  const splashMinDoneRef = useRef(false)
   useEffect(() => {
-    if (initialPromos?.length) return
-    if (sessionStorage.getItem('splashDone')) setShowSplash(false)
+    if (!sessionStorage.getItem('splashDone')) setShowSplash(true)
+    const t = setTimeout(() => {
+      splashMinDoneRef.current = true
+      if (!loading) setSplashLoading(false)
+    }, 2000)
+    return () => clearTimeout(t)
   }, [])
+  useEffect(() => {
+    if (!loading && splashMinDoneRef.current) setSplashLoading(false)
+  }, [loading])
   const [visibleCount, setVisibleCount] = useState(20)
   const [loadingAll, setLoadingAll] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [showProximas, setShowProximas] = useState(false)
+  const [proximas, setProximas] = useState<Promo[]>([])
+  const [loadingProximas, setLoadingProximas] = useState(false)
   const [focusedCatPromos, setFocusedCatPromos] = useState<Promo[]>([])
   const [focusedCatLoading, setFocusedCatLoading] = useState(false)
   const prevFilterKeyRef = useRef('')
@@ -775,6 +878,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
       // Detectar cambio de filtros para resetear paginación
       const filterKey = `${status}|${forMe}|${selectedCats.join(',')}|${JSON.stringify(activeFilters)}|${timeFilter}|${province}|${session?.user?.email}`
+      const isFirstFetch = prevFilterKeyRef.current === ''
       const filtersChanged = filterKey !== prevFilterKeyRef.current
       if (filtersChanged) {
         prevFilterKeyRef.current = filterKey
@@ -796,6 +900,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         if (cached) {
           setPromos(cached)
           setLoading(false)
+          setFilterLoading(false)
           setHasMore(false)
           return
         }
@@ -807,6 +912,9 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         // Solo mostrar spinner si no hay contenido SSR previo — evita borrar las
         // promos del servidor mientras el cliente hace el primer fetch.
         setLoading(true)
+      } else if (filtersChanged && !isFirstFetch) {
+        // Hay promos visibles y el usuario cambió algo → overlay de transición
+        setFilterLoading(true)
       }
       try {
         const res = await fetch(`/api/promos?${cacheKey}`, {
@@ -831,12 +939,24 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         if (!controller.signal.aborted) {
           setLoading(false)
           setLoadingMore(false)
+          setFilterLoading(false)
         }
       }
     }
     load()
     return () => controller.abort()
   }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode, page])
+
+  // Próximamente: fetch cuando se activa el toggle
+  useEffect(() => {
+    if (!showProximas || proximas.length > 0) return
+    setLoadingProximas(true)
+    fetch('/api/promos/upcoming', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => setProximas(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoadingProximas(false))
+  }, [showProximas])
 
   // "Ver todas" de una categoría: fetch on-demand cuando se abre el overlay
   useEffect(() => {
@@ -1123,7 +1243,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
   return (
     <>
-    {showSplash && <SplashScreen loading={loading} onDone={() => { sessionStorage.setItem('splashDone', '1'); setShowSplash(false) }} />}
+    {showSplash && <SplashScreen loading={splashLoading} onDone={() => { sessionStorage.setItem('splashDone', '1'); setShowSplash(false) }} />}
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex flex-col">
     <div className="flex flex-1">
       {/* ── Sidebar (Desktop) ── */}
@@ -1176,6 +1296,21 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   {f === 'today' ? 'Hoy' : 'Semana'}
                 </button>
               ))}
+            </div>
+
+            {/* ── PRÓXIMAMENTE (desktop) ── */}
+            <div className="px-3 mb-4">
+              <button
+                onClick={() => setShowProximas(v => !v)}
+                className={`w-full flex items-center justify-between py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  showProximas
+                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400'
+                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span>🕐 Próximamente</span>
+                {proximas.length > 0 && <span className="bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[9px] font-black">{proximas.length}</span>}
+              </button>
             </div>
 
             <div className="space-y-1">
@@ -1677,6 +1812,21 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   </button>
                 ))}
                 </div>
+
+                <div className="w-px h-4 bg-gray-200 dark:bg-slate-700 shrink-0" />
+
+                {/* Próximamente mobile */}
+                <button
+                  onClick={() => setShowProximas(v => !v)}
+                  className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all border ${
+                    showProximas
+                      ? 'bg-amber-500 border-amber-500 text-white'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400'
+                  }`}
+                >
+                  🕐
+                  {proximas.length > 0 && <span className={`font-black ${showProximas ? 'text-white' : 'text-amber-500'}`}>{proximas.length}</span>}
+                </button>
               </div>
             </div>
           </div>
@@ -1905,6 +2055,11 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           )}
         </div>
       )}
+
+        {/* Overlay loading entre filtros */}
+        {filterLoading && <FilterLoadingOverlay />}
+        {/* Explosión de guirnaldas y papelitos al terminar */}
+        {showConfetti && <ConfettiBurst />}
 
         {/* Skeletons Loading */}
         {loading && (
@@ -2185,6 +2340,82 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
           return (
             <div className="space-y-0 -mx-4">
+              {/* ── ANTES QUE NADIE ── */}
+              {showProximas && (
+                <div className="mb-5">
+                  <div className="flex items-center justify-between px-4 mb-3">
+                    <div>
+                      <p className="text-[15px] font-black text-amber-600 dark:text-amber-400">🕐 Antes que nadie</p>
+                      <p className="text-[11px] text-[#8B96A5] dark:text-slate-400 mt-0.5">
+                        {loadingProximas ? 'Buscando promos...' : proximas.length > 0 ? '¡Se vienen promos nuevas! Arrancan pronto.' : 'Todavía no hay promos nuevas cargadas.'}
+                      </p>
+                    </div>
+                    <button onClick={() => setShowProximas(false)} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-xl px-2">×</button>
+                  </div>
+
+                  {loadingProximas ? (
+                    <div className="px-4 py-3 text-sm text-amber-500 animate-pulse font-medium">Buscando promos que se vienen...</div>
+
+                  ) : proximas.length > 0 ? (
+                    <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+                      {proximas.map(promo => (
+                        <div key={promo.id} className="relative shrink-0">
+                          <div className="absolute top-2 left-2 z-10 bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md pointer-events-none">
+                            Arranca {new Date(promo.validFrom).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+                          </div>
+                          <div className="opacity-80 hover:opacity-100 transition-opacity">
+                            <PromoCard promo={promo} onClick={() => handlePromoClick(promo as any)} onToggleSave={toggleSave} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                  ) : (
+                    /* Estado vacío — CTA marketing */
+                    <div className="mx-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-3">Pero podés adelantarte:</p>
+                      <div className="flex flex-col lg:flex-row gap-2">
+                        <button
+                          onClick={() => router.push('/register')}
+                          className="flex items-center gap-2.5 flex-1 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2.5 text-left hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+                        >
+                          <span className="text-lg shrink-0">🔔</span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-slate-800 dark:text-slate-200">Registrate y activá alertas</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Avisamos cuando aparecen</p>
+                          </div>
+                          <span className="text-amber-400 ml-auto shrink-0">→</span>
+                        </button>
+                        <button
+                          onClick={() => router.push('/perfil')}
+                          className="flex items-center gap-2.5 flex-1 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2.5 text-left hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+                        >
+                          <span className="text-lg shrink-0">📣</span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-slate-800 dark:text-slate-200">Seguinos en redes</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Las publicamos apenas salen</p>
+                          </div>
+                          <span className="text-amber-400 ml-auto shrink-0">→</span>
+                        </button>
+                        <button
+                          onClick={() => router.push('/perfil')}
+                          className="flex items-center gap-2.5 flex-1 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2.5 text-left hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+                        >
+                          <span className="text-lg shrink-0">📩</span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-slate-800 dark:text-slate-200">Suscribite al newsletter</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Resumen semanal de promos</p>
+                          </div>
+                          <span className="text-amber-400 ml-auto shrink-0">→</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-4 mx-4" />
+                </div>
+              )}
+
               {destacadas.length > 0 && (
                 <Section title="⭐ Destacadas hoy" subtitle="Mejores descuentos del día" promoList={destacadas} isFirst />
               )}

@@ -53,7 +53,7 @@ export default function SplashScreen({ loading, onDone }: { loading: boolean; on
     >
       <div className="flex flex-col items-center gap-8 px-8 w-full max-w-sm">
         {/* Logo */}
-        <Image src="/promoar_gabi_transparente.png" alt="PromoAR" width={192} height={192} className="w-48 h-auto object-contain" priority />
+        <Image src="/promoar_logo.webp" alt="PromoAR" width={192} height={192} className="w-48 h-auto object-contain" priority />
 
         {/* Tagline */}
         <div className="text-center space-y-1">
@@ -72,7 +72,8 @@ export default function SplashScreen({ loading, onDone }: { loading: boolean; on
               className="h-full rounded-full"
               style={{
                 width: `${progress}%`,
-                background: 'linear-gradient(90deg, #D94F2B, #e8724f)',
+                background: 'repeating-linear-gradient(90deg, #74ACDF 0, #74ACDF 10px, #FFFFFF 10px, #FFFFFF 20px)',
+                boxShadow: 'inset 0 0 0 1px #74ACDF33',
                 transition: 'width 0.3s ease-out',
               }}
             />
