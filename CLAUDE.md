@@ -626,9 +626,28 @@ Vercel para confirmar LCP ~2s y banda <2MB por carga anónima.
 - `app/como-funciona/page.tsx`: guía paso a paso (4 pasos + features grid + disclaimer + CTA)
 - `app/faq/page.tsx`: 14 preguntas frecuentes con `<details>` expandible, incluye Comunidad, Finanzas y Favacard
 
+### Sesión 29/6/2026 — Hecho
+
+**Tour guiado mobile — DONE**
+- `TourOverlay.tsx` rediseñado para mobile: panel fijo arriba del navbar con flechita apuntando al elemento resaltado. En desktop sigue como tooltip flotante cerca del elemento.
+- `findVisibleEl()`: busca el primer selector visible (tamaño > 0) entre múltiples separados por coma. Permite fallbacks mobile/desktop en el mismo step.
+- IDs mobile agregados en `PromosClient.tsx`: `#tour-todas-parami-mobile`, `#tour-hoy-semana-mobile`, `#tour-buscador-mobile` apuntando a los elementos reales de la UI mobile (no al sidebar desktop ni a `hidden md:flex`).
+- Steps actualizados con fallbacks: `'#tour-todas-parami, #tour-todas-parami-mobile'`, etc.
+- Botón `?` movido a la izquierda (`bottom-20 left-4`) para no chocar con el chat de Crisp.
+- `scrollIntoView({ block: 'center' })` + 650ms timeout en mobile para dejar el elemento centrado en pantalla antes de capturar rect.
+- Badge "Actualizado" solo en desktop (`hidden lg:block absolute`); en mobile aparece como texto pequeño debajo del contador de promos.
+
+**Auto-validador — fixes DONE**
+- Regla "Descuento en 0" excluye NXM: promos 2x1 tienen `discountValue=0` por diseño (se guardan con `nxmN/nxmM`), no deben ser rechazadas.
+- Galicia scraper: `topeReintegro=0` en la API significa "sin tope" → ahora setea `capUnlimited=true` en vez de dejar `cap=0`.
+- Scrape route: fix de requirement fantasma `bankId=null+walletId=null+networkId=null` generado cuando una promo tiene wallet + red de tarjeta específica (ej. Personal Pay + Visa). El loop producía la combinación all-null que disparaba "Requisito sin entidad financiera". Fix: skip en el loop cuando los tres son null.
+
 ### Pendiente inmediato — próxima sesión
 
-**GitHub Actions — reactivar el 1/7 (HOY)**
+**Restyling version mobile — PRIORITARIO**
+La UI mobile necesita una revisión de diseño completa. Ver con Pablo qué aspectos mejorar.
+
+**GitHub Actions — reactivar el 1/7**
 Descomentar bloque `schedule:` en `.github/workflows/run-scrapers.yml`, `expire-promos.yml` y `refresh-vtex-sessions.yml`.
 
 **Domain promoar.com.ar — migrar a nuevo Vercel**
