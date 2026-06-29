@@ -471,6 +471,8 @@ export async function POST(req: NextRequest) {
           for (const networkWithType of networksForLoop) {
             // Evitar combinaciones imposibles: wallet + red de tarjeta específica
             if (walletId && networkWithType.cardNetworkId) continue;
+            // Evitar requirement fantasma: sin banco, sin wallet, sin red
+            if (!bankId && !walletId && !networkWithType.cardNetworkId) continue;
             for (const discount of uniqueDiscounts) {
               let segmentId = null;
               if (bankId && p.segment) {

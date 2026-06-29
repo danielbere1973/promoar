@@ -39,8 +39,8 @@ function validatePromo(
   const hasOrphanReq = promo.requirements.some((r: any) => !r.bankId && !r.walletId && !r.cardNetworkId)
   if (hasOrphanReq) issues.push('Requisito sin entidad financiera')
 
-  // 4. Descuento en 0
-  const hasZeroDiscount = promo.requirements.some((r: any) => r.discountValue === 0)
+  // 4. Descuento en 0 (NXM como 2x1 siempre tiene discountValue=0 por diseño)
+  const hasZeroDiscount = promo.requirements.some((r: any) => r.discountValue === 0 && r.discountType !== 'NXM')
   if (hasZeroDiscount) issues.push('Descuento en 0')
 
   // 4. Sin días

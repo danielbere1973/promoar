@@ -127,12 +127,15 @@ function parseLeyendaDias(leyenda: string): number {
 // ─── parseo del detalle ───────────────────────────────────────────────────────
 
 function parseDetail(detail: any): {
-  cap?: number; capTarget?: 'USER' | 'CARD'; capPeriod?: 'MONTHLY' | 'WEEKLY' | 'DAILY';
+  cap?: number; capUnlimited?: boolean; capTarget?: 'USER' | 'CARD'; capPeriod?: 'MONTHLY' | 'WEEKLY' | 'DAILY';
   leyendaTope?: string; descripcion?: string; legal?: string;
 } {
   if (!detail) return {};
 
-  const capValue  = detail.topeReintegro ?? null;
+  // topeReintegro: 0 en la API de Galicia significa "sin tope" (capUnlimited), no tope de $0
+  const rawCap    = detail.topeReintegro;
+  const capValue  = rawCap > 0 ? rawCap : null;
+  const capUnlimited = rawCap === 0 ? true : undefined;
   const tipoTope  = detail.tipoTope ?? '';
   const periodo   = detail.periodicidad ?? '';
 
@@ -162,6 +165,7 @@ function parseDetail(detail: any): {
 
   return {
     cap:          capValue ?? undefined,
+    capUnlimited: capUnlimited,
     capTarget:    capTarget,
     capPeriod:    capPeriod,
     leyendaTope:  detail.leyendaTope ?? undefined,
@@ -244,6 +248,7 @@ function parseItem(item: any, categoriaNombre: string, detail?: any, catId?: num
     paymentChannel,
     accountType:    accountType as any,
     cap:            detailData.cap ?? capInfo?.value,
+    capUnlimited:   detailData.capUnlimited,
     capPeriod:      detailData.capPeriod ?? capInfo?.period ?? (capInfo ? 'MONTHLY' : undefined),
     capTarget:      detailData.capTarget ?? (capInfo ? (capInfo.target ?? 'USER') : null),
     cardTier:       isEminent ? 'EMINENT' : undefined,
