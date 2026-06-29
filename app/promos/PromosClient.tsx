@@ -1579,7 +1579,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               </div>
 
               {/* Buscador combo: selector tipo + input en una sola barra */}
-              <div className="flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10">
+              <div id="tour-buscador-mobile" className="flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10">
                 <button
                   onClick={() => setSearchTab(prev => prev === 'comercios' ? 'productos' : 'comercios')}
                   className="flex items-center gap-1 px-3 h-full text-[11px] font-black text-gray-700 dark:text-slate-200 whitespace-nowrap border-r border-gray-200 dark:border-slate-600 shrink-0"
@@ -1643,6 +1643,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
               {/* Todas / Para Mí / Hoy / Semana — naranja activo uniforme */}
               <div className="flex gap-1.5 items-center overflow-x-auto no-scrollbar">
+                <div id="tour-todas-parami-mobile" className="flex gap-1.5 items-center shrink-0">
                 <button
                   onClick={() => setForMe(false)}
                   className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all border ${
@@ -1662,9 +1663,11 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                     forMe ? 'bg-[#D94F2B] border-[#D94F2B] text-white' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-500'
                   }`}
                 >Para Mí</button>
+                </div>
 
                 <div className="w-px h-4 bg-gray-200 dark:bg-slate-700 shrink-0" />
 
+                <div id="tour-hoy-semana-mobile" className="flex gap-1.5 items-center shrink-0">
                 {(['today', 'week'] as const).map(f => (
                   <button key={f} onClick={() => setTimeFilter(f)}
                     className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all border ${
@@ -1673,6 +1676,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                     {f === 'today' ? 'Hoy' : 'Semana'}
                   </button>
                 ))}
+                </div>
               </div>
             </div>
           </div>
