@@ -749,6 +749,108 @@ usuarios en etapa de crecimiento. El foco ahora es retención y SEO.
 - El perfil financiero del usuario es privado: no vender datos individuales, solo aggregados.
 - Empezar por el canal que menos fricción agrega a la UX existente (afiliados contextuales).
 
+## Estrategia de promoción / marketing — referencia futura
+
+El objetivo de cada canal es distinto: SEO y Reddit traen usuarios con intención alta (buscan ahorrar),
+TikTok/Instagram traen volumen con costo de atención alto. Mezclar ambos según la etapa del producto.
+
+### Orgánico — sin presupuesto
+
+**SEO (ya iniciado)**
+- Páginas de detalle de promo ya indexadas, posición media 10.2 en Google.
+- Oportunidad: páginas de categoría (`/promos/supermercados`, `/promos/combustible`) con
+  contenido estático que explique "cómo aprovechar descuentos en supermercados con tarjeta en 2026".
+- Oportunidad: artículos tipo "¿Cuándo conviene usar Visa vs Mastercard en Coto?" — long-tail de búsqueda.
+- Herramienta: Google Search Console (ya activo) + Ahrefs free tier para keywords.
+
+**Reddit**
+- r/descuentosargentina: ya publicado, 500+ vistas. Seguir con posts semanales de las mejores promos.
+- r/argentina, r/finanzaspersonalesarg: posts educativos ("cómo configurar tu perfil para no
+  perderte ninguna promo de tu banco").
+- Regla: nunca spamear. Un post útil cada 2-3 semanas. La comunidad detecta y banea el spam.
+
+**TikTok orgánico**
+- Formato ideal: video corto (15-30 seg) mostrando "esta semana con Visa en Coto tenés 30% — así
+  se carga el perfil en PromoAR". Demostración de la app en uso real, no publicidad.
+- Gancho de alto engagement en Argentina: "cuánto ahorrás en el super si usás la tarjeta correcta".
+- Frecuencia sugerida: 3-4 videos por semana para ganar alcance orgánico inicial.
+- Cuenta dedicada @promoar.ar o @ahorraararg. Niche de finanzas personales en español crece fuerte.
+
+**Instagram orgánico**
+- Stories: "promo del día" — imagen de la promo destacada, swipe up a la app.
+  Herramienta: OG image dinámica (`/api/og/daily`) ya en desarrollo, ideal para esto.
+- Reels: mismo contenido que TikTok, resubido (Instagram favorece Reels en el algoritmo actual).
+- Carruseles: "Las 5 mejores promos de este finde" — alto share rate, guardados.
+- Hashtags: #descuentosargentina #ahorrarpesos #tarjetasdecredito #promosbancos
+
+**Facebook orgánico**
+- Grupos de ahorro y finanzas: "Ahorro en Argentina", "Descuentos y promociones Argentina" —
+  hay grupos con 100k+ miembros. Publicar las mejores promos semanalmente con link a la app.
+- Página de PromoAR: menos orgánico que antes, pero sirve como canal de soporte y credibilidad.
+- Funciona bien para el segmento +35 años que todavía usa Facebook activamente.
+
+**WhatsApp / Telegram**
+- Canal de WhatsApp o grupo de Telegram "PromoAR Alertas": enviar las 3 mejores promos del día.
+  Costo cero, engagement altísimo (open rate ~90% vs ~20% email). 
+- Conectar con el sistema de notificaciones push existente para no duplicar trabajo.
+- Estrategia de crecimiento: invitar desde la app ("Unite al canal de alertas").
+
+**Comunidades y foros**
+- MercadoLibre Comunidad, foros de bancos (ej. grupos de clientes Galicia/Santander en Facebook).
+- Responder consultas de ahorro en Quora España/Argentina con links a promos relevantes.
+- Colaboraciones con creadores de contenido de finanzas personales en Argentina (micro-influencers,
+  canales de YouTube tipo "Finanzas con [nombre]") — canjes o revenue share.
+
+### Pagado — con presupuesto
+
+**Google Ads (Search)**
+- Mayor intención de compra de todos los canales: alguien que busca "30% descuento Coto Visa"
+  ya quiere la info. CPC bajo en nicho finanzas Argentina ($0.05–$0.20 USD estimado).
+- Keywords objetivo: "promociones bancarias Argentina", "descuentos tarjeta [banco]",
+  "cuotas sin interés supermercados", "promos [día de semana]".
+- Página de destino: `/promos` con filtro pre-aplicado según la keyword.
+- Presupuesto mínimo razonable para testear: USD 50-100/mes.
+
+**Google Ads (Performance Max / Display)**
+- Remarketing: usuarios que visitaron la app y no se registraron → mostrar banner
+  "Activá alertas gratis para no perderte ninguna promo".
+- Audiencias similares basadas en visitantes actuales.
+
+**Meta Ads (Facebook + Instagram)**
+- Audiencia: 25-50 años, Argentina, intereses en "ahorro", "finanzas personales",
+  "tarjetas de crédito", "supermercados".
+- Formato más efectivo para este tipo de app: video demo de 15-30 seg mostrando el flow
+  (abrir app → ver promo → ir al super → ahorrar).
+- Objetivo de campaña: conversiones (registro en la app) o tráfico a `/promos`.
+- CPM en Argentina es barato (~$1-3 USD). Presupuesto mínimo para testear: USD 50/mes.
+- Lead Ads: capturar email directamente en Facebook para newsletter → luego onboarding.
+
+**TikTok Ads**
+- Spark Ads: boost de videos orgánicos que ya funcionaron bien. Más creíble que un ad puro.
+- In-feed Ads: mismo formato que un TikTok orgánico pero con CTA "Instalar app" o "Abrir sitio".
+- Audiencia: 18-35 años, Argentina. CPM muy bajo (~$0.5–$1.5 USD), buen momento para entrar.
+- Funciona mejor cuando ya hay contenido orgánico probado — primero crecer orgánico, luego escalar con paid.
+
+**Influencer / creadores de contenido pagados**
+- Micro-influencers (10k–100k seguidores) de finanzas personales en Argentina: fee único por
+  video o post mostrando la app. Más auténtico y barato que macros.
+- Buscar en: TikTok (#ahorrar #finanzasargentina), Instagram, YouTube.
+- Fee estimado: USD 50-300 por post para micro-influencer. Medir con UTM por creador.
+
+### Cuándo arrancar con paid
+
+- Orgánico primero hasta ~2.000-3.000 usuarios activos/mes. Sirve para validar qué mensaje
+  resuena antes de pagar por amplificarlo.
+- Primera inversión pagada recomendada: Google Search Ads (intención alta, resultados medibles).
+- Segunda: Meta Ads con video orgánico que ya funcionó bien en TikTok/Instagram.
+- TikTok Ads: cuando haya contenido orgánico probado y presupuesto para escalar.
+
+### Métricas clave por canal
+- SEO: posición media, clics orgánicos (Google Search Console).
+- Redes sociales: tasa de conversión visita → registro (Google Analytics / Vercel Analytics).
+- Paid: CAC (costo de adquisición por usuario registrado), comparado contra LTV estimado.
+- Retención: % de usuarios que vuelven a la semana siguiente (el único número que importa a largo plazo).
+
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
 - `'SUP,GAS,DIN,FAR'`
