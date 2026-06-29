@@ -686,6 +686,69 @@ Depende de `CommerceBranch` con lat/lng completos por comercio.
 **Post Reddit — DONE (r/descuentosargentina)**
 Publicado. 500+ vistas, tracción SEO visible en Google Search Console.
 
+## Estrategia de monetización — referencia futura
+
+**Cuándo pensarlo**: cuando haya tracción real sostenida (>5.000 usuarios activos/mes o
+>50.000 sesiones/mes). Antes de ese umbral, monetizar distrae del producto y puede ahuyentar
+usuarios en etapa de crecimiento. El foco ahora es retención y SEO.
+
+### Opciones simples (arrancar rápido, bajo riesgo, no requieren acuerdos)
+
+- **Adsense / display ads**: banner en página de detalle de promo o al final de la grilla.
+  Bajo RPM en Argentina (~$0.3–$1 CPM), pero cero fricción para implementar. Riesgo: degrada UX.
+  Solo vale si el volumen es alto.
+
+- **Afiliados de tarjetas/bancos**: algunos bancos y fintechs tienen programas de referidos
+  (Uala, Naranja X, Mercado Pago, Brubank). CPA por cuenta abierta o tarjeta activada.
+  Encaja natural con el perfil financiero del usuario. Implementar como CTA contextual
+  ("¿No tenés esta tarjeta? Abrila gratis →") en página de detalle de promo.
+
+- **Afiliados de e-commerce**: si el comercio tiene tienda online (Shopify, VTEX, etc.),
+  enlazar "Comprar online" con link de afiliado (ej. Awin, Admitad, programas propios).
+  Depende de que los comercios tengan programas activos en Argentina.
+
+### Opciones de mediana complejidad (requieren algo de desarrollo o acuerdos simples)
+
+- **Suscripción premium**: plan gratuito (promos del día, perfil básico) vs plan pago
+  (~$2.000–$4.000 ARS/mes) con: alertas push personalizadas, historial de ahorro,
+  comparador de cuotas, export CSV, acceso anticipado a promos del día siguiente.
+  Implementar con Stripe (pesos vía MercadoPago como alternativa local).
+
+- **Destacado de promos patrocinadas**: los bancos pagan para que su promo aparezca primero
+  en la grilla o en la sección "Destacadas hoy". Badge "Patrocinado" para cumplir
+  transparencia. Comercializar directamente con áreas de marketing de bancos medianos
+  (Ciudad, Supervielle, regional). Precio sugerido: fee fijo mensual por categoría destacada.
+
+- **Newsletter de ahorro semanal**: resumen de las mejores promos de la semana, segmentado
+  por perfil financiero. Monetizar con sponsors bancarios (el banco X "patrocina" la sección
+  supermercados de esa semana). Herramienta: Resend o SendGrid + lista de suscriptores.
+
+- **Widget embebible para medios**: widget JS que muestra las mejores promos del día,
+  embebible en sitios de noticias de economía (Infobae, Cronista, Ámbito). Revenue share
+  con el medio o fee fijo. Requiere API pública y acuerdo comercial.
+
+### Opciones complejas (alto potencial, requieren inversión de tiempo o terceros)
+
+- **Datos B2B / research**: vender informes agregados de comportamiento de promos
+  (qué bancos tienen más descuentos en qué categorías, evolución de caps, etc.) a consultoras,
+  medios especializados, o a los propios bancos para benchmarking competitivo.
+  Requiere dashboard de reportes y contratos. Alta barrera de entrada, alto ticket.
+
+- **API para fintechs / apps de finanzas personales**: exponer un feed de promos matcheadas
+  por perfil a apps como Fintual, Mango, Portfolio Personal u otras que quieran mostrar
+  beneficios a sus usuarios. Modelo: licencia mensual por cantidad de requests o usuarios.
+  Requiere API key management, SLA, documentación.
+
+- **Marketplace de cashback propio**: en vez de simplemente informar la promo, intermediar
+  la transacción y cobrar comisión (% de la venta). Complejidad muy alta, requiere
+  integración con POS o e-commerce de cada comercio.
+
+### Principios para no arruinar el producto al monetizar
+- Nunca mostrar promos falsas o infladas para beneficiar a un sponsor — la confianza es el activo.
+- Separar siempre contenido editorial (promos scrapeadas) de contenido pagado (badge visible).
+- El perfil financiero del usuario es privado: no vender datos individuales, solo aggregados.
+- Empezar por el canal que menos fricción agrega a la UX existente (afiliados contextuales).
+
 ## Notas Santander scraper
 `TEST_CATS` define qué categorías scrapear. Correr en 3 grupos:
 - `'SUP,GAS,DIN,FAR'`
