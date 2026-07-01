@@ -1,8 +1,8 @@
 name: Run Scheduled Scrapers
 
 on:
-  schedule:
-    - cron: '0 * * * *'   # cada hora
+  # schedule:
+  #   - cron: '0 * * * *'   # desactivado — scrapers se corren manualmente
   workflow_dispatch:
     inputs:
       scraper_id:
