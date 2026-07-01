@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { getServerSession } from 'next-auth/next'
+import { Analytics } from '@vercel/analytics/next'
 import Providers from './providers'
 import PostHogProvider from './components/PostHogProvider'
 import SupportChat from './components/SupportChat'
@@ -81,6 +82,7 @@ export default async function RootLayout({
             <PushNotificationPrompt />
           </PostHogProvider>
         </Providers>
+        <Analytics />
       </body>
     </html>
   )

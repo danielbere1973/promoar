@@ -2132,11 +2132,12 @@ function ScraperSchedulerTab() {
         setMsg({ type: 'success', text: `${scraperId}: workflow disparado en GitHub Actions` })
       } else {
         const data = await res.json()
-        const found = data.found ?? 0
+        const found = data.totalFound ?? data.found ?? 0
         const processed = data.processed ?? 0
+        const skipped = data.skippedUnchanged ?? 0
         if (data.flagged?.length) setFlagged(data.flagged)
         const label = SCRAPERS_CONFIG.find(s => s.id === scraperId)?.name ?? scraperId
-        const detail = processed === 0 ? `sin promos nuevas` : `${found} leídas · ${processed} guardadas`
+        const detail = `${found} leídas · ${processed} guardadas · ${skipped} sin cambios`
         setMsg({ type: 'success', text: `✅ ${label}: ${detail}` })
       }
     } else {
@@ -2209,8 +2210,8 @@ function ScraperSchedulerTab() {
   async function runAllLocal() {
     setMsg(null)
     setFlagged([])
-    let ok = 0, err = 0, totalFound = 0, totalProcessed = 0
-    for (const s of SCRAPERS_CONFIG) {
+    let ok = 0, err = 0, totalFound = 0, totalProcessed = 0, totalSkipped = 0
+    for (const s of httpScrapers) {
       setRunning(s.id)
       try {
         const res = await fetch('/api/admin/scrape', {
@@ -2223,6 +2224,7 @@ function ScraperSchedulerTab() {
           ok++
           totalFound += data.totalFound ?? data.found ?? 0
           totalProcessed += data.processed ?? 0
+          totalSkipped += data.skippedUnchanged ?? 0
           if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
         } else {
           err++
@@ -2234,7 +2236,7 @@ function ScraperSchedulerTab() {
       }
     }
     setRunning(null)
-    setMsg({ type: err > 0 ? 'error' : 'success', text: `Local: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas` })
+    setMsg({ type: err > 0 ? 'error' : 'success', text: `Local: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
     setTimeout(() => setMsg(null), 15000)
     load()
   }

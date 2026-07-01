@@ -714,6 +714,7 @@ export async function POST(req: NextRequest) {
       totalFound: flatPromos.length,
       totalGrouped: grouped.size,
       processed: processedCount,
+      skippedUnchanged,
       skippedNoCategory,
       skippedNoCommerce,
       flagged: flaggedPromos.map((p: any) => ({
