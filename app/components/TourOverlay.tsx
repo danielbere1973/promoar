@@ -47,6 +47,12 @@ const STEPS_GUEST: Step[] = [
     position: 'bottom',
   },
   {
+    targetId: '#tour-nav-comunidad',
+    title: 'Comunidad 💬',
+    body: '¡Esta sección es clave! Acá podés dejar avivadas ("en Coto los jueves con Galicia hay 40%"), reportar promos que faltan, avisar errores, compartir consejos de ahorro y sugerir mejoras. Entre todos hacemos PromoAR mejor.',
+    position: 'top',
+  },
+  {
     targetId: '#tour-nav-inversiones',
     title: 'Finanzas',
     body: 'Información actualizada sobre los mercados financieros locales e internacionales: tasas de plazos fijos, cauciones, acciones, CEDEARs, bonos, letras y mucho más.',
@@ -117,8 +123,8 @@ const STEPS_USER: Step[] = [
   },
   {
     targetId: '#tour-nav-comunidad',
-    title: 'Comunidad',
-    body: 'Compartí tips, preguntá dudas y avisá si una promo falló. Entre todos hacemos PromoAR mejor.',
+    title: 'Comunidad 💬',
+    body: '¡Esta sección es clave! Acá podés dejar avivadas ("en Coto los jueves con Galicia hay 40%"), reportar promos que faltan, avisar errores, compartir consejos de ahorro y sugerir mejoras. Entre todos hacemos PromoAR mejor.',
     position: 'top',
   },
   {
