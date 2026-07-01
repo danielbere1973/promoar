@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getServerSession } from 'next-auth/next'
 import { Analytics } from '@vercel/analytics/next'
+import { GoogleAnalytics } from '@next/third-parties/google'
 import Providers from './providers'
 import PostHogProvider from './components/PostHogProvider'
 import SupportChat from './components/SupportChat'
@@ -83,6 +84,7 @@ export default async function RootLayout({
           </PostHogProvider>
         </Providers>
         <Analytics />
+        {process.env.NEXT_PUBLIC_GA_ID && <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />}
       </body>
     </html>
   )
