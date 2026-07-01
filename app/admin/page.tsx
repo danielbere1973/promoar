@@ -3044,6 +3044,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function NewsletterTab() {
   const [subscribers, setSubscribers] = useState<Array<{ id: string; name: string | null; email: string; newsletterOptInAt: string | null }>>([])
+  const [nonSubscribers, setNonSubscribers] = useState<Array<{ id: string; name: string | null; email: string; createdAt: string }>>([])
   const [total, setTotal] = useState(0)
   const [optOut, setOptOut] = useState(0)
   const [subject, setSubject] = useState('')
@@ -3052,12 +3053,31 @@ function NewsletterTab() {
   const [previewing, setPreviewing] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showPreview, setShowPreview] = useState(false)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
-  useEffect(() => {
+  function loadData() {
     fetch('/api/admin/newsletter')
       .then(r => r.json())
-      .then(d => { setSubscribers(d.subscribers ?? []); setTotal(d.total ?? 0); setOptOut(d.optOut ?? 0) })
-  }, [])
+      .then(d => {
+        setSubscribers(d.subscribers ?? [])
+        setNonSubscribers(d.nonSubscribers ?? [])
+        setTotal(d.total ?? 0)
+        setOptOut(d.optOut ?? 0)
+      })
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  async function toggleUser(userId: string, optIn: boolean) {
+    setTogglingId(userId)
+    await fetch('/api/admin/newsletter', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, newsletterOptIn: optIn }),
+    })
+    setTogglingId(null)
+    loadData()
+  }
 
   async function sendPreview() {
     setPreviewing(true)
@@ -3132,12 +3152,52 @@ function NewsletterTab() {
                 <p className="text-xs font-semibold text-slate-700">{u.name || '—'}</p>
                 <p className="text-xs text-slate-400">{u.email}</p>
               </div>
-              <p className="text-[10px] text-slate-300">{u.newsletterOptInAt ? new Date(u.newsletterOptInAt).toLocaleDateString('es-AR') : ''}</p>
+              <div className="flex items-center gap-3">
+                <p className="text-[10px] text-slate-300">{u.newsletterOptInAt ? new Date(u.newsletterOptInAt).toLocaleDateString('es-AR') : ''}</p>
+                <button
+                  onClick={() => toggleUser(u.id, false)}
+                  disabled={togglingId === u.id}
+                  className="text-[10px] text-red-400 hover:text-red-600 font-bold disabled:opacity-40"
+                >
+                  Dar de baja
+                </button>
+              </div>
             </div>
           ))}
           {subscribers.length === 0 && <p className="px-5 py-4 text-xs text-slate-400">Sin suscriptores aún</p>}
         </div>
       </div>
+
+      {/* No suscriptos */}
+      {nonSubscribers.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users2 size={15} className="text-slate-300" />
+              <span className="text-sm font-bold text-slate-500">Sin suscripción</span>
+              <span className="text-xs text-slate-300 font-medium">({nonSubscribers.length})</span>
+            </div>
+            <p className="text-[10px] text-slate-400">Activá manualmente si tenés consentimiento</p>
+          </div>
+          <div className="divide-y divide-slate-50 max-h-48 overflow-y-auto">
+            {nonSubscribers.map(u => (
+              <div key={u.id} className="px-5 py-2.5 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-slate-600">{u.name || '—'}</p>
+                  <p className="text-xs text-slate-400">{u.email}</p>
+                </div>
+                <button
+                  onClick={() => toggleUser(u.id, true)}
+                  disabled={togglingId === u.id}
+                  className="text-[10px] font-black text-emerald-600 hover:text-emerald-700 border border-emerald-200 hover:border-emerald-400 px-2.5 py-1 rounded-lg transition-all disabled:opacity-40"
+                >
+                  {togglingId === u.id ? '...' : 'Suscribir'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Compositor */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">

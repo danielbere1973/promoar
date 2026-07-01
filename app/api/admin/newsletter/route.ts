@@ -12,15 +12,21 @@ export async function GET(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token || token.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const subscribers = await prisma.user.findMany({
-    where: { newsletterOptIn: true },
-    select: { id: true, name: true, email: true, newsletterOptInAt: true, createdAt: true },
-    orderBy: { newsletterOptInAt: 'desc' },
-  })
-  const total = await prisma.user.count()
-  const optOut = await prisma.user.count({ where: { newsletterOptIn: false } })
+  const [subscribers, nonSubscribers, total] = await Promise.all([
+    prisma.user.findMany({
+      where: { newsletterOptIn: true },
+      select: { id: true, name: true, email: true, newsletterOptInAt: true, createdAt: true },
+      orderBy: { newsletterOptInAt: 'desc' },
+    }),
+    prisma.user.findMany({
+      where: { newsletterOptIn: false },
+      select: { id: true, name: true, email: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.user.count(),
+  ])
 
-  return NextResponse.json({ subscribers, total, optOut })
+  return NextResponse.json({ subscribers, nonSubscribers, total, optOut: nonSubscribers.length })
 }
 
 // POST — enviar newsletter
@@ -72,4 +78,23 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, sent, errors })
+}
+
+// PATCH — toggle opt-in de un usuario individual
+export async function PATCH(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  if (!token || token.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { userId, newsletterOptIn } = await req.json()
+  if (!userId) return NextResponse.json({ error: 'Falta userId' }, { status: 400 })
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      newsletterOptIn: !!newsletterOptIn,
+      newsletterOptInAt: newsletterOptIn ? new Date() : null,
+    },
+  })
+
+  return NextResponse.json({ ok: true })
 }
