@@ -1,8 +1,8 @@
 name: Expirar Promos Vencidas
 
 on:
-  # schedule:
-  #   - cron: '0 5 * * *'   # 05:00 UTC = 02:00 ART — DESACTIVADO temporalmente (consumo de minutos GH Actions, ver CLAUDE.md). Reactivar en julio.
+  schedule:
+    - cron: '0 5 * * *'   # 05:00 UTC = 02:00 ART
   workflow_dispatch:
 
 jobs:

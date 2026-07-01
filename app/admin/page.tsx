@@ -2212,18 +2212,26 @@ function ScraperSchedulerTab() {
     let ok = 0, err = 0, totalFound = 0, totalProcessed = 0
     for (const s of SCRAPERS_CONFIG) {
       setRunning(s.id)
-      const res = await fetch('/api/admin/run-scraper', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scraperId: s.id, forceLocal: true }),
-      })
-      if (res.ok) {
-        ok++
+      try {
+        const res = await fetch('/api/admin/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scraper: s.id, categoria: s.categoria, forceLocal: true }),
+        })
         const data = await res.json().catch(() => ({}))
-        totalFound += data.found ?? 0
-        totalProcessed += data.processed ?? 0
-        if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
-      } else err++
+        if (res.ok) {
+          ok++
+          totalFound += data.totalFound ?? data.found ?? 0
+          totalProcessed += data.processed ?? 0
+          if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
+        } else {
+          err++
+          console.error(`[${s.id}] ${data.error ?? res.status}`)
+        }
+      } catch (e) {
+        err++
+        console.error(`[${s.id}] Error de conexión`, e)
+      }
     }
     setRunning(null)
     setMsg({ type: err > 0 ? 'error' : 'success', text: `Local: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas` })

@@ -1,8 +1,8 @@
 name: Run Scheduled Scrapers
 
 on:
-  # schedule:
-  #   - cron: '0 * * * *'   # cada hora — DESACTIVADO temporalmente (consumo de minutos GH Actions, ver CLAUDE.md). Reactivar en julio.
+  schedule:
+    - cron: '0 * * * *'   # cada hora
   workflow_dispatch:
     inputs:
       scraper_id:
