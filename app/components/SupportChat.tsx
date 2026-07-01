@@ -20,7 +20,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: '¿Es gratis?',
-        a: 'Sí, 100% gratis. Nunca te vamos a cobrar nada. El registro también es gratuito.',
+        a: <>Sí, 100% gratis. Nunca te vamos a cobrar nada. <Link href="/registro" className="underline font-bold">Registrate acá</Link> sin costo.</>,
       },
       {
         q: '¿Qué bancos y billeteras tienen?',
@@ -28,7 +28,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: '¿Con qué frecuencia se actualizan las promos?',
-        a: 'Corremos scrapers automáticos que actualizan las promos de cada banco regularmente. Si ves una promo desactualizada, avisanos desde el formulario de contacto y la revisamos.',
+        a: <>Corremos scrapers automáticos que actualizan las promos de cada banco regularmente. Si ves una promo desactualizada, <Link href="/contacto" className="underline font-bold">avisanos acá</Link> y la revisamos.</>,
       },
       {
         q: '¿Por qué conviene usarlo en vez de ir al sitio de cada banco?',
@@ -42,15 +42,15 @@ const CATEGORIES: Category[] = [
     questions: [
       {
         q: '¿Para qué sirve registrarme?',
-        a: 'Al registrarte podés cargar tu perfil financiero (bancos, billeteras y tarjetas) y activar "Para mí" — así solo ves las promos que te aplican a vos, sin ruido. También podés guardar promos favoritas y activar alertas personalizadas.',
+        a: <>Al <Link href="/registro" className="underline font-bold">registrarte</Link> podés cargar tu perfil financiero (bancos, billeteras y tarjetas) y activar "Para mí" — así solo ves las promos que te aplican a vos. También guardás favoritas y activás alertas personalizadas.</>,
       },
       {
         q: '¿Puedo usar la app sin registrarme?',
-        a: 'Sí, podés ver todas las promos sin cuenta. Pero sin registro no podés filtrar "Para mí", guardar favoritas ni recibir alertas.',
+        a: <>Sí, podés <Link href="/promos" className="underline font-bold">ver todas las promos</Link> sin cuenta. Pero sin registro no podés filtrar "Para mí", guardar favoritas ni recibir alertas.</>,
       },
       {
         q: '¿Cómo cargo mi perfil financiero?',
-        a: 'Entrá a tu perfil → tab "Financiero". Ahí agregás tu banco, billetera y las tarjetas que tenés (red + tipo). Es muy rápido y solo lo hacés una vez.',
+        a: <>Entrá a <Link href="/perfil?tab=finance" className="underline font-bold">tu perfil → Financiero</Link>. Ahí agregás tu banco, billetera y las tarjetas que tenés. Es muy rápido y solo lo hacés una vez.</>,
       },
       {
         q: '¿Qué datos me piden para el perfil?',
@@ -66,7 +66,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: '¿Cómo cambio o borro mis datos?',
-        a: 'Desde tu perfil podés editar o eliminar cualquier dato en cualquier momento. Para borrar tu cuenta completamente, escribinos desde el formulario de contacto.',
+        a: <>Desde <Link href="/perfil" className="underline font-bold">tu perfil</Link> podés editar o eliminar cualquier dato en cualquier momento. Para borrar tu cuenta completamente, <Link href="/contacto" className="underline font-bold">escribinos acá</Link>.</>,
       },
     ],
   },
@@ -140,7 +140,7 @@ const CATEGORIES: Category[] = [
     questions: [
       {
         q: '¿Cómo activo las alertas de promos?',
-        a: 'Entrá a tu perfil → tab "Notificaciones". Ahí activás las notificaciones push del navegador y elegís las categorías que te interesan. Te avisamos cuando aparezca una promo nueva relevante para vos.',
+        a: <>Entrá a <Link href="/perfil?tab=notif" className="underline font-bold">tu perfil → Notificaciones</Link>. Ahí activás las notificaciones push del navegador y elegís las categorías que te interesan. Te avisamos cuando aparezca una promo nueva relevante para vos.</>,
       },
       {
         q: '¿Qué tipo de alertas puedo configurar?',
@@ -156,7 +156,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: '¿Puedo desactivar las alertas?',
-        a: 'Sí, desde tu perfil → Notificaciones podés desactivarlas en cualquier momento, o eliminar categorías específicas.',
+        a: <>Sí, desde <Link href="/perfil?tab=notif" className="underline font-bold">tu perfil → Notificaciones</Link> podés desactivarlas en cualquier momento, o eliminar categorías específicas.</>,
       },
     ],
   },
@@ -170,7 +170,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: '¿Cómo me suscribo al newsletter?',
-        a: 'Podés suscribirte al registrarte (tildando el checkbox) o después desde tu perfil → Notificaciones → activando el toggle "Resumen semanal de promos".',
+        a: <>Podés suscribirte al <Link href="/registro" className="underline font-bold">registrarte</Link> (tildando el checkbox) o después desde <Link href="/perfil?tab=notif" className="underline font-bold">tu perfil → Notificaciones</Link> → activando el toggle "Resumen semanal de promos".</>,
       },
       {
         q: '¿Con qué frecuencia llega?',
@@ -178,7 +178,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: '¿Cómo me doy de baja?',
-        a: 'Desde el link "Cancelar suscripción" al pie de cualquier email que te mandemos, o desde tu perfil → Notificaciones → desactivando el toggle del newsletter.',
+        a: <>Desde el link "Cancelar suscripción" al pie de cualquier email que te mandemos, o desde <Link href="/perfil?tab=notif" className="underline font-bold">tu perfil → Notificaciones</Link> → desactivando el toggle del newsletter.</>,
       },
     ],
   },
@@ -200,7 +200,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: '¿Comparten mis datos con terceros?',
-        a: 'No vendemos ni compartimos tus datos personales con terceros. Podés leer nuestra política de privacidad completa en el footer del sitio.',
+        a: <>No vendemos ni compartimos tus datos personales con terceros. Podés leer nuestra <Link href="/privacidad" className="underline font-bold">política de privacidad</Link> completa acá.</>,
       },
     ],
   },
@@ -220,11 +220,11 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'No me carga la app o no aparecen promos',
-        a: 'Probá recargar la página. Si el problema persiste, limpiá la caché del navegador. Si seguís con problemas, escribinos desde contacto y te ayudamos.',
+        a: <>Probá recargar la página. Si el problema persiste, limpiá la caché del navegador. Si seguís con problemas, <Link href="/contacto" className="underline font-bold">escribinos acá</Link> y te ayudamos.</>,
       },
       {
         q: 'El filtro "Para mí" no me muestra promos',
-        a: 'Verificá que tengas el perfil financiero cargado (perfil → Financiero). Si lo cargaste y aun así no ves nada, puede ser que no haya promos activas hoy para tus tarjetas. Probá con el filtro "Semana" o desactivá "Para mí" para ver todas.',
+        a: <>Verificá que tengas el perfil financiero cargado (<Link href="/perfil?tab=finance" className="underline font-bold">perfil → Financiero</Link>). Si lo cargaste y aun así no ves nada, puede ser que no haya promos activas hoy para tus tarjetas. Probá con el filtro "Semana" o desactivá "Para mí" para ver todas.</>,
       },
       {
         q: 'El descuento en el local no coincide con el de la app',
@@ -232,7 +232,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'No me llega el email de verificación',
-        a: 'Revisá la carpeta de spam. Si no está ahí, desde la pantalla de verificación podés reenviar el código. Si el problema continúa, escribinos.',
+        a: <>Revisá la carpeta de spam. Si no está ahí, desde la pantalla de verificación podés reenviar el código. Si el problema continúa, <Link href="/contacto" className="underline font-bold">escribinos acá</Link>.</>,
       },
     ],
   },
