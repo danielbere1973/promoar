@@ -192,6 +192,13 @@ function LoginForm() {
             ¿No tenés cuenta?{' '}
             <a href="/registro" className="text-green-600 font-bold hover:text-green-700">Registrate gratis</a>
           </p>
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/promos' }}
+            className="block w-full text-center py-2.5 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+          >
+            Ver promos sin registrarme →
+          </button>
         </div>
       </div>
 
@@ -265,9 +272,11 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gray-50/80 flex items-center justify-center px-4 py-12" style={{ colorScheme: 'light' }}>
+    <div className="min-h-screen bg-gray-50/80 overflow-y-auto flex flex-col items-center px-4 py-12" style={{ colorScheme: 'light' }}>
       <Suspense fallback={<div className="text-gray-400 text-sm">Cargando...</div>}>
-        <LoginForm />
+        <div className="w-full my-auto">
+          <LoginForm />
+        </div>
       </Suspense>
     </div>
   )

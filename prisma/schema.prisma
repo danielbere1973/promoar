@@ -45,6 +45,8 @@ model User {
   phoneFixed       String?
   phoneMobile      String?
   active           Boolean           @default(true)
+  newsletterOptIn  Boolean           @default(false)
+  newsletterOptInAt DateTime?
   accounts         Account[]
   posts            CommunityPost[]
   financialProfile FinancialProfile?

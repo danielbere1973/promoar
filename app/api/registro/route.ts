@@ -7,7 +7,7 @@ import { Resend } from 'resend'
 export async function POST(req: NextRequest) {
   const resend = new Resend(process.env.RESEND_API_KEY)
   try {
-    const { name, email, password } = await req.json()
+    const { name, email, password, newsletterOptIn } = await req.json()
 
     // LIMPIEZA TOTAL: Forzamos minúsculas y quitamos espacios
     const cleanEmail = email.toLowerCase().trim()
@@ -30,21 +30,25 @@ export async function POST(req: NextRequest) {
 
       await prisma.user.update({
         where: { email: cleanEmail },
-        data: { 
+        data: {
           name,
-          password: hashed, 
-          verificationCode, 
-          codeExpires: expires 
+          password: hashed,
+          verificationCode,
+          codeExpires: expires,
+          newsletterOptIn: !!newsletterOptIn,
+          newsletterOptInAt: newsletterOptIn ? new Date() : null,
         }
       })
     } else {
       await prisma.user.create({
-        data: { 
-          name, 
-          email: cleanEmail, 
+        data: {
+          name,
+          email: cleanEmail,
           password: hashed,
           verificationCode,
-          codeExpires: expires
+          codeExpires: expires,
+          newsletterOptIn: !!newsletterOptIn,
+          newsletterOptInAt: newsletterOptIn ? new Date() : null,
         }
       })
     }

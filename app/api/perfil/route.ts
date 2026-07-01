@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
       addressCity: user.addressCity,
       addressState: user.addressState,
       addressCountry: user.addressCountry,
+      newsletterOptIn: user.newsletterOptIn,
     },
     profile: user.financialProfile ?? null,
   })

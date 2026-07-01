@@ -8,7 +8,7 @@ import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
   Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
-  GitMerge, Link2, Bell, ClipboardList
+  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -316,7 +316,7 @@ function normalizeSearch(s: string): string {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -920,6 +920,9 @@ export default function AdminPage() {
         <TabButton active={tab === 'pending'} icon={ClipboardList} onClick={() => setTab('pending')}>
           Pendientes
         </TabButton>
+        <TabButton active={tab === 'newsletter'} icon={Mail} onClick={() => setTab('newsletter')}>
+          Newsletter
+        </TabButton>
         {tab === 'form' && (
           <TabButton active={true} icon={Pencil} onClick={() => { }}>
             {editingId ? 'Editando Promo' : 'Nueva Promo'}
@@ -982,6 +985,8 @@ export default function AdminPage() {
         {/* ══════════ TAB ALERTAS ══════════ */}
         {tab === 'alertas' && <NotifPrefsTab />}
         {tab === 'pending' && <PendingPromosTab />}
+
+        {tab === 'newsletter' && <NewsletterTab />}
 
         {/* Alerts */}
         {(success || error) && (
@@ -3033,6 +3038,173 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-2 block">{label}</label>
       {children}
+    </div>
+  )
+}
+
+function NewsletterTab() {
+  const [subscribers, setSubscribers] = useState<Array<{ id: string; name: string | null; email: string; newsletterOptInAt: string | null }>>([])
+  const [total, setTotal] = useState(0)
+  const [optOut, setOptOut] = useState(0)
+  const [subject, setSubject] = useState('')
+  const [htmlContent, setHtmlContent] = useState('')
+  const [sending, setSending] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/newsletter')
+      .then(r => r.json())
+      .then(d => { setSubscribers(d.subscribers ?? []); setTotal(d.total ?? 0); setOptOut(d.optOut ?? 0) })
+  }, [])
+
+  async function sendPreview() {
+    setPreviewing(true)
+    const res = await fetch('/api/admin/newsletter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, htmlContent, preview: true }),
+    })
+    const d = await res.json()
+    setPreviewing(false)
+    setMsg(res.ok ? { type: 'success', text: '✅ Preview enviado a tu email' } : { type: 'error', text: d.error })
+  }
+
+  async function sendAll() {
+    if (!confirm(`¿Enviar a ${subscribers.length} suscriptores?`)) return
+    setSending(true)
+    const res = await fetch('/api/admin/newsletter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, htmlContent }),
+    })
+    const d = await res.json()
+    setSending(false)
+    setMsg(res.ok
+      ? { type: 'success', text: `✅ Enviado a ${d.sent} suscriptores${d.errors > 0 ? ` (${d.errors} errores)` : ''}` }
+      : { type: 'error', text: d.error })
+  }
+
+  const previewHtml = `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+      <div style="background:#1E3A5F;padding:20px 28px">
+        <p style="margin:0;color:#fff;font-size:20px;font-weight:900">PromoAR</p>
+        <p style="margin:4px 0 0;color:#93b4d4;font-size:12px">Todas las promos de tus tarjetas</p>
+      </div>
+      <div style="padding:28px">${htmlContent}</div>
+      <div style="border-top:1px solid #eee;padding:16px 28px;font-size:11px;color:#bbb;text-align:center">
+        🌐 promoar.com.ar · 📱 WhatsApp: +54 11 7369-1613<br>
+        <a href="#" style="color:#bbb">Instagram</a> · <a href="#" style="color:#bbb">Facebook</a> · <a href="#" style="color:#bbb">TikTok</a><br>
+        <a href="#" style="color:#bbb;text-decoration:underline">Cancelar suscripción</a>
+      </div>
+    </div>
+  `
+
+  return (
+    <div className="space-y-6">
+      {/* Stats de suscriptores */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm text-center">
+          <p className="text-3xl font-black text-[#1E3A5F]">{subscribers.length}</p>
+          <p className="text-xs text-slate-400 mt-1 font-medium">Suscriptores activos</p>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm text-center">
+          <p className="text-3xl font-black text-slate-400">{optOut}</p>
+          <p className="text-xs text-slate-400 mt-1 font-medium">Sin suscripción</p>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm text-center">
+          <p className="text-3xl font-black text-slate-600">{total}</p>
+          <p className="text-xs text-slate-400 mt-1 font-medium">Usuarios totales</p>
+        </div>
+      </div>
+
+      {/* Lista suscriptores */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <Users2 size={15} className="text-slate-400" />
+          <span className="text-sm font-bold text-slate-700">Suscriptores</span>
+        </div>
+        <div className="divide-y divide-slate-50 max-h-48 overflow-y-auto">
+          {subscribers.map(u => (
+            <div key={u.id} className="px-5 py-2.5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-700">{u.name || '—'}</p>
+                <p className="text-xs text-slate-400">{u.email}</p>
+              </div>
+              <p className="text-[10px] text-slate-300">{u.newsletterOptInAt ? new Date(u.newsletterOptInAt).toLocaleDateString('es-AR') : ''}</p>
+            </div>
+          ))}
+          {subscribers.length === 0 && <p className="px-5 py-4 text-xs text-slate-400">Sin suscriptores aún</p>}
+        </div>
+      </div>
+
+      {/* Compositor */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+        <h3 className="text-sm font-black text-slate-800">Nuevo envío</h3>
+
+        <div>
+          <label className="text-xs font-bold text-slate-500 block mb-1.5">Asunto</label>
+          <input
+            value={subject}
+            onChange={e => setSubject(e.target.value)}
+            placeholder="Las mejores promos de esta semana 🎉"
+            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#1E3A5F]"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-500 block mb-1.5">Contenido (HTML)</label>
+          <textarea
+            value={htmlContent}
+            onChange={e => setHtmlContent(e.target.value)}
+            placeholder={'<h2>¡Hola!</h2>\n<p>Esta semana las mejores promos son...</p>'}
+            rows={10}
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:border-[#1E3A5F] resize-y"
+          />
+        </div>
+
+        {/* Preview toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPreview(p => !p)}
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            <Eye size={13} /> {showPreview ? 'Ocultar preview' : 'Ver preview'}
+          </button>
+        </div>
+
+        {showPreview && (
+          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-gray-50 p-4">
+            <p className="text-[10px] font-bold text-slate-400 mb-3 uppercase tracking-widest">Preview — así lo ve el usuario</p>
+            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          </div>
+        )}
+
+        {msg && (
+          <div className={`px-4 py-3 rounded-xl text-xs font-bold ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            {msg.text}
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={sendPreview}
+            disabled={previewing || !subject || !htmlContent}
+            className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-2 border-[#1E3A5F] text-[#1E3A5F] rounded-xl hover:bg-[#1E3A5F]/5 disabled:opacity-40 transition-all"
+          >
+            <Eye size={13} /> {previewing ? 'Enviando...' : 'Enviarme preview'}
+          </button>
+          <button
+            onClick={sendAll}
+            disabled={sending || !subject || !htmlContent || subscribers.length === 0}
+            className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-[#1E3A5F] text-white rounded-xl hover:bg-[#142840] disabled:opacity-40 transition-all"
+          >
+            <Send size={13} /> {sending ? 'Enviando...' : `Enviar a ${subscribers.length} suscriptores`}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

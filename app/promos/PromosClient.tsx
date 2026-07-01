@@ -16,6 +16,7 @@ import CommerceGroupCard from '../components/CommerceGroupCard'
 import { GuestProfile } from '../components/PromoWizard'
 import ThemeToggle from '../components/ThemeToggle'
 import SplashScreen from '../components/SplashScreen'
+import OnboardingBanner from '../components/OnboardingBanner'
 import { useTracking } from '@/lib/useTracking'
 
 const FilterDrawer = dynamic(() => import('../components/FilterDrawer'), { ssr: false })
@@ -579,6 +580,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [pinError, setPinError] = useState(false)
   const [entities, setEntities] = useState({ banks: [], wallets: [], cardNetworks: [] })
   const [userProfile, setUserProfile] = useState<{ banks: {bankId:string}[], wallets: {walletId:string}[], cards: {cardNetworkId:string|null}[] } | null>(null)
+  const [profileReady, setProfileReady] = useState(false)
   const initialFilters: FilterState = {
     banks: [], wallets: [], networks: [], days: [], channels: [],
     hasCap: null, capMin: null, capMax: null, capPeriods: [],
@@ -777,7 +779,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       }
     }
     async function fetchUserProfile() {
-      if (status !== 'authenticated') return
+      if (status !== 'authenticated') { setProfileReady(true); return }
       try {
         const r = await fetch('/api/perfil')
         if (r.ok) {
@@ -786,6 +788,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         }
       } catch (err) {
         console.error('Error fetching user profile:', err)
+      } finally {
+        setProfileReady(true)
       }
     }
     fetchEntities()
@@ -2415,6 +2419,12 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-4 mx-4" />
                 </div>
               )}
+
+              <OnboardingBanner
+                isLoggedIn={!!session?.user}
+                hasProfile={!!userProfile && (userProfile.banks.length > 0 || userProfile.wallets.length > 0)}
+                profileReady={profileReady}
+              />
 
               {destacadas.length > 0 && (
                 <Section title="⭐ Destacadas hoy" subtitle="Mejores descuentos del día" promoList={destacadas} isFirst />

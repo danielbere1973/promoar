@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Bell, BellOff, Plus, Trash2, Lock, CheckCircle2, XCircle } from 'lucide-react'
+import { Bell, BellOff, Plus, Trash2, Lock, CheckCircle2, XCircle, Mail } from 'lucide-react'
 
 type Category = { id: string; name: string; slug: string; icon: string }
 type NotifPref = {
@@ -32,6 +32,27 @@ export default function NotificationSettings() {
   const [addingCategory, setAddingCategory] = useState(false)
   const [selectedCatId, setSelectedCatId] = useState('')
   const [saving, setSaving] = useState(false)
+  const [newsletterOptIn, setNewsletterOptIn] = useState<boolean | null>(null)
+  const [savingNewsletter, setSavingNewsletter] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/perfil').then(r => r.json()).then(d => {
+      if (d.user) setNewsletterOptIn(!!d.user.newsletterOptIn)
+    })
+  }, [])
+
+  async function toggleNewsletter() {
+    if (newsletterOptIn === null) return
+    const next = !newsletterOptIn
+    setSavingNewsletter(true)
+    const res = await fetch('/api/perfil/newsletter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newsletterOptIn: next }),
+    })
+    if (res.ok) setNewsletterOptIn(next)
+    setSavingNewsletter(false)
+  }
 
   // Detectar estado real: permiso del browser + suscripción activa en pushManager
   useEffect(() => {
@@ -272,6 +293,44 @@ export default function NotificationSettings() {
           >
             <Plus size={16} /> Agregar categoría
           </button>
+        )}
+      </div>
+
+      {/* Newsletter */}
+      <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-3xl p-5 shadow-sm">
+        <h2 className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-4">Newsletter</h2>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
+              <Mail size={17} className="text-[#1E3A5F] dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Resumen semanal de promos</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">Las mejores promos de la semana en tu email</p>
+            </div>
+          </div>
+          <button
+            onClick={toggleNewsletter}
+            disabled={savingNewsletter || newsletterOptIn === null}
+            className={`relative shrink-0 w-12 h-6 rounded-full transition-colors duration-200 ${
+              newsletterOptIn ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'
+            } disabled:opacity-50`}
+            aria-label={newsletterOptIn ? 'Desactivar newsletter' : 'Activar newsletter'}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+              newsletterOptIn ? 'translate-x-6' : 'translate-x-0'
+            }`} />
+          </button>
+        </div>
+        {newsletterOptIn === false && (
+          <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-3">
+            Activalo para recibir el resumen semanal. Podés darte de baja cuando quieras.
+          </p>
+        )}
+        {newsletterOptIn === true && (
+          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-3">
+            ✓ Vas a recibir el resumen semanal en tu email.
+          </p>
         )}
       </div>
 

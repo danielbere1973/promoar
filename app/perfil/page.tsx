@@ -139,6 +139,11 @@ export default function PerfilPage() {
   const [savingProfile, setSavingProfile] = useState(false)
   const [activeTab, setActiveTab] = useState<'personal' | 'finance' | 'notif'>('personal')
 
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'notif' || t === 'finance' || t === 'personal') setActiveTab(t)
+  }, [])
+
   const [showSaved, setShowSaved] = useState(false)
   const [savedPromos, setSavedPromos] = useState<any[]>([])
   const [loadingSaved, setLoadingSaved] = useState(true)

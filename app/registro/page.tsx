@@ -36,7 +36,7 @@ export default function Registro() {
     const res = await fetch('/api/registro', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, newsletterOptIn: acceptsNewsletter }),
     })
 
     const data = await res.json()
