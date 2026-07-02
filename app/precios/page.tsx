@@ -69,7 +69,7 @@ interface Toast {
 
 const formatPrice = (p: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(p)
 
-const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'Dia', 'Changomas', 'The Food Market', 'Cordiez', 'Cooperativa Obrera']
+const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'Dia', 'Changomas', 'The Food Market', 'Cordiez', 'Cooperativa Obrera', 'Toledo Digital', 'Depot Express']
 const ALL_SUPERMARKETS_FARMA = ['Farmacity', 'Farmaplus', 'OpenFarma']
 const ALL_SUPERMARKETS_ELECTRO = ['Megatone', 'Frávega', 'Naldo', 'Coppel', 'Rodo', 'Easy', 'Carrefour', 'Coto', 'Jumbo', 'Disco', 'Vea', 'Más Online', 'Changomas', 'Dia']
 
@@ -92,6 +92,8 @@ const STORE_LOGOS: Record<string, string> = {
   'The Food Market': 'https://www.google.com/s2/favicons?domain=thefoodmarket.com.ar&sz=64',
   'Cordiez': 'https://www.google.com/s2/favicons?domain=cordiez.com.ar&sz=64',
   'Cooperativa Obrera': 'https://www.google.com/s2/favicons?domain=lacoopeencasa.coop&sz=64',
+  'Toledo Digital': 'https://www.google.com/s2/favicons?domain=toledodigital.com.ar&sz=64',
+  'Depot Express': 'https://www.google.com/s2/favicons?domain=depotexpress.com.ar&sz=64',
 }
 
 const SUPERMARKET_COLORS: Record<string, string> = {
@@ -117,6 +119,8 @@ const SUPERMARKET_COLORS: Record<string, string> = {
   'The Food Market': 'bg-emerald-700 text-white',
   'Cordiez': 'bg-red-800 text-white',
   'Cooperativa Obrera': 'bg-sky-700 text-white',
+  'Toledo Digital': 'bg-violet-700 text-white',
+  'Depot Express': 'bg-orange-700 text-white',
   'default': 'bg-gray-800 text-white'
 }
 
@@ -143,6 +147,8 @@ const SUPERMARKET_DOT: Record<string, string> = {
   'The Food Market': 'bg-emerald-700',
   'Cordiez': 'bg-red-800',
   'Cooperativa Obrera': 'bg-sky-700',
+  'Toledo Digital': 'bg-violet-700',
+  'Depot Express': 'bg-orange-700',
   'default': 'bg-gray-500'
 }
 

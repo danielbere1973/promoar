@@ -150,6 +150,60 @@ async function searchVtexCatalog(query: string, supermarket: string, baseUrl: st
 }
 
 // ---------------------------------------------------------
+// WOOCOMMERCE STORE API (Depot Express, etc.)
+// ---------------------------------------------------------
+async function searchWooCommerceStore(query: string, supermarket: string, baseUrl: string): Promise<NormalizedProduct[]> {
+  try {
+    const url = `${baseUrl}/wp-json/wc/store/v1/products?search=${encodeURIComponent(query)}&per_page=20`
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+    const slug = supermarket.toLowerCase().replace(/\s/g, '')
+    return data.map((p: any) => {
+      const minorUnit = p.prices?.currency_minor_unit ?? 2
+      const divisor = Math.pow(10, minorUnit)
+      const price = p.prices?.regular_price ? parseInt(p.prices.regular_price) / divisor : 0
+      const saleRaw = p.prices?.sale_price
+      const finalPrice = saleRaw ? parseInt(saleRaw) / divisor : price
+      if (!price) return null
+      let discountText = '-'
+      if (finalPrice < price) {
+        const pct = Math.round((1 - finalPrice / price) * 100)
+        if (pct > 0) discountText = `${pct}% OFF`
+      }
+      const ean = String(p.sku || '')
+      const imageUrl = p.images?.[0]?.src || ''
+      const permalink = p.permalink || baseUrl
+      return {
+        ean,
+        id: `${slug}-${p.id}`,
+        supermarket,
+        name: p.name || 'Sin nombre',
+        brand: '-',
+        price,
+        finalPrice,
+        discountText,
+        imageUrl,
+        url: permalink,
+        multiUnitPromo: null,
+        vtexCategoryId: '',
+        vtexCategory: '',
+      }
+    }).filter(Boolean) as NormalizedProduct[]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------
 // COOPERATIVA OBRERA (La Coope en Casa — custom API)
 // ---------------------------------------------------------
 async function searchCoopeEnCasa(query: string): Promise<NormalizedProduct[]> {
@@ -1261,7 +1315,7 @@ export async function GET(request: Request) {
     let allProducts: NormalizedProduct[] = []
 
     if (isSuper) {
-      const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas, theFoodMarket, cordiez, coope] = await Promise.all([
+      const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas, theFoodMarket, cordiez, coope, toledo, depot] = await Promise.all([
         cotoQ ? searchCoto(cotoQ, false) : Promise.resolve([]),
         carrQ ? searchCarrefour(carrQ, isCategory) : Promise.resolve([]),
         cencoQ ? searchVtexIS(cencoQ, false, 'Jumbo', 'https://www.jumbo.com.ar', vtexMap) : Promise.resolve([]),
@@ -1273,8 +1327,10 @@ export async function GET(request: Request) {
         q ? searchVtexIS(q, isCategory, 'The Food Market', 'https://www.thefoodmarket.com.ar', vtexMap) : Promise.resolve([]),
         q ? searchVtexCatalog(q, 'Cordiez', 'https://www.cordiez.com.ar') : Promise.resolve([]),
         q ? searchCoopeEnCasa(q) : Promise.resolve([]),
+        q ? searchVtexIS(q, isCategory, 'Toledo Digital', 'https://www.toledodigital.com.ar', vtexMap) : Promise.resolve([]),
+        q ? searchWooCommerceStore(q, 'Depot Express', 'https://depotexpress.com.ar') : Promise.resolve([]),
       ])
-      allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas, ...theFoodMarket, ...cordiez, ...coope]
+      allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas, ...theFoodMarket, ...cordiez, ...coope, ...toledo, ...depot]
     }
 
     if (isElectro) {
