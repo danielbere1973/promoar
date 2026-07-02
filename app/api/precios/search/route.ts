@@ -399,7 +399,7 @@ async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
       }
     }
 
-    return Array.from(seen.values()).slice(0, 20).map((item: any) => {
+    const results = Array.from(seen.values()).slice(0, 20).map((item: any) => {
       const price = item.price || 0
       const originalPrice = item.original_price || price
       let discountText = '-'
@@ -407,11 +407,7 @@ async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
         const pct = Math.round((1 - price / originalPrice) * 100)
         if (pct > 0) discountText = `${pct}% OFF`
       }
-
-      const storeName = item.official_store_name
-        ? `ML · ${item.official_store_name}`
-        : 'MercadoLibre'
-
+      const storeName = item.official_store_name ? `ML · ${item.official_store_name}` : 'MercadoLibre'
       return {
         ean: '',
         id: `ml-${item.id}`,
@@ -421,11 +417,13 @@ async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
         price: originalPrice,
         finalPrice: price,
         discountText,
-        imageUrl: (item.thumbnail || '').replace('I.jpg', 'O.jpg'), // imagen más grande
+        imageUrl: (item.thumbnail || '').replace('I.jpg', 'O.jpg'),
         url: item.permalink || 'https://www.mercadolibre.com.ar',
         multiUnitPromo: undefined,
       }
     }) as NormalizedProduct[]
+    console.log(`[MercadoLibre] ${results.length} productos para "${query}" (${items.length} items raw)`)
+    return results
   } catch (err: any) {
     console.error(`[MercadoLibre] Error para "${query}":`, err?.message || err)
     return []
@@ -852,12 +850,13 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
     }
     
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(7000) })
-    if (!res.ok) return []
-
-    const data = await res.json()
+    if (!res.ok) {
+      console.log(`[${supermarket}] IS HTTP ${res.status} — intentando catalog fallback`)
+    }
+    const data = res.ok ? await res.json() : {}
     let products = data.products || []
 
-    // Fallback al Catalog Search si IS no devuelve resultados
+    // Fallback al Catalog Search si IS no devuelve resultados o falla
     if (products.length === 0 && !isCategory) {
       try {
         const catUrl = `${baseUrl}/api/catalog_system/pub/products/search?ft=${encoded}&_from=0&_to=14`
@@ -1058,6 +1057,7 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
       }
     }
 
+    if (initial.length > 0) console.log(`[${supermarket}] ${initial.length} productos para "${query}"`)
     return initial
   } catch (error) {
     console.error(`Error ${supermarket} completo:`, error)
