@@ -26,5 +26,6 @@ export async function GET() {
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI)
   authUrl.searchParams.set('scope', 'read offline_access')
 
-  return NextResponse.redirect(authUrl.toString())
+  // DEBUG — borrar después de confirmar los valores
+  return NextResponse.json({ clientId, redirectUri: REDIRECT_URI, authUrl: authUrl.toString() })
 }
