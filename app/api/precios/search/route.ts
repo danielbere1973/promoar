@@ -269,62 +269,6 @@ async function searchCoopeEnCasa(query: string): Promise<NormalizedProduct[]> {
 }
 
 // ---------------------------------------------------------
-// MEGATONE (VTEX IO Intelligent Search — mismo formato que Easy)
-// ---------------------------------------------------------
-async function searchMegatone(query: string): Promise<NormalizedProduct[]> {
-  try {
-    const url = `https://www.megatone.net/api/io/_v/api/intelligent-search/product_search?query=${encodeURIComponent(query)}&count=30`
-    const res = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept-Language': 'es-AR,es;q=0.9',
-      },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!res.ok) {
-      console.error(`[Megatone] IO HTTP ${res.status}`)
-      return []
-    }
-    const data = await res.json()
-    const products = data.products || []
-    console.log(`[Megatone] IO ${products.length} productos para "${query}"`)
-
-    return products.flatMap((p: any) => {
-      const item = p.items?.[0] || {}
-      const offer = item.sellers?.[0]?.commertialOffer || {}
-      const price = offer.Price || 0
-      const listPrice = offer.ListPrice || price
-      if (!price || (offer.AvailableQuantity || 0) <= 0) return []
-      let discountText = '-'
-      if (listPrice > price) {
-        const pct = Math.round((1 - price / listPrice) * 100)
-        if (pct > 0) discountText = `${pct}% OFF`
-      }
-      return [{
-        ean: String(item.ean || item.itemId || ''),
-        id: `megatone-${item.itemId || p.productId}`,
-        supermarket: 'Megatone',
-        name: p.productName || 'Sin nombre',
-        brand: p.brand || '-',
-        price: listPrice,
-        finalPrice: price,
-        discountText,
-        imageUrl: item.images?.[0]?.imageUrl || '',
-        url: p.link ? `https://www.megatone.net${p.link}` : 'https://www.megatone.net',
-        multiUnitPromo: undefined,
-        vtexCategoryId: '',
-        vtexCategory: '',
-      }]
-    }) as NormalizedProduct[]
-  } catch (e: any) {
-    console.error(`[Megatone] excepción: ${e.message}`)
-    return []
-  }
-}
-
-// ---------------------------------------------------------
 // EASY (VTEX IO Intelligent Search)
 // ---------------------------------------------------------
 async function searchEasy(query: string): Promise<NormalizedProduct[]> {
