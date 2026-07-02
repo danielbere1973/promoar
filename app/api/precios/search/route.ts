@@ -446,7 +446,8 @@ async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
       signal: AbortSignal.timeout(12000),
     })
     if (!res.ok) {
-      console.error(`[MercadoLibre] HTTP ${res.status} para "${query}"`)
+      const body = await res.text().catch(() => '')
+      console.error(`[MercadoLibre] HTTP ${res.status} para "${query}" — body: ${body.slice(0, 300)}`)
       return []
     }
     const data = await res.json()
