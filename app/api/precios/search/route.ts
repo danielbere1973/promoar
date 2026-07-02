@@ -1360,7 +1360,7 @@ export async function GET(request: Request) {
     if (isElectro) {
       // ML corre en paralelo con el resto — no después (evita timeout si algún store cuelga)
       const [megatone, fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia, mlProducts] = await Promise.all([
-        electroQ ? searchVtexIS(electroQ, false, 'Megatone', 'https://www.megatone.net', 'c') : Promise.resolve([]),
+        electroQ ? searchVtexCatalog(electroQ, 'Megatone', 'https://www.megatone.net') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Frávega', 'https://www.fravega.com') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Naldo', 'https://www.naldo.com.ar') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Coppel', 'https://www.coppel.com.ar') : Promise.resolve([]),
