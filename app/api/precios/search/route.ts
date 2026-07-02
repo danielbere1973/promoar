@@ -269,6 +269,62 @@ async function searchCoopeEnCasa(query: string): Promise<NormalizedProduct[]> {
 }
 
 // ---------------------------------------------------------
+// MEGATONE (VTEX IO Intelligent Search — mismo formato que Easy)
+// ---------------------------------------------------------
+async function searchMegatone(query: string): Promise<NormalizedProduct[]> {
+  try {
+    const url = `https://www.megatone.net/api/io/_v/api/intelligent-search/product_search?query=${encodeURIComponent(query)}&count=30`
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'es-AR,es;q=0.9',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) {
+      console.error(`[Megatone] IO HTTP ${res.status}`)
+      return []
+    }
+    const data = await res.json()
+    const products = data.products || []
+    console.log(`[Megatone] IO ${products.length} productos para "${query}"`)
+
+    return products.flatMap((p: any) => {
+      const item = p.items?.[0] || {}
+      const offer = item.sellers?.[0]?.commertialOffer || {}
+      const price = offer.Price || 0
+      const listPrice = offer.ListPrice || price
+      if (!price || (offer.AvailableQuantity || 0) <= 0) return []
+      let discountText = '-'
+      if (listPrice > price) {
+        const pct = Math.round((1 - price / listPrice) * 100)
+        if (pct > 0) discountText = `${pct}% OFF`
+      }
+      return [{
+        ean: String(item.ean || item.itemId || ''),
+        id: `megatone-${item.itemId || p.productId}`,
+        supermarket: 'Megatone',
+        name: p.productName || 'Sin nombre',
+        brand: p.brand || '-',
+        price: listPrice,
+        finalPrice: price,
+        discountText,
+        imageUrl: item.images?.[0]?.imageUrl || '',
+        url: p.link ? `https://www.megatone.net${p.link}` : 'https://www.megatone.net',
+        multiUnitPromo: undefined,
+        vtexCategoryId: '',
+        vtexCategory: '',
+      }]
+    }) as NormalizedProduct[]
+  } catch (e: any) {
+    console.error(`[Megatone] excepción: ${e.message}`)
+    return []
+  }
+}
+
+// ---------------------------------------------------------
 // EASY (VTEX IO Intelligent Search)
 // ---------------------------------------------------------
 async function searchEasy(query: string): Promise<NormalizedProduct[]> {
@@ -343,10 +399,14 @@ async function getMlToken(): Promise<string | null> {
 
   const clientId = process.env.ML_CLIENT_ID
   const clientSecret = process.env.ML_CLIENT_SECRET
-  if (!clientId || !clientSecret) return null
+  if (!clientId || !clientSecret) {
+    console.error(`[ML token] vars no encontradas — CLIENT_ID:${!!clientId} CLIENT_SECRET:${!!clientSecret}`)
+    return null
+  }
 
   try {
     const refreshToken = process.env.ML_REFRESH_TOKEN
+    const grantType = refreshToken ? 'refresh_token' : 'client_credentials'
     const body = refreshToken
       ? new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken })
       : new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret })
@@ -357,15 +417,19 @@ async function getMlToken(): Promise<string | null> {
       body,
       signal: AbortSignal.timeout(5000),
     })
+    const text = await res.text()
     if (!res.ok) {
-      console.error(`[ML token] HTTP ${res.status} — ${await res.text().catch(() => '')}`)
+      console.error(`[ML token] ${grantType} HTTP ${res.status} — ${text.slice(0, 200)}`)
       return null
     }
-    const data = await res.json()
+    const data = JSON.parse(text)
     mlTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 300) * 1000 }
-    console.log(`[ML token] OK (${refreshToken ? 'refresh' : 'client_credentials'}, expira en ${data.expires_in}s)`)
+    console.log(`[ML token] OK via ${grantType}, expira en ${data.expires_in}s`)
     return data.access_token
-  } catch (e: any) { return null }
+  } catch (e: any) {
+    console.error(`[ML token] excepción: ${e.message}`)
+    return null
+  }
 }
 
 async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
@@ -1374,7 +1438,7 @@ export async function GET(request: Request) {
     if (isElectro) {
       // ML corre en paralelo con el resto — no después (evita timeout si algún store cuelga)
       const [megatone, fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia, mlProducts] = await Promise.all([
-        electroQ ? searchVtexCatalog(electroQ, 'Megatone', 'https://www.megatone.net') : Promise.resolve([]),
+        electroQ ? searchMegatone(electroQ) : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Frávega', 'https://www.fravega.com') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Naldo', 'https://www.naldo.com.ar') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Coppel', 'https://www.coppel.com.ar') : Promise.resolve([]),
