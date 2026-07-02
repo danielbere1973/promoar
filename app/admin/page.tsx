@@ -343,6 +343,7 @@ export default function AdminPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [lastUpdatedText, setLastUpdatedText] = useState('')
   const [savingConfig, setSavingConfig] = useState(false)
+  const [mlOAuthStatus, setMlOAuthStatus] = useState<{ ok: boolean; scope?: string; reason?: string } | null>(null)
   const [bulkCategory, setBulkCategory] = useState('')
   const [bulkSaving, setBulkSaving] = useState(false)
 
@@ -437,6 +438,16 @@ export default function AdminPage() {
     fetch('/api/admin/site-config').then(r => r.json()).then(d => {
       if (d.last_updated) setLastUpdatedText(d.last_updated)
     }).catch(() => {})
+    // Leer resultado del callback OAuth de MercadoLibre
+    const params = new URLSearchParams(window.location.search)
+    const mlOauth = params.get('ml_oauth')
+    if (mlOauth === 'ok') {
+      setMlOAuthStatus({ ok: true, scope: params.get('scope') || '' })
+      window.history.replaceState({}, '', window.location.pathname + (params.get('tab') ? `?tab=${params.get('tab')}` : ''))
+    } else if (mlOauth === 'error') {
+      setMlOAuthStatus({ ok: false, reason: params.get('reason') || params.get('status') || 'desconocido' })
+      window.history.replaceState({}, '', window.location.pathname + (params.get('tab') ? `?tab=${params.get('tab')}` : ''))
+    }
   }, [fetchEntities, fetchPromos, fetchUsers])
 
   const fetchCommerceAliases = useCallback(async () => {
@@ -977,6 +988,30 @@ export default function AdminPage() {
               </div>
               <p className="text-[11px] text-gray-400 mt-1.5">Se muestra en el cartel azul de la pantalla principal.</p>
             </div>
+
+            {/* MercadoLibre OAuth */}
+            <div className="mb-6 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">MercadoLibre — Autorización API</p>
+              {mlOAuthStatus && (
+                <div className={`mb-3 text-sm rounded-xl px-3 py-2 font-medium ${mlOAuthStatus.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  {mlOAuthStatus.ok
+                    ? `✅ Autorizado correctamente. Scope: ${mlOAuthStatus.scope || '(no informado)'}`
+                    : `❌ Error en la autorización: ${mlOAuthStatus.reason}`}
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mb-3">
+                Genera un refresh_token con scope <code className="bg-gray-100 px-1 rounded">read offline_access</code> y lo guarda en la DB.
+                Configurá <code className="bg-gray-100 px-1 rounded">https://promoar.com.ar/api/ml-oauth/callback</code> como redirect URI en el DevCenter de ML.
+              </p>
+              <a
+                href="/api/ml-oauth/start"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-sm font-bold rounded-xl transition-colors"
+              >
+                🔑 Autorizar con MercadoLibre
+              </a>
+              <p className="text-[11px] text-gray-400 mt-1.5">Necesitás iniciar sesión con la cuenta administradora de la app ML.</p>
+            </div>
+
             <StatsView />
           </>
         )}
