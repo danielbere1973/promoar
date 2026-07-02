@@ -69,7 +69,7 @@ interface Toast {
 
 const formatPrice = (p: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(p)
 
-const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'Dia']
+const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'Dia', 'Changomas', 'The Food Market', 'Cordiez']
 const ALL_SUPERMARKETS_FARMA = ['Farmacity', 'Farmaplus', 'OpenFarma']
 const ALL_SUPERMARKETS_ELECTRO = ['Megatone', 'Frávega', 'Naldo', 'Coppel', 'Rodo', 'Easy', 'Carrefour', 'Coto', 'Jumbo', 'Disco', 'Vea', 'Más Online', 'Changomas', 'Dia']
 
@@ -89,6 +89,8 @@ const STORE_LOGOS: Record<string, string> = {
   'Changomas': 'https://www.google.com/s2/favicons?domain=changomas.com.ar&sz=64',
   'Dia': 'https://www.google.com/s2/favicons?domain=supermercadosdia.com.ar&sz=64',
   'MercadoLibre': 'https://www.google.com/s2/favicons?domain=mercadolibre.com.ar&sz=64',
+  'The Food Market': 'https://www.google.com/s2/favicons?domain=thefoodmarket.com.ar&sz=64',
+  'Cordiez': 'https://www.google.com/s2/favicons?domain=cordiez.com.ar&sz=64',
 }
 
 const SUPERMARKET_COLORS: Record<string, string> = {
@@ -111,6 +113,8 @@ const SUPERMARKET_COLORS: Record<string, string> = {
   'Coppel': 'bg-yellow-600 text-white',
   'Rodo': 'bg-slate-700 text-white',
   'Easy': 'bg-yellow-400 text-black',
+  'The Food Market': 'bg-emerald-700 text-white',
+  'Cordiez': 'bg-red-800 text-white',
   'default': 'bg-gray-800 text-white'
 }
 
@@ -134,6 +138,8 @@ const SUPERMARKET_DOT: Record<string, string> = {
   'Coppel': 'bg-yellow-600',
   'Rodo': 'bg-slate-600',
   'Easy': 'bg-yellow-400',
+  'The Food Market': 'bg-emerald-700',
+  'Cordiez': 'bg-red-800',
   'default': 'bg-gray-500'
 }
 

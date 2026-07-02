@@ -1210,7 +1210,7 @@ export async function GET(request: Request) {
     let allProducts: NormalizedProduct[] = []
 
     if (isSuper) {
-      const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas] = await Promise.all([
+      const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas, theFoodMarket, cordiez] = await Promise.all([
         cotoQ ? searchCoto(cotoQ, false) : Promise.resolve([]),
         carrQ ? searchCarrefour(carrQ, isCategory) : Promise.resolve([]),
         cencoQ ? searchVtexIS(cencoQ, false, 'Jumbo', 'https://www.jumbo.com.ar', vtexMap) : Promise.resolve([]),
@@ -1219,8 +1219,10 @@ export async function GET(request: Request) {
         diaQ ? searchVtexIS(diaQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', vtexMap) : Promise.resolve([]),
         walmartQ ? searchVtexIS(walmartQ, false, 'Más Online', 'https://www.masonline.com.ar', vtexMap) : Promise.resolve([]),
         walmartQ ? searchVtexIS(walmartQ, false, 'Changomas', 'https://www.changomas.com.ar', vtexMap) : Promise.resolve([]),
+        q ? searchVtexIS(q, isCategory, 'The Food Market', 'https://www.thefoodmarket.com.ar', vtexMap) : Promise.resolve([]),
+        q ? searchVtexCatalog(q, 'Cordiez', 'https://www.cordiez.com.ar') : Promise.resolve([]),
       ])
-      allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas]
+      allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas, ...theFoodMarket, ...cordiez]
     }
 
     if (isElectro) {
