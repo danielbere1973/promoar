@@ -21,9 +21,6 @@ export function emailFooter(userId: string): string {
         <p style="margin:0 0 8px;font-size:12px;color:#888">
           🌐 <a href="${BASE_URL}" style="color:#1E3A5F;text-decoration:none">${BASE_URL}</a>
         </p>
-        <p style="margin:0 0 8px;font-size:12px;color:#888">
-          📱 <a href="https://wa.me/541173691613" style="color:#1E3A5F;text-decoration:none">WhatsApp: +54 11 7369-1613</a>
-        </p>
         <p style="margin:0 0 12px;font-size:12px;color:#888">
           <a href="https://www.instagram.com/promoar.com.ar" style="color:#1E3A5F;text-decoration:none;margin-right:12px">Instagram</a>
           <a href="https://www.facebook.com/share/1CzCucY74g/" style="color:#1E3A5F;text-decoration:none;margin-right:12px">Facebook</a>
@@ -48,7 +45,7 @@ export function emailWrapper(content: string, userId: string): string {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);max-width:100%">
         <tr><td style="background:#1E3A5F;padding:24px 32px">
           <p style="margin:0;color:#ffffff;font-size:22px;font-weight:900;letter-spacing:-0.5px">PromoAR</p>
-          <p style="margin:4px 0 0;color:#93b4d4;font-size:13px">Todas las promos de tus tarjetas</p>
+          <p style="margin:4px 0 0;color:#93b4d4;font-size:13px">Ahorrá en cada compra con tus tarjetas y bancos</p>
         </td></tr>
         <tr><td style="padding:32px">
           ${content}

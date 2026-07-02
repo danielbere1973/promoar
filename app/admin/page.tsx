@@ -3117,16 +3117,21 @@ function NewsletterTab() {
   }
 
   const previewHtml = `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
-      <div style="background:#1E3A5F;padding:20px 28px">
-        <p style="margin:0;color:#fff;font-size:20px;font-weight:900">PromoAR</p>
-        <p style="margin:4px 0 0;color:#93b4d4;font-size:12px">Todas las promos de tus tarjetas</p>
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+      <div style="background:#f0f0f0;padding:8px 12px;border-radius:8px 8px 0 0;font-size:11px;color:#666">
+        <strong>Asunto:</strong> ${subject || '<span style="color:#aaa">sin asunto</span>'}
       </div>
-      <div style="padding:28px">${htmlContent}</div>
-      <div style="border-top:1px solid #eee;padding:16px 28px;font-size:11px;color:#bbb;text-align:center">
-        🌐 promoar.com.ar · 📱 WhatsApp: +54 11 7369-1613<br>
-        <a href="#" style="color:#bbb">Instagram</a> · <a href="#" style="color:#bbb">Facebook</a> · <a href="#" style="color:#bbb">TikTok</a><br>
-        <a href="#" style="color:#bbb;text-decoration:underline">Cancelar suscripción</a>
+      <div style="background:#fff;border-radius:0 0 12px 12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+        <div style="background:#1E3A5F;padding:20px 28px">
+          <p style="margin:0;color:#fff;font-size:20px;font-weight:900">PromoAR</p>
+          <p style="margin:4px 0 0;color:#93b4d4;font-size:12px">Ahorrá en cada compra con tus tarjetas y bancos</p>
+        </div>
+        <div style="padding:28px">${htmlContent}</div>
+        <div style="border-top:1px solid #eee;padding:16px 28px;font-size:11px;color:#bbb;text-align:center">
+          🌐 promoar.com.ar<br>
+          <a href="#" style="color:#bbb">Instagram</a> · <a href="#" style="color:#bbb">Facebook</a> · <a href="#" style="color:#bbb">TikTok</a><br>
+          <a href="#" style="color:#bbb;text-decoration:underline">Cancelar suscripción</a>
+        </div>
       </div>
     </div>
   `
