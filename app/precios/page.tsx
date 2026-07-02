@@ -1,7 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, ShoppingCart, Loader2, Store, Plus, Minus, Trash2, ArrowRight, X, ExternalLink, SlidersHorizontal, ChevronRight, Filter } from 'lucide-react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { Search, ShoppingCart, Loader2, Plus, Minus, Trash2, X, ExternalLink, SlidersHorizontal, ChevronRight, Filter, ArrowRight } from 'lucide-react'
 import CategorySelector from './CategorySelector'
 import { CATEGORIES } from './categories'
 
@@ -701,11 +703,22 @@ export default function PreciosPage() {
 
   const sidebarInner = (
     <>
-      <div className="hidden lg:block mb-2">
-        <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3 font-bold">Sección</p>
+      {/* Logo — solo en desktop */}
+      <Link href="/promos" className="hidden lg:flex items-center gap-3 px-2 pb-4 border-b border-gray-200/60 dark:border-slate-700/60 mb-4">
+        <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={36} height={36} className="w-9 h-9 object-contain" />
+        <div>
+          <p className="font-black text-[#1E3A5F] dark:text-white tracking-tight text-base leading-none">PromoAR</p>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium mt-0.5">Comparador de precios</p>
+        </div>
+      </Link>
+
+      <div className="hidden lg:block mb-4">
+        <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 mb-2 font-bold px-1">Sección</p>
         {(['supermercados', 'farmacias', 'electrónica'] as const).map(s => (
           <button key={s} onClick={() => handleSectionChange(s)}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-1 flex items-center gap-2 transition-colors ${section === s ? 'font-semibold ' + (s === 'farmacias' ? 'bg-green-600' : s === 'electrónica' ? 'bg-purple-600' : 'bg-indigo-600') + ' text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            className={`w-full text-left px-3 py-2.5 rounded-xl text-sm mb-1 flex items-center gap-2 transition-colors font-medium ${section === s
+              ? (s === 'farmacias' ? 'bg-green-600' : s === 'electrónica' ? 'bg-purple-600' : 'bg-[#1E3A5F]') + ' text-white shadow-sm'
+              : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800'}`}>
             {s === 'supermercados' ? '🛒 Supermercados' : s === 'farmacias' ? '💊 Farmacias' : '📺 Electrónica'}
           </button>
         ))}
@@ -713,76 +726,81 @@ export default function PreciosPage() {
 
       {section === 'supermercados' && (
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Dónde buscar</p>
-            <button onClick={() => setSelectedStores(new Set(NATIONAL_STORES_SUPER))} className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors">Nacionales</button>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 font-bold">Dónde buscar</p>
+            <button onClick={() => setSelectedStores(new Set(NATIONAL_STORES_SUPER))} className="text-[10px] text-[#1E3A5F] dark:text-blue-400 hover:underline transition-colors font-semibold">Nacionales</button>
           </div>
-          <p className="text-[10px] text-slate-600 mb-1 mt-1 uppercase tracking-wide font-medium">Nacional</p>
+          <p className="text-[10px] text-gray-400 dark:text-slate-600 mb-1 mt-2 uppercase tracking-wide font-bold px-1">Nacional</p>
           {NATIONAL_STORES_SUPER.map(store => (
-            <label key={store} className="flex items-center gap-2.5 py-1.5 cursor-pointer group">
-              <input type="checkbox" checked={selectedStores.has(store)} onChange={() => toggleStore(store)} className="w-3.5 h-3.5 cursor-pointer accent-indigo-500" />
+            <label key={store} className="flex items-center gap-2.5 py-1.5 cursor-pointer group px-1">
+              <input type="checkbox" checked={selectedStores.has(store)} onChange={() => toggleStore(store)} className="w-3.5 h-3.5 cursor-pointer accent-[#1E3A5F]" />
               <span className={`w-2 h-2 rounded-full shrink-0 ${SUPERMARKET_DOT[store] || SUPERMARKET_DOT.default}`} />
-              <span className="text-sm text-slate-300 group-hover:text-white transition-colors leading-none">{store}</span>
+              <span className="text-sm text-gray-600 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors leading-none">{store}</span>
             </label>
           ))}
-          <p className="text-[10px] text-slate-600 mt-3 mb-1 uppercase tracking-wide font-medium">Interior</p>
+          <p className="text-[10px] text-gray-400 dark:text-slate-600 mt-3 mb-1 uppercase tracking-wide font-bold px-1">Interior</p>
           {REGIONAL_STORES_SUPER.map(store => (
-            <label key={store} className="flex items-center gap-2.5 py-1.5 cursor-pointer group">
-              <input type="checkbox" checked={selectedStores.has(store)} onChange={() => toggleStore(store)} className="w-3.5 h-3.5 cursor-pointer accent-indigo-500" />
+            <label key={store} className="flex items-center gap-2.5 py-1.5 cursor-pointer group px-1">
+              <input type="checkbox" checked={selectedStores.has(store)} onChange={() => toggleStore(store)} className="w-3.5 h-3.5 cursor-pointer accent-[#1E3A5F]" />
               <span className={`w-2 h-2 rounded-full shrink-0 ${SUPERMARKET_DOT[store] || SUPERMARKET_DOT.default}`} />
-              <span className="text-sm text-slate-300 group-hover:text-white transition-colors leading-none">{store}</span>
+              <span className="text-sm text-gray-600 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors leading-none">{store}</span>
             </label>
           ))}
         </div>
       )}
 
       {(section === 'supermercados' || section === 'farmacias') && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">Categorías</p>
+        <div className="mt-4">
+          <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 mb-2 font-bold px-1">Categorías</p>
           {(section === 'farmacias' ? farmaCats : rootCats).map(cat => (
             <button key={cat.id}
               onClick={() => { handleSearch(undefined, true, cat.id); setSidebarOpen(false) }}
-              className="w-full text-left px-2 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-white/5 flex items-center justify-between group transition-colors">
+              className="w-full text-left px-3 py-2 rounded-xl text-sm text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-between group transition-colors font-medium">
               <span>{cat.name}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-slate-600 group-hover:text-gray-500 shrink-0" />
             </button>
           ))}
         </div>
       )}
+
+      {/* Volver a PromoAR */}
+      <div className="mt-auto pt-4 border-t border-gray-200/60 dark:border-slate-700/60">
+        <Link href="/promos" className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-500 dark:text-slate-400 hover:text-[#1E3A5F] dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors font-medium">
+          ← Volver a PromoAR
+        </Link>
+      </div>
     </>
   )
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-slate-100 font-sans selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 font-sans">
       {/* Toasts */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none">
+      <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none">
         {toasts.map(t => (
-          <div key={t.id} className="bg-[#1A1A1A] border border-white/10 text-sm text-white px-4 py-2.5 rounded-xl shadow-xl animate-in slide-in-from-bottom-4 duration-300">
+          <div key={t.id} className="bg-[#1E3A5F] text-white text-sm px-4 py-2.5 rounded-xl shadow-xl animate-in slide-in-from-bottom-4 duration-300">
             {t.message}
           </div>
         ))}
       </div>
 
-      <header className="sticky top-0 z-40 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Store className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-              PromoAR <span className="font-light">Precios B2B</span>
-            </h1>
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-gray-200/60 dark:border-slate-700/60 lg:hidden">
+        <div className="px-4 h-14 flex items-center justify-between">
+          <Link href="/promos" className="flex items-center gap-2.5">
+            <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={32} height={32} className="w-8 h-8 object-contain" />
+            <span className="font-black text-[#1E3A5F] dark:text-white tracking-tight text-lg leading-none">PromoAR</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            {section !== 'electrónica' && (
+              <button onClick={() => setIsCartOpen(true)} className="relative p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                <ShoppingCart className="w-5 h-5 text-gray-500 dark:text-slate-400" />
+                {cartTotalItems > 0 && (
+                  <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#1E3A5F] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {cartTotalItems}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
-          {section !== 'electrónica' && (
-            <button onClick={() => setIsCartOpen(true)} className="relative p-3 rounded-xl hover:bg-white/5 transition-colors group">
-              <ShoppingCart className="w-6 h-6 text-slate-300 group-hover:text-white transition-colors" />
-              {cartTotalItems > 0 && (
-                <span className="absolute top-1 right-1 w-5 h-5 bg-indigo-500 text-white text-xs font-bold rounded-full flex items-center justify-center ring-2 ring-[#0A0A0A]">
-                  {cartTotalItems}
-                </span>
-              )}
-            </button>
-          )}
         </div>
       </header>
 
@@ -790,7 +808,7 @@ export default function PreciosPage() {
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-          <aside className="absolute left-0 top-0 bottom-0 w-72 bg-[#111] border-r border-white/10 overflow-y-auto p-5 flex flex-col gap-5">
+          <aside className="absolute left-0 top-0 bottom-0 w-72 bg-white dark:bg-slate-950 border-r border-gray-200/60 dark:border-slate-700/60 overflow-y-auto p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex bg-[#1A1A1A] border border-white/10 rounded-xl p-0.5 gap-0.5">
                 {(['supermercados', 'farmacias', 'electrónica'] as const).map(s => (
@@ -809,24 +827,24 @@ export default function PreciosPage() {
 
       <div className="max-w-7xl mx-auto flex">
         {/* Desktop sidebar */}
-        <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto border-r border-white/10 p-4 pt-6 gap-5">
+        <aside className="hidden lg:flex flex-col w-60 shrink-0 sticky top-0 h-screen overflow-y-auto border-r border-gray-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-950 p-4 pt-6 gap-0">
           {sidebarInner}
         </aside>
 
         <main className="flex-1 min-w-0 px-4 lg:px-8 py-8">
-          {/* Mobile: botón filtros + tabs */}
-          <div className="flex items-center gap-2 mb-6 lg:hidden">
-            <button onClick={() => setSidebarOpen(true)} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-slate-300 hover:text-white transition-colors">
+          {/* Mobile: botón filtros + section tabs */}
+          <div className="flex items-center gap-2 mb-5 lg:hidden">
+            <button onClick={() => setSidebarOpen(true)} className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white transition-colors font-medium shadow-sm">
               <Filter className="w-4 h-4" />
               Filtros
               {section === 'supermercados' && selectedStores.size !== ALL_SUPERMARKETS_SUPER.length && (
-                <span className="text-xs bg-indigo-600 text-white rounded-full px-1.5 py-0.5 font-bold">{selectedStores.size}</span>
+                <span className="text-xs bg-[#1E3A5F] text-white rounded-full px-1.5 py-0.5 font-bold">{selectedStores.size}</span>
               )}
             </button>
-            <div className="flex bg-[#1A1A1A] border border-white/10 rounded-xl p-0.5 gap-0.5">
+            <div className="flex bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-0.5 gap-0.5 shadow-sm">
               {(['supermercados', 'farmacias', 'electrónica'] as const).map(s => (
                 <button key={s} onClick={() => handleSectionChange(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${section === s ? (s === 'farmacias' ? 'bg-green-600' : s === 'electrónica' ? 'bg-purple-600' : 'bg-indigo-600') + ' text-white' : 'text-slate-400 hover:text-white'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${section === s ? (s === 'farmacias' ? 'bg-green-600' : s === 'electrónica' ? 'bg-purple-600' : 'bg-[#1E3A5F]') + ' text-white shadow-sm' : 'text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-white'}`}>
                   {s === 'supermercados' ? '🛒' : s === 'farmacias' ? '💊' : '📺'}
                 </button>
               ))}
@@ -835,11 +853,11 @@ export default function PreciosPage() {
 
           <div className={`transition-all duration-700 ease-out flex flex-col items-center ${hasSearched ? 'mt-0 mb-12' : 'mt-[5vh]'}`}>
             {!hasSearched && (
-              <div className="text-center mb-10 space-y-4">
-                <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight">
-                  {section === 'supermercados' ? 'Consolidá el mercado' : section === 'farmacias' ? 'Compará farmacias' : 'Compará precios de electro'}
+              <div className="text-center mb-10 space-y-3">
+                <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-[#1E3A5F] dark:text-white">
+                  {section === 'supermercados' ? 'Comparador de precios' : section === 'farmacias' ? 'Precios de farmacia' : 'Precios de electrónica'}
                 </h2>
-                <p className="text-lg text-slate-400 max-w-xl mx-auto">
+                <p className="text-base text-gray-500 dark:text-slate-400 max-w-xl mx-auto">
                   {section === 'supermercados'
                     ? 'Buscá un producto o elegí una categoría del menú lateral.'
                     : section === 'farmacias'
@@ -849,19 +867,18 @@ export default function PreciosPage() {
               </div>
             )}
             <div className="w-full max-w-2xl flex flex-col gap-4">
-              <form onSubmit={handleSearch} className="relative group w-full">
-                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500" />
-                <div className="relative flex items-center bg-[#1A1A1A] border border-white/10 rounded-2xl p-2 shadow-2xl focus-within:border-indigo-500/50 transition-colors">
-                  <div className="pl-4 pr-2"><Search className="w-6 h-6 text-slate-400" /></div>
+              <form onSubmit={handleSearch} className="w-full">
+                <div className="flex items-center bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-2 shadow-sm focus-within:border-[#1E3A5F]/40 dark:focus-within:border-blue-500/40 transition-colors">
+                  <div className="pl-3 pr-2"><Search className="w-5 h-5 text-gray-400 dark:text-slate-500" /></div>
                   <input
                     type="text"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata, leche...' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg...' : 'Ej. Samsung TV 55", Heladera no frost...'}
-                    className="flex-1 bg-transparent text-base py-3 px-2 outline-none text-white placeholder:text-slate-500 min-w-0"
+                    className="flex-1 bg-transparent text-base py-2.5 px-2 outline-none text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 min-w-0"
                   />
-                  <button type="submit" disabled={loading || !query.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 sm:px-6 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shrink-0">
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Buscar'}
+                  <button type="submit" disabled={loading || !query.trim()} className="bg-[#1E3A5F] hover:bg-[#162d4a] text-white px-5 py-2.5 rounded-xl font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0 text-sm">
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Buscar'}
                   </button>
                 </div>
               </form>
@@ -873,23 +890,30 @@ export default function PreciosPage() {
             {/* Header de resultados */}
             <div className="flex items-center justify-between flex-wrap gap-2">
               {section === 'electrónica' && query && (
-                <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <span className="text-slate-500">Electrónica</span>
-                  <span className="text-slate-600">/</span>
-                  <span className="text-white font-medium">{query}</span>
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+                  <span>Electrónica</span>
+                  <span className="text-gray-300 dark:text-slate-600">/</span>
+                  <span className="text-gray-900 dark:text-white font-semibold">{query}</span>
                 </div>
               )}
-              {section !== 'electrónica' && <h3 className="text-2xl font-semibold">Resultados Consolidados</h3>}
+              {section !== 'electrónica' && <h3 className="text-xl font-black tracking-tight text-[#1E3A5F] dark:text-white">Resultados</h3>}
               <div className="flex items-center gap-3 ml-auto">
                 {section === 'electrónica' && (
                   <button
                     onClick={() => setShowElectroFilters(!showElectroFilters)}
-                    className="flex items-center gap-2 text-xs font-bold px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
+                    className="flex items-center gap-2 text-xs font-bold px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors hover:border-gray-300 shadow-sm"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5" /> Filtrar
                   </button>
                 )}
-                <p className="text-slate-400 text-sm">{(() => {
+                {section !== 'electrónica' && (
+                  <button onClick={() => setIsCartOpen(true)} className="relative flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white shadow-sm transition-colors">
+                    <ShoppingCart className="w-4 h-4" />
+                    Carrito
+                    {cartTotalItems > 0 && <span className="bg-[#1E3A5F] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">{cartTotalItems}</span>}
+                  </button>
+                )}
+                <p className="text-gray-400 dark:text-slate-500 text-sm">{(() => {
                   const filtered = section === 'electrónica' ? products.filter(p => {
                     const market = Object.values(p.markets)[0] as any
                     const store = market?.supermarket || p.bestMarket
