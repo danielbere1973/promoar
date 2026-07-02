@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Search, ShoppingCart, Loader2, Plus, Minus, Trash2, X, ExternalLink, SlidersHorizontal, ChevronRight, Filter, ArrowRight, Camera } from 'lucide-react'
@@ -450,6 +450,8 @@ export default function PreciosPage() {
   const [hasSearched, setHasSearched] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<GroupedProduct | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [mlLoading, setMlLoading] = useState(false)
+  const mlQueryRef = useRef<string>('')
 
   const [selectedStores, setSelectedStores] = useState<Set<string>>(() => {
     if (typeof window === 'undefined') return new Set(NATIONAL_STORES_SUPER)
@@ -481,6 +483,58 @@ export default function PreciosPage() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
   }
 
+  const fetchMLClientSide = useCallback(async (q: string) => {
+    mlQueryRef.current = q
+    setMlLoading(true)
+    try {
+      const res = await fetch(
+        `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(q)}&limit=50&condition=new`,
+        { headers: { Accept: 'application/json' } }
+      )
+      if (!res.ok || mlQueryRef.current !== q) return
+      const data = await res.json()
+      const items: GroupedProduct[] = (data.results || [])
+        .filter((item: any) => item.price > 0 && item.condition === 'new')
+        .slice(0, 30)
+        .map((item: any) => {
+          const originalPrice: number = item.original_price || item.price
+          const finalPrice: number = item.price
+          const discountPct = originalPrice > finalPrice ? Math.round((1 - finalPrice / originalPrice) * 100) : 0
+          const brand = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name || '-'
+          return {
+            ean: `ml-${item.id}`,
+            name: item.title,
+            brand,
+            imageUrl: (item.thumbnail || '').replace('-I.jpg', '-O.jpg').replace('http:', 'https:'),
+            minPrice: finalPrice,
+            maxPrice: originalPrice,
+            bestMarket: 'MercadoLibre',
+            availableIn: 1,
+            markets: {
+              MercadoLibre: {
+                id: item.id,
+                supermarket: 'MercadoLibre',
+                price: originalPrice,
+                finalPrice,
+                discountText: discountPct > 0 ? `${discountPct}% OFF` : '-',
+                url: item.permalink,
+              }
+            },
+          }
+        })
+      if (mlQueryRef.current !== q) return
+      setProducts(prev => {
+        const existingEans = new Set(prev.map(p => p.ean))
+        const newItems = items.filter(i => !existingEans.has(i.ean))
+        return [...prev, ...newItems]
+      })
+    } catch {
+      // silencioso — ML client-side es best-effort
+    } finally {
+      if (mlQueryRef.current === q) setMlLoading(false)
+    }
+  }, [])
+
   const handleSearch = async (e?: React.FormEvent, isCategory = false, categoryId = '', overrideQ?: string) => {
     if (e) e.preventDefault()
     const effectiveQ = overrideQ !== undefined ? overrideQ : query
@@ -501,6 +555,10 @@ export default function PreciosPage() {
       if (data.results) {
         setProducts(data.results)
         setElectroFilters({ brands: [], stores: [], categories: [], priceMin: 0, priceMax: Infinity })
+        // ML se busca desde el browser (las IPs de Vercel están bloqueadas por ML)
+        if (section === 'electrónica' && effectiveQ.trim()) {
+          fetchMLClientSide(effectiveQ.trim())
+        }
       }
     } catch (err) {
       console.error(err)
@@ -820,6 +878,7 @@ export default function PreciosPage() {
                   <span>Electrónica</span>
                   <span className="text-gray-300 dark:text-slate-600">/</span>
                   <span className="text-gray-900 dark:text-white font-semibold">{query}</span>
+                  {mlLoading && <span className="flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400"><Loader2 className="w-3 h-3 animate-spin" />MercadoLibre...</span>}
                 </div>
               )}
               {section !== 'electrónica' && <h3 className="text-xl font-black tracking-tight text-[#1E3A5F] dark:text-white">Resultados</h3>}
