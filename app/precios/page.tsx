@@ -709,12 +709,8 @@ export default function PreciosPage() {
   const sidebarInner = (
     <>
       {/* Logo — solo en desktop */}
-      <Link href="/promos" className="hidden lg:flex items-center gap-3 px-2 pb-4 border-b border-gray-200/60 dark:border-slate-700/60 mb-4">
-        <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={36} height={36} className="w-9 h-9 object-contain" />
-        <div>
-          <p className="font-black text-[#1E3A5F] dark:text-white tracking-tight text-base leading-none">PromoAR</p>
-          <p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium mt-0.5">Comparador de precios</p>
-        </div>
+      <Link href="/promos" className="hidden lg:flex items-center justify-center pb-4 border-b border-gray-200/60 dark:border-slate-700/60 mb-4">
+        <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={80} height={80} className="w-20 h-20 object-contain" />
       </Link>
 
       <div className="hidden lg:block mb-4">
@@ -871,9 +867,8 @@ export default function PreciosPage() {
           <div className={`transition-all duration-700 ease-out flex flex-col items-center ${hasSearched ? 'mt-0 mb-12' : 'mt-[5vh]'}`}>
             {!hasSearched && (
               <div className="text-center mb-10 space-y-4">
-                <div className="flex items-center justify-center gap-3">
-                  <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={72} height={72} className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-sm" />
-                  <span className="font-black text-5xl md:text-6xl text-[#1E3A5F] dark:text-white tracking-tighter leading-none">PromoAR</span>
+                <div className="flex items-center justify-center">
+                  <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={140} height={140} className="w-28 h-28 md:w-36 md:h-36 object-contain drop-shadow-sm" />
                 </div>
                 <p className="text-base text-gray-500 dark:text-slate-400 max-w-xl mx-auto">
                   {section === 'supermercados'
@@ -892,7 +887,7 @@ export default function PreciosPage() {
                     type="text"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
-                    placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata, leche...' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg...' : 'Ej. Samsung TV 55", Heladera no frost...'}
+                    placeholder={section === 'supermercados' ? 'Buscá un producto o escaneá el código de barras 📷' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg...' : 'Ej. Samsung TV 55", Heladera no frost...'}
                     className="flex-1 bg-transparent text-base py-2.5 px-2 outline-none text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 min-w-0"
                   />
                   {section === 'supermercados' && (
