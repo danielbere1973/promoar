@@ -921,6 +921,24 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
       }
     }).filter(Boolean) as NormalizedProduct[]
 
+    // Para tiendas no-Cencosud con búsqueda de texto: enriquecer con promo data por EAN
+    // VTEX IS no siempre incluye teasers en text search → segunda consulta por EAN al catalog API
+    if (!isCencosudSite && !isCategory) {
+      const toEnrich = initial.filter(p => p.discountText === '-' && p.ean && p.ean.length >= 8)
+      if (toEnrich.length > 0) {
+        const enriched = await Promise.all(
+          toEnrich.map(p => searchVtexByEan(p.ean, supermarket, baseUrl))
+        )
+        const enrichMap = new Map<string, NormalizedProduct>()
+        enriched.flat().forEach(p => enrichMap.set(p.ean, p))
+        return initial.map(p => {
+          if (p.discountText !== '-' || !enrichMap.has(p.ean)) return p
+          const e = enrichMap.get(p.ean)!
+          return { ...p, discountText: e.discountText, finalPrice: e.finalPrice, multiUnitPromo: e.multiUnitPromo }
+        })
+      }
+    }
+
     return initial
   } catch (error) {
     console.error(`Error ${supermarket} completo:`, error)
