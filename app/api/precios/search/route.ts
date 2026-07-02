@@ -91,7 +91,14 @@ function isRelevantForQuery(productName: string, query: string): boolean {
   if (!words.length) return true
   const name = normalize(productName)
   const mainWord = words.sort((a, b) => b.length - a.length)[0]
-  return name.includes(mainWord)
+  if (!name.includes(mainWord)) return false
+  // Descartar accesorios: si el término principal aparece después de "para"
+  // el producto es un accesorio DEL objeto, no el objeto en sí
+  // ("tapa para microondas", "pochoclos para microondas" → descartados)
+  const idx = name.indexOf(mainWord)
+  const before = name.slice(0, idx).trimEnd()
+  if (/\b(para|apto para|compatible con)\s*$/.test(before)) return false
+  return true
 }
 
 // ---------------------------------------------------------
@@ -844,7 +851,7 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
       headers['Cookie'] = `vtex_segment=${VTEX_SEGMENT}; VtexWorkspace=master%3A-`
     }
     
-    const res = await fetch(url, { headers })
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(7000) })
     if (!res.ok) return []
 
     const data = await res.json()
@@ -854,7 +861,7 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
     if (products.length === 0 && !isCategory) {
       try {
         const catUrl = `${baseUrl}/api/catalog_system/pub/products/search?ft=${encoded}&_from=0&_to=14`
-        const catRes = await fetch(catUrl, { headers })
+        const catRes = await fetch(catUrl, { headers, signal: AbortSignal.timeout(7000) })
         if (catRes.ok) {
           const catData = await catRes.json()
           if (Array.isArray(catData) && catData.length > 0) {
@@ -1351,7 +1358,8 @@ export async function GET(request: Request) {
     }
 
     if (isElectro) {
-      const [megatone, fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia] = await Promise.all([
+      // ML corre en paralelo con el resto — no después (evita timeout si algún store cuelga)
+      const [megatone, fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia, mlProducts] = await Promise.all([
         electroQ ? searchVtexIS(electroQ, false, 'Megatone', 'https://www.megatone.net', 'c') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Frávega', 'https://www.fravega.com') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Naldo', 'https://www.naldo.com.ar') : Promise.resolve([]),
@@ -1366,8 +1374,8 @@ export async function GET(request: Request) {
         electroQ ? searchVtexIS(electroQ, false, 'Más Online', 'https://www.masonline.com.ar', 'c') : Promise.resolve([]),
         electroQ ? searchVtexIS(electroQ, false, 'Changomas', 'https://www.changomas.com.ar', 'c') : Promise.resolve([]),
         electroQ ? searchVtexIS(electroQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', 'c') : Promise.resolve([]),
+        electroQ ? searchMercadoLibre(electroQ) : Promise.resolve([]),
       ])
-      const mlProducts = electroQ ? await searchMercadoLibre(electroQ) : []
       console.log(`[Electro] "${electroQ}" → Megatone:${megatone.length} Frávega:${fravega.length} Naldo:${naldo.length} Coppel:${coppel.length} Rodo:${rodo.length} Easy:${easy.length} ML:${mlProducts.length}`)
       allProducts = [...megatone, ...fravega, ...naldo, ...coppel, ...rodo, ...easy, ...carrefour, ...coto, ...jumbo, ...disco, ...vea, ...masOnline, ...changomas, ...dia, ...mlProducts]
     }
