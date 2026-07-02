@@ -91,11 +91,14 @@ function isRelevantForQuery(productName: string, query: string): boolean {
   if (!words.length) return true
   const name = normalize(productName)
   const mainWord = words.sort((a, b) => b.length - a.length)[0]
-  if (!name.includes(mainWord)) return false
-  // Descartar accesorios: si el término principal aparece después de "para"
-  // el producto es un accesorio DEL objeto, no el objeto en sí
-  // ("tapa para microondas", "pochoclos para microondas" → descartados)
-  const idx = name.indexOf(mainWord)
+
+  // Stem simple: si termina en 's', también aceptar el singular (heladeras → heladera)
+  const stem = mainWord.endsWith('s') && mainWord.length > 4 ? mainWord.slice(0, -1) : mainWord
+  const match = name.includes(mainWord) ? mainWord : name.includes(stem) ? stem : null
+  if (!match) return false
+
+  // Descartar accesorios: si el término aparece después de "para/apto para/compatible con"
+  const idx = name.indexOf(match)
   const before = name.slice(0, idx).trimEnd()
   if (/\b(para|apto para|compatible con)\s*$/.test(before)) return false
   return true
@@ -334,13 +337,6 @@ async function getMlToken(): Promise<string | null> {
   // Usar access token en cache si no expiró
   if (mlTokenCache && Date.now() < mlTokenCache.expiresAt) return mlTokenCache.token
 
-  // Usar access token del env si todavía es válido (bootstrapping)
-  const envToken = process.env.ML_ACCESS_TOKEN
-  if (envToken && !mlTokenCache) {
-    mlTokenCache = { token: envToken, expiresAt: Date.now() + 5 * 60 * 60 * 1000 } // asumir 5h
-    return envToken
-  }
-
   const clientId = process.env.ML_CLIENT_ID
   const clientSecret = process.env.ML_CLIENT_SECRET
   if (!clientId || !clientSecret) {
@@ -349,26 +345,38 @@ async function getMlToken(): Promise<string | null> {
   }
 
   try {
-    const refreshToken = process.env.ML_REFRESH_TOKEN
-    const grantType = refreshToken ? 'refresh_token' : 'client_credentials'
-    const body = refreshToken
-      ? new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken })
-      : new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret })
+    // Refresh token: primero DB (rota en cada uso), fallback a env var como seed inicial
+    const dbConfig = await prisma.siteConfig.findUnique({ where: { key: 'ml_refresh_token' } }).catch(() => null)
+    const refreshToken = dbConfig?.value || process.env.ML_REFRESH_TOKEN
+    if (!refreshToken) {
+      console.error('[ML token] no hay refresh_token en DB ni en env')
+      return null
+    }
 
     const res = await fetch('https://api.mercadolibre.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
+      body: new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken }),
       signal: AbortSignal.timeout(5000),
     })
     const text = await res.text()
     if (!res.ok) {
-      console.error(`[ML token] ${grantType} HTTP ${res.status} — ${text.slice(0, 200)}`)
+      console.error(`[ML token] refresh HTTP ${res.status} — ${text.slice(0, 200)}`)
       return null
     }
     const data = JSON.parse(text)
+
+    // Guardar el nuevo refresh_token rotado en DB antes de retornar
+    if (data.refresh_token) {
+      await prisma.siteConfig.upsert({
+        where: { key: 'ml_refresh_token' },
+        update: { value: data.refresh_token },
+        create: { key: 'ml_refresh_token', value: data.refresh_token },
+      }).catch((e: any) => console.error('[ML token] error guardando refresh_token en DB:', e.message))
+    }
+
     mlTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 300) * 1000 }
-    console.log(`[ML token] OK via ${grantType}, expira en ${data.expires_in}s`)
+    console.log(`[ML token] OK, expira en ${data.expires_in}s, refresh_token rotado`)
     return data.access_token
   } catch (e: any) {
     console.error(`[ML token] excepción: ${e.message}`)
@@ -391,7 +399,10 @@ async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      console.error(`[MercadoLibre] HTTP ${res.status} para "${query}" — body: ${body.slice(0, 300)}`)
+      const hdrs: Record<string, string> = {}
+      res.headers.forEach((v, k) => { hdrs[k] = v })
+      console.error(`[MercadoLibre] HTTP ${res.status} headers: ${JSON.stringify(hdrs)}`)
+      console.error(`[MercadoLibre] HTTP ${res.status} body: ${body}`)
       return []
     }
     const data = await res.json()
@@ -458,23 +469,38 @@ async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
 // Los productos vienen embebidos en el HTML como GlobalListado.Productos
 // Los precios se obtienen por SKU via /apirecursoswebv2/api/Productos/Obtener
 // ---------------------------------------------------------
+async function fetchMegatoneHtml(url: string): Promise<Response> {
+  return fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'text/html',
+      'Accept-Language': 'es-AR,es;q=0.9',
+      'Referer': 'https://www.megatone.net/',
+    },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10000),
+  })
+}
+
 async function searchMegatone(query: string): Promise<NormalizedProduct[]> {
   try {
-    // Solo funciona para búsquedas de una sola palabra (marcas: samsung, lg, philips, etc.)
     const words = query.trim().split(/\s+/)
     const slug = words[0].toLowerCase()
-    const htmlUrl = `https://www.megatone.net/landing/${encodeURIComponent(slug)}/`
-    const res = await fetch(htmlUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html',
-        'Accept-Language': 'es-AR,es;q=0.9',
-        'Referer': 'https://www.megatone.net/',
-      },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(10000),
-    })
-    console.log(`[Megatone] ${htmlUrl} → ${res.status}`)
+
+    // 1) landing/{slug}/ — funciona para marcas (samsung) y categorías en plural (heladeras)
+    // 2) landing/{slug}s/ — fallback plural si singular da 404
+    // 3) buscar/{query}/ — buscador general como último recurso
+    let res = await fetchMegatoneHtml(`https://www.megatone.net/landing/${encodeURIComponent(slug)}/`)
+    console.log(`[Megatone] /landing/${slug}/ → ${res.status}`)
+    if (!res.ok && !slug.endsWith('s')) {
+      res = await fetchMegatoneHtml(`https://www.megatone.net/landing/${encodeURIComponent(slug + 's')}/`)
+      console.log(`[Megatone] /landing/${slug}s/ → ${res.status}`)
+    }
+    if (!res.ok) {
+      const searchSlug = query.trim().toLowerCase().replace(/\s+/g, '-')
+      res = await fetchMegatoneHtml(`https://www.megatone.net/buscar/${encodeURIComponent(searchSlug)}/`)
+      console.log(`[Megatone] /buscar/${searchSlug}/ → ${res.status}`)
+    }
     if (!res.ok) return []
     const html = await res.text()
 
@@ -485,13 +511,11 @@ async function searchMegatone(query: string): Promise<NormalizedProduct[]> {
     // El array usa sintaxis JS (comillas simples, sin comillas en keys) — convertir a JSON válido
     let productos: any[]
     try {
-      // Intentar JSON directo primero
       productos = JSON.parse(match[1])
     } catch {
       try {
-        // Extraer productos con regex más simple — solo SKU, Nombre, URL, Imagen, Marca
         const items: any[] = []
-        const itemRe = /\{SKU:"([^"]+)",ID:(\d+),Nombre:'([^']+)',URL:"([^"]+)",Imagen:"([^"]+)",Marca:\{[^}]*Descripcion:"([^"]+)"/g
+        const itemRe = /\{SKU:"([^"]+)",ID:(\d+),Nombre:["']([^"']+)["'],URL:"([^"]+)",Imagen:"([^"]+)",Marca:\{[^}]*Descripcion:"([^"]+)"/g
         let m2
         while ((m2 = itemRe.exec(match[1])) !== null) {
           items.push({ SKU: m2[1], ID: parseInt(m2[2]), Nombre: m2[3], URL: m2[4], Imagen: m2[5], Marca: { Descripcion: m2[6] } })
@@ -502,16 +526,14 @@ async function searchMegatone(query: string): Promise<NormalizedProduct[]> {
 
     if (!productos.length) return []
 
-    // Extraer precios del HTML usando el onclick de gtmClickProductoListado
-    // Formato: gtmClickProductoListado("SKU", pos, precio, nombre, ...)
     const priceMap: Record<string, number> = {}
     const priceRe = /gtmClickProductoListado\("([^"]+)",\d+,(\d+(?:\.\d+)?),/g
     let pm
     while ((pm = priceRe.exec(html)) !== null) {
       priceMap[pm[1]] = parseFloat(pm[2])
     }
-
-    return productos.slice(0, 15).map((p: any) => {
+    console.log(`[Megatone] ${productos.length} productos, ${Object.keys(priceMap).length} precios`)
+    return productos.map((p: any) => {
       const finalPrice = priceMap[p.SKU] || 0
       if (!finalPrice) return null
 
