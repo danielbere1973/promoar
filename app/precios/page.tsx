@@ -3,9 +3,12 @@
 import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Search, ShoppingCart, Loader2, Plus, Minus, Trash2, X, ExternalLink, SlidersHorizontal, ChevronRight, Filter, ArrowRight } from 'lucide-react'
+import { Search, ShoppingCart, Loader2, Plus, Minus, Trash2, X, ExternalLink, SlidersHorizontal, ChevronRight, Filter, ArrowRight, Camera } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import CategorySelector from './CategorySelector'
 import { CATEGORIES } from './categories'
+
+const BarcodeScannerModal = dynamic(() => import('./BarcodeScannerModal'), { ssr: false })
 
 interface MultiUnitPromo {
   label: string
@@ -457,6 +460,7 @@ export default function PreciosPage() {
     return new Set(NATIONAL_STORES_SUPER)
   })
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
 
   useEffect(() => {
     try { localStorage.setItem('promoar-precios-stores', JSON.stringify(Array.from(selectedStores))) } catch {}
@@ -566,9 +570,10 @@ export default function PreciosPage() {
     } catch { return [] }
   }
 
-  const handleSearch = async (e?: React.FormEvent, isCategory = false, categoryId = '') => {
+  const handleSearch = async (e?: React.FormEvent, isCategory = false, categoryId = '', overrideQ?: string) => {
     if (e) e.preventDefault()
-    if (!isCategory && !query.trim()) return
+    const effectiveQ = overrideQ !== undefined ? overrideQ : query
+    if (!isCategory && !effectiveQ.trim()) return
     setLoading(true)
     setHasSearched(true)
     try {
@@ -579,7 +584,7 @@ export default function PreciosPage() {
         : ''
       const url = isCategory
         ? `/api/precios/search?cat=${categoryId}&section=${section}${storesParam}`
-        : `/api/precios/search?q=${encodeURIComponent(query)}&section=${section}${storesParam}`
+        : `/api/precios/search?q=${encodeURIComponent(effectiveQ)}&section=${section}${storesParam}`
 
       // Para electrónica: búsqueda en servidor + ML desde el cliente en paralelo
       const serverPromise = fetch(url).then(r => r.json())
@@ -774,6 +779,18 @@ export default function PreciosPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-100 font-sans">
+      {/* Barcode scanner */}
+      {scannerOpen && (
+        <BarcodeScannerModal
+          onDetect={(ean) => {
+            setScannerOpen(false)
+            setQuery(ean)
+            handleSearch(undefined, false, '', ean)
+          }}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
+
       {/* Toasts */}
       <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none">
         {toasts.map(t => (
@@ -853,10 +870,11 @@ export default function PreciosPage() {
 
           <div className={`transition-all duration-700 ease-out flex flex-col items-center ${hasSearched ? 'mt-0 mb-12' : 'mt-[5vh]'}`}>
             {!hasSearched && (
-              <div className="text-center mb-10 space-y-3">
-                <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-[#1E3A5F] dark:text-white">
-                  {section === 'supermercados' ? 'Comparador de precios' : section === 'farmacias' ? 'Precios de farmacia' : 'Precios de electrónica'}
-                </h2>
+              <div className="text-center mb-10 space-y-4">
+                <div className="flex items-center justify-center gap-3">
+                  <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={72} height={72} className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-sm" />
+                  <span className="font-black text-5xl md:text-6xl text-[#1E3A5F] dark:text-white tracking-tighter leading-none">PromoAR</span>
+                </div>
                 <p className="text-base text-gray-500 dark:text-slate-400 max-w-xl mx-auto">
                   {section === 'supermercados'
                     ? 'Buscá un producto o elegí una categoría del menú lateral.'
@@ -877,6 +895,12 @@ export default function PreciosPage() {
                     placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata, leche...' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg...' : 'Ej. Samsung TV 55", Heladera no frost...'}
                     className="flex-1 bg-transparent text-base py-2.5 px-2 outline-none text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 min-w-0"
                   />
+                  {section === 'supermercados' && (
+                    <button type="button" onClick={() => setScannerOpen(true)} title="Escanear código de barras"
+                      className="p-2.5 text-gray-400 hover:text-[#1E3A5F] dark:hover:text-blue-400 transition-colors shrink-0 mr-0.5">
+                      <Camera className="w-5 h-5" />
+                    </button>
+                  )}
                   <button type="submit" disabled={loading || !query.trim()} className="bg-[#1E3A5F] hover:bg-[#162d4a] text-white px-5 py-2.5 rounded-xl font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0 text-sm">
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Buscar'}
                   </button>
