@@ -116,9 +116,16 @@ async function searchVtexCatalog(query: string, supermarket: string, baseUrl: st
       cache: 'no-store',
       signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) return []
+    if (!res.ok) {
+      console.error(`[${supermarket}] catalog HTTP ${res.status}`)
+      return []
+    }
     const data = await res.json()
-    if (!Array.isArray(data)) return []
+    if (!Array.isArray(data)) {
+      console.error(`[${supermarket}] catalog respuesta no es array:`, JSON.stringify(data).slice(0, 100))
+      return []
+    }
+    console.log(`[${supermarket}] catalog ${data.length} productos`)
 
     return data.flatMap((p: any) => {
       return (p.items || []).map((item: any) => {
@@ -334,24 +341,31 @@ async function getMlToken(): Promise<string | null> {
     return envToken
   }
 
-  // Renovar con refresh token
   const clientId = process.env.ML_CLIENT_ID
   const clientSecret = process.env.ML_CLIENT_SECRET
-  const refreshToken = process.env.ML_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) return null
+  if (!clientId || !clientSecret) return null
 
   try {
+    const refreshToken = process.env.ML_REFRESH_TOKEN
+    const body = refreshToken
+      ? new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken })
+      : new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret })
+
     const res = await fetch('https://api.mercadolibre.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken }),
+      body,
       signal: AbortSignal.timeout(5000),
     })
-    if (!res.ok) return envToken || null
+    if (!res.ok) {
+      console.error(`[ML token] HTTP ${res.status} — ${await res.text().catch(() => '')}`)
+      return null
+    }
     const data = await res.json()
     mlTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 300) * 1000 }
+    console.log(`[ML token] OK (${refreshToken ? 'refresh' : 'client_credentials'}, expira en ${data.expires_in}s)`)
     return data.access_token
-  } catch { return envToken || null }
+  } catch (e: any) { return null }
 }
 
 async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
