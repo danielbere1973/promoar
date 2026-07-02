@@ -28,6 +28,11 @@ export async function GET() {
         active: true,
         createdAt: true,
         image: true,
+        financialProfile: {
+          select: {
+            _count: { select: { banks: true, cards: true, wallets: true } }
+          }
+        }
       }
     })
     return NextResponse.json({ users })

@@ -17,7 +17,7 @@ type Bank = Entity & { segments: Entity[]; cardNetworks: Entity[]; cardSegments?
 type Wallet = Entity & { cardNetworks?: Entity[]; cardSegments?: Entity[] }
 type CardNetwork = Entity & { banks: { id: string; name: string }[] }
 type CardSegment = { id: string; name: string; cardNetworkId: string; cardType: string; cardNetwork: { name: string } }
-type User = { id: string; name: string | null; email: string; role: string; active: boolean; createdAt: string; image?: string }
+type User = { id: string; name: string | null; email: string; role: string; active: boolean; createdAt: string; image?: string; financialProfile?: { _count: { banks: number; cards: number; wallets: number } } | null }
 
 type Entities = {
   categories: Entity[]
@@ -1432,6 +1432,7 @@ export default function AdminPage() {
                     <th className="px-6 py-4">Usuario</th>
                     <th className="px-6 py-4">Rol</th>
                     <th className="px-6 py-4">Estado</th>
+                    <th className="px-6 py-4">Perfil</th>
                     <th className="px-6 py-4">Registro</th>
                     <th className="px-6 py-4 text-right">Acciones</th>
                   </tr>
@@ -1463,6 +1464,15 @@ export default function AdminPage() {
                           {u.active ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
                           {u.active ? 'ACTIVO' : 'BLOQUEADO'}
                         </button>
+                      </td>
+                      <td className="px-6 py-4">
+                        {u.financialProfile ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+                            <Check size={10} /> Completo
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-300 font-semibold">Sin perfil</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-[10px] text-slate-400">
                         {new Date(u.createdAt).toLocaleDateString()}
