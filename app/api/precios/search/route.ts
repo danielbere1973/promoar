@@ -150,6 +150,57 @@ async function searchVtexCatalog(query: string, supermarket: string, baseUrl: st
 }
 
 // ---------------------------------------------------------
+// COOPERATIVA OBRERA (La Coope en Casa — custom API)
+// ---------------------------------------------------------
+async function searchCoopeEnCasa(query: string): Promise<NormalizedProduct[]> {
+  try {
+    const url = `https://api.lacoopeencasa.coop/api/buscar/articulos?q=${encodeURIComponent(query)}&offset=0&pedido=1`
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Origin': 'https://www.lacoopeencasa.coop',
+        'Referer': 'https://www.lacoopeencasa.coop/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    const items: any[] = Array.isArray(data) ? data : (data.data || data.items || [])
+    return items.map((p: any) => {
+      const price = parseFloat(p.precio || '0')
+      const promoPrice = p.precio_promo ? parseFloat(p.precio_promo) : null
+      const finalPrice = promoPrice && promoPrice < price ? promoPrice : price
+      let discountText = '-'
+      if (p.descuento_porcentaje_promo) {
+        discountText = `${Math.round(Number(p.descuento_porcentaje_promo))}% OFF`
+      } else if (promoPrice && promoPrice < price) {
+        const pct = Math.round((1 - promoPrice / price) * 100)
+        if (pct > 0) discountText = `${pct}% OFF`
+      }
+      return {
+        ean: String(p.cod_interno || ''),
+        id: `coope-${p.cod_interno || Math.random()}`,
+        supermarket: 'Cooperativa Obrera',
+        name: p.descripcion || 'Sin nombre',
+        brand: p.marca_desc || '-',
+        price,
+        finalPrice,
+        discountText,
+        imageUrl: p.imagen || '',
+        url: 'https://www.lacoopeencasa.coop',
+        multiUnitPromo: null,
+        vtexCategoryId: '',
+        vtexCategory: '',
+      }
+    }).filter(p => p.price > 0)
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------
 // EASY (VTEX IO Intelligent Search)
 // ---------------------------------------------------------
 async function searchEasy(query: string): Promise<NormalizedProduct[]> {
@@ -1210,7 +1261,7 @@ export async function GET(request: Request) {
     let allProducts: NormalizedProduct[] = []
 
     if (isSuper) {
-      const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas, theFoodMarket, cordiez] = await Promise.all([
+      const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas, theFoodMarket, cordiez, coope] = await Promise.all([
         cotoQ ? searchCoto(cotoQ, false) : Promise.resolve([]),
         carrQ ? searchCarrefour(carrQ, isCategory) : Promise.resolve([]),
         cencoQ ? searchVtexIS(cencoQ, false, 'Jumbo', 'https://www.jumbo.com.ar', vtexMap) : Promise.resolve([]),
@@ -1221,8 +1272,9 @@ export async function GET(request: Request) {
         walmartQ ? searchVtexIS(walmartQ, false, 'Changomas', 'https://www.changomas.com.ar', vtexMap) : Promise.resolve([]),
         q ? searchVtexIS(q, isCategory, 'The Food Market', 'https://www.thefoodmarket.com.ar', vtexMap) : Promise.resolve([]),
         q ? searchVtexCatalog(q, 'Cordiez', 'https://www.cordiez.com.ar') : Promise.resolve([]),
+        q ? searchCoopeEnCasa(q) : Promise.resolve([]),
       ])
-      allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas, ...theFoodMarket, ...cordiez]
+      allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas, ...theFoodMarket, ...cordiez, ...coope]
     }
 
     if (isElectro) {
