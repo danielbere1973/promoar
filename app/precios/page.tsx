@@ -1,8 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, ShoppingCart, Loader2, Store, Plus, Minus, Trash2, ArrowRight, X, ExternalLink, SlidersHorizontal } from 'lucide-react'
+import { Search, ShoppingCart, Loader2, Store, Plus, Minus, Trash2, ArrowRight, X, ExternalLink, SlidersHorizontal, ChevronRight, Filter } from 'lucide-react'
 import CategorySelector from './CategorySelector'
+import { CATEGORIES } from './categories'
 
 interface MultiUnitPromo {
   label: string
@@ -70,6 +71,8 @@ interface Toast {
 const formatPrice = (p: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(p)
 
 const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'Dia', 'Changomas', 'The Food Market', 'Cordiez', 'Cooperativa Obrera', 'Toledo Digital', 'Depot Express']
+const NATIONAL_STORES_SUPER = ['Coto', 'Carrefour', 'Jumbo', 'Disco', 'Vea', 'Changomas', 'Más Online', 'Dia']
+const REGIONAL_STORES_SUPER = ['The Food Market', 'Cordiez', 'Cooperativa Obrera', 'Toledo Digital', 'Depot Express']
 const ALL_SUPERMARKETS_FARMA = ['Farmacity', 'Farmaplus', 'OpenFarma']
 const ALL_SUPERMARKETS_ELECTRO = ['Megatone', 'Frávega', 'Naldo', 'Coppel', 'Rodo', 'Easy', 'Carrefour', 'Coto', 'Jumbo', 'Disco', 'Vea', 'Más Online', 'Changomas', 'Dia']
 
@@ -443,6 +446,29 @@ export default function PreciosPage() {
   const [selectedProduct, setSelectedProduct] = useState<GroupedProduct | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
 
+  const [selectedStores, setSelectedStores] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set(NATIONAL_STORES_SUPER)
+    try {
+      const saved = localStorage.getItem('promoar-precios-stores')
+      if (saved) return new Set(JSON.parse(saved))
+    } catch {}
+    return new Set(NATIONAL_STORES_SUPER)
+  })
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => {
+    try { localStorage.setItem('promoar-precios-stores', JSON.stringify(Array.from(selectedStores))) } catch {}
+  }, [selectedStores])
+
+  const toggleStore = (store: string) => {
+    setSelectedStores(prev => {
+      const next = new Set(prev)
+      if (next.has(store)) next.delete(store)
+      else next.add(store)
+      return next
+    })
+  }
+
   const showToast = (message: string) => {
     const id = Date.now()
     setToasts(prev => [...prev, { id, message }])
@@ -544,9 +570,14 @@ export default function PreciosPage() {
     setLoading(true)
     setHasSearched(true)
     try {
+      const storesParam = section === 'supermercados'
+        ? `&stores=${Array.from(selectedStores).join(',')}`
+        : section === 'farmacias'
+        ? `&stores=${ALL_SUPERMARKETS_FARMA.join(',')}`
+        : ''
       const url = isCategory
-        ? `/api/precios/search?cat=${categoryId}&section=${section}`
-        : `/api/precios/search?q=${encodeURIComponent(query)}&section=${section}`
+        ? `/api/precios/search?cat=${categoryId}&section=${section}${storesParam}`
+        : `/api/precios/search?q=${encodeURIComponent(query)}&section=${section}${storesParam}`
 
       // Para electrónica: búsqueda en servidor + ML desde el cliente en paralelo
       const serverPromise = fetch(url).then(r => r.json())
@@ -650,7 +681,7 @@ export default function PreciosPage() {
   // Siempre mostrar todas las columnas de supermercados de la sección activa
   const baseMarkets = section === 'farmacias' ? ALL_SUPERMARKETS_FARMA
     : section === 'electrónica' ? ALL_SUPERMARKETS_ELECTRO
-    : ALL_SUPERMARKETS_SUPER
+    : ALL_SUPERMARKETS_SUPER.filter(s => selectedStores.has(s))
   // Agregar cualquier supermercado extra que esté en el carrito pero no en la lista base
   const cartMarkets = Array.from(new Set(cart.flatMap(r => Object.keys(r.markets))))
   const allMarkets = Array.from(new Set([...baseMarkets, ...cartMarkets]))
@@ -664,6 +695,62 @@ export default function PreciosPage() {
 
   const cartTotalItems = cart.reduce((acc, r) => acc + r.quantity, 0)
   const lowestTotalMarket = Object.entries(cartTotals).filter(([, v]) => (v as number) > 0).sort(([, a], [, b]) => (a as number) - (b as number))[0]?.[0] || ''
+
+  const rootCats = CATEGORIES.filter(c => !c.section || c.section === 'supermercados')
+  const farmaCats = CATEGORIES.filter(c => c.section === 'farmacias')
+
+  const sidebarInner = (
+    <>
+      <div className="hidden lg:block mb-2">
+        <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3 font-bold">Sección</p>
+        {(['supermercados', 'farmacias', 'electrónica'] as const).map(s => (
+          <button key={s} onClick={() => handleSectionChange(s)}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-1 flex items-center gap-2 transition-colors ${section === s ? 'font-semibold ' + (s === 'farmacias' ? 'bg-green-600' : s === 'electrónica' ? 'bg-purple-600' : 'bg-indigo-600') + ' text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            {s === 'supermercados' ? '🛒 Supermercados' : s === 'farmacias' ? '💊 Farmacias' : '📺 Electrónica'}
+          </button>
+        ))}
+      </div>
+
+      {section === 'supermercados' && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Dónde buscar</p>
+            <button onClick={() => setSelectedStores(new Set(NATIONAL_STORES_SUPER))} className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors">Nacionales</button>
+          </div>
+          <p className="text-[10px] text-slate-600 mb-1 mt-1 uppercase tracking-wide font-medium">Nacional</p>
+          {NATIONAL_STORES_SUPER.map(store => (
+            <label key={store} className="flex items-center gap-2.5 py-1.5 cursor-pointer group">
+              <input type="checkbox" checked={selectedStores.has(store)} onChange={() => toggleStore(store)} className="w-3.5 h-3.5 cursor-pointer accent-indigo-500" />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${SUPERMARKET_DOT[store] || SUPERMARKET_DOT.default}`} />
+              <span className="text-sm text-slate-300 group-hover:text-white transition-colors leading-none">{store}</span>
+            </label>
+          ))}
+          <p className="text-[10px] text-slate-600 mt-3 mb-1 uppercase tracking-wide font-medium">Interior</p>
+          {REGIONAL_STORES_SUPER.map(store => (
+            <label key={store} className="flex items-center gap-2.5 py-1.5 cursor-pointer group">
+              <input type="checkbox" checked={selectedStores.has(store)} onChange={() => toggleStore(store)} className="w-3.5 h-3.5 cursor-pointer accent-indigo-500" />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${SUPERMARKET_DOT[store] || SUPERMARKET_DOT.default}`} />
+              <span className="text-sm text-slate-300 group-hover:text-white transition-colors leading-none">{store}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {(section === 'supermercados' || section === 'farmacias') && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">Categorías</p>
+          {(section === 'farmacias' ? farmaCats : rootCats).map(cat => (
+            <button key={cat.id}
+              onClick={() => { handleSearch(undefined, true, cat.id); setSidebarOpen(false) }}
+              className="w-full text-left px-2 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-white/5 flex items-center justify-between group transition-colors">
+              <span>{cat.name}</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  )
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-slate-100 font-sans selection:bg-indigo-500/30">
@@ -699,70 +786,87 @@ export default function PreciosPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-12">
-        {/* Tabs de sección */}
-        <div className="flex justify-center mb-8">
-          <div className="flex bg-[#1A1A1A] border border-white/10 rounded-2xl p-1 gap-1">
-            <button
-              onClick={() => handleSectionChange('supermercados')}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${section === 'supermercados' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-            >
-              🛒 Supermercados
-            </button>
-            <button
-              onClick={() => handleSectionChange('farmacias')}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${section === 'farmacias' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-            >
-              💊 Farmacias
-            </button>
-            <button
-              onClick={() => handleSectionChange('electrónica')}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${section === 'electrónica' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-            >
-              📺 Electrónica
-            </button>
-          </div>
-        </div>
-
-        <div className={`transition-all duration-700 ease-out flex flex-col items-center ${hasSearched ? 'mt-0 mb-12' : 'mt-[5vh]'}`}>
-          {!hasSearched && (
-            <div className="text-center mb-10 space-y-4">
-              <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight">
-                {section === 'supermercados' ? 'Consolidá el mercado' : section === 'farmacias' ? 'Compará farmacias' : 'Compará precios de electro'}
-              </h2>
-              <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-                {section === 'supermercados'
-                  ? 'Buscá un producto y mirá su precio en los principales supermercados cruzando por EAN.'
-                  : section === 'farmacias'
-                  ? 'Buscá un medicamento o producto de farmacia y comparalo entre Farmacity y Farmaplus.'
-                  : 'Buscá un producto electrónico y comparalo entre Frávega, Naldo, Coppel y Rodo.'}
-              </p>
-            </div>
-          )}
-          <div className="w-full max-w-3xl flex flex-col gap-4">
-            <form onSubmit={handleSearch} className="relative group w-full">
-              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500" />
-              <div className="relative flex items-center bg-[#1A1A1A] border border-white/10 rounded-2xl p-2 shadow-2xl focus-within:border-indigo-500/50 transition-colors">
-                <div className="pl-4 pr-2"><Search className="w-6 h-6 text-slate-400" /></div>
-                <input
-                  type="text"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata...' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg...' : 'Ej. Samsung TV 55", Heladera no frost...'}
-                  className="flex-1 bg-transparent text-base py-3 px-2 outline-none text-white placeholder:text-slate-500 min-w-0"
-                />
-                <button type="submit" disabled={loading || !query.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 sm:px-8 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shrink-0">
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Buscar'}
-                </button>
+      {/* Mobile sidebar drawer */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <aside className="absolute left-0 top-0 bottom-0 w-72 bg-[#111] border-r border-white/10 overflow-y-auto p-5 flex flex-col gap-5">
+            <div className="flex items-center justify-between">
+              <div className="flex bg-[#1A1A1A] border border-white/10 rounded-xl p-0.5 gap-0.5">
+                {(['supermercados', 'farmacias', 'electrónica'] as const).map(s => (
+                  <button key={s} onClick={() => { handleSectionChange(s); setSidebarOpen(false) }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${section === s ? (s === 'farmacias' ? 'bg-green-600' : s === 'electrónica' ? 'bg-purple-600' : 'bg-indigo-600') + ' text-white' : 'text-slate-400 hover:text-white'}`}>
+                    {s === 'supermercados' ? '🛒' : s === 'farmacias' ? '💊' : '📺'}
+                  </button>
+                ))}
               </div>
-            </form>
-            {section !== 'electrónica' && (
-              <div className="flex justify-center">
-                <CategorySelector section={section} onSelectCategory={(catId) => handleSearch(undefined, true, catId)} />
+              <button onClick={() => setSidebarOpen(false)} className="p-1.5 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            {sidebarInner}
+          </aside>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto flex">
+        {/* Desktop sidebar */}
+        <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto border-r border-white/10 p-4 pt-6 gap-5">
+          {sidebarInner}
+        </aside>
+
+        <main className="flex-1 min-w-0 px-4 lg:px-8 py-8">
+          {/* Mobile: botón filtros + tabs */}
+          <div className="flex items-center gap-2 mb-6 lg:hidden">
+            <button onClick={() => setSidebarOpen(true)} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-slate-300 hover:text-white transition-colors">
+              <Filter className="w-4 h-4" />
+              Filtros
+              {section === 'supermercados' && selectedStores.size !== ALL_SUPERMARKETS_SUPER.length && (
+                <span className="text-xs bg-indigo-600 text-white rounded-full px-1.5 py-0.5 font-bold">{selectedStores.size}</span>
+              )}
+            </button>
+            <div className="flex bg-[#1A1A1A] border border-white/10 rounded-xl p-0.5 gap-0.5">
+              {(['supermercados', 'farmacias', 'electrónica'] as const).map(s => (
+                <button key={s} onClick={() => handleSectionChange(s)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${section === s ? (s === 'farmacias' ? 'bg-green-600' : s === 'electrónica' ? 'bg-purple-600' : 'bg-indigo-600') + ' text-white' : 'text-slate-400 hover:text-white'}`}>
+                  {s === 'supermercados' ? '🛒' : s === 'farmacias' ? '💊' : '📺'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={`transition-all duration-700 ease-out flex flex-col items-center ${hasSearched ? 'mt-0 mb-12' : 'mt-[5vh]'}`}>
+            {!hasSearched && (
+              <div className="text-center mb-10 space-y-4">
+                <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight">
+                  {section === 'supermercados' ? 'Consolidá el mercado' : section === 'farmacias' ? 'Compará farmacias' : 'Compará precios de electro'}
+                </h2>
+                <p className="text-lg text-slate-400 max-w-xl mx-auto">
+                  {section === 'supermercados'
+                    ? 'Buscá un producto o elegí una categoría del menú lateral.'
+                    : section === 'farmacias'
+                    ? 'Buscá un medicamento o producto de farmacia.'
+                    : 'Buscá un producto electrónico y comparalo entre tiendas.'}
+                </p>
               </div>
             )}
+            <div className="w-full max-w-2xl flex flex-col gap-4">
+              <form onSubmit={handleSearch} className="relative group w-full">
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500" />
+                <div className="relative flex items-center bg-[#1A1A1A] border border-white/10 rounded-2xl p-2 shadow-2xl focus-within:border-indigo-500/50 transition-colors">
+                  <div className="pl-4 pr-2"><Search className="w-6 h-6 text-slate-400" /></div>
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder={section === 'supermercados' ? 'Ej. Coca Cola Lata, leche...' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg...' : 'Ej. Samsung TV 55", Heladera no frost...'}
+                    className="flex-1 bg-transparent text-base py-3 px-2 outline-none text-white placeholder:text-slate-500 min-w-0"
+                  />
+                  <button type="submit" disabled={loading || !query.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 sm:px-6 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shrink-0">
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Buscar'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
 
         {hasSearched && (
           <div className="space-y-6">
@@ -1004,7 +1108,8 @@ export default function PreciosPage() {
             </div>{/* fin flex gap-6 layout */}
           </div>
         )}
-      </main>
+        </main>
+      </div>{/* fin max-w-7xl flex */}
 
       {/* Modal de producto */}
       {selectedProduct && (

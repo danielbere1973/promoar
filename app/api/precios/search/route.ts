@@ -193,7 +193,7 @@ async function searchWooCommerceStore(query: string, supermarket: string, baseUr
         discountText,
         imageUrl,
         url: permalink,
-        multiUnitPromo: null,
+        multiUnitPromo: undefined,
         vtexCategoryId: '',
         vtexCategory: '',
       }
@@ -244,7 +244,7 @@ async function searchCoopeEnCasa(query: string): Promise<NormalizedProduct[]> {
         discountText,
         imageUrl: p.imagen || '',
         url: 'https://www.lacoopeencasa.coop',
-        multiUnitPromo: null,
+        multiUnitPromo: undefined,
         vtexCategoryId: '',
         vtexCategory: '',
       }
@@ -1279,7 +1279,12 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q')
   const cat = searchParams.get('cat')
-  const section = searchParams.get('section') || 'supermercados' // 'supermercados' | 'farmacias'
+  const section = searchParams.get('section') || 'supermercados'
+  const storesParam = searchParams.get('stores')
+  const activeStores = storesParam
+    ? new Set(storesParam.split(',').map(s => s.trim()).filter(Boolean))
+    : new Set(['Coto', 'Carrefour', 'Jumbo', 'Disco', 'Vea', 'Changomas', 'Más Online', 'Dia'])
+  const has = (store: string) => activeStores.has(store)
 
   if (!q && !cat) {
     return NextResponse.json({ error: 'Missing query or category' }, { status: 400 })
@@ -1316,19 +1321,19 @@ export async function GET(request: Request) {
 
     if (isSuper) {
       const [coto, carrefour, jumbo, disco, vea, dia, masOnline, changomas, theFoodMarket, cordiez, coope, toledo, depot] = await Promise.all([
-        cotoQ ? searchCoto(cotoQ, false) : Promise.resolve([]),
-        carrQ ? searchCarrefour(carrQ, isCategory) : Promise.resolve([]),
-        cencoQ ? searchVtexIS(cencoQ, false, 'Jumbo', 'https://www.jumbo.com.ar', vtexMap) : Promise.resolve([]),
-        cencoQ ? searchVtexIS(cencoQ, false, 'Disco', 'https://www.disco.com.ar', vtexMap) : Promise.resolve([]),
-        cencoQ ? searchVtexIS(cencoQ, false, 'Vea', 'https://www.vea.com.ar', vtexMap) : Promise.resolve([]),
-        diaQ ? searchVtexIS(diaQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', vtexMap) : Promise.resolve([]),
-        walmartQ ? searchVtexIS(walmartQ, false, 'Más Online', 'https://www.masonline.com.ar', vtexMap) : Promise.resolve([]),
-        walmartQ ? searchVtexIS(walmartQ, false, 'Changomas', 'https://www.changomas.com.ar', vtexMap) : Promise.resolve([]),
-        q ? searchVtexIS(q, isCategory, 'The Food Market', 'https://www.thefoodmarket.com.ar', vtexMap) : Promise.resolve([]),
-        q ? searchVtexCatalog(q, 'Cordiez', 'https://www.cordiez.com.ar') : Promise.resolve([]),
-        q ? searchCoopeEnCasa(q) : Promise.resolve([]),
-        q ? searchVtexIS(q, isCategory, 'Toledo Digital', 'https://www.toledodigital.com.ar', vtexMap) : Promise.resolve([]),
-        q ? searchWooCommerceStore(q, 'Depot Express', 'https://depotexpress.com.ar') : Promise.resolve([]),
+        (has('Coto') && cotoQ) ? searchCoto(cotoQ, false) : Promise.resolve([]),
+        (has('Carrefour') && carrQ) ? searchCarrefour(carrQ, isCategory) : Promise.resolve([]),
+        (has('Jumbo') && cencoQ) ? searchVtexIS(cencoQ, false, 'Jumbo', 'https://www.jumbo.com.ar', vtexMap) : Promise.resolve([]),
+        (has('Disco') && cencoQ) ? searchVtexIS(cencoQ, false, 'Disco', 'https://www.disco.com.ar', vtexMap) : Promise.resolve([]),
+        (has('Vea') && cencoQ) ? searchVtexIS(cencoQ, false, 'Vea', 'https://www.vea.com.ar', vtexMap) : Promise.resolve([]),
+        (has('Dia') && diaQ) ? searchVtexIS(diaQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', vtexMap) : Promise.resolve([]),
+        (has('Más Online') && walmartQ) ? searchVtexIS(walmartQ, false, 'Más Online', 'https://www.masonline.com.ar', vtexMap) : Promise.resolve([]),
+        (has('Changomas') && walmartQ) ? searchVtexIS(walmartQ, false, 'Changomas', 'https://www.changomas.com.ar', vtexMap) : Promise.resolve([]),
+        (has('The Food Market') && q) ? searchVtexIS(q, isCategory, 'The Food Market', 'https://www.thefoodmarket.com.ar', vtexMap) : Promise.resolve([]),
+        (has('Cordiez') && q) ? searchVtexCatalog(q, 'Cordiez', 'https://www.cordiez.com.ar') : Promise.resolve([]),
+        (has('Cooperativa Obrera') && q) ? searchCoopeEnCasa(q) : Promise.resolve([]),
+        (has('Toledo Digital') && q) ? searchVtexIS(q, isCategory, 'Toledo Digital', 'https://www.toledodigital.com.ar', vtexMap) : Promise.resolve([]),
+        (has('Depot Express') && q) ? searchWooCommerceStore(q, 'Depot Express', 'https://depotexpress.com.ar') : Promise.resolve([]),
       ])
       allProducts = [...coto, ...carrefour, ...jumbo, ...disco, ...vea, ...dia, ...masOnline, ...changomas, ...theFoodMarket, ...cordiez, ...coope, ...toledo, ...depot]
     }
