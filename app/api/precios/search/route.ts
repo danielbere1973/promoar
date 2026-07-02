@@ -349,17 +349,21 @@ async function getMlToken(): Promise<string | null> {
 
 async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
   try {
-    const url = `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=50&condition=new`
-    const headers: Record<string, string> = { 'Accept': 'application/json' }
+    // condition=new removido — puede reducir resultados en algunas categorías
+    const url = `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=50`
+    const headers: Record<string, string> = { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
     // Token opcional — la API pública funciona sin auth (menor rate limit)
     const token = await getMlToken()
     if (token) headers['Authorization'] = `Bearer ${token}`
     const res = await fetch(url, {
       headers,
       cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(12000),
     })
-    if (!res.ok) return []
+    if (!res.ok) {
+      console.error(`[MercadoLibre] HTTP ${res.status} para "${query}"`)
+      return []
+    }
     const data = await res.json()
     const items: any[] = data.results || []
 
@@ -415,7 +419,8 @@ async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
         multiUnitPromo: undefined,
       }
     }) as NormalizedProduct[]
-  } catch {
+  } catch (err: any) {
+    console.error(`[MercadoLibre] Error para "${query}":`, err?.message || err)
     return []
   }
 }
@@ -1347,7 +1352,7 @@ export async function GET(request: Request) {
 
     if (isElectro) {
       const [megatone, fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia] = await Promise.all([
-        electroQ ? searchVtexCatalog(electroQ, 'Megatone', 'https://www.megatone.net') : Promise.resolve([]),
+        electroQ ? searchVtexIS(electroQ, false, 'Megatone', 'https://www.megatone.net', 'c') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Frávega', 'https://www.fravega.com') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Naldo', 'https://www.naldo.com.ar') : Promise.resolve([]),
         electroQ ? searchVtexCatalog(electroQ, 'Coppel', 'https://www.coppel.com.ar') : Promise.resolve([]),
@@ -1363,6 +1368,7 @@ export async function GET(request: Request) {
         electroQ ? searchVtexIS(electroQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', 'c') : Promise.resolve([]),
       ])
       const mlProducts = electroQ ? await searchMercadoLibre(electroQ) : []
+      console.log(`[Electro] "${electroQ}" → Megatone:${megatone.length} Frávega:${fravega.length} Naldo:${naldo.length} Coppel:${coppel.length} Rodo:${rodo.length} Easy:${easy.length} ML:${mlProducts.length}`)
       allProducts = [...megatone, ...fravega, ...naldo, ...coppel, ...rodo, ...easy, ...carrefour, ...coto, ...jumbo, ...disco, ...vea, ...masOnline, ...changomas, ...dia, ...mlProducts]
     }
 
@@ -1385,9 +1391,10 @@ export async function GET(request: Request) {
     allProducts = allProducts.filter(p => p.finalPrice > 0)
 
     // Para búsquedas de texto libre: descartar productos irrelevantes.
-    // VTEX IS a veces devuelve top-sellers sin relación con la query ("tostador 2 panes" → lavandina).
+    // VTEX IS a veces devuelve top-sellers sin relación con la query.
+    // Para electrónica SIEMPRE filtramos (cat o no) porque electroQ es siempre texto libre.
     const relevanceQ = isElectro ? electroQ : q
-    if (relevanceQ && !cat) {
+    if (relevanceQ && (!cat || isElectro)) {
       const before = allProducts.length
       allProducts = allProducts.filter(p => isRelevantForQuery(p.name, relevanceQ))
       const after = allProducts.length
