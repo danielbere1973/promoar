@@ -349,11 +349,13 @@ async function getMlToken(): Promise<string | null> {
 
 async function searchMercadoLibre(query: string): Promise<NormalizedProduct[]> {
   try {
-    const token = await getMlToken()
-    if (!token) return []
     const url = `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(query)}&limit=50&condition=new`
+    const headers: Record<string, string> = { 'Accept': 'application/json' }
+    // Token opcional — la API pública funciona sin auth (menor rate limit)
+    const token = await getMlToken()
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const res = await fetch(url, {
-      headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}` },
+      headers,
       cache: 'no-store',
       signal: AbortSignal.timeout(8000),
     })
@@ -1299,11 +1301,16 @@ export async function GET(request: Request) {
     let vtexMap = 'c'
     let isCategory = !!cat
 
+    // Para electrónica con categoría: query derivada del nodo
+    let electroQ = q || ''
+
     if (cat) {
       const node = findCategoryNode(cat)
       if (node) {
         if (isFarma) {
           farmaQ = node.farmaSlug || node.name
+        } else if (isElectro) {
+          electroQ = node.electroSlug || node.name
         } else {
           cotoQ = node.name
           carrQ = node.carrefourId || ''
@@ -1340,23 +1347,22 @@ export async function GET(request: Request) {
 
     if (isElectro) {
       const [megatone, fravega, naldo, coppel, rodo, easy, carrefour, coto, jumbo, disco, vea, masOnline, changomas, dia] = await Promise.all([
-        q ? searchMegatone(q) : Promise.resolve([]),
-        q ? searchVtexCatalog(q, 'Frávega', 'https://www.fravega.com') : Promise.resolve([]),
-        q ? searchVtexCatalog(q, 'Naldo', 'https://www.naldo.com.ar') : Promise.resolve([]),
-        q ? searchVtexCatalog(q, 'Coppel', 'https://www.coppel.com.ar') : Promise.resolve([]),
-        q ? searchRodo(q) : Promise.resolve([]),
-        q ? searchEasy(q) : Promise.resolve([]),
-        q ? searchCarrefour(q, false) : Promise.resolve([]),
-        q ? searchCoto(q, false) : Promise.resolve([]),
-        q ? searchVtexIS(q, false, 'Jumbo', 'https://www.jumbo.com.ar', 'c') : Promise.resolve([]),
-        q ? searchVtexIS(q, false, 'Disco', 'https://www.disco.com.ar', 'c') : Promise.resolve([]),
-        q ? searchVtexIS(q, false, 'Vea', 'https://www.vea.com.ar', 'c') : Promise.resolve([]),
-        q ? searchVtexIS(q, false, 'Más Online', 'https://www.masonline.com.ar', 'c') : Promise.resolve([]),
-        q ? searchVtexIS(q, false, 'Changomas', 'https://www.changomas.com.ar', 'c') : Promise.resolve([]),
-        q ? searchVtexIS(q, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', 'c') : Promise.resolve([]),
+        electroQ ? searchVtexCatalog(electroQ, 'Megatone', 'https://www.megatone.net') : Promise.resolve([]),
+        electroQ ? searchVtexCatalog(electroQ, 'Frávega', 'https://www.fravega.com') : Promise.resolve([]),
+        electroQ ? searchVtexCatalog(electroQ, 'Naldo', 'https://www.naldo.com.ar') : Promise.resolve([]),
+        electroQ ? searchVtexCatalog(electroQ, 'Coppel', 'https://www.coppel.com.ar') : Promise.resolve([]),
+        electroQ ? searchRodo(electroQ) : Promise.resolve([]),
+        electroQ ? searchEasy(electroQ) : Promise.resolve([]),
+        electroQ ? searchCarrefour(electroQ, false) : Promise.resolve([]),
+        electroQ ? searchCoto(electroQ, false) : Promise.resolve([]),
+        electroQ ? searchVtexIS(electroQ, false, 'Jumbo', 'https://www.jumbo.com.ar', 'c') : Promise.resolve([]),
+        electroQ ? searchVtexIS(electroQ, false, 'Disco', 'https://www.disco.com.ar', 'c') : Promise.resolve([]),
+        electroQ ? searchVtexIS(electroQ, false, 'Vea', 'https://www.vea.com.ar', 'c') : Promise.resolve([]),
+        electroQ ? searchVtexIS(electroQ, false, 'Más Online', 'https://www.masonline.com.ar', 'c') : Promise.resolve([]),
+        electroQ ? searchVtexIS(electroQ, false, 'Changomas', 'https://www.changomas.com.ar', 'c') : Promise.resolve([]),
+        electroQ ? searchVtexIS(electroQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', 'c') : Promise.resolve([]),
       ])
-      // ML se agrega por separado — múltiples vendedores, se trata diferente en la UI
-      const mlProducts = q ? await searchMercadoLibre(q) : []
+      const mlProducts = electroQ ? await searchMercadoLibre(electroQ) : []
       allProducts = [...megatone, ...fravega, ...naldo, ...coppel, ...rodo, ...easy, ...carrefour, ...coto, ...jumbo, ...disco, ...vea, ...masOnline, ...changomas, ...dia, ...mlProducts]
     }
 
@@ -1380,11 +1386,12 @@ export async function GET(request: Request) {
 
     // Para búsquedas de texto libre: descartar productos irrelevantes.
     // VTEX IS a veces devuelve top-sellers sin relación con la query ("tostador 2 panes" → lavandina).
-    if (q && !cat) {
+    const relevanceQ = isElectro ? electroQ : q
+    if (relevanceQ && !cat) {
       const before = allProducts.length
-      allProducts = allProducts.filter(p => isRelevantForQuery(p.name, q))
+      allProducts = allProducts.filter(p => isRelevantForQuery(p.name, relevanceQ))
       const after = allProducts.length
-      if (before !== after) console.log(`[Relevance] ${before} → ${after} (filtró ${before - after} irrelevantes para "${q}")`)
+      if (before !== after) console.log(`[Relevance] ${before} → ${after} (filtró ${before - after} irrelevantes para "${relevanceQ}")`)
     }
 
     // Electrónica: sin agrupamiento — cada producto de cada tienda es una tarjeta independiente

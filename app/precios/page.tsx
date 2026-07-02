@@ -481,95 +481,6 @@ export default function PreciosPage() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
   }
 
-  const searchMegatoneClient = async (q: string): Promise<GroupedProduct[]> => {
-    try {
-      const url = `https://www.megatone.net/api/catalog_system/pub/products/search?ft=${encodeURIComponent(q)}&_from=0&_to=14`
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
-      if (!res.ok) return []
-      const data = await res.json()
-      if (!Array.isArray(data)) return []
-      return data.flatMap((p: any) => {
-        const item = p.items?.[0] || {}
-        const offer = item.sellers?.[0]?.commertialOffer || {}
-        const price = offer.Price || 0
-        const listPrice = offer.ListPrice || price
-        if (!price || (offer.AvailableQuantity || 0) <= 0) return []
-        const discountText = listPrice > price ? `${Math.round((1 - price / listPrice) * 100)}% OFF` : '-'
-        const marketProduct = {
-          id: `megatone-${item.itemId || p.productId}`,
-          supermarket: 'Megatone',
-          price: listPrice,
-          finalPrice: price,
-          discountText,
-          url: p.linkText ? `https://www.megatone.net/${p.linkText}/p` : 'https://www.megatone.net',
-          imageUrl: item.images?.[0]?.imageUrl || '',
-        }
-        return [{
-          ean: String(item.ean || ''),
-          name: p.productName || 'Sin nombre',
-          brand: p.brand || '-',
-          imageUrl: marketProduct.imageUrl,
-          minPrice: price,
-          maxPrice: listPrice,
-          bestMarket: 'Megatone',
-          availableIn: 1,
-          markets: { 'Megatone': marketProduct },
-        } as GroupedProduct]
-      })
-    } catch { return [] }
-  }
-
-  const searchMercadoLibreClient = async (q: string): Promise<GroupedProduct[]> => {
-    try {
-      const res = await fetch(`https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(q)}&limit=30&condition=new`)
-      if (!res.ok) return []
-      const data = await res.json()
-      const items: any[] = data.results || []
-
-      // Agrupar por título normalizado, quedarnos con el más barato por "producto"
-      const seen = new Map<string, any>()
-      for (const item of items) {
-        if (!item.price) continue
-        const key = item.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40)
-        const existing = seen.get(key)
-        const isOfficial = !!item.official_store_name
-        const existingIsOfficial = existing ? !!existing.official_store_name : false
-        if (!existing ||
-            (isOfficial && !existingIsOfficial) ||
-            (isOfficial === existingIsOfficial && item.price < existing.price)) {
-          seen.set(key, item)
-        }
-      }
-
-      return Array.from(seen.values()).slice(0, 20).map((item: any) => {
-        const price = item.price || 0
-        const originalPrice = item.original_price || price
-        const discountText = originalPrice > price ? `${Math.round((1 - price / originalPrice) * 100)}% OFF` : '-'
-        const storeName = item.official_store_name ? `ML · ${item.official_store_name}` : 'MercadoLibre'
-        const marketProduct = {
-          id: `ml-${item.id}`,
-          supermarket: storeName,
-          price: originalPrice,
-          finalPrice: price,
-          discountText,
-          url: item.permalink || 'https://www.mercadolibre.com.ar',
-          imageUrl: (item.thumbnail || '').replace('I.jpg', 'O.jpg'),
-        }
-        return {
-          ean: item.catalog_product_id || `ml-${item.id}`,
-          name: item.title,
-          brand: '-',
-          imageUrl: marketProduct.imageUrl,
-          minPrice: price,
-          maxPrice: originalPrice,
-          bestMarket: storeName,
-          availableIn: 1,
-          markets: { [storeName]: marketProduct },
-        } as GroupedProduct
-      })
-    } catch { return [] }
-  }
-
   const handleSearch = async (e?: React.FormEvent, isCategory = false, categoryId = '', overrideQ?: string) => {
     if (e) e.preventDefault()
     const effectiveQ = overrideQ !== undefined ? overrideQ : query
@@ -586,14 +497,9 @@ export default function PreciosPage() {
         ? `/api/precios/search?cat=${categoryId}&section=${section}${storesParam}`
         : `/api/precios/search?q=${encodeURIComponent(effectiveQ)}&section=${section}${storesParam}`
 
-      // Para electrónica: búsqueda en servidor + ML desde el cliente en paralelo
-      const serverPromise = fetch(url).then(r => r.json())
-      const isElectro = section === 'electrónica' && !!query.trim()
-      const mlPromise = isElectro ? searchMercadoLibreClient(query) : Promise.resolve([])
-
-      const [data, mlResults] = await Promise.all([serverPromise, mlPromise])
+      const data = await fetch(url).then(r => r.json())
       if (data.results) {
-        setProducts([...data.results, ...mlResults])
+        setProducts(data.results)
         setElectroFilters({ brands: [], stores: [], categories: [], priceMin: 0, priceMax: Infinity })
       }
     } catch (err) {
@@ -705,6 +611,7 @@ export default function PreciosPage() {
 
   const rootCats = CATEGORIES.filter(c => !c.section || c.section === 'supermercados')
   const farmaCats = CATEGORIES.filter(c => c.section === 'farmacias')
+  const electroCats = CATEGORIES.filter(c => c.section === 'electrónica')
 
   const sidebarInner = (
     <>
@@ -750,10 +657,10 @@ export default function PreciosPage() {
         </div>
       )}
 
-      {(section === 'supermercados' || section === 'farmacias') && (
+      {(section === 'supermercados' || section === 'farmacias' || section === 'electrónica') && (
         <div className="mt-4">
           <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 mb-2 font-bold px-1">Categorías</p>
-          {(section === 'farmacias' ? farmaCats : rootCats).map(cat => (
+          {(section === 'farmacias' ? farmaCats : section === 'electrónica' ? electroCats : rootCats).map(cat => (
             <button key={cat.id}
               onClick={() => { handleSearch(undefined, true, cat.id); setSidebarOpen(false) }}
               className="w-full text-left px-3 py-2 rounded-xl text-sm text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-between group transition-colors font-medium">

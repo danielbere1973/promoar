@@ -1,13 +1,14 @@
 export interface CategoryNode {
   id: string
   name: string
-  section?: 'supermercados' | 'farmacias' // undefined = supermercados (default)
+  section?: 'supermercados' | 'farmacias' | 'electrónica' // undefined = supermercados (default)
   cotoId?: string
   carrefourId?: string
   cencosudSlug?: string
   diaSlug?: string
   vtexMap?: string
   farmaSlug?: string // slug para búsqueda en farmacias VTEX
+  electroSlug?: string // término de búsqueda para electrónica
   children?: CategoryNode[]
 }
 
@@ -374,6 +375,20 @@ export const CATEGORIES: CategoryNode[] = [
     diaSlug: 'aire-libre',
     vtexMap: 'c'
   },
+
+  // ─── ELECTRÓNICA ─────────────────────────────────────────────────────────
+  { id: 'electro-tv', name: 'Televisores', section: 'electrónica', electroSlug: 'televisor smart tv' },
+  { id: 'electro-celulares', name: 'Celulares', section: 'electrónica', electroSlug: 'celular smartphone' },
+  { id: 'electro-laptops', name: 'Computadoras y Laptops', section: 'electrónica', electroSlug: 'notebook laptop computadora' },
+  { id: 'electro-tablets', name: 'Tablets', section: 'electrónica', electroSlug: 'tablet' },
+  { id: 'electro-audio', name: 'Audio y Parlantes', section: 'electrónica', electroSlug: 'parlante auriculares bluetooth' },
+  { id: 'electro-heladeras', name: 'Heladeras y Freezers', section: 'electrónica', electroSlug: 'heladera no frost' },
+  { id: 'electro-lavarropas', name: 'Lavarropas', section: 'electrónica', electroSlug: 'lavarropas' },
+  { id: 'electro-aire', name: 'Aires Acondicionados', section: 'electrónica', electroSlug: 'aire acondicionado split' },
+  { id: 'electro-cocinas', name: 'Cocinas y Hornos', section: 'electrónica', electroSlug: 'cocina horno microondas' },
+  { id: 'electro-gaming', name: 'Gaming', section: 'electrónica', electroSlug: 'playstation xbox nintendo' },
+  { id: 'electro-camara', name: 'Cámaras y Foto', section: 'electrónica', electroSlug: 'camara reflex fotografica' },
+  { id: 'electro-peq-electro', name: 'Pequeños Electrodomésticos', section: 'electrónica', electroSlug: 'licuadora aspiradora plancha' },
 
   // ─── FARMACIAS ────────────────────────────────────────────────────────────
   {
