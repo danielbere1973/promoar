@@ -662,7 +662,59 @@ async function fetchVtexPromotions(baseUrl: string, itemIds: string[], headers: 
   }
 }
 
+// ---------------------------------------------------------
+// VTEX CATALOG BY EAN — para búsquedas exactas por código de barras
+// Siempre devuelve PromotionTeasers con el nombre limpio de la promo
+// ---------------------------------------------------------
+async function searchVtexByEan(ean: string, supermarket: string, baseUrl: string): Promise<NormalizedProduct[]> {
+  try {
+    const url = `${baseUrl}/api/catalog_system/pub/products/search?fq=alternateIds_Ean:${encodeURIComponent(ean)}&_from=0&_to=14`
+    const res = await fetch(url, { headers: HEADERS, cache: 'no-store', signal: AbortSignal.timeout(8000) })
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data) || !data.length) return []
+
+    return data.flatMap((p: any) => {
+      return (p.items || []).map((item: any) => {
+        const offer = item.sellers?.[0]?.commertialOffer || {}
+        const priceList = offer.ListPrice || offer.Price || 0
+        const price = offer.Price || 0
+        if ((offer.AvailableQuantity || 0) <= 0 || price <= 0) return null
+
+        const teasers: string[] = offer.PromotionTeasers?.map((t: any) => t.Name).filter(Boolean) || []
+        if (priceList > price) {
+          const pct = Math.round((1 - price / priceList) * 100)
+          if (pct > 0) teasers.unshift(`${pct}% OFF`)
+        }
+        const discountText = teasers[0] || '-'
+
+        return {
+          ean: String(item.ean || ean),
+          id: `${supermarket.toLowerCase()}-${item.itemId || p.productId}`,
+          supermarket,
+          name: p.productName || 'Sin nombre',
+          brand: p.brand || '-',
+          price: priceList,
+          finalPrice: price,
+          discountText,
+          imageUrl: item.images?.[0]?.imageUrl || '',
+          url: p.link?.startsWith('http') ? p.link : (p.linkText ? `${baseUrl}/${p.linkText}/p` : baseUrl),
+          multiUnitPromo: parseMultiUnitPromo(discountText, priceList),
+        } as NormalizedProduct
+      }).filter(Boolean)
+    }) as NormalizedProduct[]
+  } catch {
+    return []
+  }
+}
+
 async function searchVtexIS(query: string, isCategory: boolean, supermarket: string, baseUrl: string, vtexMap: string = 'c'): Promise<NormalizedProduct[]> {
+  // Para búsquedas por EAN en tiendas no-Cencosud: usar catalog API con EAN filter
+  // (VTEX IS no siempre incluye PromotionTeasers en búsquedas de texto libre)
+  const isCencosud = ['Jumbo', 'Disco', 'Vea'].includes(supermarket)
+  if (!isCategory && !isCencosud && /^\d{8,14}$/.test(query.trim())) {
+    return searchVtexByEan(query.trim(), supermarket, baseUrl)
+  }
   try {
     const encoded = encodeURIComponent(query)
     let url = `${baseUrl}/_v/api/intelligent-search/product_search/?query=${encoded}&page=1&count=15&sort=orders:desc&hideUnavailableItems=true`
