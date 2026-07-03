@@ -3094,6 +3094,7 @@ function NewsletterTab() {
   const [optOut, setOptOut] = useState(0)
   const [subject, setSubject] = useState('')
   const [htmlContent, setHtmlContent] = useState('')
+  const [selectedTheme, setSelectedTheme] = useState('top3-finde')
   const [sending, setSending] = useState(false)
   const [sendingPersonalized, setSendingPersonalized] = useState(false)
   const [previewing, setPreviewing] = useState(false)
@@ -3149,7 +3150,7 @@ function NewsletterTab() {
     const res = await fetch('/api/admin/newsletter/send-personalized', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject, preview: true }),
+      body: JSON.stringify({ subject, themeId: selectedTheme, preview: true }),
     })
     const d = await res.json()
     setPreviewingPersonalized(false)
@@ -3157,12 +3158,12 @@ function NewsletterTab() {
   }
 
   async function sendPersonalizedAll() {
-    if (!subject || !confirm(`¿Enviar newsletter personalizada a ${subscribers.length} suscriptores? Cada uno recibe sus top 3 promos según su perfil.`)) return
+    if (!subject || !confirm(`¿Enviar newsletter personalizada a ${subscribers.length} suscriptores? Cada uno recibe sus promos según su perfil.`)) return
     setSendingPersonalized(true)
     const res = await fetch('/api/admin/newsletter/send-personalized', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject }),
+      body: JSON.stringify({ subject, themeId: selectedTheme }),
     })
     const d = await res.json()
     setSendingPersonalized(false)
@@ -3294,7 +3295,41 @@ function NewsletterTab() {
       <div className="bg-gradient-to-br from-[#1E3A5F] to-[#2d5494] rounded-2xl p-6 text-white space-y-3">
         <div>
           <p className="text-sm font-black">✨ Newsletter personalizada</p>
-          <p className="text-xs text-blue-200 mt-1">Cada suscriptor recibe sus top 3 promos según su perfil financiero. Los que no tienen perfil reciben las mejores promos generales.</p>
+          <p className="text-xs text-blue-200 mt-1">Cada suscriptor recibe sus promos según su perfil financiero. Elegí el tema y escribí el asunto.</p>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-blue-200 block mb-1.5">Tema</label>
+          <select
+            value={selectedTheme}
+            onChange={e => {
+              setSelectedTheme(e.target.value)
+              const themes: Record<string, string> = {
+                'top3-finde': '🎉 Tus 3 mejores promos para este fin de semana',
+                'top5-semana': '📅 Tus 5 mejores promos de esta semana',
+                'heladerias': '🍦 Las mejores promos en heladerías para vos',
+                'gastronomia': '🍽️ Tus mejores descuentos en gastronomía',
+                'petshops': '🐾 Promos en petshops — porque tu mascota también ahorra',
+                'farmacias': '💊 Tus 3 mejores promos en farmacias',
+                'transporte': '🚌 ¿Viajás en bondi y subte? Estas promos son para vos',
+                'supermercados-por-dia': '🛒 Tus descuentos en supermercados — día por día',
+                'combustible': '⛽ Aprovechá estas promos en combustible y automotores',
+                'shoppings': '🛍️ Andá de compras al shopping con estas 5 promos',
+              }
+              setSubject(themes[e.target.value] || '')
+            }}
+            className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-white/50"
+          >
+            <option value="top3-finde" style={{color:'#000'}}>🎉 3 mejores para el finde</option>
+            <option value="top5-semana" style={{color:'#000'}}>📅 5 mejores de la semana</option>
+            <option value="heladerias" style={{color:'#000'}}>🍦 Heladerías</option>
+            <option value="gastronomia" style={{color:'#000'}}>🍽️ Gastronomía</option>
+            <option value="petshops" style={{color:'#000'}}>🐾 Petshops</option>
+            <option value="farmacias" style={{color:'#000'}}>💊 Farmacias</option>
+            <option value="transporte" style={{color:'#000'}}>🚌 Transporte</option>
+            <option value="supermercados-por-dia" style={{color:'#000'}}>🛒 Supermercados por día</option>
+            <option value="combustible" style={{color:'#000'}}>⛽ Combustible</option>
+            <option value="shoppings" style={{color:'#000'}}>🛍️ Shoppings</option>
+          </select>
         </div>
         <div>
           <label className="text-xs font-bold text-blue-200 block mb-1.5">Asunto del email</label>
