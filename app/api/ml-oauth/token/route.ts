@@ -22,9 +22,8 @@ export async function GET() {
           body: new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken }),
           signal: AbortSignal.timeout(8000),
         })
-        const text = await res.text()
         if (res.ok) {
-          const data = JSON.parse(text)
+          const data = await res.json()
           if (data.refresh_token) {
             await prisma.siteConfig.upsert({
               where: { key: 'ml_refresh_token' },
@@ -35,13 +34,20 @@ export async function GET() {
           mlTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 300) * 1000 }
           return NextResponse.json({ token: data.access_token })
         }
-        // Mostrar error exacto de ML para debug
-        return NextResponse.json({ token: null, debug: { status: res.status, body: text, refreshToken: refreshToken.slice(0, 20) + '...' } })
       }
-      return NextResponse.json({ token: null, debug: 'no refresh_token in DB' })
     }
-    return NextResponse.json({ token: null, debug: 'no credentials' })
-  } catch (e: any) {
-    return NextResponse.json({ token: null, debug: `exception: ${e.message}` })
+
+    const dbAccess = await prisma.siteConfig.findUnique({ where: { key: 'ml_access_token' } }).catch(() => null)
+    if (dbAccess?.value) {
+      const { token, expiresAt } = JSON.parse(dbAccess.value)
+      if (Date.now() < expiresAt) {
+        mlTokenCache = { token, expiresAt }
+        return NextResponse.json({ token })
+      }
+    }
+
+    return NextResponse.json({ token: null })
+  } catch {
+    return NextResponse.json({ token: null })
   }
 }
