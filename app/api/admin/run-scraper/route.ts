@@ -38,7 +38,10 @@ export async function POST(req: NextRequest) {
 
   try {
     // Llamar al endpoint de scrape existente que tiene toda la lógica de guardado
-    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    // Usar el host del request para evitar que NEXTAUTH_URL (producción) interfiera en dev
+    const host = req.headers.get('host') || 'localhost:3000'
+    const protocol = host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https'
+    const baseUrl = `${protocol}://${host}`
     const res = await fetch(`${baseUrl}/api/admin/scrape`, {
       method: 'POST',
       headers: {

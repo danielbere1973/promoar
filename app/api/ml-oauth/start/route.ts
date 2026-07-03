@@ -33,7 +33,7 @@ export async function GET() {
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('client_id', clientId)
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI)
-  authUrl.searchParams.set('scope', 'read')
+  authUrl.searchParams.set('scope', 'read offline_access')
   authUrl.searchParams.set('code_challenge', codeChallenge)
   authUrl.searchParams.set('code_challenge_method', 'S256')
 

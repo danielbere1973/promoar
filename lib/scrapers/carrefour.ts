@@ -205,23 +205,25 @@ export const CarrefourScraper: Scraper = {
         if (/american\s+express|amex/i.test(title)) cardNetworks.push({ network: 'American Express Banco', type: 'CREDIT' });
       }
 
-      // Bancos/billeteras desde el título como fallback
+      // Bancos/billeteras desde el título y subtítulo como fallback
       if (bankNames.length === 0 && walletNames.length === 0) {
-        const titleLow = title.toLowerCase();
-        if (/mercado\s*pago/i.test(title)) walletNames.push('Mercado Pago');
-        else if (/\bmodo\b/i.test(title)) walletNames.push('MODO');
-        else if (/cuenta\s+dni/i.test(title)) walletNames.push('Cuenta DNI');
-        else if (/naranja\s*x/i.test(title)) bankNames.push('Naranja X');
-        else if (/patagonia/i.test(title)) bankNames.push('Banco Patagonia');
-        else if (/galicia/i.test(title)) bankNames.push('Banco Galicia');
-        else if (/santander/i.test(title)) bankNames.push('Banco Santander');
-        else if (/bbva/i.test(title)) bankNames.push('BBVA');
-        else if (/macro/i.test(title)) bankNames.push('Banco Macro');
-        else if (/\bbna\b|naci[oó]n/i.test(title)) bankNames.push('Banco de la Nación Argentina');
+        const searchText = `${title} ${subTitle ?? ''}`;
+        if (/mercado\s*pago|dinero\s+en\s+cuenta/i.test(searchText)) walletNames.push('Mercado Pago');
+        else if (/\bmodo\b/i.test(searchText)) walletNames.push('MODO');
+        else if (/cuenta\s+dni/i.test(searchText)) walletNames.push('Cuenta DNI');
+        else if (/club\s+la\s+naci[oó]n/i.test(searchText)) walletNames.push('Club La Nacion');
+        else if (/naranja\s*x/i.test(searchText)) bankNames.push('Naranja X');
+        else if (/patagonia/i.test(searchText)) bankNames.push('Banco Patagonia');
+        else if (/galicia/i.test(searchText)) bankNames.push('Banco Galicia');
+        else if (/santander/i.test(searchText)) bankNames.push('Banco Santander');
+        else if (/bbva/i.test(searchText)) bankNames.push('BBVA');
+        else if (/macro/i.test(searchText)) bankNames.push('Banco Macro');
+        else if (/\bbna\b/i.test(searchText)) bankNames.push('Banco de la Nación Argentina');
       }
 
       if (bankNames.length === 0 && walletNames.length === 0) {
-        console.log(`[Carrefour] Sin entidad detectada, saltando: ${title.slice(0, 50)}`);
+        const unknownImgs = imgs.filter(Boolean).join(', ');
+        console.log(`[Carrefour] Sin entidad detectada, saltando: "${title}" | imgs: ${unknownImgs || 'ninguna'}`);
         continue;
       }
 

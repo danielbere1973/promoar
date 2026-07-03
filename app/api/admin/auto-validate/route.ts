@@ -36,7 +36,11 @@ function validatePromo(
   if (hasBadCap) issues.push('Tope en $0 — verificar si es sin tope')
 
   // 3. Requisito sin entidad financiera (banco, wallet y red todos null)
-  const hasOrphanReq = promo.requirements.some((r: any) => !r.bankId && !r.walletId && !r.cardNetworkId)
+  // Excepción: accountType JUBILADO/HABERES/ANSES es un constraint válido sin entidad bancaria
+  const hasOrphanReq = promo.requirements.some((r: any) =>
+    !r.bankId && !r.walletId && !r.cardNetworkId &&
+    (!r.accountType || r.accountType === 'ANY')
+  )
   if (hasOrphanReq) issues.push('Requisito sin entidad financiera')
 
   // 4. Descuento en 0 (NXM como 2x1 siempre tiene discountValue=0 por diseño)

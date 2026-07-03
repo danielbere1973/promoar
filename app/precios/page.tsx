@@ -742,10 +742,27 @@ export default function PreciosPage() {
       {/* Barcode scanner */}
       {scannerOpen && (
         <BarcodeScannerModal
-          onDetect={(ean) => {
+          onDetect={(code, format) => {
             setScannerOpen(false)
-            setQuery(ean)
-            handleSearch(undefined, false, '', ean)
+            // EAN/UPC/Code128 numérico → buscar por EAN directamente
+            const isNumeric = /^\d{8,14}$/.test(code)
+            const isEanFormat = /ean|upc|itf/i.test(format || '')
+            if (isNumeric || isEanFormat) {
+              setQuery(code)
+              handleSearch(undefined, false, '', code)
+            } else {
+              // QR o text → usar como query de búsqueda
+              // Si es URL intentar extraer término del path
+              let q = code
+              try {
+                const url = new URL(code)
+                // Tomar el último segmento del path como término (ej: /producto/iphone-15 → iphone 15)
+                const slug = url.pathname.split('/').filter(Boolean).pop() || ''
+                if (slug) q = slug.replace(/[-_]/g, ' ')
+              } catch {}
+              setQuery(q)
+              handleSearch(undefined, false, '', q)
+            }
           }}
           onClose={() => setScannerOpen(false)}
         />

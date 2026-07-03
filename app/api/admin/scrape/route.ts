@@ -486,7 +486,9 @@ export async function POST(req: NextRequest) {
             // Evitar combinaciones imposibles: wallet + red de tarjeta específica
             if (walletId && networkWithType.cardNetworkId) continue;
             // Evitar requirement fantasma: sin banco, sin wallet, sin red
-            if (!bankId && !walletId && !networkWithType.cardNetworkId) continue;
+            // Excepción: accountType JUBILADO/HABERES/ANSES es un constraint válido sin entidad bancaria
+            const hasAccountConstraint = p.accountType && p.accountType !== 'ANY'
+            if (!bankId && !walletId && !networkWithType.cardNetworkId && !hasAccountConstraint) continue;
             for (const discount of uniqueDiscounts) {
               let segmentId = null;
               if (bankId && p.segment) {
