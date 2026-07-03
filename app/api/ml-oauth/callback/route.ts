@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
-const REDIRECT_URI = `${BASE_URL}/api/ml-oauth/callback`
+const REDIRECT_URI = BASE_URL
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)

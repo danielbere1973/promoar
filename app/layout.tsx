@@ -6,6 +6,7 @@ import { GoogleAnalytics } from '@next/third-parties/google'
 import Providers from './providers'
 import PostHogProvider from './components/PostHogProvider'
 import SupportChat from './components/SupportChat'
+import MLOAuthHandler from './components/MLOAuthHandler'
 import PushNotificationPrompt from './components/PushNotificationPrompt'
 import { schemaOrganization, schemaWebSite } from '@/lib/schema'
 import './globals.css'
@@ -79,6 +80,7 @@ export default async function RootLayout({
       <body>
         <Providers session={session}>
           <PostHogProvider>
+            <MLOAuthHandler />
             {children}
             <SupportChat />
             <PushNotificationPrompt />
