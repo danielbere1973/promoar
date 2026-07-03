@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 const REDIRECT_URI = `${BASE_URL}/api/ml-oauth/callback`
 
 export async function GET() {
-  const session = await getServerSession()
+  const session = await getServerSession(authOptions)
   if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.redirect(`${BASE_URL}/login`)
   }
   const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { role: true } })
   if (user?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    return NextResponse.redirect(`${BASE_URL}/admin?ml_oauth=error&reason=forbidden`)
   }
 
   const clientId = process.env.ML_CLIENT_ID

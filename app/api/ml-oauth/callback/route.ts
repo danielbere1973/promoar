@@ -41,7 +41,7 @@ export async function GET(req: Request) {
     const text = await res.text()
     if (!res.ok) {
       console.error(`[ML OAuth] code exchange HTTP ${res.status} — ${text}`)
-      return NextResponse.redirect(`${BASE_URL}/admin?ml_oauth=error&status=${res.status}`)
+      return NextResponse.json({ error: 'ML exchange failed', status: res.status, body: text, redirect_uri: REDIRECT_URI, client_id: clientId })
     }
 
     const data = JSON.parse(text)
