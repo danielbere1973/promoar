@@ -1419,7 +1419,7 @@ export async function GET(request: Request) {
         electroQ ? searchVtexIS(electroQ, false, 'Más Online', 'https://www.masonline.com.ar', 'c') : Promise.resolve([]),
         electroQ ? searchVtexIS(electroQ, false, 'Changomas', 'https://www.changomas.com.ar', 'c') : Promise.resolve([]),
         electroQ ? searchVtexIS(electroQ, false, 'Dia', 'https://diaonline.supermercadosdia.com.ar', 'c') : Promise.resolve([]),
-        electroQ ? searchMercadoLibre(electroQ) : Promise.resolve([]),
+        Promise.resolve([]), // ML se busca client-side (IPs de Vercel bloqueadas)
       ])
       console.log(`[Electro] "${electroQ}" → Megatone:${megatone.length} Frávega:${fravega.length} Naldo:${naldo.length} Coppel:${coppel.length} Rodo:${rodo.length} Easy:${easy.length} ML:${mlProducts.length}`)
       allProducts = [...megatone, ...fravega, ...naldo, ...coppel, ...rodo, ...easy, ...carrefour, ...coto, ...jumbo, ...disco, ...vea, ...masOnline, ...changomas, ...dia, ...mlProducts]
