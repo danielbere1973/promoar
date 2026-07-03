@@ -24,7 +24,7 @@ export async function GET() {
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('client_id', clientId)
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI)
-  authUrl.searchParams.set('scope', 'read offline_access')
+  authUrl.searchParams.set('scope', 'read')
 
   return NextResponse.redirect(authUrl.toString())
 }

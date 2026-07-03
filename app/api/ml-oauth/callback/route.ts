@@ -18,7 +18,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Missing code' }, { status: 400 })
   }
 
-  // Solo admins pueden completar este flujo
   const session = await getServerSession()
   if (!session?.user?.email) {
     return NextResponse.redirect(`${BASE_URL}/login?next=/api/ml-oauth/callback?code=${code}`)
@@ -51,22 +50,31 @@ export async function GET(req: Request) {
     }
 
     const data = JSON.parse(text)
-    const refreshToken: string = data.refresh_token
     const accessToken: string = data.access_token
+    const refreshToken: string | undefined = data.refresh_token
     const expiresIn: number = data.expires_in
     const scope: string = data.scope || ''
 
-    if (!refreshToken) {
-      return NextResponse.redirect(`${BASE_URL}/admin?ml_oauth=error&reason=no_refresh_token`)
+    // Guardar refresh_token si viene (scope offline_access), sino guardar access_token con TTL
+    if (refreshToken) {
+      await prisma.siteConfig.upsert({
+        where: { key: 'ml_refresh_token' },
+        update: { value: refreshToken },
+        create: { key: 'ml_refresh_token', value: refreshToken },
+      })
+      console.log(`[ML OAuth] OK con refresh_token — scope: "${scope}", expires_in: ${expiresIn}s`)
+    } else {
+      // Sin refresh_token: guardamos el access_token directamente con su expiración
+      const expiresAt = Date.now() + (expiresIn - 300) * 1000
+      await prisma.siteConfig.upsert({
+        where: { key: 'ml_access_token' },
+        update: { value: JSON.stringify({ token: accessToken, expiresAt }) },
+        create: { key: 'ml_access_token', value: JSON.stringify({ token: accessToken, expiresAt }) },
+      })
+      // Limpiar refresh_token viejo para no confundir el token endpoint
+      await prisma.siteConfig.deleteMany({ where: { key: 'ml_refresh_token' } }).catch(() => {})
+      console.log(`[ML OAuth] OK sin refresh_token — scope: "${scope}", expires_in: ${expiresIn}s, access_token guardado en DB`)
     }
-
-    await prisma.siteConfig.upsert({
-      where: { key: 'ml_refresh_token' },
-      update: { value: refreshToken },
-      create: { key: 'ml_refresh_token', value: refreshToken },
-    })
-
-    console.log(`[ML OAuth] OK — scope: "${scope}", expires_in: ${expiresIn}s, refresh_token guardado en DB`)
 
     return NextResponse.redirect(
       `${BASE_URL}/admin?ml_oauth=ok&scope=${encodeURIComponent(scope)}`
