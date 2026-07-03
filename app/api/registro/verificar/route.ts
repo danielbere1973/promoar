@@ -2,6 +2,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { randomUUID } from 'crypto'
+import { Resend } from 'resend'
+import { welcomeEmail } from '@/lib/email/welcome'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,6 +34,14 @@ export async function POST(req: NextRequest) {
         codeExpires: null,
       }
     })
+
+    // Email de bienvenida
+    resend.emails.send({
+      from: 'PromoAR <noreply@promoar.com.ar>',
+      to: email,
+      subject: `¡Bienvenido a PromoAR, ${user.name?.split(' ')[0] || ''}! 🎉`,
+      html: welcomeEmail(user.name),
+    }).catch(() => {})
 
     // Si pidió recordar el equipo, generar token de 30 días
     let deviceToken = null
