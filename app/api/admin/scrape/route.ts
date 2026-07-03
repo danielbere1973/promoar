@@ -24,6 +24,17 @@ const CENCOSUD_GENERIC_NAMES = new Set([
   'especial cencosud',
 ]);
 
+// Palabras gen\u00e9ricas que pueden preceder el nombre de un comercio sin ser parte de su identidad
+// (ej. "Supermercados Disco" \u2192 comercio "Disco"; pero "Morena Disco" \u2192 comercio distinto)
+const GENERIC_PREFIXES = new Set(['super', 'supermercado', 'supermercados', 'hipermercado', 'hipermercados', 'farmacia', 'farmacias', 'tienda', 'tiendas', 'mercado', 'mercados', 'local', 'locales'])
+
+function hasOnlyGenericPrefix(fullNorm: string, commerceNorm: string): boolean {
+  const idx = fullNorm.indexOf(commerceNorm)
+  if (idx === 0) return true
+  const prefix = fullNorm.slice(0, idx).trim()
+  return prefix.split(/\s+/).every(w => GENERIC_PREFIXES.has(w))
+}
+
 // Busca un comercio existente por nombre exacto, substring (con word boundary,
 // m\u00ednimo 4 chars) o alias conocido (CommerceAlias).
 function matchCommerceByName(name: string, commerces: any[], aliases: any[]): any | undefined {
@@ -33,8 +44,11 @@ function matchCommerceByName(name: string, commerces: any[], aliases: any[]): an
     match = commerces.find((c: any) => {
       const normC = normalizeStr(c.name);
       // Requiere m\u00ednimo 4 chars y word boundary para evitar falsos positivos ("vea" en "alvear")
-      if (normC.length >= 4 && norm.includes(normC) && new RegExp(`\\b${normC}\\b`).test(norm)) return true;
-      if (norm.length >= 4 && normC.includes(norm) && new RegExp(`\\b${norm}\\b`).test(normC)) return true;
+      // Adem\u00e1s, si el nombre entrante tiene palabras ANTES del comercio, deben ser solo gen\u00e9ricas
+      // (evita "Morena Disco" \u2192 "Disco", pero permite "Supermercados Disco" \u2192 "Disco")
+      if (normC.length >= 4 && norm.includes(normC) && new RegExp(`\\b${normC}\\b`).test(norm) && hasOnlyGenericPrefix(norm, normC)) return true;
+      // Igual para el caso inverso: "disco" no debe matchear "Morena Disco" (nombre propio antes)
+      if (norm.length >= 4 && normC.includes(norm) && new RegExp(`\\b${norm}\\b`).test(normC) && hasOnlyGenericPrefix(normC, norm)) return true;
       return false;
     });
   }
