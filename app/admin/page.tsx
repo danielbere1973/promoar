@@ -3095,7 +3095,9 @@ function NewsletterTab() {
   const [subject, setSubject] = useState('')
   const [htmlContent, setHtmlContent] = useState('')
   const [sending, setSending] = useState(false)
+  const [sendingPersonalized, setSendingPersonalized] = useState(false)
   const [previewing, setPreviewing] = useState(false)
+  const [previewingPersonalized, setPreviewingPersonalized] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -3139,6 +3141,37 @@ function NewsletterTab() {
     const d = await res.json()
     setPreviewing(false)
     setMsg(res.ok ? { type: 'success', text: '✅ Preview enviado a tu email' } : { type: 'error', text: d.error })
+  }
+
+  async function sendPersonalizedPreview() {
+    if (!subject) return
+    setPreviewingPersonalized(true)
+    const res = await fetch('/api/admin/newsletter/send-personalized', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, preview: true }),
+    })
+    const d = await res.json()
+    setPreviewingPersonalized(false)
+    setMsg(res.ok ? { type: 'success', text: '✅ Preview personalizado enviado a tu email' } : { type: 'error', text: d.error })
+  }
+
+  async function sendPersonalizedAll() {
+    if (!subject || !confirm(`¿Enviar newsletter personalizada a ${subscribers.length} suscriptores? Cada uno recibe sus top 3 promos según su perfil.`)) return
+    setSendingPersonalized(true)
+    const res = await fetch('/api/admin/newsletter/send-personalized', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject }),
+    })
+    const d = await res.json()
+    setSendingPersonalized(false)
+    if (res.ok) {
+      setMsg({ type: 'success', text: `✅ Enviada a ${d.sent} suscriptores${d.errors > 0 ? ` (${d.errors} errores)` : ''}` })
+      loadData()
+    } else {
+      setMsg({ type: 'error', text: d.error })
+    }
   }
 
   async function sendAll() {
@@ -3257,9 +3290,47 @@ function NewsletterTab() {
         </div>
       )}
 
-      {/* Compositor */}
+      {/* Newsletter personalizada automática */}
+      <div className="bg-gradient-to-br from-[#1E3A5F] to-[#2d5494] rounded-2xl p-6 text-white space-y-3">
+        <div>
+          <p className="text-sm font-black">✨ Newsletter personalizada</p>
+          <p className="text-xs text-blue-200 mt-1">Cada suscriptor recibe sus top 3 promos según su perfil financiero. Los que no tienen perfil reciben las mejores promos generales.</p>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-blue-200 block mb-1.5">Asunto del email</label>
+          <input
+            value={subject}
+            onChange={e => setSubject(e.target.value)}
+            placeholder="Las mejores promos de esta semana 🎉"
+            className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder-blue-300 outline-none focus:border-white/50"
+          />
+        </div>
+        {msg && (
+          <div className={`px-4 py-3 rounded-xl text-xs font-bold ${msg.type === 'success' ? 'bg-green-500/20 text-green-200 border border-green-400/30' : 'bg-red-500/20 text-red-200 border border-red-400/30'}`}>
+            {msg.text}
+          </div>
+        )}
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={sendPersonalizedPreview}
+            disabled={previewingPersonalized || !subject}
+            className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 disabled:opacity-40 transition-all"
+          >
+            <Eye size={13} /> {previewingPersonalized ? 'Enviando...' : 'Preview a mí'}
+          </button>
+          <button
+            onClick={sendPersonalizedAll}
+            disabled={sendingPersonalized || !subject || subscribers.length === 0}
+            className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-white text-[#1E3A5F] rounded-xl hover:bg-blue-50 disabled:opacity-40 transition-all"
+          >
+            <Send size={13} /> {sendingPersonalized ? 'Enviando...' : `Enviar a ${subscribers.length} suscriptores`}
+          </button>
+        </div>
+      </div>
+
+      {/* Compositor manual */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-        <h3 className="text-sm font-black text-slate-800">Nuevo envío</h3>
+        <h3 className="text-sm font-black text-slate-800">Envío manual (HTML libre)</h3>
 
         <div>
           <label className="text-xs font-bold text-slate-500 block mb-1.5">Asunto</label>
