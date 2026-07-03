@@ -1004,7 +1004,7 @@ export default function AdminPage() {
                 Configurá <code className="bg-gray-100 px-1 rounded">https://promoar.com.ar/api/ml-oauth/callback</code> como redirect URI en el DevCenter de ML.
               </p>
               <a
-                href="https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=3724197421472690&redirect_uri=https://www.promoar.com.ar/api/ml-oauth/callback&scope=read"
+                href="/api/ml-oauth/start"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-sm font-bold rounded-xl transition-colors"
               >
                 🔑 Autorizar con MercadoLibre

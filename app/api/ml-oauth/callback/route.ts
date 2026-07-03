@@ -24,17 +24,24 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'ML_CLIENT_ID / ML_CLIENT_SECRET no configurados' }, { status: 500 })
   }
 
+  const cookies = req.headers.get('cookie') || ''
+  const mlCv = cookies.split(';').map(c => c.trim()).find(c => c.startsWith('ml_cv='))
+  const codeVerifier = mlCv ? mlCv.split('=')[1] : undefined
+
   try {
+    const body: Record<string, string> = {
+      grant_type: 'authorization_code',
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: REDIRECT_URI,
+    }
+    if (codeVerifier) body.code_verifier = codeVerifier
+
     const res = await fetch('https://api.mercadolibre.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-        redirect_uri: REDIRECT_URI,
-      }),
+      body: new URLSearchParams(body),
       signal: AbortSignal.timeout(10000),
     })
 
