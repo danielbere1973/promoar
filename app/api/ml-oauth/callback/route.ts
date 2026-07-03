@@ -18,11 +18,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Missing code' }, { status: 400 })
   }
 
-  const session = await getServerSession()
-  if (!session?.user?.email) {
-    return NextResponse.redirect(`${BASE_URL}/login?next=/api/ml-oauth/callback?code=${code}`)
-  }
-
   const clientId = process.env.ML_CLIENT_ID
   const clientSecret = process.env.ML_CLIENT_SECRET
   if (!clientId || !clientSecret) {
