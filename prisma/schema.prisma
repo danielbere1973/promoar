@@ -766,3 +766,14 @@ model SiteConfig {
 
   @@map("site_config")
 }
+
+model NewsletterLog {
+  id      String   @id @default(cuid())
+  subject String
+  html    String   @db.Text
+  sentTo  Int
+  errors  Int      @default(0)
+  sentAt  DateTime @default(now())
+
+  @@map("newsletter_log")
+}

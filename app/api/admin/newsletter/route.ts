@@ -73,9 +73,12 @@ export async function POST(req: NextRequest) {
         errors++
       }
     }))
-    // Pequeña pausa entre lotes para no saturar Resend
     if (i + BATCH < subscribers.length) await new Promise(r => setTimeout(r, 1000))
   }
+
+  await prisma.newsletterLog.create({
+    data: { subject, html: htmlContent, sentTo: sent, errors },
+  })
 
   return NextResponse.json({ ok: true, sent, errors })
 }

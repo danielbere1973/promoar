@@ -3099,6 +3099,7 @@ function NewsletterTab() {
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [history, setHistory] = useState<Array<{ id: string; subject: string; html: string; sentTo: number; errors: number; sentAt: string }>>([])
 
   function loadData() {
     fetch('/api/admin/newsletter')
@@ -3109,6 +3110,10 @@ function NewsletterTab() {
         setTotal(d.total ?? 0)
         setOptOut(d.optOut ?? 0)
       })
+    fetch('/api/admin/newsletter/history')
+      .then(r => r.json())
+      .then(d => setHistory(d.logs ?? []))
+      .catch(() => {})
   }
 
   useEffect(() => { loadData() }, [])
@@ -3146,9 +3151,12 @@ function NewsletterTab() {
     })
     const d = await res.json()
     setSending(false)
-    setMsg(res.ok
-      ? { type: 'success', text: `✅ Enviado a ${d.sent} suscriptores${d.errors > 0 ? ` (${d.errors} errores)` : ''}` }
-      : { type: 'error', text: d.error })
+    if (res.ok) {
+      setMsg({ type: 'success', text: `✅ Enviado a ${d.sent} suscriptores${d.errors > 0 ? ` (${d.errors} errores)` : ''}` })
+      loadData()
+    } else {
+      setMsg({ type: 'error', text: d.error })
+    }
   }
 
   const previewHtml = `
@@ -3315,6 +3323,36 @@ function NewsletterTab() {
           </button>
         </div>
       </div>
+
+      {/* Historial de envíos */}
+      {history.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+            <Clock size={15} className="text-slate-400" />
+            <span className="text-sm font-bold text-slate-700">Historial de envíos</span>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {history.map(log => (
+              <div key={log.id} className="px-5 py-3 flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-800 truncate">{log.subject}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {new Date(log.sentAt).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {' · '}<span className="text-emerald-600 font-bold">{log.sentTo} enviados</span>
+                    {log.errors > 0 && <span className="text-red-400 font-bold"> · {log.errors} errores</span>}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setSubject(log.subject); setHtmlContent(log.html); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                  className="shrink-0 text-[11px] font-bold text-[#1E3A5F] border border-[#1E3A5F]/30 hover:bg-[#1E3A5F]/5 px-3 py-1.5 rounded-lg transition-all"
+                >
+                  Reusar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
