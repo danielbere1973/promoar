@@ -46,6 +46,7 @@ interface GroupedProduct {
   maxPrice: number
   bestMarket: string
   availableIn: number
+  excludedFromBankPromos?: boolean
   markets: Record<string, MarketProduct>
 }
 
@@ -1050,6 +1051,11 @@ export default function PreciosPage() {
                       <div>
                         <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{p.brand}</p>
                         <h4 className="text-base font-medium text-slate-200 line-clamp-2 leading-snug mt-1">{p.name}</h4>
+                        {p.excludedFromBankPromos && (
+                          <p className="mt-1.5 text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5 inline-block">
+                            ⚠️ No aplica a promos bancarias
+                          </p>
+                        )}
                       </div>
 
                       {/* Badge precio normal */}
@@ -1132,6 +1138,11 @@ export default function PreciosPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-400 uppercase tracking-wider">{selectedProduct.brand}</p>
                 <p className="text-sm font-semibold text-white leading-snug mt-0.5">{selectedProduct.name}</p>
+                {selectedProduct.excludedFromBankPromos && (
+                  <p className="mt-1 text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5 inline-block">
+                    ⚠️ No aplica a promos bancarias
+                  </p>
+                )}
               </div>
               <button onClick={() => setSelectedProduct(null)} className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors flex-shrink-0">
                 <X className="w-5 h-5" />

@@ -8,7 +8,7 @@ export const revalidate = 3600
 
 export async function generateSitemaps() {
   const count = await prisma.promo.count({
-    where: { slug: { not: null }, status: { in: ['ACTIVE', 'EXPIRED'] } },
+    where: { slug: { not: null }, status: 'ACTIVE' },
   }).catch(() => 0)
   const promoBatches = Math.max(1, Math.ceil(count / BATCH_SIZE))
   return [
@@ -74,9 +74,9 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
   // Sitemaps 1+: promos en lotes de BATCH_SIZE
   const skip = (id - 1) * BATCH_SIZE
   const promos = await prisma.promo.findMany({
-    where: { slug: { not: null }, status: { in: ['ACTIVE', 'EXPIRED'] } },
-    select: { slug: true, updatedAt: true, status: true },
-    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+    where: { slug: { not: null }, status: 'ACTIVE' },
+    select: { slug: true, updatedAt: true },
+    orderBy: { updatedAt: 'desc' },
     take: BATCH_SIZE,
     skip,
   }).catch(() => [])
@@ -85,6 +85,6 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
     url: `${BASE_URL}/promos/${p.slug}`,
     lastModified: p.updatedAt,
     changeFrequency: 'weekly' as const,
-    priority: p.status === 'ACTIVE' ? 0.6 : 0.3,
+    priority: 0.6,
   }))
 }

@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
@@ -92,7 +92,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       requirements: { include: { bank: true, wallet: true, cardNetwork: true }, orderBy: { discountValue: 'desc' } },
     },
   })
-  if (!promo) return { title: 'Promoción no encontrada' }
+  if (!promo) return { title: 'Promociones bancarias en Argentina | PromoAR' }
   const bestReq = promo.requirements[0]
   const discount = bestReq ? discountLabel(bestReq) : ''
   const bankWallet = bestReq?.bank?.name || bestReq?.wallet?.name || ''
@@ -117,9 +117,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
 export async function generateStaticParams() {
   const promos = await prisma.promo.findMany({
-    where: { status: { in: ['ACTIVE', 'EXPIRED'] }, slug: { not: null } },
-    select: { slug: true, status: true },
-    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+    where: { status: 'ACTIVE', slug: { not: null } },
+    select: { slug: true },
+    orderBy: { updatedAt: 'desc' },
     take: 2000,
   })
   return promos.map(p => ({ slug: p.slug! }))
@@ -141,7 +141,9 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   })
 
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-  if (!promo) notFound()
+  // Slug inválido o promo borrada de la DB → redirect permanente a /promos
+  // (evita 404 indexados por Google; 301 le indica que el contenido se movió definitivamente)
+  if (!promo) redirect('/promos')
 
   const isExpired = promo.status === 'EXPIRED' || (promo.validUntil != null && promo.validUntil < startOfToday)
 

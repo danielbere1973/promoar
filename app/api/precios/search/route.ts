@@ -9,6 +9,17 @@ interface MultiUnitPromo {
   requiredQty: number
 }
 
+const BANK_PROMO_EXCLUSION_RE = /sin\s+desc|exclu[íi]d|pnp|no\s+promo|canasta\s+b[áa]s|no\s+elegible|no\s+aplica\s+promo|producto\s+no\s+promoc/i
+
+function isExcludedFromBankPromos(p: any): boolean {
+  const clusters: string[] = [
+    ...Object.keys(p.productClusters || {}),
+    ...Object.values(p.productClusters || {}),
+    ...Object.values(p.clusterHighlights || {}).map((v: any) => typeof v === 'object' ? v.name || '' : String(v)),
+  ]
+  return clusters.some(c => BANK_PROMO_EXCLUSION_RE.test(c))
+}
+
 interface NormalizedProduct {
   ean: string
   id: string
@@ -21,6 +32,7 @@ interface NormalizedProduct {
   imageUrl: string
   url: string
   multiUnitPromo?: MultiUnitPromo
+  excludedFromBankPromos?: boolean
 }
 
 function parseMultiUnitPromo(text: string, price: number): MultiUnitPromo | undefined {
@@ -158,6 +170,7 @@ async function searchVtexCatalog(query: string, supermarket: string, baseUrl: st
           multiUnitPromo: parseMultiUnitPromo(discountText, listPrice),
           vtexCategoryId: p.categoriesIds?.[0] || p.categoryId || '',
           vtexCategory: p.categories?.[0] || '',
+          excludedFromBankPromos: isExcludedFromBankPromos(p),
         }
       }).filter(Boolean)
     }) as NormalizedProduct[]
@@ -1081,6 +1094,7 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         jumboCheck,
         vtexCategoryId: p.categoriesIds?.[0] || p.categoryId || '',
         vtexCategory: p.categories?.[0] || '',
+        excludedFromBankPromos: isExcludedFromBankPromos(p),
       }
     }).filter(Boolean) as NormalizedProduct[]
 
@@ -1485,12 +1499,14 @@ export async function GET(request: Request) {
           name: p.name,
           brand: p.brand,
           imageUrl: p.imageUrl,
-          // Guardaremos los resultados de cada supermercado en un diccionario
+          excludedFromBankPromos: p.excludedFromBankPromos ?? false,
           markets: {}
         })
       }
-      
+
       const g = grouped.get(groupKey)
+      // Si cualquier fuente marca el producto como excluido de promos bancarias, lo marcamos a nivel grupo
+      if (p.excludedFromBankPromos) g.excludedFromBankPromos = true
       // Si el súper actual ya tiene este producto y este es MÁS BARATO, lo pisamos (por si el scraper trajo duplicados de la misma tienda)
       if (!g.markets[p.supermarket] || g.markets[p.supermarket].finalPrice > p.finalPrice) {
          g.markets[p.supermarket] = p
