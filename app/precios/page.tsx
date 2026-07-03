@@ -489,13 +489,12 @@ export default function PreciosPage() {
     try {
       // Obtener token desde nuestro backend (el refresh funciona desde Vercel)
       const tokenData = await fetch('/api/ml-oauth/token').then(r => r.json()).catch(() => ({ token: null }))
-      const mlHeaders: Record<string, string> = { Accept: 'application/json' }
-      if (tokenData.token) mlHeaders['Authorization'] = `Bearer ${tokenData.token}`
+      const mlUrl = new URL('https://api.mercadolibre.com/sites/MLA/search')
+      mlUrl.searchParams.set('q', q)
+      mlUrl.searchParams.set('limit', '50')
+      if (tokenData.token) mlUrl.searchParams.set('access_token', tokenData.token)
 
-      const res = await fetch(
-        `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(q)}&limit=50`,
-        { headers: mlHeaders }
-      )
+      const res = await fetch(mlUrl.toString())
       if (!res.ok || mlQueryRef.current !== q) return
       const data = await res.json()
       const items: GroupedProduct[] = (data.results || [])
