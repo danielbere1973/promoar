@@ -568,6 +568,7 @@ export async function POST(req: NextRequest) {
         const pctReqsForSort = reqData.filter(r =>
           r.discountType !== 'CUOTAS_SIN_INTERES' &&
           r.discountType !== 'NXM' &&
+          r.discountType !== 'FIXED_AMOUNT' &&
           (r.discountValue ?? 0) > 0
         )
         const maxDiscountPct = pctReqsForSort.length > 0
