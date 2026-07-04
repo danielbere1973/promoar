@@ -18,6 +18,7 @@ import ThemeToggle from '../components/ThemeToggle'
 import SplashScreen from '../components/SplashScreen'
 import OnboardingBanner from '../components/OnboardingBanner'
 import { useTracking } from '@/lib/useTracking'
+import { AdBannerEM } from '../components/AdBannerEM'
 
 const FilterDrawer = dynamic(() => import('../components/FilterDrawer'), { ssr: false })
 const EntitiesSheet = dynamic(() => import('../components/EntitiesSheet'), { ssr: false })
@@ -2059,6 +2060,9 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           )}
         </div>
       )}
+
+      {/* Banner publicitario Estación Mascotera */}
+      <AdBannerEM />
 
         {/* Overlay loading entre filtros */}
         {filterLoading && <FilterLoadingOverlay />}
