@@ -3282,6 +3282,51 @@ function NewsletterTab() {
         </div>
       </div>
 
+      {/* Emails de onboarding */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <Mail size={15} className="text-slate-400" />
+          <span className="text-sm font-bold text-slate-700">Emails de onboarding</span>
+        </div>
+        <div className="divide-y divide-slate-50">
+          <div className="px-5 py-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-slate-800">Bienvenida</p>
+              <p className="text-xs text-slate-400 mt-0.5">Email que recibe un usuario al registrarse</p>
+            </div>
+            <button
+              onClick={sendWelcomePreview}
+              disabled={sendingWelcomePreview}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 transition-all shrink-0"
+            >
+              <Eye size={13} /> {sendingWelcomePreview ? 'Enviando...' : 'Preview a mí'}
+            </button>
+          </div>
+          <div className="px-5 py-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-slate-800">Completá tu perfil</p>
+              <p className="text-xs text-slate-400 mt-0.5">Para usuarios registrados sin perfil financiero · {total - subscribers.length > 0 ? `${total - subscribers.length} usuarios` : 'sin destinatarios'}</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={sendActivateProfilePreview}
+                disabled={sendingActivateProfile}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 transition-all"
+              >
+                <Eye size={13} /> {sendingActivateProfile ? '...' : 'Preview'}
+              </button>
+              <button
+                onClick={sendActivateProfileAll}
+                disabled={sendingActivateProfile}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-amber-500 text-white rounded-xl hover:bg-amber-600 disabled:opacity-40 transition-all"
+              >
+                <Send size={13} /> {sendingActivateProfile ? 'Enviando...' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Lista suscriptores */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -3511,30 +3556,6 @@ function NewsletterTab() {
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
-          <span className="text-[11px] text-slate-400 font-semibold">Emails especiales:</span>
-          <button
-            onClick={sendWelcomePreview}
-            disabled={sendingWelcomePreview}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all"
-          >
-            <Eye size={12} /> {sendingWelcomePreview ? 'Enviando...' : 'Preview bienvenida'}
-          </button>
-          <button
-            onClick={sendActivateProfilePreview}
-            disabled={sendingActivateProfile}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all"
-          >
-            <Eye size={12} /> {sendingActivateProfile ? 'Enviando...' : 'Preview "activar perfil"'}
-          </button>
-          <button
-            onClick={sendActivateProfileAll}
-            disabled={sendingActivateProfile}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold border border-amber-300 text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-40 transition-all"
-          >
-            <Send size={12} /> {sendingActivateProfile ? 'Enviando...' : 'Enviar a sin perfil'}
-          </button>
-        </div>
       </div>
 
       {/* Historial de envíos */}
