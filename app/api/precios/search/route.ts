@@ -925,6 +925,99 @@ async function searchVtexByEan(ean: string, supermarket: string, baseUrl: string
   }
 }
 
+function extractPromoLabel(name: string): string {
+  const m2da = name.match(/2[°oa]?\s*[au]\s*l?\s*(\d+)\s*%/i)
+  if (m2da) return `2da al ${m2da[1]}%`
+  const m3er = name.match(/3[°era]?\s*[au]\s*l?\s*(\d+)\s*%/i)
+  if (m3er) return `3era al ${m3er[1]}%`
+  const mgratis = name.match(/(\d+)[°a]?\s*(?:unidad|u\.?)?\s*gratis/i)
+  if (mgratis) return `${mgratis[1]} gratis`
+  const mnxm = name.match(/(\d+)\s*[xX]\s*(\d+)/)
+  if (mnxm) return `${mnxm[1]}x${mnxm[2]}`
+  const moff = name.match(/(\d+)\s*%\s*(?:off|desc)/i)
+  if (moff) return `${moff[1]}% OFF`
+  // Fallback: "LLEVANDO 2 - 2da al X%" → buscar el porcentaje directamente
+  const mpct = name.match(/(\d+)\s*%/)
+  if (mpct) return `${mpct[1]}% OFF`
+  return ''
+}
+
+async function enrichWithCheckoutSim(
+  products: NormalizedProduct[],
+  baseUrl: string,
+  headers: any,
+): Promise<NormalizedProduct[]> {
+  const toCheck = products.filter(p => p.discountText === '-' && p.finalPrice > 0)
+  if (!toCheck.length) return products
+
+  // itemId está en el id del producto: "supermarket-itemId"
+  const itemIdOf = (p: NormalizedProduct) => p.id.split('-').slice(1).join('-')
+
+  try {
+    const simRes = await fetch(`${baseUrl}/api/checkout/pub/orderForms/simulation?sc=1`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: toCheck.map(p => ({ id: itemIdOf(p), quantity: 2, seller: '1' })),
+        country: 'ARG',
+        postalCode: '1000',
+      }),
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!simRes.ok) return products
+    const sim = await simRes.json()
+
+    // Mapa itemId → descuento aplicado + nombre de la promo
+    const discountByItemId = new Map<string, { discount: number; label: string }>()
+    const promoNames: string[] = (sim.ratesAndBenefitsData?.rateAndBenefitsIdentifiers || [])
+      .map((r: any) => String(r.name || ''))
+
+    for (const simItem of (sim.items || [])) {
+      const itemId = String(simItem.id)
+      const priceTags: any[] = simItem.priceTags || []
+      let totalDiscount = 0
+      for (const tag of priceTags) {
+        const raw = typeof tag.rawValue === 'number' ? tag.rawValue : (tag.value || 0) / 100
+        if (raw < 0) totalDiscount += Math.abs(raw)
+      }
+      if (totalDiscount <= 0) continue
+
+      // Buscar nombre de la promo que coincida con el tag
+      let label = ''
+      for (const name of promoNames) {
+        label = extractPromoLabel(name)
+        if (label) break
+      }
+      if (!label) {
+        const pct = Math.round((totalDiscount / ((simItem.listPrice || 1) / 100)) * 50)
+        label = pct > 0 ? `2da al ${pct}%` : '2da unidad'
+      }
+      discountByItemId.set(itemId, { discount: totalDiscount, label })
+    }
+
+    const host = baseUrl.split('//')[1]
+    if (discountByItemId.size > 0)
+      console.log(`[${host}] checkout sim: ${discountByItemId.size} promos encontradas`)
+
+    return products.map(p => {
+      if (p.discountText !== '-') return p
+      const itemId = itemIdOf(p)
+      const entry = discountByItemId.get(itemId)
+      if (!entry) return p
+      // effectivePrice por unidad = (precio × 2 - descuento total) / 2
+      const effectivePrice = Math.max(1, Math.round(p.price - entry.discount / 2))
+      return {
+        ...p,
+        discountText: entry.label,
+        multiUnitPromo: { label: entry.label, effectivePrice, requiredQty: 2 },
+      }
+    })
+  } catch (e: any) {
+    console.log(`[${baseUrl.split('//')[1]}] checkout sim error: ${e.message}`)
+    return products
+  }
+}
+
 async function searchVtexIS(query: string, isCategory: boolean, supermarket: string, baseUrl: string, vtexMap: string = 'c'): Promise<NormalizedProduct[]> {
   // Para búsquedas por EAN en tiendas no-Cencosud: usar catalog API con EAN filter
   // (VTEX IS no siempre incluye PromotionTeasers en búsquedas de texto libre)
@@ -1142,6 +1235,7 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
 
     // Para tiendas no-Cencosud con búsqueda de texto: enriquecer con promo data por EAN
     // VTEX IS no siempre incluye teasers en text search → segunda consulta por EAN al catalog API
+    let result = initial
     if (!isCencosudSite && !isCategory) {
       const toEnrich = initial.filter(p => p.discountText === '-' && p.ean && p.ean.length >= 8)
       if (toEnrich.length > 0) {
@@ -1150,16 +1244,23 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         )
         const enrichMap = new Map<string, NormalizedProduct>()
         enriched.flat().forEach(p => enrichMap.set(p.ean, p))
-        return initial.map(p => {
+        result = initial.map(p => {
           if (p.discountText !== '-' || !enrichMap.has(p.ean)) return p
           const e = enrichMap.get(p.ean)!
           return { ...p, discountText: e.discountText, finalPrice: e.finalPrice, multiUnitPromo: e.multiUnitPromo }
         })
       }
+
+      // Checkout simulation para promos de multi-unidad (2da al X%, 3era gratis, etc.)
+      // VTEX IS no devuelve estas promos con qty=1 — aparecen solo al simular qty=2
+      const needsSim = result.filter(p => p.discountText === '-')
+      if (needsSim.length > 0) {
+        result = await enrichWithCheckoutSim(result, baseUrl, headers)
+      }
     }
 
-    if (initial.length > 0) console.log(`[${supermarket}] ${initial.length} productos para "${query}"`)
-    return initial
+    if (result.length > 0) console.log(`[${supermarket}] ${result.length} productos para "${query}"`)
+    return result
   } catch (error) {
     console.error(`Error ${supermarket} completo:`, error)
     return []
@@ -1505,7 +1606,7 @@ export async function GET(request: Request) {
       let excluded = false
       if (p.supermarket === 'Carrefour') excluded = isCarrefourExcludedFromBankPromos(p)
       // Regla general: si el super ya tiene su propia promo sobre el producto, no se acumula con banco
-      if (!excluded && p.price > p.finalPrice) excluded = true
+      if (!excluded && (p.price > p.finalPrice || !!p.multiUnitPromo)) excluded = true
       return excluded ? { ...p, excludedFromBankPromos: true } : p
     })
 

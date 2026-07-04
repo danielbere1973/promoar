@@ -404,7 +404,7 @@ function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffect
                             </p>
                           )}
                           {m.excludedFromBankPromos && (
-                            <p className="text-[9px] font-bold text-amber-400">⚠️ sin promo bancaria</p>
+                            <p className="text-[9px] font-bold text-amber-400">⚠️ No acumulable con otras promos bancarias</p>
                           )}
                         </div>
                       </div>
@@ -1198,7 +1198,7 @@ export default function PreciosPage() {
                                 <p className="text-[10px] font-black text-green-400 mt-0.5">J{(m as any).jumboCheck}% Jumbo Cheques</p>
                               )}
                               {(m as any).excludedFromBankPromos && (
-                                <p className="text-[10px] font-bold text-amber-400 mt-0.5">⚠️ sin promo bancaria</p>
+                                <p className="text-[10px] font-bold text-amber-400 mt-0.5">⚠️ No acumulable con otras promos bancarias</p>
                               )}
                             </div>
                           </div>
@@ -1384,7 +1384,7 @@ export default function PreciosPage() {
                               </p>
                             )}
                             {m.excludedFromBankPromos && (
-                              <p className="text-[9px] font-bold mt-0.5 text-amber-400">⚠️ sin promo bancaria</p>
+                              <p className="text-[9px] font-bold mt-0.5 text-amber-400">⚠️ No acumulable con otras promos bancarias</p>
                             )}
                             <p className="text-[10px] text-slate-500 mt-1">{formatPrice(totalLine)}</p>
                             <button
