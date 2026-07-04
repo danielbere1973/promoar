@@ -3294,33 +3294,49 @@ function NewsletterTab() {
               <p className="text-sm font-bold text-slate-800">Bienvenida</p>
               <p className="text-xs text-slate-400 mt-0.5">Email que recibe un usuario al registrarse</p>
             </div>
-            <button
-              onClick={sendWelcomePreview}
-              disabled={sendingWelcomePreview}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 transition-all shrink-0"
-            >
-              <Eye size={13} /> {sendingWelcomePreview ? 'Enviando...' : 'Preview a mí'}
-            </button>
+            <div className="flex gap-2 shrink-0">
+              <a
+                href="/api/admin/newsletter/preview-html?type=welcome"
+                target="_blank"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all"
+              >
+                <Eye size={13} /> Ver
+              </a>
+              <button
+                onClick={sendWelcomePreview}
+                disabled={sendingWelcomePreview}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-[#1E3A5F] text-[#1E3A5F] rounded-xl hover:bg-[#1E3A5F]/5 disabled:opacity-40 transition-all"
+              >
+                <Send size={13} /> {sendingWelcomePreview ? '...' : 'Enviar a mí'}
+              </button>
+            </div>
           </div>
           <div className="px-5 py-4 flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-bold text-slate-800">Completá tu perfil</p>
-              <p className="text-xs text-slate-400 mt-0.5">Para usuarios registrados sin perfil financiero · {total - subscribers.length > 0 ? `${total - subscribers.length} usuarios` : 'sin destinatarios'}</p>
+              <p className="text-xs text-slate-400 mt-0.5">Usuarios sin perfil financiero · <span className="font-bold text-slate-600">{total - subscribers.length} destinatarios</span></p>
             </div>
             <div className="flex gap-2 shrink-0">
+              <a
+                href="/api/admin/newsletter/preview-html?type=activate-profile"
+                target="_blank"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all"
+              >
+                <Eye size={13} /> Ver
+              </a>
               <button
                 onClick={sendActivateProfilePreview}
                 disabled={sendingActivateProfile}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-[#1E3A5F] text-[#1E3A5F] rounded-xl hover:bg-[#1E3A5F]/5 disabled:opacity-40 transition-all"
               >
-                <Eye size={13} /> {sendingActivateProfile ? '...' : 'Preview'}
+                <Send size={13} /> {sendingActivateProfile ? '...' : 'Enviar a mí'}
               </button>
               <button
                 onClick={sendActivateProfileAll}
                 disabled={sendingActivateProfile}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-amber-500 text-white rounded-xl hover:bg-amber-600 disabled:opacity-40 transition-all"
               >
-                <Send size={13} /> {sendingActivateProfile ? 'Enviando...' : 'Enviar'}
+                <Send size={13} /> {sendingActivateProfile ? 'Enviando...' : 'Enviar a todos'}
               </button>
             </div>
           </div>
