@@ -36,11 +36,51 @@ export function AdBannerEM() {
   }, [])
 
   return (
+    <>
+    {/* ── MOBILE ── */}
     <a
       href="https://www.estacionmascotera.com.ar"
       target="_blank"
       rel="noopener noreferrer"
-      className="mb-4 flex items-stretch rounded-2xl overflow-hidden h-[132px] sm:h-[172px] group"
+      className="mb-4 flex sm:hidden items-stretch rounded-2xl overflow-hidden h-[120px]"
+      style={{ background: '#f9eed2' }}
+    >
+      {/* Logo */}
+      <div className="relative shrink-0 h-full aspect-square">
+        <Image src="/EM/logo-mundial-transparente.png" alt="Estación Mascotera" fill className="object-contain p-1" priority />
+      </div>
+
+      {/* Contenido */}
+      <div className="flex-1 flex flex-col justify-center px-3 min-w-0 py-2 gap-0.5">
+        <p className="font-black text-[15px] leading-tight" style={{ color: '#3d27c8' }}>Estación Mascotera</p>
+        <p className="text-[9px] font-semibold" style={{ color: '#ac620d' }}>Alimento y accesorios para mascotas</p>
+        <div className="my-1 h-px" style={{ background: '#ea912d', opacity: 0.4 }} />
+        <p className="text-[10px] font-black leading-snug" style={{ color: '#d74c35' }}>🚚 Envíos gratis a CABA desde $25.000</p>
+        <div className="mt-1 flex flex-col gap-0.5">
+          <div className="flex items-center gap-1">
+            <IgIcon size={11} />
+            <span className="text-[9px] font-bold" style={{ color: '#000' }}>@estacion_mascotera_pet_shop</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <TikTokIcon size={11} />
+            <span className="text-[9px] font-bold" style={{ color: '#000' }}>estacion.mascotera</span>
+          </div>
+          <p className="text-[8px] font-medium" style={{ color: '#3d27c8', opacity: 0.6 }}>🌐 estacionmascotera.com.ar</p>
+        </div>
+      </div>
+
+      {/* QR */}
+      <div className="relative shrink-0 h-full" style={{ width: 110, background: 'rgba(255,255,255,0.4)' }}>
+        <Image src="/EM/qr_estacion_mascotera.png" alt="QR" fill className="object-contain p-2" />
+      </div>
+    </a>
+
+    {/* ── DESKTOP ── */}
+    <a
+      href="https://www.estacionmascotera.com.ar"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mb-4 hidden sm:flex items-stretch rounded-2xl overflow-hidden h-[172px] group"
       style={{ background: '#f9eed2' }}
     >
 
@@ -155,5 +195,6 @@ export function AdBannerEM() {
       </div>
 
     </a>
+    </>
   )
 }
