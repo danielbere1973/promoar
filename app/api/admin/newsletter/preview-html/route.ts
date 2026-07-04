@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   if (type === 'activate-profile') {
     const topPromos = await prisma.promo.findMany({
-      where: { status: 'ACTIVE', isCSIOnly: false, maxDiscountPct: { gte: 20 } },
+      where: { status: 'ACTIVE', isCSIOnly: false, maxDiscountPct: { gte: 20, lte: 100 } },
       orderBy: [{ maxDiscountPct: 'desc' }, { commerce: { activePromoCount: 'desc' } }],
       take: 3,
       select: {

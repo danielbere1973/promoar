@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
   // Promos reales top para usar como ejemplo en el email
   const topPromos = await prisma.promo.findMany({
-    where: { status: 'ACTIVE', isCSIOnly: false, maxDiscountPct: { gte: 20 } },
+    where: { status: 'ACTIVE', isCSIOnly: false, maxDiscountPct: { gte: 20, lte: 100 } },
     orderBy: [{ maxDiscountPct: 'desc' }, { commerce: { activePromoCount: 'desc' } }],
     take: 3,
     select: {
