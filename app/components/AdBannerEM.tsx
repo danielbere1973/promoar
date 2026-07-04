@@ -54,7 +54,7 @@ export function AdBannerEM() {
       <div className="w-px self-stretch my-3 shrink-0" style={{ background: '#ea912d', opacity: 0.4 }} />
 
       {/* Contenido */}
-      <div className="flex-1 flex flex-col justify-between px-3 py-3 min-w-0">
+      <div className="flex-1 flex flex-col justify-between px-2 py-3 min-w-0">
         <div>
           <p className="font-black text-[16px] leading-tight" style={{ color: '#3d27c8' }}>Estación Mascotera</p>
           <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#ac620d' }}>Alimento y accesorios para mascotas</p>
