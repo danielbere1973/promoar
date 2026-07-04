@@ -3106,6 +3106,7 @@ function NewsletterTab() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [sendingSelected, setSendingSelected] = useState(false)
   const [sendingWelcomePreview, setSendingWelcomePreview] = useState(false)
+  const [sendingActivateProfile, setSendingActivateProfile] = useState(false)
 
   async function sendWelcomePreview() {
     setSendingWelcomePreview(true)
@@ -3113,6 +3114,31 @@ function NewsletterTab() {
     const d = await res.json()
     setSendingWelcomePreview(false)
     setMsg(res.ok ? { type: 'success', text: '✅ Email de bienvenida enviado a tu email' } : { type: 'error', text: d.error })
+  }
+
+  async function sendActivateProfilePreview() {
+    setSendingActivateProfile(true)
+    const res = await fetch('/api/admin/newsletter/send-activate-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preview: true }),
+    })
+    const d = await res.json()
+    setSendingActivateProfile(false)
+    setMsg(res.ok ? { type: 'success', text: '✅ Preview "activar perfil" enviado a tu email' } : { type: 'error', text: d.error })
+  }
+
+  async function sendActivateProfileAll() {
+    if (!confirm('¿Enviar el email "completá tu perfil" a todos los usuarios sin perfil financiero?')) return
+    setSendingActivateProfile(true)
+    const res = await fetch('/api/admin/newsletter/send-activate-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preview: false }),
+    })
+    const d = await res.json()
+    setSendingActivateProfile(false)
+    setMsg(res.ok ? { type: 'success', text: `✅ Enviado a ${d.sent} usuario(s) sin perfil` } : { type: 'error', text: d.error })
   }
 
   function loadData() {
@@ -3485,14 +3511,28 @@ function NewsletterTab() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-          <span className="text-[11px] text-slate-400 font-semibold">Email de bienvenida:</span>
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
+          <span className="text-[11px] text-slate-400 font-semibold">Emails especiales:</span>
           <button
             onClick={sendWelcomePreview}
             disabled={sendingWelcomePreview}
             className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all"
           >
             <Eye size={12} /> {sendingWelcomePreview ? 'Enviando...' : 'Preview bienvenida'}
+          </button>
+          <button
+            onClick={sendActivateProfilePreview}
+            disabled={sendingActivateProfile}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all"
+          >
+            <Eye size={12} /> {sendingActivateProfile ? 'Enviando...' : 'Preview "activar perfil"'}
+          </button>
+          <button
+            onClick={sendActivateProfileAll}
+            disabled={sendingActivateProfile}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold border border-amber-300 text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-40 transition-all"
+          >
+            <Send size={12} /> {sendingActivateProfile ? 'Enviando...' : 'Enviar a sin perfil'}
           </button>
         </div>
       </div>
