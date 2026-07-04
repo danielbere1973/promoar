@@ -3352,13 +3352,7 @@ function NewsletterTab() {
           </div>
           <div className="flex items-center gap-2">
             {selectedUserIds.size > 0 && (
-              <button
-                onClick={sendToSelected}
-                disabled={sendingSelected || !subject}
-                className="text-xs bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold px-3 py-1.5 rounded-lg transition-colors"
-              >
-                {sendingSelected ? 'Enviando...' : `Enviar a ${selectedUserIds.size} seleccionado(s)`}
-              </button>
+              <span className="text-[11px] text-indigo-500 font-bold">{selectedUserIds.size} seleccionado{selectedUserIds.size > 1 ? 's' : ''}</span>
             )}
             <button
               onClick={() => setSelectedUserIds(selectedUserIds.size === subscribers.length ? new Set() : new Set(subscribers.map(u => u.id)))}
@@ -3488,7 +3482,7 @@ function NewsletterTab() {
             {msg.text}
           </div>
         )}
-        <div className="flex gap-2 pt-1">
+        <div className="flex flex-wrap gap-2 pt-1">
           <button
             onClick={sendPersonalizedPreview}
             disabled={previewingPersonalized || !subject}
@@ -3496,6 +3490,15 @@ function NewsletterTab() {
           >
             <Eye size={13} /> {previewingPersonalized ? 'Enviando...' : 'Preview a mí'}
           </button>
+          {selectedUserIds.size > 0 && (
+            <button
+              onClick={sendToSelected}
+              disabled={sendingSelected || !subject}
+              className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-indigo-400 text-white rounded-xl hover:bg-indigo-300 disabled:opacity-40 transition-all"
+            >
+              <Send size={13} /> {sendingSelected ? 'Enviando...' : `Enviar a ${selectedUserIds.size} seleccionado${selectedUserIds.size > 1 ? 's' : ''}`}
+            </button>
+          )}
           <button
             onClick={sendPersonalizedAll}
             disabled={sendingPersonalized || !subject || subscribers.length === 0}
