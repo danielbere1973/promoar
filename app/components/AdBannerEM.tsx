@@ -71,6 +71,7 @@ export function AdBannerEM() {
             <TikTokIcon size={12} />
             <span className="text-[10px] font-bold" style={{ color: '#000' }}>estacion.mascotera</span>
           </div>
+          <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#3d27c8' }}>🌐 estacionmascotera.com.ar</p>
         </div>
       </div>
     </a>
