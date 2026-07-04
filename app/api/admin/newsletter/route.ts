@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token || token.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [subscribers, nonSubscribers, total] = await Promise.all([
+  const [subscribers, nonSubscribers, usersWithoutProfile, total] = await Promise.all([
     prisma.user.findMany({
       where: { newsletterOptIn: true },
       select: { id: true, name: true, email: true, newsletterOptInAt: true, createdAt: true },
@@ -23,10 +23,15 @@ export async function GET(req: NextRequest) {
       select: { id: true, name: true, email: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.user.findMany({
+      where: { financialProfile: null },
+      select: { id: true, name: true, email: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    }),
     prisma.user.count(),
   ])
 
-  return NextResponse.json({ subscribers, nonSubscribers, total, optOut: nonSubscribers.length })
+  return NextResponse.json({ subscribers, nonSubscribers, usersWithoutProfile, total, optOut: nonSubscribers.length })
 }
 
 // POST — enviar newsletter

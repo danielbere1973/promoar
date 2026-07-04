@@ -3107,6 +3107,8 @@ function NewsletterTab() {
   const [sendingSelected, setSendingSelected] = useState(false)
   const [sendingWelcomePreview, setSendingWelcomePreview] = useState(false)
   const [sendingActivateProfile, setSendingActivateProfile] = useState(false)
+  const [noProfileUsers, setNoProfileUsers] = useState<Array<{ id: string; name: string | null; email: string }>>([])
+  const [selectedNoProfileIds, setSelectedNoProfileIds] = useState<Set<string>>(new Set())
 
   async function sendWelcomePreview() {
     setSendingWelcomePreview(true)
@@ -3128,6 +3130,20 @@ function NewsletterTab() {
     setMsg(res.ok ? { type: 'success', text: '✅ Preview "activar perfil" enviado a tu email' } : { type: 'error', text: d.error })
   }
 
+  async function sendActivateProfileSelected() {
+    if (selectedNoProfileIds.size === 0) return
+    if (!confirm(`¿Enviar el email a ${selectedNoProfileIds.size} usuario(s) seleccionado(s)?`)) return
+    setSendingActivateProfile(true)
+    const res = await fetch('/api/admin/newsletter/send-activate-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userIds: Array.from(selectedNoProfileIds) }),
+    })
+    const d = await res.json()
+    setSendingActivateProfile(false)
+    setMsg(res.ok ? { type: 'success', text: `✅ Enviado a ${d.sent} usuario(s)` } : { type: 'error', text: d.error })
+  }
+
   async function sendActivateProfileAll() {
     if (!confirm('¿Enviar el email "completá tu perfil" a todos los usuarios sin perfil financiero?')) return
     setSendingActivateProfile(true)
@@ -3147,6 +3163,7 @@ function NewsletterTab() {
       .then(d => {
         setSubscribers(d.subscribers ?? [])
         setNonSubscribers(d.nonSubscribers ?? [])
+        setNoProfileUsers(d.usersWithoutProfile ?? [])
         setTotal(d.total ?? 0)
         setOptOut(d.optOut ?? 0)
       })
@@ -3311,34 +3328,80 @@ function NewsletterTab() {
               </button>
             </div>
           </div>
-          <div className="px-5 py-4 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-slate-800">Completá tu perfil</p>
-              <p className="text-xs text-slate-400 mt-0.5">Usuarios sin perfil financiero · <span className="font-bold text-slate-600">{total - subscribers.length} destinatarios</span></p>
+          <div className="px-5 py-4 border-t border-slate-100">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-slate-800">Completá tu perfil</p>
+                <p className="text-xs text-slate-400 mt-0.5">Usuarios sin perfil financiero · <span className="font-bold text-slate-600">{noProfileUsers.length} destinatarios</span></p>
+              </div>
+              <div className="flex flex-wrap gap-2 shrink-0 justify-end">
+                <a
+                  href="/api/admin/newsletter/preview-html?type=activate-profile"
+                  target="_blank"
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all"
+                >
+                  <Eye size={13} /> Ver
+                </a>
+                <button
+                  onClick={sendActivateProfilePreview}
+                  disabled={sendingActivateProfile}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-[#1E3A5F] text-[#1E3A5F] rounded-xl hover:bg-[#1E3A5F]/5 disabled:opacity-40 transition-all"
+                >
+                  <Send size={13} /> {sendingActivateProfile ? '...' : 'Enviar a mí'}
+                </button>
+                {selectedNoProfileIds.size > 0 && (
+                  <button
+                    onClick={sendActivateProfileSelected}
+                    disabled={sendingActivateProfile}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 disabled:opacity-40 transition-all"
+                  >
+                    <Send size={13} /> {sendingActivateProfile ? '...' : `Enviar a ${selectedNoProfileIds.size} seleccionado${selectedNoProfileIds.size > 1 ? 's' : ''}`}
+                  </button>
+                )}
+                <button
+                  onClick={sendActivateProfileAll}
+                  disabled={sendingActivateProfile}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-amber-500 text-white rounded-xl hover:bg-amber-600 disabled:opacity-40 transition-all"
+                >
+                  <Send size={13} /> {sendingActivateProfile ? 'Enviando...' : 'Enviar a todos'}
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <a
-                href="/api/admin/newsletter/preview-html?type=activate-profile"
-                target="_blank"
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all"
-              >
-                <Eye size={13} /> Ver
-              </a>
-              <button
-                onClick={sendActivateProfilePreview}
-                disabled={sendingActivateProfile}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-[#1E3A5F] text-[#1E3A5F] rounded-xl hover:bg-[#1E3A5F]/5 disabled:opacity-40 transition-all"
-              >
-                <Send size={13} /> {sendingActivateProfile ? '...' : 'Enviar a mí'}
-              </button>
-              <button
-                onClick={sendActivateProfileAll}
-                disabled={sendingActivateProfile}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-amber-500 text-white rounded-xl hover:bg-amber-600 disabled:opacity-40 transition-all"
-              >
-                <Send size={13} /> {sendingActivateProfile ? 'Enviando...' : 'Enviar a todos'}
-              </button>
-            </div>
+            {noProfileUsers.length > 0 && (
+              <div className="mt-3 border border-slate-100 rounded-xl overflow-hidden">
+                <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {selectedNoProfileIds.size > 0 ? <span className="text-indigo-500 font-bold">{selectedNoProfileIds.size} seleccionado{selectedNoProfileIds.size > 1 ? 's' : ''}</span> : 'Seleccioná para envío parcial'}
+                  </span>
+                  <button
+                    onClick={() => setSelectedNoProfileIds(selectedNoProfileIds.size === noProfileUsers.length ? new Set() : new Set(noProfileUsers.map(u => u.id)))}
+                    className="text-[11px] text-slate-400 hover:text-slate-600 font-medium"
+                  >
+                    {selectedNoProfileIds.size === noProfileUsers.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-50 max-h-36 overflow-y-auto">
+                  {noProfileUsers.map(u => (
+                    <label key={u.id} className="px-4 py-2 flex items-center gap-3 hover:bg-slate-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedNoProfileIds.has(u.id)}
+                        onChange={e => {
+                          const next = new Set(selectedNoProfileIds)
+                          e.target.checked ? next.add(u.id) : next.delete(u.id)
+                          setSelectedNoProfileIds(next)
+                        }}
+                        className="w-4 h-4 accent-indigo-600"
+                      />
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700">{u.name || '—'}</p>
+                        <p className="text-xs text-slate-400">{u.email}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

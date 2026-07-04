@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token || token.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { preview } = await req.json().catch(() => ({}))
+  const { preview, userIds } = await req.json().catch(() => ({}))
 
   // Promos reales top para usar como ejemplo en el email
   const topPromos = await prisma.promo.findMany({
@@ -57,9 +57,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: 1, mode: 'preview' })
   }
 
-  // Usuarios registrados sin perfil financiero
+  // Usuarios registrados sin perfil financiero (o selección específica)
   const targets = await prisma.user.findMany({
-    where: { financialProfile: null },
+    where: Array.isArray(userIds) && userIds.length > 0
+      ? { id: { in: userIds } }
+      : { financialProfile: null },
     select: { id: true, email: true, name: true },
   })
 
