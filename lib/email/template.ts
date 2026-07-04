@@ -44,8 +44,15 @@ export function emailWrapper(content: string, userId: string): string {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);max-width:100%">
         <tr><td style="background:#1E3A5F;padding:24px 32px">
-          <p style="margin:0;color:#ffffff;font-size:22px;font-weight:900;letter-spacing:-0.5px">PromoAR</p>
-          <p style="margin:4px 0 0;color:#93b4d4;font-size:13px">Ahorrá en cada compra con tus tarjetas y bancos</p>
+          <table cellpadding="0" cellspacing="0"><tr>
+            <td style="vertical-align:middle;padding-right:12px">
+              <img src="${BASE_URL}/promoar_logo_transparent.png" width="48" height="48" alt="PromoAR" style="display:block;border-radius:8px" />
+            </td>
+            <td style="vertical-align:middle">
+              <p style="margin:0;color:#ffffff;font-size:22px;font-weight:900;letter-spacing:-0.5px">PromoAR</p>
+              <p style="margin:2px 0 0;color:#93b4d4;font-size:13px">Ahorrá en cada compra con tus tarjetas y bancos</p>
+            </td>
+          </tr></table>
         </td></tr>
         <tr><td style="padding:32px">
           ${content}

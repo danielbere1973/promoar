@@ -9,7 +9,7 @@ interface MultiUnitPromo {
   requiredQty: number
 }
 
-const BANK_PROMO_EXCLUSION_RE = /sin\s+desc|exclu[íi]d|pnp|no\s+promo|canasta\s+b[áa]s|no\s+elegible|no\s+aplica\s+promo|producto\s+no\s+promoc/i
+const BANK_PROMO_EXCLUSION_RE = /sin\s+desc|exclu[íi]d|pnp|no\s+promo|canasta\s+b[áa]s|no\s+elegible|no\s+aplica\s+promo|producto\s+no\s+promoc|no\s+acumul/i
 
 function isExcludedFromBankPromos(p: any): boolean {
   const clusters: string[] = [
@@ -18,6 +18,47 @@ function isExcludedFromBankPromos(p: any): boolean {
     ...Object.values(p.clusterHighlights || {}).map((v: any) => typeof v === 'object' ? v.name || '' : String(v)),
   ]
   return clusters.some(c => BANK_PROMO_EXCLUSION_RE.test(c))
+}
+
+// Marcas excluidas de promos bancarias en Coto (según legales vigentes)
+const COTO_EXCLUDED_BRANDS_RE = /\b(coca[\s-]?cola|fanta|sprite|schweppes|aquarius|smartwater|cepita|powerade|monster|crush|ades|hi[\s-]?c|benedictino|luigi\s+bosca|rutini|trumpeter|chandon|terrazas\s+de\s+los\s+andes|norton|catena|cadus|monteviejo|baron\s+b|dom\s+perignon|pommery|mo[eë]t|krug|alma\s+negra|animal\s+wines?|saint\s+felicien|nicasia|tilia|la\s+posta|aruma|luca\b|bianchi|valent[íi]n\s+bianchi)\b/i
+
+// Categorías excluidas de promos bancarias en Coto (según legales vigentes)
+const COTO_EXCLUDED_CATEGORY_RE = /electrodom[eé]stico|rodado|neum[áa]tico|bicicleta|menudencia|carne\s+elaborada|leche\s+infantil|harina\b|az[úu]car\b|aceite\s+girasol|aceite\s+mezcla|pollo\s+entero|novillo|novillito|ternera\b|carnes\s+frescas/i
+
+// Carrefour — marcas excluidas según legales vigentes
+const CARREFOUR_EXCLUDED_BRANDS_RE = /\b(alamos|altaland|ang[eé]lica\s+zapata|aruma|caro\b|casa\s+de\s+herrero|chandon|cuchillo\s+de\s+palo|d\.?v\.?\s*catena|el\s+enemigo|la\s+posta|luca\b|luigi\s+bosca|nicasia|ojo\s+de\s+buen\s+cubero|ribera\s+del\s+cuarzo|rutini|saint\s+felicien|san\s+felipe|valmont)\b/i
+
+// Carrefour — categorías excluidas según legales vigentes
+const CARREFOUR_EXCLUDED_CATEGORY_RE = /electrodom[eé]stico|telefon[íi]a|fotograf[íi]a|inform[áa]tica|imagen\s+y\s+sonido|sonido\b|leche\s+infantil|maternizada|carncer[íi]a|carne\s+vacuna|cerdo\b|embutido|conservadora\s+de\s+cerveza/i
+
+function isCarrefourExcludedFromBankPromos(p: any): boolean {
+  const brand = (p.brand || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (CARREFOUR_EXCLUDED_BRANDS_RE.test(brand)) return true
+  const nameAndCat = `${p.name || ''} ${p.vtexCategory || ''}`.normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (CARREFOUR_EXCLUDED_CATEGORY_RE.test(nameAndCat)) return true
+  return false
+}
+
+function isCotoExcludedFromBankPromos(d: any): boolean {
+  // Señal directa: imagen "NoAcumulable" en alguna lista de precios
+  const prices: any[] = d.price || []
+  if (prices.some((p: any) => p.saleImage2 === 'NoAcumulable.png' || p.saleImage1 === 'NoAcumulable.png')) return true
+
+  // Señal directa: comments en algún descuento activo
+  const discounts: any[] = d.discounts || []
+  if (discounts.some((disc: any) => BANK_PROMO_EXCLUSION_RE.test(disc.comments || ''))) return true
+
+  // Marcas excluidas según legales vigentes
+  const brand = (d.product_brand || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (COTO_EXCLUDED_BRANDS_RE.test(brand)) return true
+
+  // Categorías excluidas — usando la jerarquía de grupos que trae la API
+  const groupNames = (d.groups || []).map((g: any) => g.display_name || '').join(' ')
+  const nameAndGroups = `${d.sku_display_name || ''} ${groupNames}`.normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (COTO_EXCLUDED_CATEGORY_RE.test(nameAndGroups)) return true
+
+  return false
 }
 
 interface NormalizedProduct {
@@ -684,7 +725,8 @@ async function searchCoto(query: string, isCategory = false): Promise<Normalized
         discountText: discountText,
         imageUrl: d.image_url || '',
         url: d.url ? `https://www.cotodigital.com.ar/sitios/cdigi/productos/detalle/_/${d.url}` : '',
-        multiUnitPromo: parseMultiUnitPromo(discountText, pList)
+        multiUnitPromo: parseMultiUnitPromo(discountText, pList),
+        excludedFromBankPromos: isCotoExcludedFromBankPromos(d)
       }
     })
   } catch (error) {
@@ -1457,6 +1499,16 @@ export async function GET(request: Request) {
 
     allProducts = allProducts.filter(p => p.finalPrice > 0)
 
+    // Exclusiones de promos bancarias — aplicar reglas por supermercado
+    allProducts = allProducts.map(p => {
+      if (p.excludedFromBankPromos) return p  // ya marcado por la función del scraper (ej. Coto)
+      let excluded = false
+      if (p.supermarket === 'Carrefour') excluded = isCarrefourExcludedFromBankPromos(p)
+      // Regla general: si el super ya tiene su propia promo sobre el producto, no se acumula con banco
+      if (!excluded && p.price > p.finalPrice) excluded = true
+      return excluded ? { ...p, excludedFromBankPromos: true } : p
+    })
+
     // Para búsquedas de texto libre: descartar productos irrelevantes.
     // VTEX IS a veces devuelve top-sellers sin relación con la query.
     // Para electrónica SIEMPRE filtramos (cat o no) porque electroQ es siempre texto libre.
@@ -1499,17 +1551,18 @@ export async function GET(request: Request) {
           name: p.name,
           brand: p.brand,
           imageUrl: p.imageUrl,
+          excludedFromBankPromos: false,
           excludedFromBankPromos: p.excludedFromBankPromos ?? false,
           markets: {}
         })
       }
 
       const g = grouped.get(groupKey)
-      // Si cualquier fuente marca el producto como excluido de promos bancarias, lo marcamos a nivel grupo
+      // Si cualquier fuente marca el producto como excluido, lo marcamos a nivel grupo Y en el market específico
       if (p.excludedFromBankPromos) g.excludedFromBankPromos = true
       // Si el súper actual ya tiene este producto y este es MÁS BARATO, lo pisamos (por si el scraper trajo duplicados de la misma tienda)
       if (!g.markets[p.supermarket] || g.markets[p.supermarket].finalPrice > p.finalPrice) {
-         g.markets[p.supermarket] = p
+         g.markets[p.supermarket] = p  // p ya incluye excludedFromBankPromos por market
       }
     })
 

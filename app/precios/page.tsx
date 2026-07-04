@@ -65,6 +65,7 @@ interface CartRow {
     promoLabel?: string
     promoQty?: number
     jumboCheck?: number
+    excludedFromBankPromos?: boolean
     url: string
   }>
 }
@@ -387,7 +388,7 @@ function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffect
               <div className="border-t border-white/10">
                 {allMarkets.map(market => {
                   const m = row.markets[market]
-                  if (!m || !m.promoLabel) return null
+                  if (!m || (!m.promoLabel && !m.excludedFromBankPromos)) return null
                   const promoActiva = m.promoQty ? row.quantity >= m.promoQty : false
                   const faltanParaPromo = m.promoQty && !promoActiva ? m.promoQty - row.quantity : 0
                   const precioUnit = getEffectivePrice(m, row.quantity)
@@ -397,9 +398,14 @@ function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffect
                         <span className={`w-1.5 h-1.5 rounded-full ${SUPERMARKET_DOT[market] || SUPERMARKET_DOT.default}`} />
                         <div>
                           <p className="text-[10px] font-bold text-slate-300">{market}</p>
-                          <p className={`text-[9px] font-bold ${promoActiva ? 'text-orange-400' : 'text-amber-500/60'}`}>
-                            🔥 {m.promoLabel}{faltanParaPromo > 0 ? ` (agregá ${faltanParaPromo} más)` : ''}
-                          </p>
+                          {m.promoLabel && (
+                            <p className={`text-[9px] font-bold ${promoActiva ? 'text-orange-400' : 'text-amber-500/60'}`}>
+                              🔥 {m.promoLabel}{faltanParaPromo > 0 ? ` (agregá ${faltanParaPromo} más)` : ''}
+                            </p>
+                          )}
+                          {m.excludedFromBankPromos && (
+                            <p className="text-[9px] font-bold text-amber-400">⚠️ sin promo bancaria</p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right">
@@ -585,6 +591,7 @@ export default function PreciosPage() {
         promoLabel: m.multiUnitPromo?.label || (hasDiscount && m.discountText !== '-' ? m.discountText : undefined),
         promoQty: m.multiUnitPromo?.requiredQty,
         jumboCheck: m.jumboCheck,
+        excludedFromBankPromos: m.excludedFromBankPromos,
         url: m.url,
       }
     }
@@ -1068,11 +1075,6 @@ export default function PreciosPage() {
                       <div>
                         <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{p.brand}</p>
                         <h4 className="text-base font-medium text-slate-200 line-clamp-2 leading-snug mt-1">{p.name}</h4>
-                        {p.excludedFromBankPromos && (
-                          <p className="mt-1.5 text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5 inline-block">
-                            ⚠️ No aplica a promos bancarias
-                          </p>
-                        )}
                       </div>
 
                       {/* Badge precio normal */}
@@ -1155,11 +1157,6 @@ export default function PreciosPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-400 uppercase tracking-wider">{selectedProduct.brand}</p>
                 <p className="text-sm font-semibold text-white leading-snug mt-0.5">{selectedProduct.name}</p>
-                {selectedProduct.excludedFromBankPromos && (
-                  <p className="mt-1 text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5 inline-block">
-                    ⚠️ No aplica a promos bancarias
-                  </p>
-                )}
               </div>
               <button onClick={() => setSelectedProduct(null)} className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors flex-shrink-0">
                 <X className="w-5 h-5" />
@@ -1199,6 +1196,9 @@ export default function PreciosPage() {
                               )}
                               {(m as any).jumboCheck && (
                                 <p className="text-[10px] font-black text-green-400 mt-0.5">J{(m as any).jumboCheck}% Jumbo Cheques</p>
+                              )}
+                              {(m as any).excludedFromBankPromos && (
+                                <p className="text-[10px] font-bold text-amber-400 mt-0.5">⚠️ sin promo bancaria</p>
                               )}
                             </div>
                           </div>
@@ -1382,6 +1382,9 @@ export default function PreciosPage() {
                               <p className={`text-[9px] font-bold mt-0.5 ${promoActiva ? 'text-orange-400' : 'text-amber-500/60'}`}>
                                 🔥 {m.promoLabel}{!promoActiva && faltanParaPromo > 0 ? ` (+${faltanParaPromo})` : ''}
                               </p>
+                            )}
+                            {m.excludedFromBankPromos && (
+                              <p className="text-[9px] font-bold mt-0.5 text-amber-400">⚠️ sin promo bancaria</p>
                             )}
                             <p className="text-[10px] text-slate-500 mt-1">{formatPrice(totalLine)}</p>
                             <button

@@ -3103,6 +3103,17 @@ function NewsletterTab() {
   const [showPreview, setShowPreview] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [history, setHistory] = useState<Array<{ id: string; subject: string; html: string; sentTo: number; errors: number; sentAt: string }>>([])
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
+  const [sendingSelected, setSendingSelected] = useState(false)
+  const [sendingWelcomePreview, setSendingWelcomePreview] = useState(false)
+
+  async function sendWelcomePreview() {
+    setSendingWelcomePreview(true)
+    const res = await fetch('/api/admin/newsletter/send-welcome-preview', { method: 'POST' })
+    const d = await res.json()
+    setSendingWelcomePreview(false)
+    setMsg(res.ok ? { type: 'success', text: '✅ Email de bienvenida enviado a tu email' } : { type: 'error', text: d.error })
+  }
 
   function loadData() {
     fetch('/api/admin/newsletter')
@@ -3175,6 +3186,20 @@ function NewsletterTab() {
     }
   }
 
+  async function sendToSelected() {
+    if (!subject || selectedUserIds.size === 0) return
+    if (!confirm(`¿Enviar newsletter a ${selectedUserIds.size} usuario(s) seleccionado(s)?`)) return
+    setSendingSelected(true)
+    const res = await fetch('/api/admin/newsletter/send-personalized', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, themeId: selectedTheme, userIds: Array.from(selectedUserIds) }),
+    })
+    const d = await res.json()
+    setSendingSelected(false)
+    setMsg(res.ok ? { type: 'success', text: `✅ Enviada a ${d.sent} usuario(s)${d.errors > 0 ? ` (${d.errors} errores)` : ''}` } : { type: 'error', text: d.error })
+  }
+
   async function sendAll() {
     if (!confirm(`¿Enviar a ${subscribers.length} suscriptores?`)) return
     setSending(true)
@@ -3233,16 +3258,47 @@ function NewsletterTab() {
 
       {/* Lista suscriptores */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-          <Users2 size={15} className="text-slate-400" />
-          <span className="text-sm font-bold text-slate-700">Suscriptores</span>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users2 size={15} className="text-slate-400" />
+            <span className="text-sm font-bold text-slate-700">Suscriptores</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedUserIds.size > 0 && (
+              <button
+                onClick={sendToSelected}
+                disabled={sendingSelected || !subject}
+                className="text-xs bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {sendingSelected ? 'Enviando...' : `Enviar a ${selectedUserIds.size} seleccionado(s)`}
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedUserIds(selectedUserIds.size === subscribers.length ? new Set() : new Set(subscribers.map(u => u.id)))}
+              className="text-[11px] text-slate-400 hover:text-slate-600 font-medium"
+            >
+              {selectedUserIds.size === subscribers.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+            </button>
+          </div>
         </div>
         <div className="divide-y divide-slate-50 max-h-48 overflow-y-auto">
           {subscribers.map(u => (
             <div key={u.id} className="px-5 py-2.5 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-slate-700">{u.name || '—'}</p>
-                <p className="text-xs text-slate-400">{u.email}</p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={selectedUserIds.has(u.id)}
+                  onChange={e => {
+                    const next = new Set(selectedUserIds)
+                    e.target.checked ? next.add(u.id) : next.delete(u.id)
+                    setSelectedUserIds(next)
+                  }}
+                  className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                />
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">{u.name || '—'}</p>
+                  <p className="text-xs text-slate-400">{u.email}</p>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <p className="text-[10px] text-slate-300">{u.newsletterOptInAt ? new Date(u.newsletterOptInAt).toLocaleDateString('es-AR') : ''}</p>
@@ -3426,6 +3482,17 @@ function NewsletterTab() {
             className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-[#1E3A5F] text-white rounded-xl hover:bg-[#142840] disabled:opacity-40 transition-all"
           >
             <Send size={13} /> {sending ? 'Enviando...' : `Enviar a ${subscribers.length} suscriptores`}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+          <span className="text-[11px] text-slate-400 font-semibold">Email de bienvenida:</span>
+          <button
+            onClick={sendWelcomePreview}
+            disabled={sendingWelcomePreview}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all"
+          >
+            <Eye size={12} /> {sendingWelcomePreview ? 'Enviando...' : 'Preview bienvenida'}
           </button>
         </div>
       </div>

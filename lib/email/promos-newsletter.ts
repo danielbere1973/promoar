@@ -1,13 +1,13 @@
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
-function discountLabel(discountType: string, discountValue: number): string {
+function discountLabel(discountType: string, discountValue: number, nxmN?: number | null, nxmM?: number | null): string {
   switch (discountType) {
     case 'PERCENTAGE_REINTEGRO':   return `${discountValue}% reintegro`
     case 'PERCENTAGE_DESCUENTO':   return `${discountValue}% descuento`
     case 'CUOTAS_SIN_INTERES':     return `${discountValue} cuotas sin interés`
     case 'BONIFICACION':           return `${discountValue}% bonificación`
     case 'FIXED_AMOUNT':           return `$${discountValue} de descuento`
-    case 'NXM':                    return `${discountValue}x1`
+    case 'NXM':                    return nxmN && nxmM ? `${nxmN}x${nxmM}` : `${nxmN ?? '?'}x${nxmM ?? '?'}`
     default: return `${discountValue}%`
   }
 }
@@ -28,6 +28,8 @@ export interface PromoForEmail {
   categoryName: string
   discountType: string
   discountValue: number
+  nxmN?: number | null
+  nxmM?: number | null
   entityName: string
   validDays: number | null
   validUntil: Date | null
@@ -46,7 +48,7 @@ function daysChip(validDays: number | null): string {
 
 function promoCard(p: PromoForEmail, last = false): string {
   const colors = CARD_COLORS[p.discountType] || CARD_COLORS.default
-  const label = discountLabel(p.discountType, p.discountValue)
+  const label = discountLabel(p.discountType, p.discountValue, p.nxmN, p.nxmM)
   const url = p.slug ? `${BASE_URL}/promos/${p.slug}` : BASE_URL
   const days = daysChip(p.validDays)
 
@@ -64,8 +66,8 @@ function promoCard(p: PromoForEmail, last = false): string {
             ${p.hasCap ? '<p style="margin:0 0 6px;font-size:10px;color:#aaa">Tiene tope</p>' : ''}
           </td>
           ${p.commerceLogo ? `
-          <td width="44" style="vertical-align:top;padding-left:10px">
-            <img src="${p.commerceLogo}" width="36" height="36" alt="${p.commerceName}" style="border-radius:8px;object-fit:contain;border:1px solid #e5e7eb;background:#fff;display:block" />
+          <td width="68" style="vertical-align:top;padding-left:12px">
+            <img src="${p.commerceLogo}" width="56" height="56" alt="${p.commerceName}" style="border-radius:10px;object-fit:contain;border:1px solid #e5e7eb;background:#fff;display:block" />
           </td>` : ''}
         </tr>
       </table>
@@ -130,7 +132,7 @@ export function byDayPromoEmail(
   const sections = grouped.map(({ dayLabel, promos }) => {
     const rows = promos.slice(0, 3).map(p => {
       const colors = CARD_COLORS[p.discountType] || CARD_COLORS.default
-      const label = discountLabel(p.discountType, p.discountValue)
+      const label = discountLabel(p.discountType, p.discountValue, p.nxmN, p.nxmM)
       const url = p.slug ? `${BASE_URL}/promos/${p.slug}` : BASE_URL
       return `
 <tr>

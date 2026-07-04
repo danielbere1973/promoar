@@ -54,7 +54,7 @@ async function getPromos(entity: EntityInfo, page: number) {
           take: 1,
         },
       },
-      orderBy: [{ maxDiscountPct: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ isCSIOnly: 'asc' }, { maxDiscountPct: 'desc' }, { commerce: { activePromoCount: 'desc' } }, { id: 'asc' }],
       take: PAGE_SIZE,
       skip: (page - 1) * PAGE_SIZE,
     }),

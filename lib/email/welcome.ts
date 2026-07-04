@@ -17,8 +17,15 @@ export function welcomeEmail(name?: string | null): string {
 
         <!-- HEADER -->
         <tr><td style="background:linear-gradient(135deg,#1E3A5F 0%,#2563a8 100%);padding:36px 40px 32px">
-          <p style="margin:0;color:#ffffff;font-size:28px;font-weight:900;letter-spacing:-1px">PromoAR</p>
-          <p style="margin:6px 0 0;color:#93b4d4;font-size:14px;font-weight:400">Todas las promos de tus tarjetas y bancos, en un lugar</p>
+          <table cellpadding="0" cellspacing="0"><tr>
+            <td style="vertical-align:middle;padding-right:14px">
+              <img src="${BASE_URL}/promoar_logo_transparent.png" width="52" height="52" alt="PromoAR" style="display:block;border-radius:10px" />
+            </td>
+            <td style="vertical-align:middle">
+              <p style="margin:0;color:#ffffff;font-size:28px;font-weight:900;letter-spacing:-1px">PromoAR</p>
+              <p style="margin:4px 0 0;color:#93b4d4;font-size:14px;font-weight:400">Todas las promos de tus tarjetas y bancos, en un lugar</p>
+            </td>
+          </tr></table>
         </td></tr>
 
         <!-- HERO -->

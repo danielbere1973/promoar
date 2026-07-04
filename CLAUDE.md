@@ -1,5 +1,8 @@
 # PromoAR — Contexto del proyecto
 
+## Skills — uso automático
+Cuando el usuario pida diseñar, crear o rediseñar cualquier interfaz web (página, pantalla, componente, layout, sección visual), invocar automáticamente la skill `frontend-design` antes de empezar a escribir código.
+
 App Next.js 14 (App Router) + Prisma + PostgreSQL (CockroachDB) que agrega y muestra promociones bancarias de Argentina.
 
 ## Stack

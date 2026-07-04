@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token || token.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { subject, themeId = 'top3-finde', preview } = await req.json()
+  const { subject, themeId = 'top3-finde', preview, userIds } = await req.json()
   if (!subject) return NextResponse.json({ error: 'Falta subject' }, { status: 400 })
 
   const theme = THEME_BY_ID[themeId] || NEWSLETTER_THEMES[0]
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       commerce: { select: { name: true, logoUrl: true } },
       category: { select: { name: true } },
       requirements: {
-        select: { bankId: true, walletId: true, cardNetworkId: true, cardSegmentId: true, discountType: true, discountValue: true, cap: true, capUnlimited: true, bank: { select: { name: true } }, wallet: { select: { name: true } } },
+        select: { bankId: true, walletId: true, cardNetworkId: true, cardSegmentId: true, discountType: true, discountValue: true, nxmN: true, nxmM: true, cap: true, capUnlimited: true, bank: { select: { name: true } }, wallet: { select: { name: true } } },
         orderBy: { discountValue: 'desc' },
         take: 1,
       },
@@ -62,9 +62,12 @@ export async function POST(req: NextRequest) {
     ? promos.filter(p => ((p.validDays ?? 127) & theme.dayBitmask!) !== 0)
     : promos
 
-  // 2. Fetch suscriptores con perfiles
+  // 2. Fetch suscriptores con perfiles (filtrar por userIds si se especifica)
+  const subscriberWhere: any = userIds?.length
+    ? { id: { in: userIds } }
+    : { newsletterOptIn: true }
   const subscribers = await prisma.user.findMany({
-    where: { newsletterOptIn: true },
+    where: subscriberWhere,
     select: {
       id: true, name: true, email: true,
       financialProfile: {
@@ -78,17 +81,18 @@ export async function POST(req: NextRequest) {
   })
 
   if (preview) {
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
+    // Usar el email del token de sesión, no findFirst(role=ADMIN)
+    const sessionUser = await prisma.user.findUnique({
+      where: { email: token.email as string },
       select: { id: true, email: true, name: true, financialProfile: { select: { banks: { select: { bankId: true } }, wallets: { select: { walletId: true } }, cards: { select: { cardSegmentId: true } } } } }
     })
-    if (!adminUser) return NextResponse.json({ error: 'No hay admin' }, { status: 500 })
-    const html = buildHtml(adminUser, filteredPromos, theme, subject)
+    if (!sessionUser) return NextResponse.json({ error: 'No se encontró el usuario' }, { status: 500 })
+    const html = buildHtml(sessionUser, filteredPromos, theme, subject)
     await resend.emails.send({
       from: 'PromoAR <noreply@promoar.com.ar>',
-      to: adminUser.email,
+      to: sessionUser.email,
       subject: `[PREVIEW] ${subject}`,
-      html: emailWrapper(html, adminUser.id),
+      html: emailWrapper(html, sessionUser.id),
     })
     return NextResponse.json({ ok: true, sent: 1, mode: 'preview' })
   }
@@ -166,6 +170,8 @@ function buildHtml(
       categoryName: p.category.name,
       discountType: req?.discountType || 'PERCENTAGE_DESCUENTO',
       discountValue: req?.discountValue || 0,
+      nxmN: req?.nxmN ?? null,
+      nxmM: req?.nxmM ?? null,
       entityName,
       validDays: p.validDays,
       validUntil: p.validUntil,
@@ -186,6 +192,8 @@ function buildHtml(
           categoryName: p.category.name,
           discountType: req?.discountType || 'PERCENTAGE_DESCUENTO',
           discountValue: req?.discountValue || 0,
+          nxmN: req?.nxmN ?? null,
+          nxmM: req?.nxmM ?? null,
           entityName: req?.bank?.name || req?.wallet?.name || '—',
           validDays: p.validDays,
           validUntil: p.validUntil,
