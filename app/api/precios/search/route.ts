@@ -292,7 +292,7 @@ async function searchCoopeEnCasa(query: string): Promise<NormalizedProduct[]> {
     })
     if (!res.ok) return []
     const data = await res.json()
-    const items: any[] = Array.isArray(data) ? data : (data.data || data.items || [])
+    const items: any[] = Array.isArray(data) ? data : (data.datos || data.data || data.items || [])
     return items.map((p: any) => {
       const price = parseFloat(p.precio || '0')
       const promoPrice = p.precio_promo ? parseFloat(p.precio_promo) : null
