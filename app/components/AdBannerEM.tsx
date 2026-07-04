@@ -169,7 +169,19 @@ export function AdBannerEM() {
         </div>
       </div>
 
-      {/* ── 4. QR — columna derecha, full height ── */}
+      {/* ── 4. MARCAS — solo desktop grande ── */}
+      <div className="hidden lg:flex items-center shrink-0 px-1">
+        <div className="relative" style={{ width: 440, height: 160 }}>
+          <Image
+            src="/EM/marcas.png"
+            alt="Nuestras marcas"
+            fill
+            className="object-contain object-center"
+          />
+        </div>
+      </div>
+
+      {/* ── 5. QR — columna derecha, full height ── */}
       <div
         className="hidden sm:block relative shrink-0 h-full"
         style={{ width: 140, background: 'rgba(255,255,255,0.4)' }}
