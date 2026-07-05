@@ -27,6 +27,14 @@ function TikTokIcon({ size = 15 }: { size?: number }) {
   )
 }
 
+function trackClick() {
+  fetch('/api/track/click', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bannerId: 'em' }),
+  }).catch(() => {})
+}
+
 export function AdBannerEM() {
   const [idx, setIdx] = useState(0)
 
@@ -44,6 +52,7 @@ export function AdBannerEM() {
       rel="noopener noreferrer"
       className="mb-4 flex sm:hidden items-stretch rounded-2xl overflow-hidden"
       style={{ background: '#f9eed2', minHeight: 100 }}
+      onClick={trackClick}
     >
       {/* Logo */}
       <div className="relative shrink-0" style={{ width: 100, minHeight: 100, background: 'rgba(255,255,255,0.3)' }}>
@@ -83,6 +92,7 @@ export function AdBannerEM() {
       rel="noopener noreferrer"
       className="mb-4 hidden sm:flex items-stretch rounded-2xl overflow-hidden h-[172px] group"
       style={{ background: '#f9eed2' }}
+      onClick={trackClick}
     >
 
       {/* ── 1. LOGO — columna izquierda, full height ── */}

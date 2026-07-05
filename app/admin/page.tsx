@@ -261,6 +261,38 @@ const MODO_CATEGORIAS = ['Supermercados', 'Combustible', 'Tecnologia', 'Petshops
 // ─── Main Component ───────────────────────────────────────────
 const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN ?? '1234'
 
+function BannerClickStats() {
+  const [stats, setStats] = useState<{ total: number; today: number } | null>(null)
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    fetch('/api/admin/site-config').then(r => r.json()).then((d: Record<string, string>) => {
+      setStats({
+        total: parseInt(d[`banner_em_clicks_total`] ?? '0') || 0,
+        today: parseInt(d[`banner_em_clicks_${today}`] ?? '0') || 0,
+      })
+    }).catch(() => {})
+  }, [])
+  return (
+    <div className="mb-6 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Banner Estación Mascotera — Clicks</p>
+      {stats === null ? (
+        <p className="text-sm text-gray-400">Cargando...</p>
+      ) : (
+        <div className="flex gap-6">
+          <div>
+            <p className="text-2xl font-black text-indigo-600">{stats.total}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Total histórico</p>
+          </div>
+          <div>
+            <p className="text-2xl font-black text-emerald-600">{stats.today}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Hoy</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PinGuard({ children }: { children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -988,6 +1020,9 @@ export default function AdminPage() {
               </div>
               <p className="text-[11px] text-gray-400 mt-1.5">Se muestra en el cartel azul de la pantalla principal.</p>
             </div>
+
+            {/* Banner EM — clicks */}
+            <BannerClickStats />
 
             {/* MercadoLibre OAuth */}
             <div className="mb-6 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">

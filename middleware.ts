@@ -20,6 +20,7 @@ const PUBLIC_PATHS = [
   '/api/precios',
   '/api/internal',
   '/api/r',
+  '/api/track',
   '/promos',
   '/precios',
   '/favicon.ico',
