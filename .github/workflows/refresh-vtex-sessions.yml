@@ -1,27 +1,49 @@
 name: Refresh VTEX Sessions
 
 on:
+  # Este job tarda ~3hs (150 categorías x 3 sitios). A día por medio (15
+  # corridas/mes x 180 min) se comía 2700 min/mes él solo, más que la cuota
+  # entera de 2000 min/mes de GH Actions. Bajado a:
+  #   1) 1 vez por semana (jueves, para llegar con cache fresco al fin de
+  #      semana — Cencosud suele renovar promos para el finde) = ~4
+  #      corridas/mes x 180 min = ~720 min/mes.
+  #   2) + el día hábil siguiente a cada feriado largo de 2026 (Cencosud
+  #      suele renovar promos para estos findes extendidos) = 8 fechas
+  #      puntuales x 180 min = ~1440 min/año (~120 min/mes promediado).
+  #      Calendario 2026 verificado (carnaval, semana santa, día del
+  #      trabajador, 25 de mayo, Güemes, San Martín, diversidad cultural,
+  #      soberanía nacional) — actualizar esta lista a fin de año para 2027.
+  #   Total estimado ~960 min/mes, sobra margen sobre la cuota de 2000.
+  # Para fechas no cubiertas (día del padre/madre/amigo, etc.) correr manual
+  # con workflow_dispatch (o local, ver CLAUDE.md "Refresh Cencosud local").
   schedule:
-    - cron: '0 6 */2 * *'   # día por medio a las 6am UTC
-  workflow_dispatch:          # trigger manual desde GitHub UI
+    - cron: '0 6 * * 4'    # jueves a las 6am UTC (semanal)
+    - cron: '0 6 18 2 *'   # miér 18/2 — post carnaval (16-17/2)
+    - cron: '0 6 6 4 *'    # lun 6/4 — post semana santa (3-5/4)
+    - cron: '0 6 4 5 *'    # lun 4/5 — post día del trabajador (1-3/5)
+    - cron: '0 6 26 5 *'   # mar 26/5 — post 25 de mayo (23-25/5)
+    - cron: '0 6 16 6 *'   # mar 16/6 — post Güemes (13-15/6)
+    - cron: '0 6 18 8 *'   # mar 18/8 — post San Martín (15-17/8)
+    - cron: '0 6 13 10 *'  # mar 13/10 — post diversidad cultural (10-12/10)
+    - cron: '0 6 24 11 *'  # mar 24/11 — post soberanía nacional (21-23/11)
+  workflow_dispatch:          # trigger manual desde GitHub UI (fechas no cubiertas arriba)
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Cache node_modules
+        uses: actions/cache@v4
         with:
-          node-version: '24'
+          path: node_modules
+          key: playwright-node-${{ hashFiles('package-lock.json') }}
 
-      - name: Install Playwright
-        run: |
-          npm install playwright
-          npx playwright install chromium --with-deps
-
-      - name: Install Xvfb (virtual display for non-headless Playwright)
-        run: sudo apt-get install -y xvfb
+      - name: Install dependencies
+        run: npm ci --prefer-offline
 
       - name: Refresh vtex promo cache
         env:
