@@ -247,6 +247,14 @@ const SCRAPERS_CONFIG: ScraperConfig[] = [
   { id: 'banco supervielle', name: 'Supervielle',   group: 'banco',        description: 'Next.js — tiers de cliente' },
   { id: 'banco patagonia', name: 'Patagonia',       group: 'banco',        description: 'Server-rendered — Mastercard' },
   { id: 'icbc',            name: 'ICBC',            group: 'banco',        description: 'Playwright — ignoreHTTPSErrors' },
+  { id: 'petersen',        name: 'Petersen',        group: 'banco',        description: 'Santa Fe + Entre Ríos + San Juan + Santa Cruz — Playwright' },
+  { id: 'bancor',          name: 'Bancor',          group: 'banco',        description: 'Banco de Córdoba — GraphQL público, sin WAF' },
+  { id: 'hipotecario',     name: 'Hipotecario',     group: 'banco',        description: 'WordPress — HTML server-rendered, sin WAF' },
+  { id: 'comafi',          name: 'Comafi',          group: 'banco',        description: 'Te Va Bien (tevabien.com) — JSON público, sin WAF' },
+  { id: 'banco del sol',   name: 'Banco del Sol',   group: 'banco',        description: 'Webflow — Playwright headed (WAF Akamai)' },
+  { id: 'nuevo banco del chaco', name: 'Nuevo Banco del Chaco', group: 'banco', description: 'Promo TUYA (nbch.com.ar) — JSON público, sin WAF' },
+  { id: 'banco del chubut', name: 'Banco del Chubut', group: 'banco', description: 'Patagonia 365 — JSON público, sin WAF, incluye lat/lng de sucursales' },
+  { id: 'banco de corrientes', name: 'Banco de Corrientes', group: 'banco', description: 'Promos del Banco (promosdelbanco.com) — WordPress/TablePress, sin WAF' },
 ]
 
 const GRUPO_LABEL: Record<ScraperGroup, string> = {
@@ -2158,6 +2166,7 @@ const PLAYWRIGHT_SCRAPER_IDS = new Set([
   'banco macro', 'naranjax', 'banco santander',
   'banco supervielle', 'banco ciudad', 'visa',
   'jumbo', 'disco', 'vea', 'banco patagonia',
+  'petersen', 'banco del sol',
 ])
 
 function ScraperSchedulerTab() {
@@ -2353,6 +2362,46 @@ function ScraperSchedulerTab() {
           </p>
         </div>
       </div>
+
+      {scraperSubTab === 'gh' && (
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarClock size={16} className="text-slate-500" />
+          <h3 className="text-sm font-bold text-slate-700">Calendario de ejecución automática (cron GH Actions)</h3>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Los scrapers no cambian de un día para el otro, así que en vez de chequear cada hora
+          (lo que agotó la cuota mensual de minutos) se corre 1 vez por semana + fechas clave.
+          Total estimado: ~12 corridas/mes, bien por debajo del límite de 2000 min/mes.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3 text-xs">
+          <div>
+            <p className="font-bold text-slate-600 mb-1">Recurrente</p>
+            <ul className="space-y-0.5 text-slate-500">
+              <li>• Todos los jueves, 2am ART</li>
+              <li>• Primer día de cada mes, 2am ART</li>
+            </ul>
+          </div>
+          <div>
+            <p className="font-bold text-slate-600 mb-1">Fechas clave 2026 (día hábil post feriado largo)</p>
+            <ul className="space-y-0.5 text-slate-500">
+              <li>• Mié 18/2 — post Carnaval</li>
+              <li>• Lun 6/4 — post Semana Santa</li>
+              <li>• Lun 4/5 — post Día del Trabajador</li>
+              <li>• Mar 26/5 — post 25 de Mayo</li>
+              <li>• Mar 16/6 — post Güemes</li>
+              <li>• Mar 18/8 — post San Martín</li>
+              <li>• Mar 13/10 — post Diversidad Cultural</li>
+              <li>• Mar 24/11 — post Soberanía Nacional</li>
+            </ul>
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-400 mt-3">
+          Fuera de estas fechas: usar "Ejecutar todos HTTP/GH" o la solapa Local. Calendario de
+          feriados a actualizar a fin de año para 2027 (ver .github/workflows/run-scrapers.yml).
+        </p>
+      </div>
+      )}
 
       {scraperSubTab === 'gh' && (
       <div className="flex justify-end gap-2">
@@ -2586,7 +2635,14 @@ function ScraperSchedulerTab() {
 const SOURCE_LABELS: { label: string; value: string }[] = [
   { label: 'AmEx',          value: 'americanexpress.com' },
   { label: 'BBVA',          value: 'bbva.com.ar' },
+  { label: 'Bancor',        value: 'bancor.com.ar' },
   { label: 'BNA',           value: 'semananacion.com.ar' },
+  { label: 'Comafi',        value: 'tevabien.com' },
+  { label: 'Banco del Sol', value: 'bancodelsol.com' },
+  { label: 'Nuevo Banco del Chaco', value: 'nbch.com.ar' },
+  { label: 'Banco del Chubut', value: 'bancochubut.com.ar' },
+  { label: 'Banco de Corrientes', value: 'promosdelbanco.com' },
+  { label: 'Hipotecario',   value: 'hipotecario.com.ar' },
   { label: 'Brubank',       value: 'brubank.com' },
   { label: 'Cabal',         value: 'beneficios.bancocredicoop.coop' },
   { label: 'Carrefour',     value: 'carrefour.com.ar' },
@@ -2611,6 +2667,10 @@ const SOURCE_LABELS: { label: string; value: string }[] = [
   { label: 'Personal Pay',  value: 'personal.com.ar' },
   { label: 'Provincia',     value: 'bancoprovincia.com.ar' },
   { label: 'Santander',     value: 'santander.com.ar' },
+  { label: 'Santa Fe',      value: 'bancosantafe.com.ar' },
+  { label: 'Entre Ríos',    value: 'bancoentrerios.com.ar' },
+  { label: 'San Juan',      value: 'bancosanjuan.com.ar' },
+  { label: 'Santa Cruz',    value: 'bancosantacruz.com.ar' },
   { label: 'Supervielle',   value: 'supervielle.com.ar' },
   { label: 'Favacard',      value: 'promosfavacard.com.ar' },
   { label: 'Vea',           value: 'vea.com.ar' },
