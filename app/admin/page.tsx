@@ -403,10 +403,15 @@ export default function AdminPage() {
     setBulkMode(false)
     setBulkCategory('')
     setBulkSaving(false)
-    // Recargar promos
-    const res = await fetch('/api/admin/promos')
-    const data = await res.json()
-    if (data.promos) setPromos(data.promos)
+    // Recargar promos según el modo actual (categoría o búsqueda)
+    const isSearching = filterText.trim().length >= 3
+    if (isSearching) {
+      const sp = new URLSearchParams({ q: filterText.trim() })
+      if (filterCategories.length > 0) sp.set('categoryIds', filterCategories.join(','))
+      fetchPromos(sp.toString())
+    } else if (subTab && subTab !== 'all') {
+      fetchPromos(`categoryId=${subTab}`)
+    }
   }
 
   // Estados ABM Entidades
@@ -452,9 +457,9 @@ export default function AdminPage() {
     }
   }, [tab]) // Quitamos subTab de aquí para evitar refetches infinitos
 
-  const fetchPromos = useCallback(async () => {
+  const fetchPromos = useCallback(async (params?: string) => {
     try {
-      const res = await fetch('/api/admin/promos', { cache: 'no-store' })
+      const res = await fetch(`/api/admin/promos${params ? `?${params}` : ''}`, { cache: 'no-store' })
       const data = await res.json()
       if (data.promos) setPromos(data.promos)
     } catch (e) {
@@ -473,7 +478,6 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchEntities()
-    fetchPromos()
     fetchUsers()
     fetch('/api/admin/site-config').then(r => r.json()).then(d => {
       if (d.last_updated) setLastUpdatedText(d.last_updated)
@@ -488,7 +492,31 @@ export default function AdminPage() {
       setMlOAuthStatus({ ok: false, reason: params.get('reason') || params.get('status') || 'desconocido' })
       window.history.replaceState({}, '', window.location.pathname + (params.get('tab') ? `?tab=${params.get('tab')}` : ''))
     }
-  }, [fetchEntities, fetchPromos, fetchUsers])
+  }, [fetchEntities, fetchUsers])
+
+  // Carga de promos: por categoría (subTab), por status (tab expired), o por búsqueda —
+  // nunca sin filtro, el listado completo (95MB+) cuelga las funciones serverless de Vercel.
+  useEffect(() => {
+    if (tab === 'expired') {
+      fetchPromos('status=EXPIRED')
+      return
+    }
+    if (tab !== 'promos') return
+
+    const isSearching = filterText.trim().length >= 3
+    const t = setTimeout(() => {
+      if (isSearching) {
+        const params = new URLSearchParams({ q: filterText.trim() })
+        if (filterCategories.length > 0) params.set('categoryIds', filterCategories.join(','))
+        fetchPromos(params.toString())
+      } else if (subTab && subTab !== 'all') {
+        fetchPromos(`categoryId=${subTab}`)
+      } else {
+        setPromos([])
+      }
+    }, isSearching ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [tab, subTab, filterText, filterCategories, fetchPromos])
 
   const fetchCommerceAliases = useCallback(async () => {
     try {
@@ -669,7 +697,7 @@ export default function AdminPage() {
       setEditingId(null)
       setForm(emptyForm())
       setTab('promos')
-      fetchPromos()
+      if (subTab && subTab !== 'all') fetchPromos(`categoryId=${subTab}`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
@@ -682,7 +710,8 @@ export default function AdminPage() {
     try {
       await fetch(`/api/promos/${id}`, { method: 'DELETE' })
       setDeleteConfirm(null)
-      fetchPromos()
+      if (tab === 'expired') fetchPromos('status=EXPIRED')
+      else if (subTab && subTab !== 'all') fetchPromos(`categoryId=${subTab}`)
     } finally {
       setSaving(false)
     }
@@ -738,7 +767,8 @@ export default function AdminPage() {
     }
     setScraping(false)
     setScrapingCurrent('')
-    fetchPromos()
+    if (tab === 'expired') fetchPromos('status=EXPIRED')
+    else if (subTab && subTab !== 'all') fetchPromos(`categoryId=${subTab}`)
     const parts = []
     if (totalFound > 0 || totalProcessed > 0) parts.push(`Leídas: ${totalFound} | Procesadas: ${totalProcessed}`)
     if (triggered > 0) parts.push(`${triggered} workflow${triggered !== 1 ? 's' : ''} disparado${triggered !== 1 ? 's' : ''} en GitHub`)
@@ -1276,7 +1306,13 @@ export default function AdminPage() {
                     confirmDelete={() => handleDelete(p.id)}
                     onToggleFeatured={async () => {
                       const res = await fetch('/api/admin/promos', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, isFeatured: !p.isFeatured }) })
-                      if (res.ok) fetchPromos()
+                      if (res.ok) {
+                        if (isSearching) {
+                          const sp = new URLSearchParams({ q: filterText.trim() })
+                          if (filterCategories.length > 0) sp.set('categoryIds', filterCategories.join(','))
+                          fetchPromos(sp.toString())
+                        } else if (subTab && subTab !== 'all') fetchPromos(`categoryId=${subTab}`)
+                      }
                     }}
                     discount={
                       p.requirements.length > 0

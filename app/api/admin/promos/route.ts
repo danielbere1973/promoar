@@ -45,7 +45,9 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-export async function GET() {
+const MAX_RESULTS = 1000
+
+export async function GET(req: NextRequest) {
   try {
     const today = new Date()
     const startOfToday = new Date(today); startOfToday.setHours(0,0,0,0)
@@ -65,7 +67,35 @@ export async function GET() {
       console.error('Error in auto-expiration logic:', e)
     }
 
+    const { searchParams } = new URL(req.url)
+    const categoryId = searchParams.get('categoryId')
+    const categoryIds = searchParams.get('categoryIds')?.split(',').filter(Boolean)
+    const status = searchParams.get('status') // ej. 'EXPIRED'
+    const q = searchParams.get('q')?.trim()
+
+    const where: any = {}
+    if (status) {
+      where.status = status
+    } else {
+      where.status = { in: ['ACTIVE', 'EXPIRED'] }
+    }
+    if (categoryId) where.categoryId = categoryId
+    if (categoryIds?.length) where.categoryId = { in: categoryIds }
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { commerce: { name: { contains: q, mode: 'insensitive' } } },
+      ]
+    }
+
+    // Sin ningún filtro (carga inicial sin categoría/búsqueda todavía elegida): no traer nada,
+    // el payload completo (95MB+) cuelga las funciones serverless de Vercel.
+    if (!categoryId && !categoryIds?.length && !status && !q) {
+      return NextResponse.json({ promos: [] })
+    }
+
     const promos = await prisma.promo.findMany({
+      where,
       include: {
         category: true,
         commerce: true,
@@ -78,6 +108,7 @@ export async function GET() {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: MAX_RESULTS,
     })
     return NextResponse.json({ promos })
   } catch (error) {
