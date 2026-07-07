@@ -377,6 +377,9 @@ export default function AdminPage() {
   const [filterCommerce, setFilterCommerce] = useState('')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [filterSource, setFilterSource] = useState('')
+  const [promosPage, setPromosPage] = useState(0)
+  const [promosHasMore, setPromosHasMore] = useState(false)
+  const [promosLoadingMore, setPromosLoadingMore] = useState(false)
   const [showLogoSuggestions, setShowLogoSuggestions] = useState(false)
   const [flaggedScrapedPromos, setFlaggedScrapedPromos] = useState<Array<{ title: string; storeName: string; sourceUrl: string; description: string }>>([])
   const [bulkMode, setBulkMode] = useState(false)
@@ -457,15 +460,26 @@ export default function AdminPage() {
     }
   }, [tab]) // Quitamos subTab de aquí para evitar refetches infinitos
 
-  const fetchPromos = useCallback(async (params?: string) => {
+  const fetchPromos = useCallback(async (params?: string, append?: boolean) => {
     try {
       const res = await fetch(`/api/admin/promos${params ? `?${params}` : ''}`, { cache: 'no-store' })
       const data = await res.json()
-      if (data.promos) setPromos(data.promos)
+      if (data.promos) {
+        setPromos(prev => append ? [...prev, ...data.promos] : data.promos)
+        setPromosHasMore(!!data.hasMore)
+      }
     } catch (e) {
       console.error('Error fetching promos', e)
     }
   }, [])
+
+  const loadMorePromos = useCallback(async (baseParams: string) => {
+    setPromosLoadingMore(true)
+    const nextPage = promosPage + 1
+    await fetchPromos(`${baseParams}&page=${nextPage}`, true)
+    setPromosPage(nextPage)
+    setPromosLoadingMore(false)
+  }, [fetchPromos, promosPage])
 
   const fetchUsers = useCallback(async () => {
     const res = await fetch('/api/admin/users')
@@ -497,6 +511,7 @@ export default function AdminPage() {
   // Carga de promos: por categoría (subTab), por status (tab expired), o por búsqueda —
   // nunca sin filtro, el listado completo (95MB+) cuelga las funciones serverless de Vercel.
   useEffect(() => {
+    setPromosPage(0)
     if (tab === 'expired') {
       fetchPromos('status=EXPIRED')
       return
@@ -513,6 +528,7 @@ export default function AdminPage() {
         fetchPromos(`categoryId=${subTab}`)
       } else {
         setPromos([])
+        setPromosHasMore(false)
       }
     }, isSearching ? 300 : 0)
     return () => clearTimeout(t)
@@ -1328,6 +1344,26 @@ export default function AdminPage() {
                 ))}
               </div>
               )
+            )}
+
+            {promosHasMore && (
+              <div className="flex justify-center py-4">
+                <button
+                  onClick={() => {
+                    if (isSearching) {
+                      const sp = new URLSearchParams({ q: filterText.trim() })
+                      if (filterCategories.length > 0) sp.set('categoryIds', filterCategories.join(','))
+                      loadMorePromos(sp.toString())
+                    } else if (subTab && subTab !== 'all') {
+                      loadMorePromos(`categoryId=${subTab}`)
+                    }
+                  }}
+                  disabled={promosLoadingMore}
+                  className="px-6 py-2.5 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                >
+                  {promosLoadingMore ? 'Cargando...' : 'Cargar más promos →'}
+                </button>
+              </div>
             )}
 
             {/* Barra flotante de categorización bulk */}

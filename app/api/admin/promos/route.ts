@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
     const categoryIds = searchParams.get('categoryIds')?.split(',').filter(Boolean)
     const status = searchParams.get('status') // ej. 'EXPIRED'
     const q = searchParams.get('q')?.trim()
+    const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10) || 0)
 
     const where: any = {}
     if (status) {
@@ -94,23 +95,27 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ promos: [] })
     }
 
-    const promos = await prisma.promo.findMany({
-      where,
-      include: {
-        category: true,
-        commerce: true,
-        requirements: {
-          include: {
-            bank: { select: { id: true, name: true } },
-            wallet: { select: { id: true, name: true } },
-            cardNetwork: { select: { id: true, name: true } },
+    const [promos, total] = await Promise.all([
+      prisma.promo.findMany({
+        where,
+        include: {
+          category: true,
+          commerce: true,
+          requirements: {
+            include: {
+              bank: { select: { id: true, name: true } },
+              wallet: { select: { id: true, name: true } },
+              cardNetwork: { select: { id: true, name: true } },
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: MAX_RESULTS,
-    })
-    return NextResponse.json({ promos })
+        orderBy: { createdAt: 'desc' },
+        skip: page * MAX_RESULTS,
+        take: MAX_RESULTS,
+      }),
+      prisma.promo.count({ where }),
+    ])
+    return NextResponse.json({ promos, total, hasMore: (page + 1) * MAX_RESULTS < total })
   } catch (error) {
     console.error('[GET /api/admin/promos]', error)
     return NextResponse.json({ error: 'Error al obtener promociones' }, { status: 500 })
