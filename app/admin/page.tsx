@@ -17,7 +17,7 @@ type Bank = Entity & { segments: Entity[]; cardNetworks: Entity[]; cardSegments?
 type Wallet = Entity & { cardNetworks?: Entity[]; cardSegments?: Entity[] }
 type CardNetwork = Entity & { banks: { id: string; name: string }[] }
 type CardSegment = { id: string; name: string; cardNetworkId: string; cardType: string; cardNetwork: { name: string } }
-type User = { id: string; name: string | null; email: string; role: string; active: boolean; createdAt: string; image?: string; financialProfile?: { _count: { banks: number; cards: number; wallets: number } } | null }
+type User = { id: string; name: string | null; email: string; role: string; active: boolean; createdAt: string; lastLoginAt: string | null; image?: string; financialProfile?: { _count: { banks: number; cards: number; wallets: number } } | null }
 
 type Entities = {
   categories: Entity[]
@@ -1575,6 +1575,24 @@ export default function AdminPage() {
                 <input type="text" placeholder="Buscar por email..." className="pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-100 placeholder:font-normal placeholder:text-slate-400" />
               </div>
             </div>
+            <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap gap-6">
+              <div>
+                <p className="text-2xl font-black text-slate-900">{users.length}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Registrados</p>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-emerald-600">
+                  {users.filter(u => u.lastLoginAt && new Date(u.lastLoginAt).getTime() - new Date(u.createdAt).getTime() > 10 * 60 * 1000).length}
+                </p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Volvieron al sitio</p>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-slate-400">
+                  {users.length > 0 ? Math.round((users.filter(u => u.lastLoginAt && new Date(u.lastLoginAt).getTime() - new Date(u.createdAt).getTime() > 10 * 60 * 1000).length / users.length) * 100) : 0}%
+                </p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tasa de retorno</p>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -1584,6 +1602,7 @@ export default function AdminPage() {
                     <th className="px-6 py-4">Estado</th>
                     <th className="px-6 py-4">Perfil</th>
                     <th className="px-6 py-4">Registro</th>
+                    <th className="px-6 py-4">Volvió</th>
                     <th className="px-6 py-4 text-right">Acciones</th>
                   </tr>
                 </thead>
@@ -1626,6 +1645,15 @@ export default function AdminPage() {
                       </td>
                       <td className="px-6 py-4 text-[10px] text-slate-400">
                         {new Date(u.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        {u.lastLoginAt && new Date(u.lastLoginAt).getTime() - new Date(u.createdAt).getTime() > 10 * 60 * 1000 ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+                            <Check size={10} /> {new Date(u.lastLoginAt).toLocaleDateString()}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-300 font-semibold">No volvió</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button className="p-2 text-slate-300 hover:text-red-500 transition-colors">

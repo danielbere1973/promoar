@@ -575,13 +575,6 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   }
 
   // ── Ordenamiento (path no-paginado: usuarios con perfil o filtros complejos) ────────────
-  // Popularidad de comercio: cantidad de promos en el resultado actual
-  const commercePromoCount: Record<string, number> = {}
-  for (const p of dedupedPromos) {
-    const cname = (p as any).commerce?.name ?? ''
-    commercePromoCount[cname] = (commercePromoCount[cname] ?? 0) + 1
-  }
-
   // 1. Métricas por promo
   const promoData = dedupedPromos.map(p => {
     const maxPct = (p as any).requirements.reduce((max: number, r: any) => {
@@ -595,11 +588,10 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     const hasNxm: boolean = (p as any).requirements.some((r: any) => r.discountType === 'NXM')
     const catSlug: string = (p as any).category?.slug ?? ''
     const name: string = (p as any).commerce?.name ?? ''
-    const commercePopularity: number = commercePromoCount[name] ?? 0
     // Tipo: 1 = % o NXM (sin CSI), 2 = (% o NXM) + CSI, 3 = solo CSI
     const hasMainDiscount = maxPct > 0 || hasNxm
     const type = hasMainDiscount && maxCsi > 0 ? 2 : hasMainDiscount ? 1 : 3
-    return { p, maxPct, maxCsi, catSlug, commercePopularity, name, type }
+    return { p, maxPct, maxCsi, catSlug, name, type }
   })
 
   // 2. Popularidad de categoría = nº de promos tipo 1 y 2 (con %) de esa categoría
@@ -609,8 +601,10 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   }
 
   // 3. Ordenar:
-  //    Grupos 1 y 2 (con %): catPopularity DESC → commercePopularity DESC → mayor descuento DESC → alfabético
+  //    Grupos 1 y 2 (con %): catPopularity DESC → tipo (1 antes que 2) → mayor descuento DESC → alfabético
   //    Grupo 3 (solo CSI): al final, ordenado por más cuotas DESC
+  //    La popularidad de COMERCIO ya no pesa en el orden: un comercio con una sola promo
+  //    de mayor descuento debe rankear por encima de un comercio con muchas promos de menor %.
   const orderedPromos = [...promoData].sort((a, b) => {
     // CSI solo siempre va al final
     if (a.type === 3 && b.type !== 3) return 1
@@ -625,8 +619,8 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     const catDiff = (catCounts[b.catSlug] ?? 0) - (catCounts[a.catSlug] ?? 0)
     if (catDiff !== 0) return catDiff
 
-    // Luego popularidad de comercio
-    if (b.commercePopularity !== a.commercePopularity) return b.commercePopularity - a.commercePopularity
+    // Luego tipo: 1 (solo % / NXM) antes que 2 (% + CSI)
+    if (a.type !== b.type) return a.type - b.type
 
     // Luego mayor descuento %
     if (b.maxPct !== a.maxPct) return b.maxPct - a.maxPct

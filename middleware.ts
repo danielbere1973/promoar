@@ -47,6 +47,14 @@ const ADMIN_PATHS = ['/admin', '/api/admin']
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  // 0. Restringir APIs a tráfico de Argentina (reduce bandwidth de bots/scrapers extranjeros)
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
+    const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country')
+    if (country && country !== 'AR') {
+      return NextResponse.json({ error: 'No disponible fuera de Argentina' }, { status: 403 })
+    }
+  }
+
   // 1. Saltarse archivos estáticos y rutas internas de Next.js de forma explícita
   if (
     pathname.includes('/_next/') ||

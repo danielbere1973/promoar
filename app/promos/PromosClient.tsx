@@ -26,6 +26,7 @@ const PromoDetailSheet = dynamic(() => import('../components/PromoDetailSheet'),
 const PromoWizard = dynamic(() => import('../components/PromoWizard'), { ssr: false })
 const ProvinceSelector = dynamic(() => import('../components/ProvinceSelector'), { ssr: false })
 const TourOverlay = dynamic(() => import('../components/TourOverlay'), { ssr: false })
+const NewBanksWelcomePopup = dynamic(() => import('../components/NewBanksWelcomePopup'), { ssr: false })
 
 // Caché de módulo: sobrevive navegaciones internas, se limpia con F5
 // TTL de 5 minutos para la carga por defecto (sin filtros complejos)
@@ -568,6 +569,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
   const [focusedCat, setFocusedCat] = useState<string | null>(null)
+  const [focusedCatSearch, setFocusedCatSearch] = useState('')
+  const [focusedCatSort, setFocusedCatSort] = useState<'default' | 'discount' | 'alpha'>('default')
   const [entitiesPromo, setEntitiesPromo] = useState<Promo | null>(null)
   const [expandedPromos, setExpandedPromos] = useState<Set<string>>(new Set())
   const toggleExpand = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setExpandedPromos(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
@@ -969,6 +972,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     let cancelled = false
     setFocusedCatLoading(true)
     setFocusedCatPromos([])
+    setFocusedCatSearch('')
+    setFocusedCatSort('default')
     const qp = new URLSearchParams()
     qp.set('categories', focusedCat)
     qp.set('view', timeFilter)
@@ -2524,27 +2529,62 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               }
               return null
             })()
-        const catPromos = focusedCatPromos.length > 0 ? focusedCatPromos : promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === focusedCat)
+        const rawCatPromos = focusedCatPromos.length > 0 ? focusedCatPromos : promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === focusedCat)
+        const q = focusedCatSearch.trim().toLowerCase()
+        const searchedPromos = q ? rawCatPromos.filter(p => p.commerce.name.toLowerCase().includes(q)) : rawCatPromos
+        const catPromos = focusedCatSort === 'default'
+          ? searchedPromos
+          : [...searchedPromos].sort((a, b) => {
+              if (focusedCatSort === 'discount') {
+                const diff = (bestPercentageReq(b)?.discountValue ?? 0) - (bestPercentageReq(a)?.discountValue ?? 0)
+                if (diff !== 0) return diff
+                return a.commerce.name.localeCompare(b.commerce.name, 'es')
+              }
+              return a.commerce.name.localeCompare(b.commerce.name, 'es')
+            })
         if (!sec) return null
         return (
           <div className="fixed inset-0 z-50 flex flex-col">
             <div className="absolute inset-0 bg-black/50" onClick={() => setFocusedCat(null)} />
             <div className="relative bg-white dark:bg-slate-900 flex flex-col h-full max-w-lg mx-auto w-full shadow-2xl">
               {/* Header */}
-              <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10">
-                <button onClick={() => setFocusedCat(null)}
-                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-600 dark:text-white font-bold text-sm">
-                  ←
-                </button>
-                <div>
-                  <p className="text-[15px] font-black text-[#1E3A5F] dark:text-white">{sec.catIcon} {sec.catName}</p>
-                  <p className="text-[11px] text-[#8B96A5]">{focusedCatLoading ? 'Cargando...' : `${catPromos.length} promos`}</p>
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10 space-y-2.5">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setFocusedCat(null)}
+                    className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-600 dark:text-white font-bold text-sm shrink-0">
+                    ←
+                  </button>
+                  <div>
+                    <p className="text-[15px] font-black text-[#1E3A5F] dark:text-white">{sec.catIcon} {sec.catName}</p>
+                    <p className="text-[11px] text-[#8B96A5]">{focusedCatLoading ? 'Cargando...' : `${catPromos.length} promos`}</p>
+                  </div>
+                </div>
+                {/* Buscador + orden */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={focusedCatSearch}
+                    onChange={e => setFocusedCatSearch(e.target.value)}
+                    placeholder="Buscar comercio..."
+                    className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-xl border border-[#EAECF0] dark:border-slate-700 bg-[#F8F9FB] dark:bg-slate-800 text-[#1E3A5F] dark:text-white placeholder:text-[#8B96A5] focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20"
+                  />
+                  <select
+                    value={focusedCatSort}
+                    onChange={e => setFocusedCatSort(e.target.value as any)}
+                    className="text-[12px] font-semibold px-2.5 py-2 rounded-xl border border-[#EAECF0] dark:border-slate-700 bg-[#F8F9FB] dark:bg-slate-800 text-[#1E3A5F] dark:text-white focus:outline-none shrink-0"
+                  >
+                    <option value="default">Relevancia</option>
+                    <option value="discount">Mayor descuento</option>
+                    <option value="alpha">Alfabético</option>
+                  </select>
                 </div>
               </div>
               {/* Grid vertical */}
               <div className="overflow-y-auto flex-1 p-4">
                 {focusedCatLoading ? (
                   <div className="flex justify-center py-12 text-gray-400 text-sm">Cargando promos...</div>
+                ) : catPromos.length === 0 ? (
+                  <div className="flex justify-center py-12 text-gray-400 text-sm">Sin resultados para "{focusedCatSearch}"</div>
                 ) : (
                 <div className="grid grid-cols-2 gap-3">
                   {catPromos.map(p => {
@@ -2659,6 +2699,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       )}
 
       <TourOverlay isAuthenticated={status === 'authenticated'} blocked={showProvinceSelector} />
+      <NewBanksWelcomePopup isAuthenticated={status === 'authenticated'} blocked={showProvinceSelector} />
     </div>
     </>
   )

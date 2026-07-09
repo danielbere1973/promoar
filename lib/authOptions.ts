@@ -75,6 +75,12 @@ export const authOptions: NextAuthOptions = {
           })
         }
       }
+      if (user.email) {
+        await prisma.user.update({
+          where: { email: user.email },
+          data: { lastLoginAt: new Date() },
+        })
+      }
       return true
     },
     async jwt({ token, user, account }) {

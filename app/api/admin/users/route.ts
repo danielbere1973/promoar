@@ -27,6 +27,7 @@ export async function GET() {
         role: true,
         active: true,
         createdAt: true,
+        lastLoginAt: true,
         image: true,
         financialProfile: {
           select: {
