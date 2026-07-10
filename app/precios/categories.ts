@@ -7,7 +7,10 @@ export interface CategoryNode {
   cencosudSlug?: string
   diaSlug?: string
   vtexMap?: string
-  farmaSlug?: string // slug para búsqueda en farmacias VTEX
+  farmaSlug?: string // slug para búsqueda en farmacias VTEX (fallback texto libre)
+  farmacityId?: string // id de categoría VTEX real en farmacity.com
+  farmaplusId?: string // id de categoría VTEX real en farmaplus.com.ar
+  openfarmaTaxonId?: string // id de taxon Spree real en openfarma.com.ar
   electroSlug?: string // término de búsqueda para electrónica
   children?: CategoryNode[]
 }
@@ -391,65 +394,154 @@ export const CATEGORIES: CategoryNode[] = [
   { id: 'electro-peq-electro', name: 'Pequeños Electrodomésticos', section: 'electrónica', electroSlug: 'licuadora aspiradora plancha' },
 
   // ─── FARMACIAS ────────────────────────────────────────────────────────────
+  // farmacityId/farmaplusId guardan el PATH COMPLETO de ancestros VTEX (ej. "979/980/987"),
+  // requerido por el filtro fq=C:<path> — el id solo no alcanza. Relevado navegando
+  // /api/catalog_system/pub/category/tree/3 de cada sitio. openfarmaTaxonId sí es standalone.
   {
     id: 'farma-analgesicos',
     name: 'Analgésicos',
     section: 'farmacias',
     farmaSlug: 'analgesicos',
+    farmacityId: '979/980',
+    farmaplusId: '5/363/364',
+    openfarmaTaxonId: '4099',
+    children: [
+      { id: 'farma-analgesicos-adultos', name: 'Adultos', section: 'farmacias', farmaSlug: 'analgesicos adultos', farmacityId: '979/980/987', farmaplusId: '5/363/364', openfarmaTaxonId: '4099' },
+      { id: 'farma-analgesicos-infantiles', name: 'Infantiles', section: 'farmacias', farmaSlug: 'analgesicos infantiles', farmacityId: '979/980/989', farmaplusId: '5/363/364', openfarmaTaxonId: '4099' },
+    ],
   },
   {
     id: 'farma-digestivos',
     name: 'Digestivos',
     section: 'farmacias',
     farmaSlug: 'digestivos',
+    farmacityId: '979/1011',
+    farmaplusId: '5/363/365',
+    openfarmaTaxonId: '4101',
+    children: [
+      { id: 'farma-digestivos-acidez', name: 'Acidez', section: 'farmacias', farmaSlug: 'acidez', farmacityId: '979/1011/1012', farmaplusId: '5/363/365/366', openfarmaTaxonId: '4101' },
+      { id: 'farma-digestivos-antidiarreicos', name: 'Antidiarreicos', section: 'farmacias', farmaSlug: 'antidiarreicos', farmacityId: '979/1011/1013', farmaplusId: '5/363/365/367', openfarmaTaxonId: '4101' },
+      { id: 'farma-digestivos-laxantes', name: 'Laxantes', section: 'farmacias', farmaSlug: 'laxantes', farmacityId: '979/1011/1017', farmaplusId: '5/363/365/368', openfarmaTaxonId: '4101' },
+      { id: 'farma-digestivos-dolor-panza', name: 'Dolor de Panza', section: 'farmacias', farmaSlug: 'dolor de panza', farmacityId: '979/1011/1014', farmaplusId: '5/363/365/369', openfarmaTaxonId: '4101' },
+      { id: 'farma-digestivos-mareos', name: 'Mareos', section: 'farmacias', farmaSlug: 'mareos', farmacityId: '979/1011/1016', farmaplusId: '5/363/365/370', openfarmaTaxonId: '4101' },
+      { id: 'farma-digestivos-resaca', name: 'Antiresaca', section: 'farmacias', farmaSlug: 'antiresaca', farmacityId: '979/1011/1015', farmaplusId: '5/363/365/371', openfarmaTaxonId: '4101' },
+    ],
   },
   {
     id: 'farma-vitaminas',
     name: 'Vitaminas y Suplementos',
     section: 'farmacias',
     farmaSlug: 'vitaminas-y-suplementos',
+    farmacityId: '248/280',
+    farmaplusId: '6/38',
+    openfarmaTaxonId: '1740',
+    children: [
+      { id: 'farma-vitaminas-multivitaminicos', name: 'Multivitamínicos', section: 'farmacias', farmaSlug: 'multivitaminicos', farmacityId: '248/280/971', farmaplusId: '6/38/203', openfarmaTaxonId: '1740' },
+      { id: 'farma-vitaminas-energia', name: 'Energía', section: 'farmacias', farmaSlug: 'energizante', farmacityId: '248/280/286', farmaplusId: '6/38/201', openfarmaTaxonId: '1740' },
+      { id: 'farma-vitaminas-memoria', name: 'Memoria y Concentración', section: 'farmacias', farmaSlug: 'memoria', farmacityId: '248/280/291', farmaplusId: '6/38/204', openfarmaTaxonId: '1740' },
+      { id: 'farma-vitaminas-huesos', name: 'Huesos y Articulaciones', section: 'farmacias', farmaSlug: 'huesos y articulaciones', farmacityId: '248/280/289', farmaplusId: '6/38/195', openfarmaTaxonId: '1740' },
+      { id: 'farma-vitaminas-piel-unas-cabello', name: 'Piel, Uñas y Cabello', section: 'farmacias', farmaSlug: 'piel unas cabello', farmacityId: '248/280/294', farmaplusId: '6/38/196', openfarmaTaxonId: '1740' },
+      { id: 'farma-vitaminas-defensas', name: 'Invierno y Defensas', section: 'farmacias', farmaSlug: 'defensas', farmacityId: '248/280/290', farmaplusId: '6/38/194', openfarmaTaxonId: '1740' },
+    ],
   },
   {
     id: 'farma-dermocosmetica',
     name: 'Dermocosmética',
     section: 'farmacias',
     farmaSlug: 'dermocosmetica',
+    farmacityId: '116',
+    farmaplusId: '2',
+    openfarmaTaxonId: '1569',
+    children: [
+      { id: 'farma-dermo-facial', name: 'Facial', section: 'farmacias', farmaSlug: 'dermocosmetica facial', farmacityId: '116/67', farmaplusId: '2/18', openfarmaTaxonId: '1569' },
+      { id: 'farma-dermo-corporal', name: 'Corporal', section: 'farmacias', farmaSlug: 'dermocosmetica corporal', farmacityId: '116/124', farmaplusId: '2/19', openfarmaTaxonId: '1569' },
+      { id: 'farma-dermo-solar', name: 'Protección Solar', section: 'farmacias', farmaSlug: 'protector solar', farmacityId: '116/432', farmaplusId: '2/21', openfarmaTaxonId: '1569' },
+      { id: 'farma-dermo-capilar', name: 'Capilar', section: 'farmacias', farmaSlug: 'dermocosmetica capilar', farmacityId: '116/437', farmaplusId: '2/20', openfarmaTaxonId: '1569' },
+    ],
   },
   {
     id: 'farma-higiene',
     name: 'Higiene Personal',
     section: 'farmacias',
     farmaSlug: 'higiene-personal',
+    farmacityId: '92/170',
+    farmaplusId: '4/28',
+    openfarmaTaxonId: '1713',
+    children: [
+      { id: 'farma-higiene-oral', name: 'Cuidado Oral', section: 'farmacias', farmaSlug: 'cuidado oral', farmacityId: '92/149', farmaplusId: '4/26', openfarmaTaxonId: '1713' },
+      { id: 'farma-higiene-afeitado', name: 'Afeitado y Depilación', section: 'farmacias', farmaSlug: 'afeitado depilacion', farmacityId: '92/170/171', farmaplusId: '4/28/143', openfarmaTaxonId: '1713' },
+      { id: 'farma-higiene-femenina', name: 'Protección Femenina', section: 'farmacias', farmaSlug: 'proteccion femenina', farmacityId: '92/170/190', farmaplusId: '4/28/146', openfarmaTaxonId: '1713' },
+      { id: 'farma-higiene-desodorantes', name: 'Desodorantes', section: 'farmacias', farmaSlug: 'desodorantes', farmacityId: '92/170/441', farmaplusId: '4/28/322', openfarmaTaxonId: '1713' },
+    ],
   },
   {
     id: 'farma-bebe',
     name: 'Bebé y Embarazo',
     section: 'farmacias',
     farmaSlug: 'bebe-y-embarazo',
+    farmacityId: '3',
+    farmaplusId: '1',
+    openfarmaTaxonId: '1639',
+    children: [
+      { id: 'farma-bebe-panales', name: 'Pañales', section: 'farmacias', farmaSlug: 'pañales bebe', farmacityId: '3/1036', farmaplusId: '1/14/63', openfarmaTaxonId: '1639' },
+      { id: 'farma-bebe-higiene', name: 'Higiene del Bebé', section: 'farmacias', farmaSlug: 'higiene del bebe', farmacityId: '3/967', farmaplusId: '1/14', openfarmaTaxonId: '1639' },
+      { id: 'farma-bebe-lactancia', name: 'Lactancia y Maternidad', section: 'farmacias', farmaSlug: 'lactancia', farmacityId: '3/966', farmaplusId: '1/282', openfarmaTaxonId: '1639' },
+      { id: 'farma-bebe-nutricion', name: 'Nutrición Infantil', section: 'farmacias', farmaSlug: 'nutricion infantil', farmacityId: '3/13', farmaplusId: '1/13', openfarmaTaxonId: '1639' },
+    ],
   },
   {
     id: 'farma-optica',
     name: 'Óptica y Contactología',
     section: 'farmacias',
     farmaSlug: 'optica-y-contactologia',
+    farmacityId: '979/1026',
+    farmaplusId: '5/32',
+    children: [
+      { id: 'farma-optica-lagrimas', name: 'Lágrimas Artificiales', section: 'farmacias', farmaSlug: 'lagrimas artificiales', farmacityId: '979/1026/1027', farmaplusId: '5/32/291' },
+      { id: 'farma-optica-descongestivos', name: 'Descongestivos Oculares', section: 'farmacias', farmaSlug: 'descongestivo ocular', farmacityId: '979/1026/1028', farmaplusId: '5/32/291' },
+      { id: 'farma-optica-limpiadores', name: 'Limpiadores de Cristales', section: 'farmacias', farmaSlug: 'limpiador de cristales', farmacityId: '979/1026', farmaplusId: '5/32/173' },
+      { id: 'farma-optica-soluciones', name: 'Soluciones Multipropósito', section: 'farmacias', farmaSlug: 'solucion multiproposito lentes', farmacityId: '979/1026', farmaplusId: '5/32/292' },
+    ],
   },
   {
     id: 'farma-primeros-auxilios',
     name: 'Primeros Auxilios',
     section: 'farmacias',
     farmaSlug: 'primeros-auxilios',
+    farmacityId: '979/1031',
+    farmaplusId: '5/34',
+    children: [
+      { id: 'farma-auxilios-antisepticos', name: 'Antisépticos', section: 'farmacias', farmaSlug: 'antisepticos', farmacityId: '979/1031/1032', farmaplusId: '5/34/177' },
+      { id: 'farma-auxilios-vendas', name: 'Apósitos, Vendas y Gasas', section: 'farmacias', farmaSlug: 'apositos vendas gasas', farmacityId: '199/226/232', farmaplusId: '5/34/178' },
+      { id: 'farma-auxilios-picaduras', name: 'Picaduras', section: 'farmacias', farmaSlug: 'picaduras', farmacityId: '979/1031/1033', farmaplusId: '5/34/177' },
+    ],
   },
   {
     id: 'farma-sueño',
     name: 'Sueño',
     section: 'farmacias',
     farmaSlug: 'sueno',
+    farmacityId: '979/1022',
+    farmaplusId: '5/363/382',
+    children: [
+      { id: 'farma-sueño-sedantes', name: 'Sedantes', section: 'farmacias', farmaSlug: 'sedantes', farmacityId: '979/1022/1023', farmaplusId: '5/363/382' },
+      { id: 'farma-sueño-reguladores', name: 'Reguladores de Sueño', section: 'farmacias', farmaSlug: 'reguladores de sueño', farmacityId: '979/1022/1024', farmaplusId: '5/363/382' },
+      { id: 'farma-sueño-inductores', name: 'Inductores de Sueño', section: 'farmacias', farmaSlug: 'inductores de sueño', farmacityId: '979/1022/1025', farmaplusId: '5/363/382' },
+    ],
   },
   {
     id: 'farma-antimicoticos',
     name: 'Antimicóticos',
     section: 'farmacias',
     farmaSlug: 'antimicoticos',
+    farmacityId: '979/993',
+    farmaplusId: '5/363/385',
+    openfarmaTaxonId: '4162',
+    children: [
+      { id: 'farma-antimicoticos-piel', name: 'Piel', section: 'farmacias', farmaSlug: 'antimicotico piel', farmacityId: '979/993/994', farmaplusId: '5/363/385', openfarmaTaxonId: '4162' },
+      { id: 'farma-antimicoticos-unas', name: 'Uñas', section: 'farmacias', farmaSlug: 'antimicotico uñas', farmacityId: '979/993/995', farmaplusId: '5/363/385', openfarmaTaxonId: '4162' },
+      { id: 'farma-antimicoticos-vaginales', name: 'Vaginales', section: 'farmacias', farmaSlug: 'antimicotico vaginal', farmacityId: '979/993/996', farmaplusId: '5/363/385', openfarmaTaxonId: '4162' },
+    ],
   },
 ]
 

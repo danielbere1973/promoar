@@ -1267,6 +1267,85 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
   }
 }
 
+// Búsqueda por categoría real de VTEX (catalog_system, no Intelligent Search).
+// fq=C:<path> requiere el path COMPLETO de ancestros (ej. "979/980/987") — un id
+// suelto no filtra nada, VTEX devuelve [] silenciosamente.
+async function searchVtexByCategoryPath(categoryPath: string, supermarket: string, baseUrl: string): Promise<NormalizedProduct[]> {
+  try {
+    const url = `${baseUrl}/api/catalog_system/pub/products/search?fq=C:${categoryPath}&_from=0&_to=39`
+    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(7000) })
+    if (!res.ok) {
+      console.log(`[${supermarket}] categoryPath HTTP ${res.status}`)
+      return []
+    }
+    const products: any[] = await res.json()
+    if (!Array.isArray(products)) return []
+
+    const itemIds = products
+      .flatMap((p: any) => p.items || [])
+      .map((item: any) => String(item.itemId || ''))
+      .filter(Boolean)
+    const headers: any = { ...HEADERS }
+    const promotionsMap = itemIds.length > 0 ? await fetchVtexPromotions(baseUrl, itemIds, headers) : {}
+
+    const initial = products.map((p: any) => {
+      const item = p.items?.[0] || {}
+      const offer = item.sellers?.[0]?.commertialOffer || {}
+      const rawListPrice = offer.ListPrice || 0
+      const salePrice = offer.Price || 0
+      const listPrice = (rawListPrice > 0 && rawListPrice <= salePrice * 3) ? rawListPrice : (offer.PriceWithoutDiscount || salePrice || 0)
+      const spot = offer.spotPrice || 0
+      const available = (offer.AvailableQuantity || 0) > 0
+      if (!available || listPrice <= 0) return null
+
+      const priceList = listPrice
+      let finalPrice = spot > 0 && spot < salePrice ? spot : salePrice
+
+      const teaserTexts: string[] = (offer.teasers || []).map((t: any) => t.name).filter(Boolean)
+      const vtexPromo = promotionsMap[item.itemId]
+      let multiUnitPromo: MultiUnitPromo | undefined
+      if (vtexPromo?.code) {
+        const parsed = parseMultiUnitPromo(vtexPromo.code.trim(), priceList)
+        if (parsed && parsed.effectivePrice < finalPrice) multiUnitPromo = parsed
+      }
+      if (!multiUnitPromo) {
+        for (const pt of teaserTexts.filter(Boolean)) {
+          const candidate = parseMultiUnitPromo(pt, priceList)
+          if (candidate && candidate.effectivePrice < finalPrice) { multiUnitPromo = candidate; break }
+        }
+      }
+      let promoText = multiUnitPromo?.label || teaserTexts[0] || '-'
+      if (promoText === '-' && spot > 0 && spot < salePrice) {
+        promoText = `${Math.round((1 - spot / salePrice) * 100)}% OFF`
+      } else if (promoText === '-' && priceList > finalPrice * 1.04) {
+        promoText = `${Math.round((1 - finalPrice / priceList) * 100)}% OFF`
+      }
+
+      const productUrl = p.linkText ? `${baseUrl}/${p.linkText}/p` : ''
+      return {
+        ean: String(item.ean || ''),
+        id: `${supermarket.toLowerCase()}-${item.itemId || p.productId}`,
+        supermarket,
+        name: p.productName || 'Sin nombre',
+        brand: p.brand || '-',
+        price: priceList,
+        finalPrice,
+        discountText: promoText,
+        imageUrl: item.images?.[0]?.imageUrl || '',
+        url: productUrl || baseUrl,
+        multiUnitPromo,
+        excludedFromBankPromos: isExcludedFromBankPromos(p),
+      } as NormalizedProduct
+    }).filter(Boolean) as NormalizedProduct[]
+
+    console.log(`[${supermarket}] categoryPath ${categoryPath}: ${initial.length} productos`)
+    return initial
+  } catch (e) {
+    console.error(`[${supermarket}] categoryPath error:`, e)
+    return []
+  }
+}
+
 // ---------------------------------------------------------
 // OPENFARMA (Spree Commerce v1)
 // Taxones principales: 4098=Medicamentos, 1569=Dermocosmetica, 1740=Suplementos,
@@ -1583,14 +1662,23 @@ export async function GET(request: Request) {
     }
 
     if (isFarma) {
-      const openFarmaSlug = cat ? findCategoryNode(cat)?.farmaSlug : undefined
+      const farmaNode = cat ? findCategoryNode(cat) : undefined
+      const openFarmaSlug = farmaNode?.farmaSlug
       const t0 = Date.now()
       const timed = (name: string, p: Promise<NormalizedProduct[]>) =>
         p.then(r => { console.log(`[Precios] ${name}: ${Date.now() - t0}ms → ${r.length} productos`); return r })
           .catch(() => { console.log(`[Precios] ${name}: ERROR ${Date.now() - t0}ms`); return [] as NormalizedProduct[] })
+
+      const farmacityP = farmaNode?.farmacityId
+        ? timed('Farmacity', searchVtexByCategoryPath(farmaNode.farmacityId, 'Farmacity', 'https://www.farmacity.com'))
+        : farmaQ ? timed('Farmacity', searchVtexIS(farmaQ, false, 'Farmacity', 'https://www.farmacity.com', vtexMap)) : Promise.resolve([])
+      const farmaplusP = farmaNode?.farmaplusId
+        ? timed('Farmaplus', searchVtexByCategoryPath(farmaNode.farmaplusId, 'Farmaplus', 'https://www.farmaplus.com.ar'))
+        : farmaQ ? timed('Farmaplus', searchVtexIS(farmaQ, false, 'Farmaplus', 'https://www.farmaplus.com.ar', vtexMap)) : Promise.resolve([])
+
       const [farmacity, farmaplus, openfarma, farmatodo, centralOeste] = await Promise.all([
-        farmaQ ? timed('Farmacity', searchVtexIS(farmaQ, false, 'Farmacity', 'https://www.farmacity.com', vtexMap)) : Promise.resolve([]),
-        farmaQ ? timed('Farmaplus', searchVtexIS(farmaQ, false, 'Farmaplus', 'https://www.farmaplus.com.ar', vtexMap)) : Promise.resolve([]),
+        farmacityP,
+        farmaplusP,
         farmaQ ? timed('OpenFarma', searchOpenFarma(farmaQ, openFarmaSlug)) : Promise.resolve([]),
         farmaQ ? timed('Farmatodo', searchFarmatodo(farmaQ)) : Promise.resolve([]),
         farmaQ ? timed('Central Oeste', searchCentralOeste(farmaQ)) : Promise.resolve([]),

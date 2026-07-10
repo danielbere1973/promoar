@@ -470,6 +470,7 @@ export default function PreciosPage() {
   })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [expandedCatId, setExpandedCatId] = useState<string | null>(null)
 
   useEffect(() => {
     try { localStorage.setItem('promoar-precios-stores', JSON.stringify(Array.from(selectedStores))) } catch {}
@@ -724,14 +725,43 @@ export default function PreciosPage() {
       {(section === 'supermercados' || section === 'farmacias' || section === 'electrónica') && (
         <div className="mt-4">
           <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 mb-2 font-bold px-1">Categorías</p>
-          {(section === 'farmacias' ? farmaCats : section === 'electrónica' ? electroCats : rootCats).map(cat => (
-            <button key={cat.id}
-              onClick={() => { handleSearch(undefined, true, cat.id); setSidebarOpen(false) }}
-              className="w-full text-left px-3 py-2 rounded-xl text-sm text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-between group transition-colors font-medium">
-              <span>{cat.name}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-slate-600 group-hover:text-gray-500 shrink-0" />
-            </button>
-          ))}
+          {(section === 'farmacias' ? farmaCats : section === 'electrónica' ? electroCats : rootCats).map(cat => {
+            const hasChildren = !!cat.children && cat.children.length > 0
+            const isExpanded = expandedCatId === cat.id
+            return (
+              <div key={cat.id}>
+                <button
+                  onClick={() => {
+                    if (hasChildren) {
+                      setExpandedCatId(isExpanded ? null : cat.id)
+                    } else {
+                      handleSearch(undefined, true, cat.id)
+                      setSidebarOpen(false)
+                    }
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-sm text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-between group transition-colors font-medium">
+                  <span>{cat.name}</span>
+                  <ChevronRight className={`w-3.5 h-3.5 text-gray-300 dark:text-slate-600 group-hover:text-gray-500 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                </button>
+                {hasChildren && isExpanded && (
+                  <div className="ml-3 pl-2 border-l border-gray-200 dark:border-slate-700">
+                    <button
+                      onClick={() => { handleSearch(undefined, true, cat.id); setSidebarOpen(false); setExpandedCatId(null) }}
+                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs italic text-gray-400 dark:text-slate-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                      Ver todo {cat.name}
+                    </button>
+                    {cat.children!.map(sub => (
+                      <button key={sub.id}
+                        onClick={() => { handleSearch(undefined, true, sub.id); setSidebarOpen(false); setExpandedCatId(null) }}
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                        {sub.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -875,10 +905,10 @@ export default function PreciosPage() {
                     type="text"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
-                    placeholder={section === 'supermercados' ? 'Buscá un producto o escaneá el código de barras 📷' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg...' : 'Ej. Samsung TV 55", Heladera no frost...'}
+                    placeholder={section === 'supermercados' ? 'Buscá un producto o escaneá el código de barras 📷' : section === 'farmacias' ? 'Ej. Ibuprofeno 400mg o escaneá 📷' : 'Ej. Samsung TV 55", Heladera no frost...'}
                     className="flex-1 bg-transparent text-base py-2.5 px-2 outline-none text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 min-w-0"
                   />
-                  {section === 'supermercados' && (
+                  {(section === 'supermercados' || section === 'farmacias') && (
                     <button type="button" onClick={() => setScannerOpen(true)} title="Escanear código de barras"
                       className="p-2.5 text-gray-400 hover:text-[#1E3A5F] dark:hover:text-blue-400 transition-colors shrink-0 mr-0.5">
                       <Camera className="w-5 h-5" />
