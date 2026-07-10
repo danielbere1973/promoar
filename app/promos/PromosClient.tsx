@@ -1215,7 +1215,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     }
     const activeCommerce = activeFilters.commerces[0]
     const commList = Array.from(commMap.values())
-      .filter(c => c.bestDiscount > 0)
+      .filter(c => c.bestDiscount > 0 && c.bestDiscount <= 100)
       .sort((a, b) => b.count !== a.count ? b.count - a.count : b.bestDiscount - a.bestDiscount)
       .slice(0, 5)
 
@@ -2635,7 +2635,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                           }
                           {label && (
                             <div className="absolute top-1.5 right-1.5 bg-[#D94F2B] text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">
-                              {pctReq ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
+                              {pctReq && pctReq.discountType !== 'FIXED_AMOUNT' ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
                             </div>
                           )}
                         </div>
