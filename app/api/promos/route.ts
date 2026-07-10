@@ -56,7 +56,9 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get('page') ?? '1') || 1
 
     // Fechas clave: buscar si hoy está dentro del window de alguna fecha especial
-    const isWeekend = [5, 6, 0].includes(new Date().getDay())
+    // Servidor en UTC (Vercel) — ajustar a Argentina (UTC-3 fijo) para no adelantar el día
+    const argNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
+    const isWeekend = [5, 6, 0].includes(argNow.getDay())
     const windowMax = new Date(); windowMax.setDate(windowMax.getDate() + 30)
     const keyDate = paginate ? await prisma.promoCalendar.findFirst({
       where: { date: { gte: new Date(), lte: windowMax } },

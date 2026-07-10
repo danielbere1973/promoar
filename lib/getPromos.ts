@@ -102,8 +102,13 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     data: { status: 'EXPIRED' }
   }).catch(() => {})
 
+  // Servidor corre en UTC (Vercel) — Argentina es UTC-3 fijo (sin horario de verano).
+  // Sin este ajuste, getDay() adelanta el día ~3hs antes de tiempo (ej. jueves 21hs ARG
+  // ya es viernes 00hs UTC, mostrando promos de "mañana" como si fueran de "hoy").
+  const argNow = new Date(today.getTime() - 3 * 60 * 60 * 1000)
+
   // Default to today if no specific day filter is provided
-  const defaultDayBit = 1 << today.getDay()
+  const defaultDayBit = 1 << argNow.getDay()
 
   // Construct Prisma where clause
   const where: any = {

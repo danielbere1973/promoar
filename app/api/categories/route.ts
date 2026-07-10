@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
 
     const today = new Date()
     const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
-    const dayBit = 1 << today.getDay()
+    // Servidor en UTC (Vercel) — ajustar a Argentina (UTC-3 fijo) para no adelantar el día
+    const argNow = new Date(today.getTime() - 3 * 60 * 60 * 1000)
+    const dayBit = 1 << argNow.getDay()
 
     // 1. Obtener perfil del usuario si forMe=true
     let userCards: any[] = []
