@@ -2,6 +2,20 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Share2, Copy, Check, Heart, Star } from 'lucide-react'
 
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+
+function formatRenewalDate(capPeriod: string | null | undefined, periodEnd: string | Date): string | null {
+  if (!capPeriod || capPeriod === 'TOTAL' || capPeriod === 'PER_TRANSACTION') return null
+  const renewal = new Date(periodEnd)
+  renewal.setDate(renewal.getDate() + 1)
+  renewal.setHours(0, 0, 0, 0)
+  if (capPeriod === 'DAILY') return 'mañana'
+  const dd = String(renewal.getDate()).padStart(2, '0')
+  const mm = String(renewal.getMonth() + 1).padStart(2, '0')
+  if (capPeriod === 'WEEKLY') return `el ${DIAS_SEMANA[renewal.getDay()]} ${dd}/${mm}`
+  return `el ${dd}/${mm}`
+}
+
 function formatDays(mask: number): string {
   if (!mask || mask === 127) return 'Todos los días'
   const names = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -16,6 +30,7 @@ function formatDays(mask: number): string {
 }
 
 type Req = {
+  id?: string
   bank?: { name: string; slug?: string; logoUrl?: string | null } | null
   wallet?: { name: string; slug?: string; logoUrl?: string | null } | null
   cardNetwork?: { name: string; slug: string } | null
@@ -25,8 +40,10 @@ type Req = {
   nxmM?: number | null
   cap?: number | null
   capUnlimited?: boolean | null
+  capPeriod?: string | null
   cardSegment?: { name: string } | null
   paymentChannel?: string | null
+  usage?: { amountUsed: number; cap: number; exhausted: boolean; periodEnd: string | Date } | null
 }
 
 type Promo = {
@@ -82,9 +99,10 @@ type Props = {
   isCommerceSaved?: boolean
   fullWidth?: boolean
   priority?: boolean
+  onRegisterUsage?: (req: Req, promo: Promo, e: React.MouseEvent) => void
 }
 
-export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, fullWidth, priority }: Props) {
+export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, fullWidth, priority, onRegisterUsage }: Props) {
   const bestReq = bestDiscountReq(promo.requirements)
   const { num, unit, label, isCsi } = discountDisplay(bestReq)
 
@@ -100,6 +118,13 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   const entities = [...banks, ...wallets].slice(0, 2)
 
   const hasSinTope = promo.requirements.some(r => r.capUnlimited)
+  const reqWithUsage = promo.requirements.find(r => r.usage) ?? null
+  const usage = reqWithUsage?.usage ?? null
+  const usagePct = usage ? Math.min(100, Math.round((usage.amountUsed / usage.cap) * 100)) : 0
+  const renewalLabel = usage ? formatRenewalDate(reqWithUsage?.capPeriod, usage.periodEnd) : null
+  const cappedReq = reqWithUsage ?? promo.requirements.find(r => r.cap != null && r.capPeriod) ?? null
+  // Para "Registrar uso": cualquier requirement con ahorro real (no CSI puro), priorizando uno con tope.
+  const usableReq = cappedReq ?? (isCsi ? null : bestReq)
   const segments = promo.requirements.map(r => r.cardSegment?.name).filter(Boolean)
   const exclusiveSegment = segments.length > 0 && new Set(segments).size === 1 ? segments[0] : null
 
@@ -268,6 +293,31 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </div>
         )}
 
+        {/* Uso registrado — badge con tooltip. La card sigue mostrándose siempre,
+            aunque el tope esté agotado, para que el usuario sepa que la promo sigue ahí. */}
+        {usage && (
+          <div
+            className={`relative self-start group/usage inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wide rounded-lg px-2 py-1 cursor-default ${
+              usage.exhausted
+                ? 'bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-300 border border-gray-200 dark:border-white/15'
+                : 'bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700/40'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+            Promo utilizada
+            <div className="hidden group-hover/usage:block absolute bottom-full left-0 mb-2 w-52 bg-[#0D1B2E] text-white text-[11px] font-medium normal-case tracking-normal leading-snug rounded-xl px-3 py-2.5 shadow-2xl z-20">
+              Usaste <strong className="font-extrabold">${usage.amountUsed.toLocaleString('es-AR')}</strong> de{' '}
+              <strong className="font-extrabold">${usage.cap.toLocaleString('es-AR')}</strong> este período
+              {usage.exhausted ? ' — agotaste el tope' : ''}.
+              <div className="h-1 rounded-full bg-white/15 mt-2 mb-0.5 overflow-hidden">
+                <div className={`h-full rounded-full ${usage.exhausted ? 'bg-gray-400' : 'bg-amber-400'}`} style={{ width: `${usagePct}%` }} />
+              </div>
+              {renewalLabel && <span className="block mt-1 font-bold text-amber-300">Se renueva {renewalLabel}</span>}
+            </div>
+          </div>
+        )}
+
         {/* Entidades + redes */}
         {(entities.length > 0 || networks.length > 0) && (
           <div className="flex flex-wrap items-center gap-1">
@@ -328,6 +378,16 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
         {/* Días */}
         {days !== 'Todos los días' && (
           <p className="text-[10px] text-gray-400 dark:text-gray-500">{days}</p>
+        )}
+
+        {/* Registrar uso — cualquier promo con ahorro real (no CSI puro) */}
+        {onRegisterUsage && usableReq && (
+          <button
+            onClick={e => { e.stopPropagation(); onRegisterUsage(usableReq, promo, e) }}
+            className="mt-0.5 w-full text-[10px] font-extrabold rounded-lg px-2 py-1.5 bg-[#EEF2F8] dark:bg-[#16294B] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#26406F] hover:bg-[#D0DBF0] dark:hover:bg-[#1C3258] transition-colors"
+          >
+            {usage ? 'Registrar otro uso' : 'Registrar uso'}
+          </button>
         )}
       </div>
 

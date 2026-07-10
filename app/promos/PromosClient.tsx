@@ -27,6 +27,7 @@ const PromoWizard = dynamic(() => import('../components/PromoWizard'), { ssr: fa
 const ProvinceSelector = dynamic(() => import('../components/ProvinceSelector'), { ssr: false })
 const TourOverlay = dynamic(() => import('../components/TourOverlay'), { ssr: false })
 const NewBanksWelcomePopup = dynamic(() => import('../components/NewBanksWelcomePopup'), { ssr: false })
+const RegisterUsageModal = dynamic(() => import('../components/RegisterUsageModal'), { ssr: false })
 
 // Caché de módulo: sobrevive navegaciones internas, se limpia con F5
 // TTL de 5 minutos para la carga por defecto (sin filtros complejos)
@@ -572,6 +573,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [focusedCatSearch, setFocusedCatSearch] = useState('')
   const [focusedCatSort, setFocusedCatSort] = useState<'default' | 'discount' | 'alpha'>('default')
   const [entitiesPromo, setEntitiesPromo] = useState<Promo | null>(null)
+  const [usageModal, setUsageModal] = useState<{ requirement: any; commerceName: string; discountLabel: string; promoId: string } | null>(null)
   const [expandedPromos, setExpandedPromos] = useState<Set<string>>(new Set())
   const toggleExpand = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setExpandedPromos(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
   const [categorias, setCategorias] = useState<Categoria[]>([])
@@ -1250,6 +1252,35 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     }
   }
 
+  const handleRegisterUsage = (req: any, promo: Promo, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const bestReq = req.usage ? req : (promo.requirements as any[]).find(r => r.id === req.id) ?? req
+    const entityName = bestReq.bank?.name || bestReq.wallet?.name || ''
+    const discountLabel = bestReq.discountType === 'CUOTAS_SIN_INTERES'
+      ? `${bestReq.discountValue} cuotas s/int.`
+      : `${bestReq.discountValue}% ${entityName ? 'con ' + entityName : ''}`.trim()
+    setUsageModal({
+      requirement: bestReq,
+      commerceName: promo.commerce.name,
+      discountLabel,
+      promoId: promo.id,
+    })
+  }
+
+  const handleUsageSaved = (usage: { amountUsed: number; cap: number; exhausted: boolean; periodEnd: string } | null) => {
+    if (!usageModal) return
+    if (usage) {
+      const reqId = usageModal.requirement.id
+      setPromos(prev => prev.map(p => {
+        if (p.id !== usageModal.promoId) return p
+        return {
+          ...p,
+          requirements: (p.requirements as any[]).map(r => r.id === reqId ? { ...r, usage } : r),
+        } as any
+      }))
+    }
+    setUsageModal(null)
+  }
 
   return (
     <>
@@ -2169,7 +2200,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 py-2" style={{ scrollbarWidth: 'none' }}>
                     {c.promos.map(p => {
                       const promo = withCommerce(c, p)
-                      return <PromoCard key={p.id} promo={promo} nearbyCount={nearbyBranches[c.id]?.count} onClick={() => handleProductPromoClick(promo)} onToggleSave={toggleSave} />
+                      return <PromoCard key={p.id} promo={promo} nearbyCount={nearbyBranches[c.id]?.count} onClick={() => handleProductPromoClick(promo)} onToggleSave={toggleSave} onRegisterUsage={handleRegisterUsage} />
                     })}
                   </div>
                   {c.promos.length > 2 && (
@@ -2343,6 +2374,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                       onToggleSaveCommerce={toggleFavCommerce}
                       isCommerceSaved={favCommerces.includes(g.commerce.name)}
                       priority={isFirst && gi <= 2}
+                      onRegisterUsage={handleRegisterUsage}
                     />
                   ))}
                 </div>
@@ -2645,6 +2677,16 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           commerceName={entitiesPromo.commerce.name}
           requirements={entitiesPromo.requirements}
           onCloseAction={() => setEntitiesPromo(null)}
+        />
+      )}
+
+      {usageModal && (
+        <RegisterUsageModal
+          requirement={usageModal.requirement}
+          commerceName={usageModal.commerceName}
+          discountLabel={usageModal.discountLabel}
+          onClose={() => setUsageModal(null)}
+          onSaved={handleUsageSaved}
         />
       )}
 

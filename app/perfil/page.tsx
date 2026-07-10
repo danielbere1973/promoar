@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil, Bell } from 'lucide-react'
+import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil, Bell, History } from 'lucide-react'
 import BottomNav from '../components/BottomNav'
 import PromoWizard, { GuestProfile } from '../components/PromoWizard'
 import NotificationSettings from '../components/NotificationSettings'
@@ -137,12 +137,36 @@ export default function PerfilPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
-  const [activeTab, setActiveTab] = useState<'personal' | 'finance' | 'notif'>('personal')
+  const [activeTab, setActiveTab] = useState<'personal' | 'finance' | 'notif' | 'historial'>('personal')
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'notif' || t === 'finance' || t === 'personal') setActiveTab(t)
+    if (t === 'notif' || t === 'finance' || t === 'personal' || t === 'historial') setActiveTab(t)
   }, [])
+
+  type UsageHistoryItem = {
+    id: string
+    fecha: string
+    monto: number
+    promo: { id: string; title: string; slug: string | null }
+    comercio: { id?: string; name: string; logoUrl?: string | null } | null
+    entidad: string | null
+    discountType: string
+    discountValue: number
+    capPeriod: string | null
+  }
+  const [historial, setHistorial] = useState<UsageHistoryItem[]>([])
+  const [loadingHistorial, setLoadingHistorial] = useState(true)
+
+  useEffect(() => {
+    if (activeTab !== 'historial' || !email) return
+    setLoadingHistorial(true)
+    fetch('/api/perfil/historial-uso')
+      .then(res => res.ok ? res.json() : { historial: [] })
+      .then(data => setHistorial(data.historial ?? []))
+      .catch(() => setHistorial([]))
+      .finally(() => setLoadingHistorial(false))
+  }, [activeTab, email])
 
   const [showSaved, setShowSaved] = useState(false)
   const [savedPromos, setSavedPromos] = useState<any[]>([])
@@ -469,10 +493,10 @@ export default function PerfilPage() {
         </div>
 
         <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-2xl gap-1">
-          {(['personal', 'finance', 'notif'] as const).map(tab => (
+          {(['personal', 'finance', 'historial', 'notif'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`flex-1 py-2.5 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === tab ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-300 hover:text-gray-700 dark:hover:text-white'}`}>
-              {tab === 'personal' ? 'Personal' : tab === 'finance' ? 'Financiero' : <><Bell size={13} />Alertas</>}
+              {tab === 'personal' ? 'Personal' : tab === 'finance' ? 'Financiero' : tab === 'historial' ? <><History size={13} />Usos</> : <><Bell size={13} />Alertas</>}
             </button>
           ))}
         </div>
@@ -612,6 +636,58 @@ export default function PerfilPage() {
               className="w-full py-4 bg-gray-900 text-white font-bold rounded-2xl shadow-lg shadow-black/10 active:scale-[0.98] transition-all disabled:opacity-50">
               {saving ? 'Guardando...' : 'Guardar Información Personal'}
             </button>
+          </div>
+
+        ) : activeTab === 'historial' ? (
+          /* ══════════ TAB HISTORIAL DE USOS ══════════ */
+          <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {loadingHistorial ? (
+              <div className="space-y-3 py-4">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 animate-pulse">
+                    <div className="h-4 bg-gray-100 dark:bg-slate-700 rounded w-2/3 mb-2" />
+                    <div className="h-3 bg-gray-100 dark:bg-slate-700 rounded w-1/3" />
+                  </div>
+                ))}
+              </div>
+            ) : historial.length === 0 ? (
+              <div className="py-14 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 bg-gray-50 dark:bg-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                  <History size={22} className="text-gray-300" />
+                </div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">Todavía no registraste usos</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 max-w-[220px]">
+                  Cuando toques &quot;Registrar uso&quot; en una promo, va a aparecer acá con fecha, monto y banco.
+                </p>
+              </div>
+            ) : historial.map(h => {
+              let dLabel = `${h.discountValue}%`
+              if (h.discountType === 'FIXED_AMOUNT') dLabel = `$${h.discountValue}`
+              if (h.discountType === 'BONIFICACION') dLabel = `${h.discountValue}% BON.`
+              return (
+                <div key={h.id} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">
+                        {new Date(h.fecha).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {' · '}
+                        {new Date(h.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      <h3 className="font-bold text-gray-900 dark:text-white text-[15px] mt-0.5 leading-tight truncate">
+                        {h.comercio?.name || h.promo.title}
+                      </h3>
+                      {h.entidad && (
+                        <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">{h.entidad} · {dLabel}</p>
+                      )}
+                    </div>
+                    <div className="shrink-0 bg-gradient-to-br from-[#1E3A5F] to-[#0D1B2E] shadow-sm text-white rounded-xl px-3 py-2 flex flex-col items-center justify-center min-w-[70px]">
+                      <span className="text-[9px] font-bold uppercase tracking-wide opacity-70">Gastaste</span>
+                      <span className="text-sm font-black tracking-tight">${h.monto.toLocaleString('es-AR')}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
         ) : activeTab === 'notif' ? (

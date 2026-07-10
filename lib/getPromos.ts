@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { getCurrentPeriod } from '@/lib/promoUsage'
 
 // Cache del count total de promos activas — se recalcula cada 5 minutos
 let cachedTotalCount: number | null = null
@@ -490,9 +491,47 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     )
   }
 
+  // ─── Uso de promos (tope consumido) — solo con perfil activo ──────────────
+  // Se carga el uso del período vigente por requirement, para pintar el badge
+  // "Promo utilizada" sin que el cliente tenga que pedirlo aparte.
+  const usageByRequirementId = new Map<string, { amountUsed: number; periodEnd: Date }>()
+  if (forMe && email && filtered.length) {
+    const userForUsage = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+    if (userForUsage) {
+      const reqIds = filtered.flatMap(p => (p as any).requirements?.map((r: any) => r.id) ?? [])
+      if (reqIds.length) {
+        const usages = await prisma.promoUsage.findMany({
+          where: {
+            userId: userForUsage.id,
+            requirementId: { in: reqIds },
+            periodEnd: { gte: new Date() },
+          },
+        })
+        for (const u of usages) {
+          usageByRequirementId.set(u.requirementId, { amountUsed: u.amountUsed, periodEnd: u.periodEnd })
+        }
+      }
+    }
+  }
+
   // ─── Enriquecimiento final de promos ──────────────────────────────────────
   const finalSavedSet = new Set(fetchedUser ? (fetchedUser as any).savedPromos.map((sp: any) => sp.promoId) : [])
   const finalPromos = filtered.map(p => {
+    if (usageByRequirementId.size) {
+      (p as any).requirements = (p as any).requirements.map((r: any) => {
+        const usage = usageByRequirementId.get(r.id)
+        if (!usage || r.cap == null) return r
+        return {
+          ...r,
+          usage: {
+            amountUsed: usage.amountUsed,
+            cap: r.cap,
+            exhausted: usage.amountUsed >= r.cap,
+            periodEnd: usage.periodEnd,
+          },
+        }
+      })
+    }
     const allReqs = p.requirements ?? []
     const globalMaxDiscount = allReqs.length > 0 ? allReqs.reduce((max, r) => (r.discountValue ?? 0) > (max?.discountValue ?? 0) ? r : max, allReqs[0]) : null
 

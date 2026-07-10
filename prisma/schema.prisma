@@ -54,6 +54,8 @@ model User {
   postLikes        PostLike[]
   promoReports     PromoReport[]
   savedPromos      SavedPromo[]
+  promoUsages      PromoUsage[]
+  promoUsageEvents PromoUsageEvent[]
   sessions         Session[]
   trustedDevices   TrustedDevice[]
   events           UserEvent[]
@@ -439,6 +441,8 @@ model Promo {
   category           Category           @relation(fields: [categoryId], references: [id])
   commerce           Commerce           @relation(fields: [commerceId], references: [id])
   savedByUsers       SavedPromo[]
+  usages             PromoUsage[]
+  usageEvents        PromoUsageEvent[]
 
   @@index([categoryId])
   @@index([commerceId])
@@ -479,8 +483,47 @@ model PromoRequirement {
   promo           Promo                 @relation(fields: [promoId], references: [id], onDelete: Cascade)
   segmentRef      BankSegment?          @relation(fields: [segmentId], references: [id])
   wallet          Wallet?               @relation(fields: [walletId], references: [id])
+  usages          PromoUsage[]
+  usageEvents     PromoUsageEvent[]
 
   @@map("promo_requirements")
+}
+
+model PromoUsage {
+  id            String           @id @default(cuid())
+  userId        String
+  promoId       String
+  requirementId String
+  amountUsed    Float            @default(0)
+  periodStart   DateTime
+  periodEnd     DateTime
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promo         Promo            @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  requirement   PromoRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, requirementId, periodStart])
+  @@index([userId])
+  @@map("promo_usages")
+}
+
+// Log inmutable de cada carga individual (nunca se edita ni se borra) — alimenta
+// el historial "Promos usadas" del perfil (fecha, monto, comercio, banco/wallet).
+// PromoUsage de arriba guarda el acumulado por período (para el cálculo rápido del tope).
+model PromoUsageEvent {
+  id            String           @id @default(cuid())
+  userId        String
+  promoId       String
+  requirementId String
+  amount        Float
+  createdAt     DateTime         @default(now())
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promo         Promo            @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  requirement   PromoRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("promo_usage_events")
 }
 
 model CommunityPost {
