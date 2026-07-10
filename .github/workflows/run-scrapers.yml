@@ -1,29 +1,14 @@
 name: Run Scheduled Scrapers
 
 on:
-  schedule:
-    # Mismo esquema que refresh-vtex-sessions.yml: los scrapers bancarios no
-    # cambian de un día para el otro, así que no hace falta chequear
-    # scrapers-due cada hora (24 corridas/día == 744/mes solo para preguntar
-    # "¿hay algo pendiente?"). Se corre:
-    #   1) 1 vez por semana (jueves de madrugada) — cadencia base.
-    #   2) + el día hábil siguiente a cada feriado largo de 2026 (mismas 8
-    #      fechas que refresh-vtex-sessions.yml — actualizar a fin de año
-    #      para 2027).
-    #   3) + primer día del mes (levanta lo que venció el último día del mes
-    #      anterior — muchas promos vencen fin de mes).
-    # Todo a las 5am UTC (2am ART) para no interferir con sistemas
-    # corporativos de los bancos en horario hábil.
-    - cron: '0 5 * * 4'    # jueves (semanal)
-    - cron: '0 5 18 2 *'   # post carnaval
-    - cron: '0 5 6 4 *'    # post semana santa
-    - cron: '0 5 4 5 *'    # post día del trabajador
-    - cron: '0 5 26 5 *'   # post 25 de mayo
-    - cron: '0 5 16 6 *'   # post Güemes
-    - cron: '0 5 18 8 *'   # post San Martín
-    - cron: '0 5 13 10 *'  # post diversidad cultural
-    - cron: '0 5 24 11 *'  # post soberanía nacional
-    - cron: '0 5 1 * *'    # primer día del mes
+  # schedule DESACTIVADO a propósito (8/7/2026): este workflow llegó a tener
+  # `cron: '0 * * * *'` (cada hora, todos los días) hasta el 6/7 — 14+
+  # corridas en un solo día. No volvió a fundir Vercel/Neon solo porque la
+  # tabla scraper_schedules estaba vacía (scrapers-due devolvía siempre []).
+  # Pablo pidió explícitamente que este workflow NUNCA vuelva a dispararse
+  # solo — de acá en más corre exclusivamente vía workflow_dispatch manual
+  # desde el admin. Si en el futuro se quiere reactivar un cron, cargar antes
+  # scraper_schedules a propósito y probar con un solo scraper primero.
   workflow_dispatch:
     inputs:
       scraper_id:
@@ -129,3 +114,16 @@ jobs:
             echo "Ejecutando Playwright: $SCRAPER"
             npx tsx scripts/run-playwright-scraper.ts "$SCRAPER"
           done
+
+  auto-validate:
+    needs: [check, run-http, run-playwright]
+    if: always() && (needs.run-http.result == 'success' || needs.run-playwright.result == 'success')
+    runs-on: ubuntu-latest
+    name: Auto-validar DRAFTs
+    steps:
+      - name: Ejecutar auto-validador
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" \
+            "${{ secrets.API_URL }}/api/admin/auto-validate"
+          echo ""

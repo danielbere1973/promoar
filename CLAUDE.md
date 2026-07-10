@@ -873,14 +873,32 @@ las IPs de datacenter de los runners de GH Actions son bloqueadas por el WAF de
 `utilidades-icbc-prod.pisol.net`, no es un bug del scraper. ICBC debe correrse siempre con
 "Ejecutar todos" local desde el admin, nunca con "Ejecutar todos GH".
 
-## GitHub Actions desactivado temporalmente (hasta 1/7)
-El 13/6 se llegó al 90% de los 2000 minutos/mes de GH Actions (cuenta `danielbere1973`,
-repo privado). Se desactivaron los `schedule` (cron) de los 3 workflows en
-`.github/workflows/` (`run-scrapers.yml`, `expire-promos.yml`, `refresh-vtex-sessions.yml`),
-dejando solo `workflow_dispatch` (disparo manual). El ciclo de minutos se reinicia el
-**1 de julio** — reactivar los crons descomentando el bloque `schedule:` en cada archivo.
-Mientras tanto, scrapers y expiración de promos se corren manualmente en local.
-También se refactorizó `run-scrapers.yml`: el job `check` (sin contenedor) determina qué
-scrapers están pendientes y los jobs `run-http`/`run-playwright` solo corren (con `if` a
-nivel de job) si hay algo pendiente — evita el pull del contenedor pesado de Playwright
-en corridas sin trabajo.
+## GitHub Actions — `run-scrapers.yml` con schedule desactivado (desde 8/7/2026) — PENDIENTE reactivar el 13/7
+Hasta el 6/7 este workflow tuvo `cron: '0 * * * *'` (cada hora, todos los días) —
+residuo de una versión vieja que nunca se corrigió del todo al bajar la frecuencia.
+El 5-6/7 esto generó **14+ disparos en un solo día** (ver historial de Actions). No llegó
+a fundir Vercel/Neon solo porque la tabla `scraper_schedules` estaba vacía (nunca se cargó
+tras implementar el scheduler el 29/5 — `/api/internal/scrapers-due` siempre devolvía `[]`,
+así que el job `check` no encontraba nada pendiente y cada run terminaba en segundos sin
+scrapear nada real).
+
+El mismo 6/7 (commit `8964610`) se corrigió el cron a un esquema de baja frecuencia: jueves
+2am ART + primer día del mes + 8 fechas puntuales post-feriado largo 2026 (~12 corridas/mes,
+bien por debajo del límite de 2000 min/mes). Ese esquema en sí **no** era el problema.
+
+El 8/7 Pablo pidió, por precaución dado el consumo reciente de Vercel, desactivar el
+`schedule:` por completo — de acá en más `run-scrapers.yml` solo corre vía
+`workflow_dispatch` manual desde el admin. **Pendiente: restaurar el esquema jueves +
+primer día del mes + fechas post-feriado (el mismo bloque `cron:` de `8964610`) a partir
+del 13/7**, una vez que pase la ventana de alto consumo. La tabla `scraper_schedules` sigue
+vacía — cargarla a propósito desde el admin (frecuencia por scraper) es lo que hace que
+esos triggers realmente ejecuten algo; hasta entonces son un fusible inofensivo aunque se
+reactiven.
+
+`expire-promos.yml` y `refresh-vtex-sessions.yml` no fueron tocados en este cambio — sus
+schedules siguen activos con la frecuencia baja ya configurada.
+
+`run-scrapers.yml` sigue con el job `check` (sin contenedor) que determina qué scrapers
+están pendientes; los jobs `run-http`/`run-playwright` solo corren (con `if` a nivel de
+job) si hay algo pendiente — evita el pull del contenedor pesado de Playwright en corridas
+sin trabajo.
