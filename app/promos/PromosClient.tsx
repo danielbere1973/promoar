@@ -26,7 +26,6 @@ const PromoDetailSheet = dynamic(() => import('../components/PromoDetailSheet'),
 const PromoWizard = dynamic(() => import('../components/PromoWizard'), { ssr: false })
 const ProvinceSelector = dynamic(() => import('../components/ProvinceSelector'), { ssr: false })
 const TourOverlay = dynamic(() => import('../components/TourOverlay'), { ssr: false })
-const NewBanksWelcomePopup = dynamic(() => import('../components/NewBanksWelcomePopup'), { ssr: false })
 const RegisterUsageModal = dynamic(() => import('../components/RegisterUsageModal'), { ssr: false })
 
 // Caché de módulo: sobrevive navegaciones internas, se limpia con F5
@@ -2741,7 +2740,6 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       )}
 
       <TourOverlay isAuthenticated={status === 'authenticated'} blocked={showProvinceSelector} />
-      <NewBanksWelcomePopup isAuthenticated={status === 'authenticated'} blocked={showProvinceSelector} />
     </div>
     </>
   )
