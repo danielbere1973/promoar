@@ -418,6 +418,17 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
           )}
         </p>
 
+        {/* ── CTA temprano (arriba del fold, antes de vigencia/legales) ── */}
+        <a
+          href="/promos"
+          className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-2xl px-5 py-3.5 shadow-md hover:shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <p className="text-sm font-black">Ver más promos como esta →</p>
+          <div className="w-8 h-8 rounded-xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-sm">
+            🎯
+          </div>
+        </a>
+
         {/* ── NOTA / CONDICIÓN ESPECIAL ── */}
         {promo.commerceNote && (
           <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
