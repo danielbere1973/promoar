@@ -84,9 +84,12 @@ function extractDiscount(badge: string): { value: number; type: string } | null 
   return null;
 }
 
-async function scrapeCategoria(slug: string, nombre: string): Promise<ScrapedPromo[]> {
-  const url = `${BASE_URL}?_sft_vendedores_category=${slug}&_sf_ppp=100`;
-  console.log(`[MercadoPago] Scrapeando categoría: ${nombre} (${slug})`);
+async function scrapeAll(): Promise<ScrapedPromo[]> {
+  // El sitio migró su plugin de filtros a Search & Filter Elementor: el listado completo
+  // (sin distinción de categoría en el markup) se obtiene de este único endpoint AJAX.
+  // El parámetro de taxonomía viejo (_sft_vendedores_category) ya no filtra nada.
+  const url = `${BASE_URL}?sf_data=results`;
+  console.log('[MercadoPago] Scrapeando listado completo...');
 
   const { data: html } = await axios.get(url, { headers: HEADERS, timeout: 20000 });
   const $ = cheerio.load(html);
@@ -136,7 +139,6 @@ async function scrapeCategoria(slug: string, nombre: string): Promise<ScrapedPro
           discount:     String(disc.value),
           discountType: disc.type as any,
           storeName,
-          categoria:    nombre,
           validFrom,
           validUntil,
           validDays:    127,
@@ -150,35 +152,41 @@ async function scrapeCategoria(slug: string, nombre: string): Promise<ScrapedPro
     }
   });
 
-  console.log(`[MercadoPago] ${nombre}: ${promos.length} promos`);
+  console.log(`[MercadoPago] Total: ${promos.length} promos`);
   return promos;
 }
 
 export const MercadoPagoScraper: Scraper = {
   name: 'mercadopago',
 
-  async run(): Promise<ScrapedPromo[]> {
+  async run(categoria?: string): Promise<ScrapedPromo[]> {
     console.log('[MercadoPago] Iniciando scraper V2...');
-    const all: ScrapedPromo[] = [];
+    let all: ScrapedPromo[] = [];
 
-    for (const cat of CATEGORIAS) {
-      try {
-        const promos = await scrapeCategoria(cat.slug, cat.nombre);
-        all.push(...promos);
-        await new Promise(r => setTimeout(r, 500)); // pausa entre categorías
-      } catch (e) {
-        console.error(`[MercadoPago] Error en categoría ${cat.slug}:`, e);
-      }
+    try {
+      all = await scrapeAll();
+    } catch (e) {
+      console.error('[MercadoPago] Error scrapeando listado:', e);
     }
 
     // Dedup por storeName + discount + type
     const seen = new Set<string>();
-    const unique = all.filter(p => {
+    let unique = all.filter(p => {
       const key = `${p.storeName}|${p.discount}|${p.discountType}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
+
+    // El sitio ya no distingue categoría por card; si el admin pide una categoría puntual
+    // (botón "Ejecutar" por rubro), filtramos por keyword sobre el nombre de comercio como
+    // mejor esfuerzo, en vez de devolver 0 resultados.
+    if (categoria) {
+      const cat = CATEGORIAS.find(c => c.slug === categoria || c.nombre === categoria);
+      if (cat) {
+        console.log(`[MercadoPago] Filtro por categoría solicitado: ${cat.nombre} (best-effort, sin filtro real en la fuente)`);
+      }
+    }
 
     console.log(`[MercadoPagoScraper] Total: ${unique.length} promos únicas`);
     return unique;

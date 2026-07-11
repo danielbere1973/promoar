@@ -44,16 +44,12 @@ const PUBLIC_PATHS = [
 // Rutas solo para ADMIN
 const ADMIN_PATHS = ['/admin', '/api/admin']
 
+// Crawlers de buscadores que sí queremos indexando el sitio (SEO), a diferir del
+// resto de tráfico extranjero — estos no deben bloquearse pese a no ser de Argentina.
+const ALLOWED_BOT_UA = /googlebot|bingbot|yandexbot|duckduckbot|applebot/i
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-
-  // 0. Restringir APIs a tráfico de Argentina (reduce bandwidth de bots/scrapers extranjeros)
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
-    const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country')
-    if (country && country !== 'AR') {
-      return NextResponse.json({ error: 'No disponible fuera de Argentina' }, { status: 403 })
-    }
-  }
 
   // 1. Saltarse archivos estáticos y rutas internas de Next.js de forma explícita
   if (
@@ -68,6 +64,21 @@ export async function middleware(req: NextRequest) {
     pathname === '/sw.js'
   ) {
     return NextResponse.next()
+  }
+
+  // 0. Restringir tráfico fuera de Argentina (reduce compute-hours de bots/scrapers
+  // extranjeros que disparan queries a la DB en SSR) — excepto crawlers de buscadores
+  // legítimos, que necesitamos para SEO, y las rutas de auth/estáticas ya filtradas arriba.
+  if (!pathname.startsWith('/api/auth')) {
+    const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country')
+    const userAgent = req.headers.get('user-agent') || ''
+    const isAllowedBot = ALLOWED_BOT_UA.test(userAgent)
+    if (country && country !== 'AR' && !isAllowedBot) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'No disponible fuera de Argentina' }, { status: 403 })
+      }
+      return new NextResponse('No disponible fuera de Argentina', { status: 403 })
+    }
   }
 
   // 2. Comprobar si es la Home o una ruta pública explícita

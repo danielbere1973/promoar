@@ -673,7 +673,12 @@ export async function POST(req: NextRequest) {
           await prisma.promoRequirement.deleteMany({ where: { promoId: existing.id } });
           let slug = baseSlug;
           if (existingSlugs.has(slug) && existing.slug !== slug) slug = `${baseSlug}-${existing.id.slice(-4)}`;
-          await prisma.promo.update({ where: { id: existing.id }, data: { ...promoData, slug, status: existing.status, requirements: { create: reqData } } });
+          // Si el scraper trae un validUntil nuevo y vigente para una promo que había quedado
+          // EXPIRED (venció y el sitio la volvió a publicar con fecha renovada), reactivarla.
+          const newValidUntil = promoData.validUntil instanceof Date ? promoData.validUntil : (promoData.validUntil ? new Date(promoData.validUntil) : null)
+          const renewedAndValid = existing.status === 'EXPIRED' && (!newValidUntil || newValidUntil >= new Date())
+          const nextStatus = renewedAndValid ? 'ACTIVE' : existing.status;
+          await prisma.promo.update({ where: { id: existing.id }, data: { ...promoData, slug, status: nextStatus, requirements: { create: reqData } } });
         } catch (e: any) {
           if (e?.code === 'P2002') {
             // Slug duplicado al actualizar — skipear, ya existe una promo con ese slug
