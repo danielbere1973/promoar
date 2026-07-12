@@ -39,6 +39,7 @@ const PUBLIC_PATHS = [
   '/api/push',
   '/api/events',
   '/api/site-config',
+  '/api/og',
 ]
 
 // Rutas solo para ADMIN

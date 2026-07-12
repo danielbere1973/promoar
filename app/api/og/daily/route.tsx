@@ -10,7 +10,7 @@ const fontData = fs.readFileSync(
   path.resolve('./node_modules/next/dist/compiled/@vercel/og/noto-sans-v27-latin-regular.ttf')
 )
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://promoar.com.ar')
 const PCT_TYPES = ['PERCENTAGE_REINTEGRO', 'PERCENTAGE_DESCUENTO', 'BONIFICACION']
 
 function absoluteLogo(url: string | null | undefined): string | null {
@@ -32,9 +32,13 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const count = Math.min(parseInt(searchParams.get('n') ?? '5'), 8)
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
+  const isWeekly = searchParams.get('range') === 'week'
 
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-  const todayBit = 1 << new Date().getDay()
+  // Hora Argentina explícita — el servidor corre en UTC, y sin esto el
+  // día calculado queda adelantado entre las 21:00 y las 00:00 ART.
+  const nowAR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }))
+  const todayBit = 1 << nowAR.getDay()
 
   // Categorías prioritarias en orden
   const PRIORITY_CATS = ['supermercados', 'combustible', 'transporte', 'farmacias']
@@ -71,6 +75,9 @@ export async function GET(request: Request) {
   const candidates = raw
     .filter(p => {
       if (p.requirements.length === 0) return false
+      // En la semanal no filtramos por día — se muestran las mejores promos
+      // de la semana sin importar qué días de la semana aplican.
+      if (isWeekly) return true
       if (!p.validDays || p.validDays === 127) return false
       if ((p.validDays & todayBit) === 0) return false
       return true
@@ -95,9 +102,8 @@ export async function GET(request: Request) {
     })
     .slice((page - 1) * count, page * count)
 
-  const today = new Date()
-  const dateStr = today.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
-  const dateCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
+  const dayName = nowAR.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'America/Argentina/Buenos_Aires' }).toUpperCase()
+  const dateStr = nowAR.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', timeZone: 'America/Argentina/Buenos_Aires' })
 
   // Colors for variety
   const ACCENT_COLORS = ['#D94F2B', '#2563EB', '#059669', '#7C3AED', '#D97706', '#DC2626', '#0891B2', '#65A30D']
@@ -116,27 +122,29 @@ export async function GET(request: Request) {
         }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '44px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{
-              background: '#D94F2B',
-              borderRadius: '16px',
-              width: '52px', height: '52px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '28px',
-            }}>🎯</div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: 'white', fontSize: '38px', fontWeight: 900, letterSpacing: '-1px', lineHeight: 1 }}>PromoAR</span>
-              <span style={{ color: '#64a0d4', fontSize: '19px', fontWeight: 600, marginTop: '4px' }}>
-                🔥 {dateCapitalized}
-              </span>
-            </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'white', borderRadius: '16px', padding: '14px 22px',
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`${BASE_URL}/promoar_gabi_transparente_fixed.png`} alt="PromoAR" width={200} height={109} style={{ objectFit: 'contain' }} />
           </div>
           <span style={{ color: '#3a6a9a', fontSize: '18px', fontWeight: 700 }}>promoar.com.ar</span>
         </div>
 
+        {/* Título — dinámico según día/rango */}
+        <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '28px' }}>
+          <span style={{ color: '#64a0d4', fontSize: '22px', fontWeight: 700 }}>
+            {isWeekly ? '📅 Lo mejor de la semana' : '🔥 Tus promos para hoy'}
+          </span>
+          <span style={{ color: 'white', fontSize: '44px', fontWeight: 900, letterSpacing: '-1px', lineHeight: 1.1 }}>
+            {isWeekly ? 'ESTA SEMANA' : dayName} <span style={{ color: '#7ab0e0', fontSize: '26px', fontWeight: 700 }}>{dateStr}</span>
+          </span>
+        </div>
+
         {/* Divider */}
-        <div style={{ height: '2px', background: 'rgba(255,255,255,0.08)', marginBottom: '32px' }} />
+        <div style={{ height: '2px', background: 'rgba(255,255,255,0.08)', marginBottom: '28px' }} />
 
         {/* Promos */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', flex: 1 }}>
