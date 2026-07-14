@@ -20,6 +20,11 @@ import OnboardingBanner from '../components/OnboardingBanner'
 import { useTracking } from '@/lib/useTracking'
 import { AdBannerEM } from '../components/AdBannerEM'
 
+// `.includes()` de JS no ignora acentos — "cafe" no matchea "Café Martínez" sin esto.
+function normalizeAccents(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 const FilterDrawer = dynamic(() => import('../components/FilterDrawer'), { ssr: false })
 const EntitiesSheet = dynamic(() => import('../components/EntitiesSheet'), { ssr: false })
 const PromoDetailSheet = dynamic(() => import('../components/PromoDetailSheet'), { ssr: false })
@@ -1670,6 +1675,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                         value={searchText}
                         onChange={(e) => {
                           setSearchText(e.target.value)
+                          setSearchMode('startsWith')
                           if (searchTimer.current) clearTimeout(searchTimer.current)
                           searchTimer.current = setTimeout(() => {
                             const val = e.target.value
@@ -1772,6 +1778,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                     onChange={e => {
                       if (searchTab === 'comercios') {
                         setSearchText(e.target.value)
+                        setSearchMode('startsWith')
                         if (searchTimer.current) clearTimeout(searchTimer.current)
                         searchTimer.current = setTimeout(() => {
                           setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
@@ -2561,8 +2568,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               return null
             })()
         const rawCatPromos = focusedCatPromos.length > 0 ? focusedCatPromos : promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === focusedCat)
-        const q = focusedCatSearch.trim().toLowerCase()
-        const searchedPromos = q ? rawCatPromos.filter(p => p.commerce.name.toLowerCase().includes(q)) : rawCatPromos
+        const q = normalizeAccents(focusedCatSearch.trim())
+        const searchedPromos = q ? rawCatPromos.filter(p => normalizeAccents(p.commerce.name).includes(q)) : rawCatPromos
         const catPromos = focusedCatSort === 'default'
           ? searchedPromos
           : [...searchedPromos].sort((a, b) => {

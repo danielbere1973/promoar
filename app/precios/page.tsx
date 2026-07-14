@@ -75,6 +75,12 @@ interface Toast {
   message: string
 }
 
+interface BankPromoInfo {
+  label: string
+  discountValue: number
+  discountType: string
+}
+
 const formatPrice = (p: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(p)
 
 const ALL_SUPERMARKETS_SUPER = ['Jumbo', 'Disco', 'Vea', 'Coto', 'Carrefour', 'Más Online', 'Dia', 'Changomas', 'The Food Market', 'Cordiez', 'Cooperativa Obrera', 'Toledo Digital', 'Depot Express']
@@ -277,11 +283,12 @@ function SimilarProductModal({ ean, market, catId, excludeEan, cartRow, onSelect
   )
 }
 
-function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffectivePrice, updateQuantity, removeFromCart }: {
+function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, bankPromos, getEffectivePrice, updateQuantity, removeFromCart }: {
   cart: CartRow[]
   allMarkets: string[]
   cartTotals: Record<string, number>
   lowestTotalMarket: string
+  bankPromos: Record<string, BankPromoInfo | null>
   getEffectivePrice: (m: CartRow['markets'][string], qty: number) => number
   updateQuantity: (ean: string, delta: number) => void
   removeFromCart: (ean: string) => void
@@ -326,6 +333,7 @@ function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffect
               const conDesc = cartTotals[market] || 0
               const ahorrado = lista - conDesc
               const isBest = market === lowestTotalMarket
+              const bp = bankPromos[market]
               return (
                 <div key={market} className={`px-3 py-2 border-b border-white/5 ${isBest ? 'bg-emerald-500/5' : ''}`}>
                   <div className="flex items-center justify-between mb-1">
@@ -339,6 +347,11 @@ function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, getEffect
                     <span>Lista: {formatPrice(lista)}</span>
                     {ahorrado > 0 && <span className="text-emerald-700">Ahorrás {formatPrice(ahorrado)}</span>}
                   </div>
+                  {bp && (
+                    <p className="text-[9px] font-bold text-sky-400 pl-3 mt-0.5">
+                      🏦 {bp.label} {bp.discountType === 'CUOTAS_SIN_INTERES' ? `${bp.discountValue} CSI` : `${bp.discountValue}%`}
+                    </p>
+                  )}
                 </div>
               )
             })}
@@ -449,6 +462,7 @@ export default function PreciosPage() {
   })
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [similarSearch, setSimilarSearch] = useState<{ ean: string; market: string; catId: string; excludeEan: string } | null>(null)
+  const [bankPromos, setBankPromos] = useState<Record<string, BankPromoInfo | null>>({})
 
   // Persistir carrito en localStorage
   useEffect(() => {
@@ -672,7 +686,36 @@ export default function PreciosPage() {
   }, {} as Record<string, number>)
 
   const cartTotalItems = cart.reduce((acc, r) => acc + r.quantity, 0)
-  const lowestTotalMarket = Object.entries(cartTotals).filter(([, v]) => (v as number) > 0).sort(([, a], [, b]) => (a as number) - (b as number))[0]?.[0] || ''
+
+  // Promo bancaria del perfil del usuario aplicable a cada supermercado del carrito.
+  const marketsWithItems = allMarkets.filter(m => (cartTotals[m] || 0) > 0)
+  const marketsKey = marketsWithItems.slice().sort().join(',')
+  useEffect(() => {
+    if (!isCartOpen || !marketsWithItems.length) return
+    fetch('/api/precios/bank-promos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commerces: marketsWithItems }),
+    })
+      .then(r => r.json())
+      .then(data => setBankPromos(data.promos || {}))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCartOpen, marketsKey])
+
+  // Total con la promo bancaria aplicada (sumado sobre el total ya-con-promo-de-super).
+  const cartTotalsWithBank = allMarkets.reduce((acc, market) => {
+    const base = cartTotals[market] || 0
+    const bp = bankPromos[market]
+    if (bp && base > 0 && bp.discountType !== 'CUOTAS_SIN_INTERES') {
+      acc[market] = base * (1 - bp.discountValue / 100)
+    } else {
+      acc[market] = base
+    }
+    return acc
+  }, {} as Record<string, number>)
+
+  const lowestTotalMarket = Object.entries(cartTotalsWithBank).filter(([, v]) => (v as number) > 0).sort(([, a], [, b]) => (a as number) - (b as number))[0]?.[0] || ''
 
   const rootCats = CATEGORIES.filter(c => !c.section || c.section === 'supermercados')
   const farmaCats = CATEGORIES.filter(c => c.section === 'farmacias')
@@ -1321,8 +1364,9 @@ export default function PreciosPage() {
               <MobileCart
                 cart={cart}
                 allMarkets={allMarkets}
-                cartTotals={cartTotals}
+                cartTotals={cartTotalsWithBank}
                 lowestTotalMarket={lowestTotalMarket}
+                bankPromos={bankPromos}
                 getEffectivePrice={getEffectivePrice}
                 updateQuantity={updateQuantity}
                 removeFromCart={removeFromCart}
@@ -1339,14 +1383,20 @@ export default function PreciosPage() {
                     <td />
                     {allMarkets.map(market => {
                       const lista = cart.reduce((sum, row) => { const m = row.markets[market]; return m ? sum + m.price * row.quantity : sum }, 0)
-                      const conDesc = cartTotals[market] || 0
+                      const conDesc = cartTotalsWithBank[market] || 0
                       const ahorrado = lista - conDesc
                       const isBest = market === lowestTotalMarket
+                      const bp = bankPromos[market]
                       return (
                         <td key={market} className={`p-3 text-center ${isBest ? 'bg-emerald-500/10' : ''}`}>
                           <p className={`text-base font-black ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(conDesc)}</p>
                           {lista > conDesc && <p className="text-[9px] text-slate-500 line-through">{formatPrice(lista)}</p>}
                           {ahorrado > 0 && <p className="text-[9px] text-emerald-600 font-bold">-{formatPrice(ahorrado)}</p>}
+                          {bp && (
+                            <p className="text-[9px] font-bold text-sky-400 mt-0.5">
+                              🏦 {bp.label} {bp.discountType === 'CUOTAS_SIN_INTERES' ? `${bp.discountValue} CSI` : `${bp.discountValue}%`}
+                            </p>
+                          )}
                           {isBest && <p className="text-[9px] text-emerald-500 font-bold uppercase mt-0.5">Más barato ★</p>}
                         </td>
                       )

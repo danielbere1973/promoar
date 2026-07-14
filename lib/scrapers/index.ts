@@ -39,6 +39,14 @@ import { BancoCiudadScraper } from './bancociudad';
 import { PatagoniaScraper } from './patagonia';
 import { SupervielleScraper } from './supervielle';
 import { BNAScraper } from './bna';
+import { PetersenScraper } from './petersen'; // Banco San Juan, Santa Fe, Entre Ríos, Santa Cruz
+import { BancorScraper } from './bancor'; // Banco de Córdoba
+import { HipotecarioScraper } from './hipotecario'; // Banco Hipotecario
+import { ComafiScraper } from './comafi'; // Banco Comafi (tevabien.com)
+import { CorrientesScraper } from './corrientes'; // Banco de Corrientes (promosdelbanco.com)
+import { ChubutScraper } from './chubut'; // Banco del Chubut (Patagonia 365, apilaravel)
+import { ChacoScraper } from './chaco'; // Nuevo Banco del Chaco (Promo TUYA, Kendo API)
+import { SolScraper } from './banco-del-sol'; // Banco del Sol (Webflow/Finsweet, WAF Akamai)
 // ProvinciaScraper reemplazado por CuentaDNIScraper V3 (cheerio, sin Playwright)
 
 export const SUPERMERCADO_SCRAPERS: Scraper[] = [
@@ -82,6 +90,14 @@ export const BANCO_SCRAPERS: Scraper[] = [
   PatagoniaScraper,
   ICBCScraper,
   CabalScraper,   // Banco Credicoop
+  PetersenScraper,
+  BancorScraper,
+  HipotecarioScraper,
+  ComafiScraper,
+  CorrientesScraper,
+  ChubutScraper,
+  ChacoScraper,
+  SolScraper,
 ];
 
 export const ALL_SCRAPERS: Scraper[] = [
@@ -100,6 +116,14 @@ export const ALL_SCRAPERS: Scraper[] = [
   PatagoniaScraper,
   ICBCScraper,
   FavacardScraper,
+  PetersenScraper,
+  BancorScraper,
+  HipotecarioScraper,
+  ComafiScraper,
+  CorrientesScraper,
+  ChubutScraper,
+  ChacoScraper,
+  SolScraper,
 ];
 
 export * from './types';

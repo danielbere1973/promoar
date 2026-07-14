@@ -52,6 +52,14 @@ export async function GET(request: Request) {
         'Supervielle': 'supervielle.com.ar',
         'Vea': 'vea.com.ar',
         'VISA': 'visa.com.ar',
+        'Petersen': 'bancosanjuan.com',
+        'Bancor': 'bancor.com.ar',
+        'Hipotecario': 'hipotecario.com.ar',
+        'Comafi': 'tevabien.com',
+        'Corrientes': 'promosdelbanco.com',
+        'Chubut': 'bancochubut.com.ar',
+        'Chaco': 'nbch.com.ar',
+        'Sol': 'bancodelsol.com',
       };
       const domains = scrapers.map(s => scraperDomains[s]).filter(Boolean);
       if (domains.length > 0) {
@@ -209,6 +217,14 @@ export async function GET(request: Request) {
       { name: 'Supervielle',    patterns: ['supervielle.com.ar'] },
       { name: 'Vea',            patterns: ['vea.com.ar'] },
       { name: 'VISA',           patterns: ['visa.com.ar'] },
+      { name: 'Petersen',       patterns: ['bancosanjuan.com', 'bancosantafe.com.ar', 'bancoentrerios.com.ar', 'bancosantacruz.com'] },
+      { name: 'Bancor',         patterns: ['bancor.com.ar'] },
+      { name: 'Hipotecario',    patterns: ['hipotecario.com.ar'] },
+      { name: 'Comafi',         patterns: ['tevabien.com'] },
+      { name: 'Corrientes',     patterns: ['promosdelbanco.com'] },
+      { name: 'Chubut',         patterns: ['bancochubut.com.ar'] },
+      { name: 'Chaco',          patterns: ['nbch.com.ar'] },
+      { name: 'Sol',            patterns: ['bancodelsol.com'] },
     ];
 
     const scraperMap: Record<string, number> = {};

@@ -581,8 +581,14 @@ export async function POST(req: NextRequest) {
           title: p.title,
           description: p.description || '',
           stackable: p.stackable ?? false,
-          validFrom: p.validFrom ? new Date(p.validFrom) : new Date(),
-          validUntil: p.validUntil ? new Date(p.validUntil) : endOfMonth,
+          validFrom: (() => {
+            const d = p.validFrom ? new Date(p.validFrom) : new Date()
+            return isNaN(d.getTime()) ? new Date() : d
+          })(),
+          validUntil: (() => {
+            const d = p.validUntil ? new Date(p.validUntil) : endOfMonth
+            return isNaN(d.getTime()) ? endOfMonth : d
+          })(),
           validDays: p.validDays ?? 127,
           specificDates: p.specificDates ? JSON.stringify(p.specificDates) : null,
           categoryId: target.defaultCategoryId ?? catMatch.id,

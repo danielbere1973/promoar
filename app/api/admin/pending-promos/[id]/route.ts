@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { id } = params
   const body = await req.json()
-  const { title, description, commerceId, categoryId, validDays, requirements } = body
+  const { title, description, commerceId, categoryId, validDays, requirements, deletedReqIds } = body
 
   // Actualizar campos de la promo
   const promoData: Record<string, any> = {}
@@ -46,18 +46,51 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   })
 
-  // Actualizar requirements si vienen
+  // Borrar requirements marcados para eliminación
+  if (deletedReqIds?.length) {
+    await prisma.promoRequirement.deleteMany({ where: { id: { in: deletedReqIds } } })
+  }
+
+  const reqInclude = {
+    bank: { select: { id: true, name: true } },
+    wallet: { select: { id: true, name: true } },
+    cardNetwork: { select: { id: true, name: true } },
+    cardSegmentRef: { select: { id: true, name: true } },
+  }
+
+  // Crear/actualizar requirements si vienen
   if (requirements?.length) {
     for (const req of requirements) {
       const { reqId, bankId, walletId, cardNetworkId, cardSegmentId, paymentChannel,
               cap, capPeriod, capUnlimited, minPurchase } = req
-      if (!reqId) continue
+      if (!reqId) {
+        // Nuevo requirement — necesita al menos discountType/discountValue con default razonable
+        await prisma.promoRequirement.create({
+          data: {
+            promoId: id,
+            bankId: bankId || null,
+            walletId: walletId || null,
+            cardNetworkId: cardNetworkId || null,
+            cardSegmentId: cardSegmentId || null,
+            paymentChannel: paymentChannel || 'ANY',
+            discountType: req.discountType || 'PERCENTAGE_REINTEGRO',
+            discountValue: req.discountValue != null && req.discountValue !== '' ? Number(req.discountValue) : 0,
+            cap: cap != null && cap !== '' ? Number(cap) : null,
+            capPeriod: capPeriod || null,
+            capUnlimited: Boolean(capUnlimited),
+            minPurchase: minPurchase != null && minPurchase !== '' ? Number(minPurchase) : null,
+          },
+        })
+        continue
+      }
       const reqData: Record<string, any> = {}
       if (bankId !== undefined) reqData.bankId = bankId || null
       if (walletId !== undefined) reqData.walletId = walletId || null
       if (cardNetworkId !== undefined) reqData.cardNetworkId = cardNetworkId || null
       if (cardSegmentId !== undefined) reqData.cardSegmentId = cardSegmentId || null
       if (paymentChannel !== undefined) reqData.paymentChannel = paymentChannel
+      if (req.discountType !== undefined) reqData.discountType = req.discountType
+      if (req.discountValue !== undefined) reqData.discountValue = req.discountValue != null && req.discountValue !== '' ? Number(req.discountValue) : 0
       if (cap !== undefined) reqData.cap = cap != null && cap !== '' ? Number(cap) : null
       if (capPeriod !== undefined) reqData.capPeriod = capPeriod || null
       if (capUnlimited !== undefined) reqData.capUnlimited = Boolean(capUnlimited)
@@ -73,14 +106,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       include: {
         commerce: { select: { id: true, name: true, logoUrl: true } },
         category: { select: { id: true, name: true, icon: true } },
-        requirements: {
-          include: {
-            bank: { select: { id: true, name: true } },
-            wallet: { select: { id: true, name: true } },
-            cardNetwork: { select: { id: true, name: true } },
-            cardSegmentRef: { select: { id: true, name: true } },
-          },
-        },
+        requirements: { include: reqInclude },
+      },
+    })
+    return NextResponse.json({ promo: final })
+  }
+
+  // Si solo se borraron requirements (sin crear/editar), re-fetch igual para reflejarlo
+  if (deletedReqIds?.length) {
+    const final = await prisma.promo.findUnique({
+      where: { id },
+      include: {
+        commerce: { select: { id: true, name: true, logoUrl: true } },
+        category: { select: { id: true, name: true, icon: true } },
+        requirements: { include: reqInclude },
       },
     })
     return NextResponse.json({ promo: final })

@@ -65,7 +65,7 @@ function parseCards(blockHtml: string): Array<{ network: string; type: 'CREDIT' 
     const alt = m[1].trim();
     const lower = alt.toLowerCase();
     if (lower.includes('modo'))                    walletNames.push('MODO');
-    else if (lower.includes('mercado pago'))       walletNames.push('MercadoPago');
+    else if (lower.includes('mercado pago'))       walletNames.push('Mercado Pago');
     else if (lower.includes('visa') && lower.includes('déb')) nets.push({ network: 'Visa', type: 'DEBIT' });
     else if (lower.includes('visa'))               nets.push({ network: 'Visa', type: 'CREDIT' });
     else if (lower.includes('mastercard') && lower.includes('déb')) nets.push({ network: 'Mastercard', type: 'DEBIT' });
@@ -82,7 +82,7 @@ function parseWallets(blockHtml: string): string[] {
   for (const m of imgMatches) {
     const alt = m[1].toLowerCase();
     if (alt.includes('modo') && !wallets.includes('MODO'))               wallets.push('MODO');
-    if (alt.includes('mercado pago') && !wallets.includes('MercadoPago')) wallets.push('MercadoPago');
+    if (alt.includes('mercado pago') && !wallets.includes('Mercado Pago')) wallets.push('Mercado Pago');
     if ((alt.includes('google pay') || alt.includes('gpay')) && !wallets.includes('GPay')) wallets.push('GPay');
     if (alt.includes('apple pay') && !wallets.includes('Apple Pay'))     wallets.push('Apple Pay');
   }

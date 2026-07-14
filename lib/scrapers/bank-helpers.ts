@@ -118,7 +118,8 @@ export function extractInstallments(text: string): number | null {
 }
 
 export function extractCap(text: string): number | null {
-  const m = text.match(/tope[:\s]+\$?\s*([\d.,]+)/i)
+  if (/sin\s+tope/i.test(text)) return null;
+  const m = text.match(/tope(?:\s+\w+){0,5}?[:\s]+\$?\s*([\d.,]+)/i)
     ?? text.match(/m[aá]ximo[:\s]+\$?\s*([\d.,]+)/i);
   if (m) return parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
   return null;
@@ -145,11 +146,20 @@ export function extractWallets(text: string): string[] {
   const t = normStr(text);
   const wallets: string[] = [];
   if (/\bMODO\b/.test(t)) wallets.push('MODO');
-  if (/MERCADO\s*PAGO/.test(t)) wallets.push('MercadoPago');
-  if (/CUENTA\s*DNI/.test(t)) wallets.push('CuentaDNI');
+  if (/MERCADO\s*PAGO/.test(t)) wallets.push('Mercado Pago');
+  if (/CUENTA\s*DNI/.test(t)) wallets.push('Cuenta DNI');
   if (/BUEPP|GUEPP|GÜEPP/.test(t)) wallets.push('BUEPP');
   if (/APP\s*CIUDAD|APP\s*BANCO\s*CIUDAD/.test(t)) wallets.push('MODO'); // App Ciudad usa MODO
   return wallets;
+}
+
+// Quita sufijos de razón social (S.A., SRL, S.R.L., etc.) que algunas fuentes
+// incluyen de forma inconsistente entre corridas (ej. "KEOPS" vs "KEOPS S A"),
+// lo que rompe el matching título+comercio usado para skipear promos sin cambios.
+const BUSINESS_SUFFIX_RE = /\s+S\.?\s*A\.?\s*U?\.?$|\s+S\.?\s*R\.?\s*L\.?$|\s+S\.?\s*A\.?\s*I\.?\s*C\.?$/i;
+
+export function stripBusinessSuffix(name: string): string {
+  return name.replace(BUSINESS_SUFFIX_RE, '').trim();
 }
 
 export function detectCategoria(text: string): string {

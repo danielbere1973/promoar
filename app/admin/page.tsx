@@ -247,14 +247,14 @@ const SCRAPERS_CONFIG: ScraperConfig[] = [
   { id: 'banco supervielle', name: 'Supervielle',   group: 'banco',        description: 'Next.js — tiers de cliente' },
   { id: 'banco patagonia', name: 'Patagonia',       group: 'banco',        description: 'Server-rendered — Mastercard' },
   { id: 'icbc',            name: 'ICBC',            group: 'banco',        description: 'Playwright — ignoreHTTPSErrors' },
-  { id: 'petersen',        name: 'Petersen',        group: 'banco',        description: 'Santa Fe + Entre Ríos + San Juan + Santa Cruz — Playwright' },
+  { id: 'petersen',        name: 'Petersen',        group: 'banco',        description: 'Santa Fe + Entre Ríos + San Juan + Santa Cruz — RSC fetch directo, sin Playwright' },
   { id: 'bancor',          name: 'Bancor',          group: 'banco',        description: 'Banco de Córdoba — GraphQL público, sin WAF' },
   { id: 'hipotecario',     name: 'Hipotecario',     group: 'banco',        description: 'WordPress — HTML server-rendered, sin WAF' },
   { id: 'comafi',          name: 'Comafi',          group: 'banco',        description: 'Te Va Bien (tevabien.com) — JSON público, sin WAF' },
-  { id: 'banco del sol',   name: 'Banco del Sol',   group: 'banco',        description: 'Webflow — Playwright headed (WAF Akamai)' },
-  { id: 'nuevo banco del chaco', name: 'Nuevo Banco del Chaco', group: 'banco', description: 'Promo TUYA (nbch.com.ar) — JSON público, sin WAF' },
-  { id: 'banco del chubut', name: 'Banco del Chubut', group: 'banco', description: 'Patagonia 365 — JSON público, sin WAF, incluye lat/lng de sucursales' },
-  { id: 'banco de corrientes', name: 'Banco de Corrientes', group: 'banco', description: 'Promos del Banco (promosdelbanco.com) — WordPress/TablePress, sin WAF' },
+  { id: 'sol',             name: 'Banco del Sol',   group: 'banco',        description: 'Webflow — Playwright headed (WAF Akamai)' },
+  { id: 'chaco', name: 'Nuevo Banco del Chaco', group: 'banco', description: 'Promo TUYA (nbch.com.ar) — JSON público, sin WAF' },
+  { id: 'chubut', name: 'Banco del Chubut', group: 'banco', description: 'Patagonia 365 — JSON público, sin WAF, incluye lat/lng de sucursales' },
+  { id: 'corrientes', name: 'Banco de Corrientes', group: 'banco', description: 'Promos del Banco (promosdelbanco.com) — WordPress/TablePress, sin WAF' },
 ]
 
 const GRUPO_LABEL: Record<ScraperGroup, string> = {
@@ -2266,7 +2266,7 @@ const PLAYWRIGHT_SCRAPER_IDS = new Set([
   'banco macro', 'naranjax', 'banco santander',
   'banco supervielle', 'banco ciudad', 'visa',
   'jumbo', 'disco', 'vea', 'banco patagonia',
-  'petersen', 'banco del sol',
+  'sol',
 ])
 
 function ScraperSchedulerTab() {
@@ -2277,6 +2277,7 @@ function ScraperSchedulerTab() {
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [flagged, setFlagged] = useState<Array<{ title: string; storeName: string; sourceUrl: string; description: string }>>([])
+  const [selectedLocal, setSelectedLocal] = useState<Set<string>>(new Set())
 
   async function load() {
     setLoading(true)
@@ -2431,6 +2432,51 @@ function ScraperSchedulerTab() {
     }
     setRunning(null)
     setMsg({ type: err > 0 ? 'error' : 'success', text: `Local: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
+    setTimeout(() => setMsg(null), 15000)
+    load()
+  }
+
+  function toggleLocalSelected(id: string) {
+    setSelectedLocal(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function runSelectedLocal() {
+    const targets = SCRAPERS_CONFIG.filter(s => selectedLocal.has(s.id))
+    if (targets.length === 0) return
+    setMsg(null)
+    setFlagged([])
+    let ok = 0, err = 0, totalFound = 0, totalProcessed = 0, totalSkipped = 0
+    for (const s of targets) {
+      setRunning(s.id)
+      try {
+        const res = await fetch('/api/admin/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scraper: s.id, categoria: (s as any).categoria, forceLocal: true }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok) {
+          ok++
+          totalFound += data.totalFound ?? data.found ?? 0
+          totalProcessed += data.processed ?? 0
+          totalSkipped += data.skippedUnchanged ?? 0
+          if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
+        } else {
+          err++
+          console.error(`[${s.id}] ${data.error ?? res.status}`)
+        }
+      } catch (e) {
+        err++
+        console.error(`[${s.id}] Error de conexión`, e)
+      }
+    }
+    setRunning(null)
+    setMsg({ type: err > 0 ? 'error' : 'success', text: `Seleccionados: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
     setTimeout(() => setMsg(null), 15000)
     load()
   }
@@ -2685,14 +2731,34 @@ function ScraperSchedulerTab() {
 
       {/* ── Tabla Local (contingencia) ── */}
       {scraperSubTab === 'local' && <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 bg-orange-50 border-b border-orange-100">
+        <div className="px-5 py-3 bg-orange-50 border-b border-orange-100 flex items-center justify-between flex-wrap gap-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">
             Todos los scrapers corren localmente — requiere <code className="font-mono bg-orange-100 px-1 rounded">npm run dev</code>
           </p>
+          <button
+            onClick={runSelectedLocal}
+            disabled={!!running || selectedLocal.size === 0}
+            className="text-[10px] font-bold px-3 py-1.5 bg-orange-600 text-white hover:bg-orange-700 rounded-lg transition-colors disabled:opacity-40 flex items-center gap-1.5"
+          >
+            {running ? <RefreshCw size={11} className="animate-spin" /> : <Play size={11} />}
+            Ejecutar seleccionados{selectedLocal.size > 0 ? ` (${selectedLocal.size})` : ''}
+          </button>
         </div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
+              <th className="px-5 py-3 text-left w-8">
+                <input
+                  type="checkbox"
+                  checked={SCRAPERS_CONFIG.length > 0 && selectedLocal.size === SCRAPERS_CONFIG.length}
+                  onChange={() => {
+                    setSelectedLocal(prev =>
+                      prev.size === SCRAPERS_CONFIG.length ? new Set() : new Set(SCRAPERS_CONFIG.map(s => s.id))
+                    )
+                  }}
+                  className="w-3.5 h-3.5 accent-orange-600"
+                />
+              </th>
               <th className="px-5 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Scraper</th>
               <th className="px-5 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Tipo</th>
               <th className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Ejecutar</th>
@@ -2701,6 +2767,14 @@ function ScraperSchedulerTab() {
           <tbody>
             {SCRAPERS_CONFIG.map(cfg => (
               <tr key={cfg.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                <td className="px-5 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedLocal.has(cfg.id)}
+                    onChange={() => toggleLocalSelected(cfg.id)}
+                    className="w-3.5 h-3.5 accent-orange-600"
+                  />
+                </td>
                 <td className="px-5 py-3">
                   <p className="font-bold text-slate-800 text-xs">{cfg.name}</p>
                   <p className="text-[10px] text-slate-400">{cfg.description}</p>

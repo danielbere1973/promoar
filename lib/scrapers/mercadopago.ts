@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
 import { Scraper, ScrapedPromo } from './types';
 
 const BASE_URL = 'https://promociones.mercadopago.com.ar/';
-const WALLET_NAME = 'MercadoPago';
+const WALLET_NAME = 'Mercado Pago';
 
 const CATEGORIAS: { slug: string; nombre: string }[] = [
   { slug: 'supermercado',      nombre: 'Supermercados' },

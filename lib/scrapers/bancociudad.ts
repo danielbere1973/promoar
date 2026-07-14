@@ -8,7 +8,7 @@ import { Scraper, ScrapedPromo } from './types';
 import { buildPromos, dedup, RawBankPromo, normStr, detectCategoria } from './bank-helpers';
 
 const BASE_URL    = 'https://www.bancociudad.com.ar/beneficios/';
-const API_URL     = 'https://www.bancociudad.com.ar/beneficios_rest/beneficios/busqueda';
+const API_URL     = 'https://www.bancociudad.com.ar/beneficios_rest/busqueda';
 
 const BANK_NAME   = 'Banco Ciudad';
 const PAGE_SIZE   = 12;
@@ -358,7 +358,6 @@ export const BancoCiudadScraper: Scraper = {
 
       let capturedBody: any = null;
       let capturedHeaders: Record<string, string> = {};
-      let firstPageItems: any[] = [];
 
       page.on('request', req => {
         if (req.url().includes('busqueda') && req.method() === 'POST') {
@@ -389,24 +388,21 @@ export const BancoCiudadScraper: Scraper = {
           } catch {}
         }
 
-        if (url.includes('busqueda') && res.request().method() === 'POST') {
-          try {
-            const json = await res.json();
-            const items: any[] = json?.retorno?.beneficios ?? [];
-            if (items.length > 0 && firstPageItems.length === 0) {
-              firstPageItems = items;
-              console.log(`[BancoCiudad] Página 1 (browser): ${items.length} items`);
-            }
-          } catch {}
-        }
       });
 
       await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 45000 });
       await page.waitForTimeout(2000);
 
-      for (const item of firstPageItems) {
-        const parsed = parseItem(item, rubroMap);
-        if (parsed) allParsed.push(parsed);
+      // El primer POST que dispara la carga de la página es el de "destacados"
+      // (body distinto, shape viejo). El listado completo real solo se pide tras
+      // clickear "Ver todos los beneficios" — hay que forzar ese click para
+      // capturar el body/shape correcto (palabra_clave, quotas, zona, aplica_tienda,
+      // tipo_cliente en mayúsculas) que la paginación necesita.
+      try {
+        await page.locator('text=Ver todos los beneficios').first().click({ timeout: 10000 });
+        await page.waitForTimeout(2000);
+      } catch {
+        console.log('[BancoCiudad] No se pudo clickear "Ver todos los beneficios"');
       }
 
       if (!capturedBody) {
@@ -418,6 +414,7 @@ export const BancoCiudadScraper: Scraper = {
       const baseBody = JSON.parse(JSON.stringify(capturedBody));
       baseBody.data.tamano_pagina = PAGE_SIZE;
       baseBody.data.destacado     = false;
+      baseBody.data.numero_pagina = 1;
 
       // Función auxiliar para buscar con parámetros específicos
       const fetchPage = async (pagina: number, rubroId?: number | null) => {
@@ -446,7 +443,9 @@ export const BancoCiudadScraper: Scraper = {
       };
 
       // ── Paginación general (sin filtro de rubro) ──────────────────────────
-      for (let pagina = 2; pagina <= MAX_PAGES; pagina++) {
+      // Arranca en 1: firstPageItems (destacados) queda descartado a partir de
+      // acá, la paginación real completa se pide desde cero con el body correcto.
+      for (let pagina = 1; pagina <= MAX_PAGES; pagina++) {
         const beneficios = await fetchPage(pagina);
         if (!beneficios || beneficios.length === 0) {
           console.log(`[BancoCiudad] Página ${pagina}: vacía, fin`);
@@ -468,7 +467,7 @@ export const BancoCiudadScraper: Scraper = {
       // ── Rubro "Exclusivo Buepp" (si se encontró el rubroId) ─────────────
       if (bueppRubroId != null) {
         console.log(`[BancoCiudad] Scrapeando rubro Exclusivo Buepp (id=${bueppRubroId})...`);
-        for (let pagina = 1; pagina <= 20; pagina++) {
+        for (let pagina = 1; pagina <= MAX_PAGES; pagina++) {
           const beneficios = await fetchPage(pagina, bueppRubroId);
           if (!beneficios || beneficios.length === 0) {
             console.log(`[BancoCiudad] Buepp página ${pagina}: vacía, fin`);

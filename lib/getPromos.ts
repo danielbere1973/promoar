@@ -1,6 +1,12 @@
 import { prisma } from '@/lib/prisma'
 import { getCurrentPeriod } from '@/lib/promoUsage'
 
+// Prisma/Postgres `contains`+`insensitive` solo ignora mayúsculas, no acentos —
+// "cafe" no matchea "Café" sin este normalizado en ambos lados de la comparación.
+function normalizeAccents(s: string): string {
+  return (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 // Cache del count total de promos activas — se recalcula cada 5 minutos
 let cachedTotalCount: number | null = null
 let cachedTotalCountAt: number = 0
@@ -163,13 +169,23 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   }
 
   if (commerceIds?.length) {
-    where.commerce = {
-      OR: commerceIds.map(name => {
-        if (searchMode === 'exact')      return { name: { equals: name, mode: 'insensitive' as const } }
-        if (searchMode === 'contains')   return { name: { contains: name, mode: 'insensitive' as const } }
-        return { name: { startsWith: name, mode: 'insensitive' as const } }
-      })
+    // Resolvemos los nombres candidatos en JS (normalizando acentos en ambos lados)
+    // en vez de usar `contains`/`startsWith` de Prisma, que en Postgres solo ignora
+    // mayúsculas y no diacríticos (ej. "cafe" no matchea "Café Martínez").
+    const candidates = await prisma.commerce.findMany({ select: { id: true, name: true } })
+    const matchedIds = new Set<string>()
+    for (const term of commerceIds) {
+      const normTerm = normalizeAccents(term)
+      for (const c of candidates) {
+        const normName = normalizeAccents(c.name)
+        const isMatch =
+          searchMode === 'exact'    ? normName === normTerm :
+          searchMode === 'contains' ? normName.includes(normTerm) :
+                                       normName.startsWith(normTerm)
+        if (isMatch) matchedIds.add(c.id)
+      }
     }
+    where.commerce = { id: { in: Array.from(matchedIds) } }
   }
 
   if (dateFromStr) where.validFrom = { ...where.validFrom, gte: new Date(dateFromStr) }

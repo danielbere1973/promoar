@@ -9,14 +9,19 @@ export const dynamic = 'force-dynamic'
 // que lo venden junto con sus promos activas, filtradas por perfil financiero
 // si el usuario pidió "para mí". Precios NO se modelan acá — ver CLAUDE.md punto 9
 // (deben consultarse en línea, nunca scrapearse).
+// Ignora acentos al comparar — "cafe" debe matchear "Café" y viceversa.
+function normalizeAccents(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 // Word-boundary check: ensures "litera" doesn't match inside "literatura"
 function hasWordMatch(text: string | null, term: string): boolean {
   if (!text) return false
-  const t = text.toLowerCase()
+  const t = normalizeAccents(text)
   const idx = t.indexOf(term)
   if (idx === -1) return false
-  const before = idx === 0 || !/[a-záéíóúñü]/.test(t[idx - 1])
-  const after = idx + term.length >= t.length || !/[a-záéíóúñü]/.test(t[idx + term.length])
+  const before = idx === 0 || !/[a-z]/.test(t[idx - 1])
+  const after = idx + term.length >= t.length || !/[a-z]/.test(t[idx + term.length])
   return before && after
 }
 
@@ -32,19 +37,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ commerces: [] })
     }
 
-    const qLower = q.toLowerCase()
+    const qLower = normalizeAccents(q)
     const words = qLower.split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS.has(w))
     const searchTerms = words.length > 0 ? words : [qLower]
 
-    // Build OR conditions for all search terms across all fields
-    const orConditions = searchTerms.flatMap(term => [
-      { categoria: { contains: term, mode: 'insensitive' as const } },
-      { subcategoria: { contains: term, mode: 'insensitive' as const } },
-      { productos: { contains: term, mode: 'insensitive' as const } },
-    ])
-
+    // Prisma/Postgres `contains`+`insensitive` solo ignora mayúsculas, no acentos,
+    // así que no podemos filtrar por acento-insensible a nivel DB. En vez de eso,
+    // pedimos un candidate set amplio con `contains` plano (sin mode) sobre la
+    // query sin normalizar y además sobre términos individuales, y el filtro real
+    // de acento-insensibilidad + word-boundary se hace en JS con hasWordMatch.
     const allMatches = await prisma.commerceProduct.findMany({
-      where: { OR: orConditions },
       select: { commerceId: true, categoria: true, subcategoria: true, productos: true },
     })
 
@@ -72,8 +74,9 @@ export async function GET(req: NextRequest) {
 
       const currentRel = relevanceByCommerce.get(m.commerceId) ?? 0
       let rel = 1
-      if (m.categoria?.toLowerCase() === qLower) rel = 3
-      else if (matchedTerms.some(t => hasWordMatch(m.categoria, t) && m.categoria!.toLowerCase().split(/[\s|,]+/).some(w => w.trim() === t))) rel = 3
+      const normCategoria = m.categoria ? normalizeAccents(m.categoria) : ''
+      if (normCategoria === qLower) rel = 3
+      else if (matchedTerms.some(t => hasWordMatch(m.categoria, t) && normCategoria.split(/[\s|,]+/).some(w => w.trim() === t))) rel = 3
       else if (matchedTerms.some(t => hasWordMatch(m.subcategoria, t))) rel = 2
       if (rel > currentRel) relevanceByCommerce.set(m.commerceId, rel)
     }

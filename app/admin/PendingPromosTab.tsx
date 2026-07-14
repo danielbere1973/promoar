@@ -17,6 +17,7 @@ type Requirement = {
   cardSegmentRef: { id: string; name: string } | null
 }
 
+
 type Promo = {
   id: string
   title: string
@@ -88,11 +89,22 @@ function buildForm(p: Promo) {
       bankId: r.bank?.id ?? '', walletId: r.wallet?.id ?? '',
       cardNetworkId: r.cardNetwork?.id ?? '', cardSegmentId: r.cardSegmentRef?.id ?? '',
       paymentChannel: r.paymentChannel,
+      discountType: r.discountType,
+      discountValue: r.discountValue != null ? String(r.discountValue) : '',
       cap: r.cap != null ? String(r.cap) : '',
       capPeriod: r.capPeriod ?? 'MONTHLY',
       capUnlimited: r.capUnlimited,
       minPurchase: r.minPurchase != null ? String(r.minPurchase) : '',
     })),
+    deletedReqIds: [] as string[],
+  }
+}
+
+function blankRequirement() {
+  return {
+    reqId: '', bankId: '', walletId: '', cardNetworkId: '', cardSegmentId: '',
+    paymentChannel: 'ANY', discountType: 'PERCENTAGE_REINTEGRO', discountValue: '',
+    cap: '', capPeriod: 'MONTHLY', capUnlimited: false, minPurchase: '',
   }
 }
 
@@ -163,6 +175,19 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
   function setReq(i: number, patch: Partial<typeof form.requirements[0]>) {
     setForm(f => { const r = [...f.requirements]; r[i] = { ...r[i], ...patch }; return { ...f, requirements: r } })
   }
+  function addReq() {
+    setForm(f => ({ ...f, requirements: [...f.requirements, blankRequirement()] }))
+  }
+  function removeReq(i: number) {
+    setForm(f => {
+      const r = [...f.requirements]
+      const [removed] = r.splice(i, 1)
+      return {
+        ...f, requirements: r,
+        deletedReqIds: removed.reqId ? [...f.deletedReqIds, removed.reqId] : f.deletedReqIds,
+      }
+    })
+  }
 
   async function save() {
     setSaving(true)
@@ -173,8 +198,11 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
           title: form.title, description: form.description,
           commerceId: form.commerceId, categoryId: form.categoryId,
           validDays: buildDayMask(form.days),
+          deletedReqIds: form.deletedReqIds,
           requirements: form.requirements.map(r => ({
             ...r,
+            reqId: r.reqId || undefined,
+            discountValue: r.discountValue !== '' ? Number(r.discountValue) : 0,
             cap: r.cap !== '' ? Number(r.cap) : null,
             minPurchase: r.minPurchase !== '' ? Number(r.minPurchase) : null,
           })),
@@ -256,28 +284,39 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
           </div>
 
           {/* Requirements table */}
-          {form.requirements.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Requisitos de pago · {form.requirements.length} fila{form.requirements.length !== 1 ? 's' : ''}
               </p>
+              <button type="button" onClick={addReq}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
+                + Agregar requisito
+              </button>
+            </div>
+            {form.requirements.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-3">Sin requisitos — esta promo no tiene ningún medio de pago asignado.</p>
+            ) : (
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 {/* Table header */}
                 <div className="grid gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[9px] font-black uppercase tracking-widest text-slate-400"
-                  style={{ gridTemplateColumns: '1.5fr 1.5fr 1fr 1.2fr 1.2fr 1.2fr 1.2fr' }}>
+                  style={{ gridTemplateColumns: '1.3fr 1.3fr 0.9fr 1fr 1fr 0.8fr 1fr 1fr 1fr 0.4fr' }}>
                   <span>Banco</span>
                   <span>Billetera</span>
                   <span>Red</span>
                   <span>Canal</span>
+                  <span>Tipo desc.</span>
+                  <span>Valor</span>
                   <span>Tope ($)</span>
                   <span>Período</span>
                   <span>Mínimo ($)</span>
+                  <span />
                 </div>
                 {/* Rows */}
                 {form.requirements.map((r, i) => (
-                  <div key={r.reqId}
+                  <div key={r.reqId || `new-${i}`}
                     className={`grid gap-2 px-3 py-2.5 items-center ${i < form.requirements.length - 1 ? 'border-b border-slate-100' : ''} ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
-                    style={{ gridTemplateColumns: '1.5fr 1.5fr 1fr 1.2fr 1.2fr 1.2fr 1.2fr' }}>
+                    style={{ gridTemplateColumns: '1.3fr 1.3fr 0.9fr 1fr 1fr 0.8fr 1fr 1fr 1fr 0.4fr' }}>
                     <select value={r.bankId} onChange={e => setReq(i, { bankId: e.target.value })} className={sel}>
                       <option value="">—</option>
                       {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -293,6 +332,12 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
                     <select value={r.paymentChannel} onChange={e => setReq(i, { paymentChannel: e.target.value })} className={sel}>
                       {PAYMENT_CHANNELS.map(ch => <option key={ch} value={ch}>{CHANNEL_META[ch]?.label ?? ch}</option>)}
                     </select>
+                    <select value={r.discountType} onChange={e => setReq(i, { discountType: e.target.value })} className={sel}>
+                      {Object.entries(DISCOUNT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                    <input type="number" placeholder="0"
+                      value={r.discountValue} onChange={e => setReq(i, { discountValue: e.target.value })}
+                      className={inp} />
                     <input type="number" placeholder="Sin tope"
                       value={r.cap} onChange={e => setReq(i, { cap: e.target.value, capUnlimited: false })}
                       className={inp} />
@@ -302,11 +347,15 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
                     <input type="number" placeholder="Sin mínimo"
                       value={r.minPurchase} onChange={e => setReq(i, { minPurchase: e.target.value })}
                       className={inp} />
+                    <button type="button" onClick={() => removeReq(i)}
+                      className="text-slate-300 hover:text-red-600 transition-colors flex justify-center">
+                      <X size={13} />
+                    </button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Footer */}

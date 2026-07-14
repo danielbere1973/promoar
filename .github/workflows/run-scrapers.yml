@@ -16,7 +16,7 @@ on:
         required: false
 
 env:
-  PLAYWRIGHT_SCRAPERS: "amex,cabal,changomas,banco galicia,icbc,banco macro,naranjax,banco santander,banco supervielle,banco ciudad,visa,petersen,banco del sol"
+  PLAYWRIGHT_SCRAPERS: "amex,cabal,changomas,banco galicia,icbc,banco macro,naranjax,banco santander,banco supervielle,banco ciudad,visa,banco del sol"
 
 jobs:
   check:
