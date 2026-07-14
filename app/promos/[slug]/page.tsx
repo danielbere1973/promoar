@@ -216,14 +216,8 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
   const isExpired = promo.status === 'EXPIRED' || (promo.validUntil != null && promo.validUntil < startOfToday)
 
-  // Promo vencida — página 200 con promos vigentes del mismo comercio
+  // Promo vencida — página 200 con link a promos vigentes del mismo comercio (sin query extra a Prisma)
   if (isExpired) {
-    const vigentes = await prisma.promo.findMany({
-      where: { commerceId: promo.commerce.id, status: 'ACTIVE', slug: { not: null } },
-      include: { requirements: { include: { bank: true, wallet: true }, take: 1, orderBy: { discountValue: 'desc' } } },
-      orderBy: { requirements: { _count: 'desc' } },
-      take: 6,
-    })
     const firstReq = promo.requirements[0]
     const entityName = firstReq?.bank?.name ?? firstReq?.wallet?.name ?? null
     const entitySlug = firstReq?.bank?.slug ?? firstReq?.wallet?.slug ?? null
@@ -256,31 +250,17 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
             </a>
           )}
 
-          {/* Promos vigentes del mismo comercio */}
-          {vigentes.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">
-                Promos vigentes en {promo.commerce.name}
-              </p>
-              {vigentes.map(v => {
-                const req = v.requirements[0]
-                const label = req ? discountLabel(req) : ''
-                const entity = req?.bank?.name ?? req?.wallet?.name ?? ''
-                return (
-                  <a
-                    key={v.id}
-                    href={`/promos/${v.slug}`}
-                    className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
-                  >
-                    <div>
-                      <p className="text-base font-black text-gray-800">{label}</p>
-                      {entity && <p className="text-xs text-gray-400 mt-0.5">con {entity}</p>}
-                    </div>
-                    <span className="text-indigo-500 font-black text-sm shrink-0 ml-3">→</span>
-                  </a>
-                )
-              })}
-            </div>
+          {/* Link a promos vigentes del mismo comercio (sin query extra a Prisma) */}
+          {promo.commerce.slug && (
+            <a
+              href={`/comercios/${promo.commerce.slug}`}
+              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
+            >
+              <div>
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
+                <p className="text-sm font-black text-gray-800">en {promo.commerce.name} →</p>
+              </div>
+            </a>
           )}
 
           {/* CTA general */}
