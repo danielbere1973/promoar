@@ -7,6 +7,8 @@ import { schemaOffer } from '@/lib/schema'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
+export const revalidate = 3600
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function discountLabel(req: any): string {
