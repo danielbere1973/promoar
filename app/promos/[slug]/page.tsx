@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
@@ -144,73 +144,18 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
 
-  // Promo borrada de la DB (expirada y purgada por el scraper) → intentar
-  // reconocer el comercio por el prefijo del slug y mostrar sus promos vigentes;
-  // si no matchea ningún comercio, 404 propio con categorías destacadas.
+  // Promo borrada de la DB (expirada y purgada por el scraper) → redirect 301
+  // al comercio si se puede reconocer por el prefijo del slug, para que Google
+  // actualice el índice y deje de re-pedir esta URL muerta en cada crawl
+  // (evita 2 queries extra a Prisma en cada hit repetido de bots a URLs viejas).
   if (!promo) {
     const guessedSlug = params.slug.split('-')[0]
     const guessedCommerce = guessedSlug
-      ? await prisma.commerce.findFirst({ where: { slug: guessedSlug } })
+      ? await prisma.commerce.findFirst({ where: { slug: guessedSlug }, select: { slug: true } })
       : null
 
     if (guessedCommerce) {
-      const vigentes = await prisma.promo.findMany({
-        where: { commerceId: guessedCommerce.id, status: 'ACTIVE', slug: { not: null } },
-        include: { requirements: { include: { bank: true, wallet: true }, take: 1, orderBy: { discountValue: 'desc' } } },
-        orderBy: { requirements: { _count: 'desc' } },
-        take: 6,
-      })
-
-      if (vigentes.length > 0) {
-        return (
-          <div className="min-h-screen bg-gray-50 pb-24">
-            <BackButton label={guessedCommerce.name} />
-            <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
-              <div className="bg-gray-100 border border-gray-200 rounded-3xl px-6 py-8 text-center space-y-2">
-                <p className="text-4xl">⏰</p>
-                <p className="text-lg font-black text-gray-700">Esta promo ya no está disponible</p>
-                <p className="text-sm text-gray-500">
-                  Pero <span className="font-semibold">{guessedCommerce.name}</span> tiene otras promos vigentes.
-                </p>
-              </div>
-              <div className="space-y-3">
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">
-                  Promos vigentes en {guessedCommerce.name}
-                </p>
-                {vigentes.map(v => {
-                  const req = v.requirements[0]
-                  const label = req ? discountLabel(req) : ''
-                  const entity = req?.bank?.name ?? req?.wallet?.name ?? ''
-                  return (
-                    <a
-                      key={v.id}
-                      href={`/promos/${v.slug}`}
-                      className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
-                    >
-                      <div>
-                        <p className="text-base font-black text-gray-800">{label}</p>
-                        {entity && <p className="text-xs text-gray-400 mt-0.5">con {entity}</p>}
-                      </div>
-                      <span className="text-indigo-500 font-black text-sm shrink-0 ml-3">→</span>
-                    </a>
-                  )
-                })}
-              </div>
-              <a
-                href="/promos"
-                className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg"
-              >
-                <div>
-                  <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Querés ver tus promos?</p>
-                  <p className="text-sm font-black">Ver todas las promos →</p>
-                </div>
-                <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
-              </a>
-            </div>
-            <BottomNav />
-          </div>
-        )
-      }
+      redirect(`/comercios/${guessedCommerce.slug}`)
     }
 
     notFound()
