@@ -601,7 +601,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [timeFilter, setTimeFilter] = useState<'today' | 'week'>('today')
   const [wizardOpen, setWizardOpen] = useState(false)
   const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null)
-  const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
+  const [guestProfileConversionBannerDismissed, setGuestProfileConversionBannerDismissed] = useState(false)
   const [guestProfileBannerDismissed, setGuestProfileBannerDismissed] = useState(false)
   const mobileSearchRef = useRef<HTMLInputElement>(null)
   const [searchTab, setSearchTab] = useState<'comercios' | 'productos'>('comercios')
@@ -659,6 +659,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
   useEffect(() => {
     setGuestProfileBannerDismissed(localStorage.getItem('guestProfileBannerDismissed') === '1')
+    setGuestProfileConversionBannerDismissed(localStorage.getItem('guestProfileConversionBannerDismissed') === '1')
 
     if (status === 'authenticated') {
       setForMe(true)
@@ -1891,44 +1892,50 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
         <div className="px-6 py-6 pb-28 max-w-[1440px] w-full mx-auto">
 
-        {/* Banner perfil guest */}
-        {status !== 'authenticated' && !!guestProfile?.cards?.length && !guestBannerDismissed && forMe && (
+        {/* Banner Estado 2 — Invitado con Perfil Financiero local (RFC-001 Alternativa B) */}
+        {status !== 'authenticated' && !!guestProfile?.cards?.length && !guestProfileConversionBannerDismissed && forMe && (
           <div className="mb-4 flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 shadow-sm">
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-xl shrink-0">✨</span>
               <div className="min-w-0">
-                <p className="text-xs font-black text-indigo-900">Estás viendo promos para tu perfil</p>
-                <p className="text-[11px] text-indigo-600 truncate">Registrate gratis para no perder tu configuración</p>
+                <p className="text-xs font-black text-indigo-900">Guardá tu Perfil Financiero</p>
+                <p className="text-[11px] text-indigo-600 truncate">Creá una cuenta gratis para conservar tu perfil y usarlo en cualquier dispositivo.</p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
               <button
                 onClick={() => setWizardOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-indigo-600 text-[11px] font-black hover:bg-indigo-50 transition-colors whitespace-nowrap"
+                className="px-2 py-1.5 text-indigo-500 text-[11px] font-bold hover:text-indigo-700 transition-colors whitespace-nowrap underline underline-offset-2"
               >
-                Editar
+                Editar perfil
               </button>
               <button
-                onClick={() => router.push('/register')}
+                onClick={() => router.push('/registro')}
                 className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-black hover:bg-indigo-700 transition-colors whitespace-nowrap"
               >
-                Registrarse
+                Crear cuenta gratis
               </button>
-              <button onClick={() => setGuestBannerDismissed(true)} className="text-indigo-300 hover:text-indigo-500 p-1">
+              <button
+                onClick={() => {
+                  setGuestProfileConversionBannerDismissed(true)
+                  localStorage.setItem('guestProfileConversionBannerDismissed', '1')
+                }}
+                className="text-indigo-300 hover:text-indigo-500 p-1"
+              >
                 <X size={14} />
               </button>
             </div>
           </div>
         )}
 
-        {/* Banner invitado sin perfil configurado — placeholder de copy, pendiente revisión UX Writing */}
+        {/* Banner Estado 1 — Invitado sin Perfil Financiero (RFC-001 Alternativa B) */}
         {status !== 'authenticated' && !guestProfile?.cards?.length && !guestProfileBannerDismissed && (
           <div className="mb-4 flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 shadow-sm">
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-xl shrink-0">✨</span>
               <div className="min-w-0">
-                <p className="text-xs font-black text-indigo-900">[Placeholder] Configurá tu perfil para ver tus promos</p>
-                <p className="text-[11px] text-indigo-600 truncate">[Placeholder] Sumá tus tarjetas y billeteras para filtrar lo que te sirve</p>
+                <p className="text-xs font-black text-indigo-900">Encontrá las promociones que realmente te sirven</p>
+                <p className="text-[11px] text-indigo-600 truncate">Configurá tu Perfil Financiero y te mostraremos beneficios según tus tarjetas y medios de pago.</p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
@@ -1936,7 +1943,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 onClick={() => setWizardOpen(true)}
                 className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-black hover:bg-indigo-700 transition-colors whitespace-nowrap"
               >
-                [Placeholder] Configurar
+                Configurar Perfil Financiero
               </button>
               <button
                 onClick={() => {
@@ -2460,7 +2467,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                       <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-3">Pero podés adelantarte:</p>
                       <div className="flex flex-col lg:flex-row gap-2">
                         <button
-                          onClick={() => router.push('/register')}
+                          onClick={() => router.push('/registro')}
                           className="flex items-center gap-2.5 flex-1 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2.5 text-left hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
                         >
                           <span className="text-lg shrink-0">🔔</span>
@@ -2755,7 +2762,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           setGuestProfile(profile)
           setForMe(true)
           setWizardOpen(false)
-          setGuestBannerDismissed(false)
+          setGuestProfileConversionBannerDismissed(false)
+          localStorage.removeItem('guestProfileConversionBannerDismissed')
         }}
       />
 

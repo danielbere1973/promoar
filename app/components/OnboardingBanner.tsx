@@ -16,26 +16,19 @@ export default function OnboardingBanner({ isLoggedIn, hasProfile, profileReady 
   const [step, setStep] = useState(0)
   const router = useRouter()
 
-  const steps = isLoggedIn
-    ? [
-        { icon: '🏦', label: 'Tus bancos y billeteras', desc: 'Decinos con qué banco operás y qué billeteras usás. Así filtramos solo las promos que te aplican a vos.', href: '/perfil?tab=finance' },
-        { icon: '💳', label: 'Tus tarjetas', desc: 'Visa, Mastercard, AmEx, Naranja X... Cargalas una vez y las tenemos en cuenta en cada búsqueda.', href: '/perfil?tab=finance' },
-        { icon: '📍', label: 'Tu provincia', desc: 'Para mostrarte promos disponibles en tu zona y sucursales cerca tuyo.', href: '/perfil?tab=personal' },
-        { icon: '🔔', label: 'Alertas personalizadas', desc: 'Activá alertas y te avisamos cuando aparezca una promo de tu banco o billetera.', href: '/perfil?tab=notif' },
-        { icon: '📩', label: 'Newsletter semanal', desc: 'Las mejores promos de la semana directamente en tu email. Sin spam, te das de baja cuando querés.', href: '/perfil?tab=notif' },
-      ]
-    : [
-        { icon: '📝', label: 'Registrate gratis', desc: 'Sin tarjeta de crédito, sin costo. Solo tu email y una contraseña — en 30 segundos estás adentro.', href: '/registro' },
-        { icon: '🏦', label: 'Tus bancos y billeteras', desc: 'Decinos con qué banco operás y qué billeteras usás. Así filtramos solo las promos que te aplican a vos.', href: '/registro' },
-        { icon: '💳', label: 'Tus tarjetas', desc: 'Visa, Mastercard, AmEx, Naranja X... Cargalas una vez y las tenemos en cuenta en cada búsqueda.', href: '/registro' },
-        { icon: '📍', label: 'Tu provincia', desc: 'Para mostrarte promos disponibles en tu zona y sucursales cerca tuyo.', href: '/registro' },
-        { icon: '🔔', label: 'Alertas y newsletter', desc: 'Avisamos cuando aparezca algo tuyo y mandamos el resumen semanal de las mejores promos.', href: '/registro' },
-      ]
+  const steps = [
+    { icon: '🏦', label: 'Tus bancos y billeteras', desc: 'Decinos con qué banco operás y qué billeteras usás. Así filtramos solo las promos que te aplican a vos.', href: '/perfil?tab=finance' },
+    { icon: '💳', label: 'Tus tarjetas', desc: 'Visa, Mastercard, AmEx, Naranja X... Cargalas una vez y las tenemos en cuenta en cada búsqueda.', href: '/perfil?tab=finance' },
+    { icon: '📍', label: 'Tu provincia', desc: 'Para mostrarte promos disponibles en tu zona y sucursales cerca tuyo.', href: '/perfil?tab=personal' },
+    { icon: '🔔', label: 'Alertas personalizadas', desc: 'Activá alertas y te avisamos cuando aparezca una promo de tu banco o billetera.', href: '/perfil?tab=notif' },
+    { icon: '📩', label: 'Newsletter semanal', desc: 'Las mejores promos de la semana directamente en tu email. Sin spam, te das de baja cuando querés.', href: '/perfil?tab=notif' },
+  ]
 
   useEffect(() => {
+    if (!isLoggedIn) return
     if (!profileReady) return
     if (localStorage.getItem(STORAGE_KEY)) return
-    if (isLoggedIn && hasProfile) return
+    if (hasProfile) return
     const saved = parseInt(localStorage.getItem(STEP_KEY) ?? '0', 10)
     setStep(isNaN(saved) ? 0 : Math.min(saved, steps.length - 1))
     setVisible(true)
@@ -81,7 +74,7 @@ export default function OnboardingBanner({ isLoggedIn, hasProfile, profileReady 
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-[#D94F2B] uppercase tracking-widest">
-                {isLoggedIn ? 'Completá tu perfil' : 'Nuevo por acá'}
+                Completá tu perfil
               </span>
               <span className="text-[10px] text-slate-300 dark:text-slate-600 font-medium">
                 {step + 1} / {steps.length}
@@ -131,7 +124,7 @@ export default function OnboardingBanner({ isLoggedIn, hasProfile, profileReady 
               onClick={handleCta}
               className="flex-1 py-2.5 text-[13px] font-black text-white bg-[#D94F2B] rounded-xl hover:bg-[#c04426] transition-all"
             >
-              {isLast ? (isLoggedIn ? 'Ir al perfil →' : 'Registrarme gratis →') : `${s.label.split(' ')[0] === 'Registrate' ? 'Registrarme' : 'Configurar'} →`}
+              {isLast ? 'Ir al perfil →' : 'Configurar →'}
             </button>
             {!isLast && (
               <button
