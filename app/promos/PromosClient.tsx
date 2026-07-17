@@ -1911,18 +1911,18 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 <X size={14} />
               </button>
             </div>
-            <div className="flex items-center gap-2 shrink-0 sm:ml-3">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:shrink-0 sm:ml-3">
+              <button
+                onClick={() => router.push('/registro')}
+                className="w-full sm:w-auto text-center px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-black hover:bg-indigo-700 transition-colors whitespace-nowrap"
+              >
+                Crear cuenta gratis
+              </button>
               <button
                 onClick={() => setWizardOpen(true)}
                 className="px-2 py-1.5 text-indigo-500 text-[11px] font-bold hover:text-indigo-700 transition-colors whitespace-nowrap underline underline-offset-2"
               >
-                Editar perfil
-              </button>
-              <button
-                onClick={() => router.push('/registro')}
-                className="flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-black hover:bg-indigo-700 transition-colors whitespace-nowrap"
-              >
-                Crear cuenta gratis
+                Editar Perfil Financiero
               </button>
               <button
                 onClick={() => {
