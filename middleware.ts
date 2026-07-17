@@ -124,6 +124,7 @@ export async function middleware(req: NextRequest) {
       'unknown'
     const userAgent = req.headers.get('user-agent') || ''
     const isLikelyBot = !BROWSER_UA.test(userAgent)
+    console.log(`[rate-limit-debug] ip=${ip} bot=${isLikelyBot} path=${pathname} ua=${userAgent}`)
     if (ip !== 'unknown' && isRateLimited(ip, isLikelyBot)) {
       return new NextResponse('Too Many Requests', { status: 429 })
     }
