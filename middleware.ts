@@ -49,6 +49,31 @@ const ADMIN_PATHS = ['/admin', '/api/admin']
 // resto de tráfico extranjero — estos no deben bloquearse pese a no ser de Argentina.
 const ALLOWED_BOT_UA = /googlebot|bingbot|yandexbot|duckduckbot|applebot/i
 
+// Rate-limit en memoria por IP para rutas SSR pesadas (cada hit a un slug nuevo dispara
+// una query a Neon). Best-effort: el Edge Runtime de Vercel puede tener múltiples instancias,
+// así que esto no bloquea 100% un ataque distribuido, pero frena scrapers de una sola IP
+// recorriendo el catálogo secuencialmente (caso real detectado 17/7/2026 — 2 IPs de AR
+// haciendo ~2500 requests/día a /promos/[slug] y /comercios/[slug], manteniendo Neon sin
+// idle toda la noche).
+const RATE_LIMITED_PREFIXES = ['/promos/', '/comercios/', '/api/promos', '/api/search']
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX = 40
+const hitLog = new Map<string, number[]>()
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const hits = (hitLog.get(ip) ?? []).filter(t => now - t < RATE_LIMIT_WINDOW_MS)
+  hits.push(now)
+  hitLog.set(ip, hits)
+  // Poda ocasional para no crecer sin límite en memoria
+  if (hitLog.size > 5000) {
+    hitLog.forEach((times, key) => {
+      if (times.every((t: number) => now - t > RATE_LIMIT_WINDOW_MS)) hitLog.delete(key)
+    })
+  }
+  return hits.length > RATE_LIMIT_MAX
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
@@ -82,10 +107,18 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // 1.5. Rate-limit por IP en rutas SSR pesadas, antes de cualquier otra lógica
+  if (RATE_LIMITED_PREFIXES.some(p => pathname.startsWith(p))) {
+    const ip = req.headers.get('x-real-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    if (ip !== 'unknown' && isRateLimited(ip)) {
+      return new NextResponse('Too Many Requests', { status: 429 })
+    }
+  }
+
   // 2. Comprobar si es la Home o una ruta pública explícita
   const isHomePage = pathname === '/'
   const isPublicRoute = PUBLIC_PATHS.some(p => pathname.startsWith(p))
-  
+
   if (isHomePage || isPublicRoute) {
     return NextResponse.next()
   }
