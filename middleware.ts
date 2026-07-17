@@ -117,7 +117,11 @@ export async function middleware(req: NextRequest) {
 
   // 1.5. Rate-limit por IP en rutas SSR pesadas, antes de cualquier otra lógica
   if (RATE_LIMITED_PREFIXES.some(p => pathname.startsWith(p))) {
-    const ip = req.headers.get('x-real-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    const ip =
+      req.headers.get('x-real-ip') ??
+      req.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ??
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      'unknown'
     const userAgent = req.headers.get('user-agent') || ''
     const isLikelyBot = !BROWSER_UA.test(userAgent)
     if (ip !== 'unknown' && isRateLimited(ip, isLikelyBot)) {
