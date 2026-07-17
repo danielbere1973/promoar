@@ -54,14 +54,22 @@ const ALLOWED_BOT_UA = /googlebot|bingbot|yandexbot|duckduckbot|applebot/i
 // así que esto no bloquea 100% un ataque distribuido, pero frena scrapers de una sola IP
 // recorriendo el catálogo secuencialmente (caso real detectado 17/7/2026 — 2 IPs de AR
 // haciendo ~2500 requests/día a /promos/[slug] y /comercios/[slug], manteniendo Neon sin
-// idle toda la noche).
+// idle toda la noche; luego se detectaron IPs adicionales con el mismo patrón el mismo día).
+// Límite bajado a 15/min (de 40) tras confirmar cadencia de ~1 request/seg sostenida sin
+// pausas — muy por encima de lo que genera un usuario navegando la grilla/detalle a mano.
 const RATE_LIMITED_PREFIXES = ['/promos/', '/comercios/', '/api/promos', '/api/search']
 const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX = 40
+const RATE_LIMIT_MAX = 15
 const hitLog = new Map<string, number[]>()
 
-function isRateLimited(ip: string): boolean {
+// User-Agents típicos de navegador real. Un cliente sin UA de navegador (script/curl/bot
+// sin identificarse, salvo los bots de búsqueda ya permitidos arriba) pegando a estas rutas
+// es en sí mismo una señal fuerte de scraping — se le aplica un límite mucho más estricto.
+const BROWSER_UA = /mozilla|chrome|safari|firefox|edg\//i
+
+function isRateLimited(ip: string, isLikelyBot: boolean): boolean {
   const now = Date.now()
+  const max = isLikelyBot ? 5 : RATE_LIMIT_MAX
   const hits = (hitLog.get(ip) ?? []).filter(t => now - t < RATE_LIMIT_WINDOW_MS)
   hits.push(now)
   hitLog.set(ip, hits)
@@ -71,7 +79,7 @@ function isRateLimited(ip: string): boolean {
       if (times.every((t: number) => now - t > RATE_LIMIT_WINDOW_MS)) hitLog.delete(key)
     })
   }
-  return hits.length > RATE_LIMIT_MAX
+  return hits.length > max
 }
 
 export async function middleware(req: NextRequest) {
@@ -110,7 +118,9 @@ export async function middleware(req: NextRequest) {
   // 1.5. Rate-limit por IP en rutas SSR pesadas, antes de cualquier otra lógica
   if (RATE_LIMITED_PREFIXES.some(p => pathname.startsWith(p))) {
     const ip = req.headers.get('x-real-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-    if (ip !== 'unknown' && isRateLimited(ip)) {
+    const userAgent = req.headers.get('user-agent') || ''
+    const isLikelyBot = !BROWSER_UA.test(userAgent)
+    if (ip !== 'unknown' && isRateLimited(ip, isLikelyBot)) {
       return new NextResponse('Too Many Requests', { status: 429 })
     }
   }
