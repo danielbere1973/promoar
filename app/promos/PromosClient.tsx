@@ -602,6 +602,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [wizardOpen, setWizardOpen] = useState(false)
   const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null)
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
+  const [guestProfileBannerDismissed, setGuestProfileBannerDismissed] = useState(false)
   const mobileSearchRef = useRef<HTMLInputElement>(null)
   const [searchTab, setSearchTab] = useState<'comercios' | 'productos'>('comercios')
   const [searchText, setSearchText] = useState('')
@@ -657,6 +658,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   }, [])
 
   useEffect(() => {
+    setGuestProfileBannerDismissed(localStorage.getItem('guestProfileBannerDismissed') === '1')
+
     if (status === 'authenticated') {
       setForMe(true)
       // Importar perfil guest si existe en localStorage
@@ -1889,7 +1892,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         <div className="px-6 py-6 pb-28 max-w-[1440px] w-full mx-auto">
 
         {/* Banner perfil guest */}
-        {status !== 'authenticated' && guestProfile && !guestBannerDismissed && forMe && (
+        {status !== 'authenticated' && !!guestProfile?.cards?.length && !guestBannerDismissed && forMe && (
           <div className="mb-4 flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 shadow-sm">
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-xl shrink-0">✨</span>
@@ -1912,6 +1915,36 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 Registrarse
               </button>
               <button onClick={() => setGuestBannerDismissed(true)} className="text-indigo-300 hover:text-indigo-500 p-1">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Banner invitado sin perfil configurado — placeholder de copy, pendiente revisión UX Writing */}
+        {status !== 'authenticated' && !guestProfile?.cards?.length && !guestProfileBannerDismissed && (
+          <div className="mb-4 flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-xl shrink-0">✨</span>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-indigo-900">[Placeholder] Configurá tu perfil para ver tus promos</p>
+                <p className="text-[11px] text-indigo-600 truncate">[Placeholder] Sumá tus tarjetas y billeteras para filtrar lo que te sirve</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <button
+                onClick={() => setWizardOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-black hover:bg-indigo-700 transition-colors whitespace-nowrap"
+              >
+                [Placeholder] Configurar
+              </button>
+              <button
+                onClick={() => {
+                  setGuestProfileBannerDismissed(true)
+                  localStorage.setItem('guestProfileBannerDismissed', '1')
+                }}
+                className="text-indigo-300 hover:text-indigo-500 p-1"
+              >
                 <X size={14} />
               </button>
             </div>
