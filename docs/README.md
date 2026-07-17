@@ -3,6 +3,8 @@
 ## Objetivo de la documentación
 
 Esta carpeta centraliza la documentación de producto, técnica, de marca y de negocio de PromoAR.
+
+<!-- test: verificación de flujo PR -> Preview, revertir antes de mergear -->
 El objetivo es que cualquier persona (o IA) que se incorpore al proyecto pueda entender rápidamente
 qué es PromoAR, hacia dónde va, cómo está construido y por qué se tomaron ciertas decisiones — sin
 depender de leer el código o el historial de git para reconstruir el contexto.
