@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 
 export async function POST(req: Request) {
   try {
@@ -74,6 +75,8 @@ export async function POST(req: Request) {
     }
 
     await prisma.commerce.delete({ where: { id: sourceId } })
+
+    if (promosResult.count > 0) invalidatePublicPromosCache()
 
     return NextResponse.json({
       success: true,

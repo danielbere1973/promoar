@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 
 async function isAdmin() {
   const session = await getServerSession()
@@ -109,6 +110,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         requirements: { include: reqInclude },
       },
     })
+    invalidatePublicPromosCache()
     return NextResponse.json({ promo: final })
   }
 
@@ -122,8 +124,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         requirements: { include: reqInclude },
       },
     })
+    invalidatePublicPromosCache()
     return NextResponse.json({ promo: final })
   }
 
+  invalidatePublicPromosCache()
   return NextResponse.json({ promo: updated })
 }

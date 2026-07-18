@@ -1,5 +1,7 @@
+import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { getCurrentPeriod } from '@/lib/promoUsage'
+import { PROMOS_PUBLIC_TAG } from '@/lib/cache/promosCache'
 
 // Prisma/Postgres `contains`+`insensitive` solo ignora mayúsculas, no acentos —
 // "cafe" no matchea "Café" sin este normalizado en ambos lados de la comparación.
@@ -18,6 +20,74 @@ async function getActiveTotalCount(): Promise<number> {
   cachedTotalCountAt = Date.now()
   return cachedTotalCount
 }
+
+// RFC-002 Fase 1 — caché exclusiva de la rama pública de invitado sin filtros
+// (sin forMe, sin email, sin filtros, sin provincia): misma respuesta para
+// todos los visitantes de esa combinación page/pageSize/view. NUNCA debe
+// recibir email/isAdmin/userProvince como argumento — el guard que decide
+// llamar a esta función (isPublicCacheableView en getPromosData) ya excluye
+// esos casos por construcción; esta función no acepta esos parámetros en su
+// firma para que sea imposible colarlos por error.
+//
+// TTL de 10 minutos como red de seguridad (por si una invalidación por evento
+// falla en algún punto de escritura) + revalidateTag('promos-public') disparado
+// desde cada mutación real (scraper, admin CRUD, auto-validate, cron de
+// expiración) — ver lib/cache/promosCache.ts.
+const getPublicPromosPage = unstable_cache(
+  async (page: number, pageSize: number, view: string) => {
+    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view})`)
+
+    const today = new Date()
+    const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
+
+    const where = {
+      status: 'ACTIVE' as const,
+      validFrom: { lte: today },
+      OR: [
+        { validUntil: null },
+        { validUntil: { gte: startOfToday } },
+      ],
+    }
+
+    const [promos, totalCount] = await Promise.all([
+      prisma.promo.findMany({
+        where,
+        include: {
+          category: { select: { name: true, slug: true, icon: true, color: true } },
+          commerce: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              logoUrl: true,
+              instagramUrl: true,
+              activePromoCount: true,
+            },
+          },
+          requirements: {
+            include: {
+              bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
+              wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
+              cardNetwork: { select: { id: true, name: true, slug: true } },
+            },
+          },
+        },
+        orderBy: [
+          { isCSIOnly: 'asc' },
+          { maxDiscountPct: { sort: 'desc', nulls: 'last' } },
+          { id: 'asc' },
+        ],
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+      }),
+      getActiveTotalCount(),
+    ])
+
+    return [promos, totalCount] as const
+  },
+  ['public-promos-page'],
+  { revalidate: 600, tags: [PROMOS_PUBLIC_TAG] }, // 600s = 10min TTL de seguridad
+)
 
 // Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
 // contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
@@ -103,11 +173,9 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   const today = new Date()
   const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
 
-  // Auto-expiration: se maneja en background, no bloquea el request
-  prisma.promo.updateMany({
-    where: { status: 'ACTIVE', validUntil: { lt: startOfToday } },
-    data: { status: 'EXPIRED' }
-  }).catch(() => {})
+  // RFC-002 Fase 1: la auto-expiración se eliminó de este read path público.
+  // Vive exclusivamente en /api/internal/expire-promos (cron), que además
+  // invalida la caché pública tras expirar promos — ver ese archivo.
 
   // Servidor corre en UTC (Vercel) — Argentina es UTC-3 fijo (sin horario de verano).
   // Sin este ajuste, getDay() adelanta el día ~3hs antes de tiempo (ej. jueves 21hs ARG
@@ -218,36 +286,44 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       ]
     : undefined
 
-  const [promos, totalCount] = await Promise.all([
-    prisma.promo.findMany({
-      where,
-      include: {
-        category: { select: { name: true, slug: true, icon: true, color: true } },
-        commerce: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            logoUrl: true,
-            instagramUrl: true,
-            activePromoCount: true,
-            ...(userProvince && !isAdmin ? { branches: { select: { province: true }, where: { province: { not: null } } } } : {}),
-          },
-        },
-        requirements: {
+  // RFC-002 Fase 1: la rama pública (invitado, sin filtros, sin provincia) va por
+  // una función cacheada (10 min TTL + invalidación por tag). Cualquier otra
+  // combinación (con perfil, con filtros, o invitado CON provincia — que ya es
+  // una forma de personalización) sigue el camino directo a Prisma, sin cambios.
+  const isPublicCacheableView = paginate && !userProvince
+
+  const [promos, totalCount] = isPublicCacheableView
+    ? await getPublicPromosPage(page, pageSize, view ?? 'today')
+    : await Promise.all([
+        prisma.promo.findMany({
+          where,
           include: {
-            bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
-            wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
-            cardNetwork: { select: { id: true, name: true, slug: true } },
+            category: { select: { name: true, slug: true, icon: true, color: true } },
+            commerce: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                logoUrl: true,
+                instagramUrl: true,
+                activePromoCount: true,
+                ...(userProvince && !isAdmin ? { branches: { select: { province: true }, where: { province: { not: null } } } } : {}),
+              },
+            },
+            requirements: {
+              include: {
+                bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
+                wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
+                cardNetwork: { select: { id: true, name: true, slug: true } },
+              },
+            },
           },
-        },
-      },
-      orderBy: paginateOrderBy ?? (take ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }] : { createdAt: 'desc' }),
-      ...(paginate ? { take: pageSize, skip: (page - 1) * pageSize } : take ? { take } : {}),
-    }),
-    // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
-    paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
-  ])
+          orderBy: paginateOrderBy ?? (take ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }] : { createdAt: 'desc' }),
+          ...(paginate ? { take: pageSize, skip: (page - 1) * pageSize } : take ? { take } : {}),
+        }),
+        // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
+        paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
+      ])
 
   // Day bitmask filtering
   let filtered = promos
