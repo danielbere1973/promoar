@@ -49,6 +49,21 @@ const ADMIN_PATHS = ['/admin', '/api/admin']
 // resto de tráfico extranjero — estos no deben bloquearse pese a no ser de Argentina.
 const ALLOWED_BOT_UA = /googlebot|bingbot|yandexbot|duckduckbot|applebot/i
 
+// ── INSTRUMENTACIÓN TEMPORAL RFC-003 (18-19/7/2026) ──────────────────────────
+// Objetivo: medir distribución real de tráfico por ruta pública SSR antes de decidir
+// dónde extender el cache de RFC-002. Solo logging, no cambia rate-limit ni caché ni
+// lógica de negocio. Borrar este bloque (y su único console.log) una vez capturada
+// la ventana de datos — no es instrumentación permanente.
+// `likelyPrisma` es una heurística estática por prefijo de ruta (no una medición real:
+// el middleware corre en Edge, antes del render, y no puede observar si la page terminó
+// pegándole a Prisma) — sirve para separar de entrada rutas candidatas de las que no.
+const TRAFFIC_DEBUG_PREFIXES = ['/promos/', '/comercios/', '/bancos/', '/precios', '/finanzas', '/api/promos', '/api/search']
+function likelyPrisma(pathname: string): boolean {
+  return pathname.startsWith('/promos/') || pathname.startsWith('/comercios/') || pathname.startsWith('/bancos/')
+    || pathname.startsWith('/api/promos') || pathname.startsWith('/api/search')
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 // Rate-limit en memoria por IP para rutas SSR pesadas (cada hit a un slug nuevo dispara
 // una query a Neon). Best-effort: el Edge Runtime de Vercel puede tener múltiples instancias,
 // así que esto no bloquea 100% un ataque distribuido, pero frena scrapers de una sola IP
@@ -115,6 +130,21 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // 1.4. INSTRUMENTACIÓN TEMPORAL RFC-003 — ver bloque de comentario arriba. Corre para
+  // más rutas que el rate-limit (incluye /bancos/, que hoy no tiene ningún logging), y
+  // nunca bloquea ni altera la request — solo observa.
+  if (TRAFFIC_DEBUG_PREFIXES.some(p => pathname.startsWith(p))) {
+    const ip =
+      req.headers.get('x-real-ip') ??
+      req.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ??
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      'unknown'
+    const userAgent = req.headers.get('user-agent') || ''
+    const uaShort = userAgent.slice(0, 60)
+    const ipMasked = ip === 'unknown' ? 'unknown' : ip.split('.').slice(0, 3).join('.') + '.x'
+    console.log(`[traffic-debug] path=${pathname} method=${req.method} ip=${ipMasked} ua="${uaShort}" prisma=${likelyPrisma(pathname)} ts=${Date.now()}`)
+  }
+
   // 1.5. Rate-limit por IP en rutas SSR pesadas, antes de cualquier otra lógica
   if (RATE_LIMITED_PREFIXES.some(p => pathname.startsWith(p))) {
     const ip =
@@ -124,7 +154,8 @@ export async function middleware(req: NextRequest) {
       'unknown'
     const userAgent = req.headers.get('user-agent') || ''
     const isLikelyBot = !BROWSER_UA.test(userAgent)
-    console.log(`[rate-limit-debug] ip=${ip} bot=${isLikelyBot} path=${pathname} ua=${userAgent}`)
+    const ipMaskedRL = ip === 'unknown' ? 'unknown' : ip.split('.').slice(0, 3).join('.') + '.x'
+    console.log(`[rate-limit-debug] ip=${ipMaskedRL} bot=${isLikelyBot} path=${pathname} ua="${userAgent.slice(0, 60)}"`)
     if (ip !== 'unknown' && isRateLimited(ip, isLikelyBot)) {
       return new NextResponse('Too Many Requests', { status: 429 })
     }
