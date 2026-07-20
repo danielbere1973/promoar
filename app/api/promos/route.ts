@@ -4,6 +4,8 @@ export const dynamic = 'force-dynamic'
 
 import { getToken } from 'next-auth/jwt'
 import { getPromosData, PromoQueryParams } from '@/lib/getPromos'
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 
 export async function GET(req: NextRequest) {
   try {
@@ -144,6 +146,8 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    invalidatePublicPromosCache()
+    invalidateCategoriesCache()
     return NextResponse.json({ promo }, { status: 201 })
   } catch (error) {
     console.error('[POST /api/promos]', error)

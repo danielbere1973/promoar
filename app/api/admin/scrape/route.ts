@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { ALL_SCRAPERS } from '@/lib/scrapers';
 import { generatePromoSlug } from '@/lib/utils/promoSlug';
 import { detectCategoria, detectSalesChannel } from '@/lib/scrapers/bank-helpers';
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache';
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache';
 
 function normalizeStr(s: string): string {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -723,6 +725,8 @@ export async function POST(req: NextRequest) {
         await prisma.commerce.update({ where: { id: cid }, data: { activePromoCount: count } })
       }))
     }
+
+    if (processedCount > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache() }
 
     // Disparar notificaciones push para las promos nuevas (fire-and-forget)
     if (newPromoIds.length > 0) {

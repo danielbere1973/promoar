@@ -24,8 +24,18 @@ export default async function PromosPage({
     ? decodeURIComponent(cookieStore.get('userProvince')!.value)
     : null
 
+  // Mismo criterio que /api/promos (paginate = invitado sin filtros): permite que
+  // este preview SSR reutilice getPublicPromosPage (RFC-002/003), en vez de ir
+  // siempre directo a Prisma. isPublicCacheableView (lib/getPromos.ts) además
+  // exige !userProvince — con provincia seteada, cae solo al camino directo,
+  // igual que el fetch del cliente.
+  const noFilters = initialCats.length === 0
+  const paginate = !forMe && noFilters
+
   const { promos: rawPromos, totalCount } = await getPromosData(
-    { forMe, view: 'today', categorySlugs: initialCats, take: PREVIEW_TAKE, province: initialProvince },
+    paginate
+      ? { forMe, view: 'today', categorySlugs: initialCats, paginate: true, page: 1, pageSize: PREVIEW_TAKE, province: initialProvince }
+      : { forMe, view: 'today', categorySlugs: initialCats, take: PREVIEW_TAKE, province: initialProvince },
     session?.user?.email,
     isAdmin,
   ).catch(() => ({ promos: null, totalCount: 0 }))

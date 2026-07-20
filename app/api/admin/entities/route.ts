@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { invalidateEntitiesCache, invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
           order: data.order ?? 99,
         }
       })
+      invalidateCategoriesCache()
       return NextResponse.json(category)
     }
 
@@ -100,6 +102,7 @@ export async function POST(req: Request) {
           active: data.active ?? true,
         }
       })
+      invalidateEntitiesCache()
       return NextResponse.json(bank)
     }
 
@@ -112,6 +115,7 @@ export async function POST(req: Request) {
           active: data.active ?? true,
         }
       })
+      invalidateEntitiesCache()
       return NextResponse.json(wallet)
     }
 
@@ -122,6 +126,7 @@ export async function POST(req: Request) {
           slug: toSlug(data.name),
         }
       })
+      invalidateEntitiesCache()
       return NextResponse.json(network)
     }
 
@@ -159,6 +164,7 @@ export async function PUT(req: Request) {
           order: data.order != null ? Number(data.order) : undefined,
         }
       })
+      invalidateCategoriesCache()
       return NextResponse.json(category)
     }
 
@@ -183,6 +189,7 @@ export async function PUT(req: Request) {
         where: { id },
         data: updateData
       })
+      invalidateEntitiesCache()
       return NextResponse.json(bank)
     }
 
@@ -206,6 +213,7 @@ export async function PUT(req: Request) {
         where: { id },
         data: updateData
       })
+      invalidateEntitiesCache()
       return NextResponse.json(wallet)
     }
 
@@ -214,6 +222,7 @@ export async function PUT(req: Request) {
         where: { id },
         data: { name: data.name }
       })
+      invalidateEntitiesCache()
       return NextResponse.json(network)
     }
 
@@ -244,12 +253,16 @@ export async function DELETE(req: Request) {
 
     if (type === 'category') {
       await prisma.category.delete({ where: { id } })
+      invalidateCategoriesCache()
     } else if (type === 'bank') {
       await prisma.bank.delete({ where: { id } })
+      invalidateEntitiesCache()
     } else if (type === 'wallet') {
       await prisma.wallet.delete({ where: { id } })
+      invalidateEntitiesCache()
     } else if (type === 'cardNetwork') {
       await prisma.cardNetwork.delete({ where: { id } })
+      invalidateEntitiesCache()
     } else if (type === 'commerce') {
       await prisma.commerce.update({ where: { id }, data: { active: false } })
     } else {

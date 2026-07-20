@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
+import { ENTITIES_PUBLIC_TAG } from '@/lib/cache/filtersCache'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,8 +34,9 @@ function groupByPopularity<T extends { name: string }>(
   return [...pop, ...rest]
 }
 
-export async function GET() {
-  try {
+const getEntitiesCached = unstable_cache(
+  async () => {
+    console.log('[entities-cache] MISS — ejecutando queries reales')
     const [banks, wallets, cardNetworks, segments, currencies, accountTypes] = await Promise.all([
       prisma.bank.findMany({
         where: { active: true },
@@ -64,7 +67,16 @@ export async function GET() {
       prisma.financialAccountType.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     ])
 
-    return NextResponse.json({ banks, wallets, cardNetworks, segments, currencies, accountTypes })
+    return { banks, wallets, cardNetworks, segments, currencies, accountTypes }
+  },
+  ['public-entities'],
+  { revalidate: 600, tags: [ENTITIES_PUBLIC_TAG] },
+)
+
+export async function GET() {
+  try {
+    const result = await getEntitiesCached()
+    return NextResponse.json(result)
   } catch (error) {
     console.error('[GET /api/public/entities]', error)
     return NextResponse.json({ error: 'Error al obtener entidades' }, { status: 500 })

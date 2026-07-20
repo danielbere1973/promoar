@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 
 // Toggle isFeatured o bulk update category
 export async function PATCH(req: NextRequest) {
@@ -13,6 +15,8 @@ export async function PATCH(req: NextRequest) {
         where: { id: body.id },
         data: { isFeatured: body.isFeatured },
       })
+      invalidatePublicPromosCache()
+      invalidateCategoriesCache()
       return NextResponse.json({ ok: true, isFeatured: promo.isFeatured })
     }
 
@@ -38,6 +42,8 @@ export async function PATCH(req: NextRequest) {
       })
     }
 
+    invalidatePublicPromosCache()
+    invalidateCategoriesCache()
     return NextResponse.json({ updated: result.count })
   } catch (error) {
     console.error('[PATCH /api/admin/promos]', error)
