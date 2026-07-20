@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
     data: { status: 'EXPIRED' },
   })
 
-  if (result.count > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache() }
+  if (result.count > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
 
   return NextResponse.json({ expired: result.count })
 }

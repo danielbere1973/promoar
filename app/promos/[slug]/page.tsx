@@ -1,13 +1,40 @@
 import { notFound, redirect } from 'next/navigation'
+import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
 import { schemaOffer } from '@/lib/schema'
+import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 export const revalidate = 3600
+
+const getCachedPromoBySlug = unstable_cache(
+  async (slug: string) => prisma.promo.findUnique({
+    where: { slug },
+    include: {
+      commerce: true,
+      category: true,
+      requirements: {
+        include: { bank: true, wallet: true, cardNetwork: true },
+        orderBy: { discountValue: 'desc' },
+      },
+    },
+  }),
+  ['promo-detail-by-slug'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+)
+
+const getCachedCommerceBranchesCount = unstable_cache(
+  async (commerceId: string) => prisma.commerceBranch.findMany({
+    where: { commerceId },
+    take: 1,
+  }),
+  ['promo-detail-commerce-branches'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+)
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -86,14 +113,7 @@ const CARD_NETWORK_LOGOS: Record<string, string> = {
 // ─── Metadata dinámica ────────────────────────────────────────────────────────
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const promo = await prisma.promo.findUnique({
-    where: { slug: params.slug },
-    include: {
-      commerce: true,
-      category: true,
-      requirements: { include: { bank: true, wallet: true, cardNetwork: true }, orderBy: { discountValue: 'desc' } },
-    },
-  })
+  const promo = await getCachedPromoBySlug(params.slug)
   if (!promo) return { title: 'Promociones bancarias en Argentina | PromoAR' }
   const bestReq = promo.requirements[0]
   const discount = bestReq ? discountLabel(bestReq) : ''
@@ -130,17 +150,13 @@ export async function generateStaticParams() {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function PromoDetailPage({ params }: { params: { slug: string } }) {
-  const promo = await prisma.promo.findUnique({
-    where: { slug: params.slug },
-    include: {
-      commerce: true,
-      category: true,
-      requirements: {
-        include: { bank: true, wallet: true, cardNetwork: true },
-        orderBy: { discountValue: 'desc' },
-      },
-    },
-  })
+  const cachedPromo = await getCachedPromoBySlug(params.slug)
+  // unstable_cache serializa el resultado como JSON: Date vuelve como string, hay que recomponerlo
+  const promo = cachedPromo && {
+    ...cachedPromo,
+    validFrom: cachedPromo.validFrom ? new Date(cachedPromo.validFrom) : cachedPromo.validFrom,
+    validUntil: cachedPromo.validUntil ? new Date(cachedPromo.validUntil) : cachedPromo.validUntil,
+  }
 
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
 
@@ -227,10 +243,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
     )
   }
 
-  const branches = await prisma.commerceBranch.findMany({
-    where: { commerceId: promo.commerce.id },
-    take: 1,
-  })
+  const branches = await getCachedCommerceBranchesCount(promo.commerce.id)
 
   const specificDates: string[] = promo.specificDates ? JSON.parse(promo.specificDates) : []
   const reqs = promo.requirements
