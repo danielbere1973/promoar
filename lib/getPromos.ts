@@ -29,24 +29,66 @@ async function getActiveTotalCount(): Promise<number> {
 // esos casos por construcción; esta función no acepta esos parámetros en su
 // firma para que sea imposible colarlos por error.
 //
+// Cache del count total de promos activas Y válidas hoy (por dayBit) — mismo criterio
+// que getActiveTotalCount pero acotado al bitmask del día, recalculado cada 5 minutos.
+// Sin esto, el totalCount que ve el invitado en view=today incluiría promos de otros días.
+const cachedTodayCountByBit = new Map<number, { count: number; at: number }>()
+async function getActiveTodayCount(dayBit: number): Promise<number> {
+  const cached = cachedTodayCountByBit.get(dayBit)
+  if (cached && Date.now() - cached.at < 5 * 60 * 1000) return cached.count
+  const count = await prisma.$queryRaw<{ count: bigint }[]>`
+    SELECT count(*)::bigint as count FROM "promos"
+    WHERE status = 'ACTIVE'
+      AND "validFrom" <= now()
+      AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
+      AND ("validDays" & ${dayBit}) != 0
+  `.then(rows => Number(rows[0]?.count ?? 0))
+  cachedTodayCountByBit.set(dayBit, { count, at: Date.now() })
+  return count
+}
+
 // TTL de 10 minutos como red de seguridad (por si una invalidación por evento
 // falla en algún punto de escritura) + revalidateTag('promos-public') disparado
 // desde cada mutación real (scraper, admin CRUD, auto-validate, cron de
 // expiración) — ver lib/cache/promosCache.ts.
+//
+// El filtro de día (dayBit) se aplica en el WHERE de la query SQL, ANTES del
+// take/skip — filtrarlo en JS después de paginar (como se hacía antes) recorta
+// primero por mayor descuento y recién después por día, dejando fuera a la
+// enorme mayoría de promos válidas hoy que no entraron en esa página truncada
+// (bug: invitado veía ~37 promos en vez de miles). dayBit forma parte de la
+// clave de cache — sin esto, el resultado de hoy quedaría sirviéndose mañana
+// hasta vencer el TTL.
 const getPublicPromosPage = unstable_cache(
-  async (page: number, pageSize: number, view: string) => {
-    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view})`)
+  async (page: number, pageSize: number, view: string, dayBit: number) => {
+    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view} dayBit=${dayBit})`)
 
     const today = new Date()
     const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
 
-    const where = {
+    const where: any = {
       status: 'ACTIVE' as const,
       validFrom: { lte: today },
       OR: [
         { validUntil: null },
         { validUntil: { gte: startOfToday } },
       ],
+    }
+
+    // view === 'week' no filtra por día — se mantiene el universo completo de activas.
+    if (view !== 'week') {
+      // Prisma no soporta operadores bitwise en `where` sobre un Int — se resuelve
+      // el set de IDs candidatos con SQL crudo y luego se hace el findMany real
+      // con el `include` completo vía `id: { in }`, para no perder el shape de datos.
+      const idRows = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "promos"
+        WHERE status = 'ACTIVE'
+          AND "validFrom" <= now()
+          AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
+          AND ("validDays" & ${dayBit}) != 0
+      `
+      const matchingIds = idRows.map(r => r.id)
+      where.id = { in: matchingIds }
     }
 
     const [promos, totalCount] = await Promise.all([
@@ -80,7 +122,7 @@ const getPublicPromosPage = unstable_cache(
         take: pageSize,
         skip: (page - 1) * pageSize,
       }),
-      getActiveTotalCount(),
+      view === 'week' ? getActiveTotalCount() : getActiveTodayCount(dayBit),
     ])
 
     return [promos, totalCount] as const
@@ -293,7 +335,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   const isPublicCacheableView = paginate && !userProvince
 
   const [promos, totalCount] = isPublicCacheableView
-    ? await getPublicPromosPage(page, pageSize, view ?? 'today')
+    ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit)
     : await Promise.all([
         prisma.promo.findMany({
           where,
