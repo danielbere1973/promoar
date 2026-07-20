@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 
 async function isAdmin() {
   const session = await getServerSession()
@@ -61,5 +62,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   invalidatePublicPromosCache()
+  invalidateCategoriesCache()
   return NextResponse.json({ ok: true, count: ids.length })
 }

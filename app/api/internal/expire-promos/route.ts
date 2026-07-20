@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
     data: { status: 'EXPIRED' },
   })
 
-  if (result.count > 0) invalidatePublicPromosCache()
+  if (result.count > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache() }
 
   return NextResponse.json({ expired: result.count })
 }
