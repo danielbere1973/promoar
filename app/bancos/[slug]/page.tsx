@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
+import { unstable_cache } from 'next/cache'
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
+import { BANK_DETAIL_TAG } from '@/lib/cache/detailCache'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 const PAGE_SIZE = 200
@@ -23,13 +25,23 @@ function discountBadge(req: { discountType: string; discountValue: number | null
 
 type EntityInfo = { id: string; name: string; slug: string; logoUrl: string | null; type: 'bank' | 'wallet' }
 
-async function getEntity(slug: string): Promise<EntityInfo | null> {
-  const bank = await prisma.bank.findUnique({ where: { slug }, select: { id: true, name: true, slug: true, logoUrl: true } })
-  if (bank) return { ...bank, type: 'bank' }
-  const wallet = await prisma.wallet.findUnique({ where: { slug }, select: { id: true, name: true, slug: true, logoUrl: true } })
-  if (wallet) return { ...wallet, type: 'wallet' }
-  return null
-}
+const getCachedEntity = unstable_cache(
+  async (slug: string): Promise<EntityInfo | null> => {
+    const bank = await prisma.bank.findUnique({ where: { slug }, select: { id: true, name: true, slug: true, logoUrl: true } })
+    if (bank) return { ...bank, type: 'bank' }
+    const wallet = await prisma.wallet.findUnique({ where: { slug }, select: { id: true, name: true, slug: true, logoUrl: true } })
+    if (wallet) return { ...wallet, type: 'wallet' }
+    return null
+  },
+  ['bank-detail-entity-by-slug'],
+  { tags: [BANK_DETAIL_TAG], revalidate: 3600 },
+)
+
+const getCachedPromos = unstable_cache(
+  async (entityId: string, entityType: 'bank' | 'wallet', page: number) => getPromos({ id: entityId, type: entityType } as EntityInfo, page),
+  ['bank-detail-promos'],
+  { tags: [BANK_DETAIL_TAG], revalidate: 3600 },
+)
 
 async function getPromos(entity: EntityInfo, page: number) {
   const where = entity.type === 'bank'
@@ -71,7 +83,7 @@ async function getPromos(entity: EntityInfo, page: number) {
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const entity = await getEntity(params.slug)
+  const entity = await getCachedEntity(params.slug)
   if (!entity) return { title: 'Banco no encontrado — PromoAR' }
 
   const title = `Promos ${entity.name} hoy — Descuentos y reintegros | PromoAR`
@@ -101,11 +113,11 @@ export async function generateStaticParams() {
 }
 
 export default async function BancoPage({ params, searchParams }: { params: { slug: string }, searchParams: { page?: string } }) {
-  const entity = await getEntity(params.slug)
+  const entity = await getCachedEntity(params.slug)
   if (!entity) notFound()
 
   const page = Math.max(1, parseInt(searchParams.page ?? '1') || 1)
-  const { promos, total, totalPages } = await getPromos(entity, page)
+  const { promos, total, totalPages } = await getCachedPromos(entity.id, entity.type, page)
 
   // Agrupar por categoría
   const byCategory = new Map<string, { name: string; icon: string; color: string; promos: typeof promos }>()

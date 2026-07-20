@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
 
 async function isAdmin() {
   const session = await getServerSession()
@@ -113,6 +114,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     invalidatePublicPromosCache()
     invalidateCategoriesCache()
+    invalidatePromoDetailCache()
+    invalidateCommerceDetailCache()
     return NextResponse.json({ promo: final })
   }
 
@@ -128,10 +131,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     invalidatePublicPromosCache()
     invalidateCategoriesCache()
+    invalidatePromoDetailCache()
+    invalidateCommerceDetailCache()
     return NextResponse.json({ promo: final })
   }
 
   invalidatePublicPromosCache()
   invalidateCategoriesCache()
+  invalidatePromoDetailCache()
+  invalidateCommerceDetailCache()
   return NextResponse.json({ promo: updated })
 }

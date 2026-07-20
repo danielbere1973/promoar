@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { invalidateEntitiesCache, invalidateCategoriesCache } from '@/lib/cache/filtersCache'
+import { invalidateBankDetailCache } from '@/lib/cache/detailCache'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,6 +104,7 @@ export async function POST(req: Request) {
         }
       })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
       return NextResponse.json(bank)
     }
 
@@ -116,6 +118,7 @@ export async function POST(req: Request) {
         }
       })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
       return NextResponse.json(wallet)
     }
 
@@ -127,6 +130,7 @@ export async function POST(req: Request) {
         }
       })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
       return NextResponse.json(network)
     }
 
@@ -190,6 +194,7 @@ export async function PUT(req: Request) {
         data: updateData
       })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
       return NextResponse.json(bank)
     }
 
@@ -214,6 +219,7 @@ export async function PUT(req: Request) {
         data: updateData
       })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
       return NextResponse.json(wallet)
     }
 
@@ -223,6 +229,7 @@ export async function PUT(req: Request) {
         data: { name: data.name }
       })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
       return NextResponse.json(network)
     }
 
@@ -257,12 +264,15 @@ export async function DELETE(req: Request) {
     } else if (type === 'bank') {
       await prisma.bank.delete({ where: { id } })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
     } else if (type === 'wallet') {
       await prisma.wallet.delete({ where: { id } })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
     } else if (type === 'cardNetwork') {
       await prisma.cardNetwork.delete({ where: { id } })
       invalidateEntitiesCache()
+      invalidateBankDetailCache()
     } else if (type === 'commerce') {
       await prisma.commerce.update({ where: { id }, data: { active: false } })
     } else {

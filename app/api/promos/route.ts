@@ -6,6 +6,7 @@ import { getToken } from 'next-auth/jwt'
 import { getPromosData, PromoQueryParams } from '@/lib/getPromos'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
 
 export async function GET(req: NextRequest) {
   try {
@@ -148,6 +149,8 @@ export async function POST(req: NextRequest) {
 
     invalidatePublicPromosCache()
     invalidateCategoriesCache()
+    invalidatePromoDetailCache()
+    invalidateCommerceDetailCache()
     return NextResponse.json({ promo }, { status: 201 })
   } catch (error) {
     console.error('[POST /api/promos]', error)

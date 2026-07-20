@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
 
 // Toggle isFeatured o bulk update category
 export async function PATCH(req: NextRequest) {
@@ -17,6 +18,8 @@ export async function PATCH(req: NextRequest) {
       })
       invalidatePublicPromosCache()
       invalidateCategoriesCache()
+      invalidatePromoDetailCache()
+      invalidateCommerceDetailCache()
       return NextResponse.json({ ok: true, isFeatured: promo.isFeatured })
     }
 
@@ -44,6 +47,8 @@ export async function PATCH(req: NextRequest) {
 
     invalidatePublicPromosCache()
     invalidateCategoriesCache()
+    invalidatePromoDetailCache()
+    invalidateCommerceDetailCache()
     return NextResponse.json({ updated: result.count })
   } catch (error) {
     console.error('[PATCH /api/admin/promos]', error)

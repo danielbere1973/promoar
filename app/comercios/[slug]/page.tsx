@@ -1,12 +1,49 @@
 import { notFound } from 'next/navigation'
+import { unstable_cache } from 'next/cache'
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
+import { COMMERCE_DETAIL_TAG } from '@/lib/cache/detailCache'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 export const revalidate = 3600
+
+const getCachedCommerceBySlug = unstable_cache(
+  async (slug: string) => prisma.commerce.findUnique({
+    where: { slug },
+    include: {
+      defaultCategory: true,
+      _count: { select: { branches: true } },
+    },
+  }).catch(() => null),
+  ['commerce-detail-by-slug'],
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: 3600 },
+)
+
+const getCachedCommercePromos = unstable_cache(
+  async (commerceId: string) => {
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+    return prisma.promo.findMany({
+      where: {
+        commerceId,
+        status: 'ACTIVE',
+        OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+      },
+      include: {
+        category: { select: { name: true, icon: true, color: true } },
+        requirements: {
+          include: { bank: { select: { name: true, logoUrl: true } }, wallet: { select: { name: true, logoUrl: true } } },
+          orderBy: { discountValue: 'desc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  },
+  ['commerce-detail-promos'],
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: 3600 },
+)
 
 const DAYS_LABELS: Record<number, string> = {
   127: 'Todos los días',
@@ -34,10 +71,7 @@ function discountLabel(req: { discountType: string; discountValue: number | null
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const commerce = await prisma.commerce.findUnique({
-    where: { slug: params.slug },
-    include: { defaultCategory: true },
-  }).catch(() => null)
+  const commerce = await getCachedCommerceBySlug(params.slug)
   if (!commerce) return { title: 'Comercio no encontrado — PromoAR' }
 
   const title = `Promos y descuentos en ${commerce.name} | PromoAR`
@@ -67,32 +101,11 @@ export async function generateStaticParams() {
 }
 
 export default async function CommercePage({ params }: { params: { slug: string } }) {
-  const commerce = await prisma.commerce.findUnique({
-    where: { slug: params.slug },
-    include: {
-      defaultCategory: true,
-      _count: { select: { branches: true } },
-    },
-  }).catch(() => null)
+  const commerce = await getCachedCommerceBySlug(params.slug)
 
   if (!commerce || !commerce.active) notFound()
 
-  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-  const promos = await prisma.promo.findMany({
-    where: {
-      commerceId: commerce.id,
-      status: 'ACTIVE',
-      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
-    },
-    include: {
-      category: { select: { name: true, icon: true, color: true } },
-      requirements: {
-        include: { bank: { select: { name: true, logoUrl: true } }, wallet: { select: { name: true, logoUrl: true } } },
-        orderBy: { discountValue: 'desc' },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const promos = await getCachedCommercePromos(commerce.id)
 
   const bestPromo = promos[0]
   const bestReq = bestPromo?.requirements[0]

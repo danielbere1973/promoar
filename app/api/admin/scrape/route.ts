@@ -7,6 +7,7 @@ import { generatePromoSlug } from '@/lib/utils/promoSlug';
 import { detectCategoria, detectSalesChannel } from '@/lib/scrapers/bank-helpers';
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache';
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache';
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache';
 
 function normalizeStr(s: string): string {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -726,7 +727,7 @@ export async function POST(req: NextRequest) {
       }))
     }
 
-    if (processedCount > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache() }
+    if (processedCount > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
 
     // Disparar notificaciones push para las promos nuevas (fire-and-forget)
     if (newPromoIds.length > 0) {
