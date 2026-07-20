@@ -1,14 +1,15 @@
-name: RFC-004 Watch (ventana 48hs)
+name: RFC-004 Watch (Neon idle/suspend)
 
 on:
   schedule:
-    - cron: '13 */2 * * *'
+    - cron: '17 */4 * * *'
   workflow_dispatch:
 
 env:
   NEON_PROJECT: fancy-haze-35979318
   NEON_BRANCH: br-sweet-snow-am8mia6k
   DEPLOY_TS_UTC: '2026-07-20T17:27:59Z'
+  FIRST_CUT_HOURS: '6'
 
 jobs:
   check:
@@ -21,47 +22,72 @@ jobs:
           name: rfc004-last-snapshot
           path: /tmp/rfc004
 
-      - name: Consultar estado actual de Neon y comparar
+      - name: Consultar estado actual de Neon y comparar deltas
         id: check
         run: |
           set -e
           BRANCH_DATA=$(curl -s "https://console.neon.tech/api/v2/projects/${NEON_PROJECT}/branches/${NEON_BRANCH}" \
             -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}")
+          ENDPOINT_DATA=$(curl -s "https://console.neon.tech/api/v2/projects/${NEON_PROJECT}/endpoints" \
+            -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}")
 
-          ACTIVE_TIME=$(echo "$BRANCH_DATA" | node -e "process.stdin.once('data',d=>{try{console.log(JSON.parse(d).branch.active_time_seconds)}catch(e){console.log('ERROR')}})")
-          CPU_USED=$(echo "$BRANCH_DATA" | node -e "process.stdin.once('data',d=>{try{console.log(JSON.parse(d).branch.cpu_used_sec)}catch(e){console.log('ERROR')}})")
+          eval "$(node -e "
+            const b = JSON.parse(process.argv[1]).branch;
+            const e = (JSON.parse(process.argv[2]).endpoints || [])[0] || {};
+            console.log('ACTIVE_TIME=' + b.active_time_seconds);
+            console.log('CPU_USED=' + b.cpu_used_sec);
+            console.log('LAST_ACTIVE=' + e.last_active);
+            console.log('STARTED_AT=' + e.started_at);
+            console.log('CURRENT_STATE=' + e.current_state);
+          " "$BRANCH_DATA" "$ENDPOINT_DATA")"
 
-          if [ "$ACTIVE_TIME" = "ERROR" ]; then
-            echo "No se pudo leer la respuesta de Neon:"
-            echo "$BRANCH_DATA"
-            exit 1
-          fi
-
-          echo "active_time_seconds actual: $ACTIVE_TIME"
-          echo "cpu_used_sec actual: $CPU_USED"
+          NOW_EPOCH=$(date -u +%s)
+          echo "Snapshot actual — active_time_seconds=$ACTIVE_TIME cpu_used_sec=$CPU_USED started_at=$STARTED_AT current_state=$CURRENT_STATE last_active=$LAST_ACTIVE"
 
           mkdir -p /tmp/rfc004
           PREV_FILE=/tmp/rfc004/snapshot.json
+
           if [ -f "$PREV_FILE" ]; then
-            PREV_ACTIVE_TIME=$(node -e "console.log(require('$PREV_FILE').active_time_seconds)")
-            echo "active_time_seconds anterior: $PREV_ACTIVE_TIME"
-            if [ "$ACTIVE_TIME" != "$PREV_ACTIVE_TIME" ]; then
-              echo "::warning::Neon tuvo un evento de suspend/resume (active_time_seconds cambió de $PREV_ACTIVE_TIME a $ACTIVE_TIME) — revisar si el endpoint se suspendió y volvió a arrancar."
+            eval "$(node -e "
+              const p = require('$PREV_FILE');
+              console.log('PREV_ACTIVE_TIME=' + p.active_time_seconds);
+              console.log('PREV_CPU_USED=' + p.cpu_used_sec);
+              console.log('PREV_STARTED_AT=' + p.started_at);
+              console.log('PREV_TS_EPOCH=' + Math.floor(new Date(p.ts).getTime()/1000));
+            ")"
+
+            # started_at cambia SOLO si el compute se reinició (suspend -> resume)
+            if [ "$STARTED_AT" != "$PREV_STARTED_AT" ]; then
+              echo "::warning::SUSPEND/RESUME detectado — started_at cambió de $PREV_STARTED_AT a $STARTED_AT. El compute se reinició en algún momento desde la última corrida."
               echo "suspend_detected=true" >> "$GITHUB_OUTPUT"
+            fi
+
+            WALL_DELTA=$(( NOW_EPOCH - PREV_TS_EPOCH ))
+            ACTIVE_DELTA=$(( ACTIVE_TIME - PREV_ACTIVE_TIME ))
+            CPU_DELTA=$(( CPU_USED - PREV_CPU_USED ))
+            IDLE_DELTA=$(( WALL_DELTA - ACTIVE_DELTA ))
+
+            echo "Delta desde la corrida anterior: wall_clock=${WALL_DELTA}s active_time=${ACTIVE_DELTA}s cpu_used=${CPU_DELTA}s -> idle_estimado=${IDLE_DELTA}s"
+
+            if [ "$IDLE_DELTA" -gt 60 ]; then
+              echo "::notice::Hubo ~${IDLE_DELTA}s de idle/suspend entre corridas (active_time avanzó menos que el reloj) — señal positiva de que Neon está pudiendo bajar a idle."
+              echo "idle_window_seen=true" >> "$GITHUB_OUTPUT"
             fi
           else
             echo "Sin snapshot previo (primera corrida) — nada para comparar todavía."
           fi
 
-          node -e "require('fs').writeFileSync('$PREV_FILE', JSON.stringify({active_time_seconds: '$ACTIVE_TIME', cpu_used_sec: '$CPU_USED', ts: new Date().toISOString()}))"
+          node -e "require('fs').writeFileSync('$PREV_FILE', JSON.stringify({active_time_seconds: '$ACTIVE_TIME', cpu_used_sec: '$CPU_USED', started_at: '$STARTED_AT', current_state: '$CURRENT_STATE', last_active: '$LAST_ACTIVE', ts: new Date().toISOString()}))"
 
-          NOW_EPOCH=$(date -u +%s)
           DEPLOY_EPOCH=$(date -u -d "${DEPLOY_TS_UTC}" +%s)
           ELAPSED_H=$(( (NOW_EPOCH - DEPLOY_EPOCH) / 3600 ))
           echo "Horas transcurridas desde el deploy de RFC-004: $ELAPSED_H"
-          if [ "$ELAPSED_H" -ge 48 ]; then
-            echo "::warning::Ya pasaron $ELAPSED_H hs desde el deploy de RFC-004 (>=48hs) — la ventana de observación se completó, falta la decisión final sobre esta línea de trabajo."
-            echo "window_complete=true" >> "$GITHUB_OUTPUT"
+
+          if [ "$ELAPSED_H" -ge "$FIRST_CUT_HOURS" ] && [ "$ELAPSED_H" -lt "$((FIRST_CUT_HOURS + 4))" ]; then
+            if [ -z "$idle_window_seen" ]; then
+              echo "::warning::Corte de ${FIRST_CUT_HOURS}hs cumplido y todavía NO se vio ningún hueco de idle/suspend en Neon (last_active sigue avanzando sin pausas). Según el criterio del CPO, esto amerita revisar YA qué ruta/proceso sigue pegándole a la DB en vez de esperar pasivamente a las 48hs."
+              echo "no_idle_at_first_cut=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Guardar snapshot para la próxima corrida
@@ -72,7 +98,7 @@ jobs:
           retention-days: 3
 
       - name: Fallar el job si hay algo para revisar
-        if: steps.check.outputs.suspend_detected == 'true' || steps.check.outputs.window_complete == 'true'
+        if: steps.check.outputs.suspend_detected == 'true' || steps.check.outputs.no_idle_at_first_cut == 'true'
         run: |
-          echo "Ver el step anterior para el detalle (suspend/resume detectado y/o ventana de 48hs completada)."
+          echo "Ver el step anterior para el detalle."
           exit 1
