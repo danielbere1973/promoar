@@ -76,16 +76,27 @@ const getPublicPromosPage = unstable_cache(
     }
 
     // view === 'week' no filtra por día — se mantiene el universo completo de activas.
-    if (view !== 'week') {
+    const dayFiltered = view !== 'week'
+    if (dayFiltered) {
       // Prisma no soporta operadores bitwise en `where` sobre un Int — se resuelve
       // el set de IDs candidatos con SQL crudo y luego se hace el findMany real
       // con el `include` completo vía `id: { in }`, para no perder el shape de datos.
+      // El ORDER BY/LIMIT/OFFSET va acá también (mismo criterio que el findMany de
+      // abajo): sin esto, esta query traía TODOS los IDs activos que matchean el día
+      // (miles) para terminar usando sólo `pageSize` — generaba un `IN (...)` con
+      // miles de parámetros en cada visita de invitado, manteniendo el compute de
+      // Neon siempre activo (nunca llegaba a idle/suspend).
       const idRows = await prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM "promos"
         WHERE status = 'ACTIVE'
           AND "validFrom" <= now()
           AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
           AND ("validDays" & ${dayBit}) != 0
+        ORDER BY
+          "isCSIOnly" ASC,
+          "maxDiscountPct" DESC NULLS LAST,
+          id ASC
+        LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
       `
       const matchingIds = idRows.map(r => r.id)
       where.id = { in: matchingIds }
@@ -119,8 +130,11 @@ const getPublicPromosPage = unstable_cache(
           { maxDiscountPct: { sort: 'desc', nulls: 'last' } },
           { id: 'asc' },
         ],
-        take: pageSize,
-        skip: (page - 1) * pageSize,
+        // Si dayFiltered, el where.id ya viene acotado a la página exacta
+        // (LIMIT/OFFSET aplicado en la query cruda de arriba) — aplicar skip
+        // de nuevo acá saltearía sobre un set que ya es la página, dando 0 filas.
+        take: dayFiltered ? undefined : pageSize,
+        skip: dayFiltered ? undefined : (page - 1) * pageSize,
       }),
       view === 'week' ? getActiveTotalCount() : getActiveTodayCount(dayBit),
     ])
