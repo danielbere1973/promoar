@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
+import { invalidateSiteConfigCache } from '@/lib/cache/filtersCache'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,5 +28,6 @@ export async function POST(req: NextRequest) {
       create: { key, value },
     })
   }
+  invalidateSiteConfigCache()
   return NextResponse.json({ ok: true })
 }
