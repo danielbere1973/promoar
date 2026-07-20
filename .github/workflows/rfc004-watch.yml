@@ -1,0 +1,78 @@
+name: RFC-004 Watch (ventana 48hs)
+
+on:
+  schedule:
+    - cron: '13 */2 * * *'
+  workflow_dispatch:
+
+env:
+  NEON_PROJECT: fancy-haze-35979318
+  NEON_BRANCH: br-sweet-snow-am8mia6k
+  DEPLOY_TS_UTC: '2026-07-20T17:27:59Z'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar snapshot anterior
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: rfc004-last-snapshot
+          path: /tmp/rfc004
+
+      - name: Consultar estado actual de Neon y comparar
+        id: check
+        run: |
+          set -e
+          BRANCH_DATA=$(curl -s "https://console.neon.tech/api/v2/projects/${NEON_PROJECT}/branches/${NEON_BRANCH}" \
+            -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}")
+
+          ACTIVE_TIME=$(echo "$BRANCH_DATA" | node -e "process.stdin.once('data',d=>{try{console.log(JSON.parse(d).branch.active_time_seconds)}catch(e){console.log('ERROR')}})")
+          CPU_USED=$(echo "$BRANCH_DATA" | node -e "process.stdin.once('data',d=>{try{console.log(JSON.parse(d).branch.cpu_used_sec)}catch(e){console.log('ERROR')}})")
+
+          if [ "$ACTIVE_TIME" = "ERROR" ]; then
+            echo "No se pudo leer la respuesta de Neon:"
+            echo "$BRANCH_DATA"
+            exit 1
+          fi
+
+          echo "active_time_seconds actual: $ACTIVE_TIME"
+          echo "cpu_used_sec actual: $CPU_USED"
+
+          mkdir -p /tmp/rfc004
+          PREV_FILE=/tmp/rfc004/snapshot.json
+          if [ -f "$PREV_FILE" ]; then
+            PREV_ACTIVE_TIME=$(node -e "console.log(require('$PREV_FILE').active_time_seconds)")
+            echo "active_time_seconds anterior: $PREV_ACTIVE_TIME"
+            if [ "$ACTIVE_TIME" != "$PREV_ACTIVE_TIME" ]; then
+              echo "::warning::Neon tuvo un evento de suspend/resume (active_time_seconds cambió de $PREV_ACTIVE_TIME a $ACTIVE_TIME) — revisar si el endpoint se suspendió y volvió a arrancar."
+              echo "suspend_detected=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Sin snapshot previo (primera corrida) — nada para comparar todavía."
+          fi
+
+          node -e "require('fs').writeFileSync('$PREV_FILE', JSON.stringify({active_time_seconds: '$ACTIVE_TIME', cpu_used_sec: '$CPU_USED', ts: new Date().toISOString()}))"
+
+          NOW_EPOCH=$(date -u +%s)
+          DEPLOY_EPOCH=$(date -u -d "${DEPLOY_TS_UTC}" +%s)
+          ELAPSED_H=$(( (NOW_EPOCH - DEPLOY_EPOCH) / 3600 ))
+          echo "Horas transcurridas desde el deploy de RFC-004: $ELAPSED_H"
+          if [ "$ELAPSED_H" -ge 48 ]; then
+            echo "::warning::Ya pasaron $ELAPSED_H hs desde el deploy de RFC-004 (>=48hs) — la ventana de observación se completó, falta la decisión final sobre esta línea de trabajo."
+            echo "window_complete=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Guardar snapshot para la próxima corrida
+        uses: actions/upload-artifact@v4
+        with:
+          name: rfc004-last-snapshot
+          path: /tmp/rfc004/snapshot.json
+          retention-days: 3
+
+      - name: Fallar el job si hay algo para revisar
+        if: steps.check.outputs.suspend_detected == 'true' || steps.check.outputs.window_complete == 'true'
+        run: |
+          echo "Ver el step anterior para el detalle (suspend/resume detectado y/o ventana de 48hs completada)."
+          exit 1
