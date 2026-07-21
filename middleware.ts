@@ -47,7 +47,10 @@ const ADMIN_PATHS = ['/admin', '/api/admin']
 
 // Crawlers de buscadores que sí queremos indexando el sitio (SEO), a diferir del
 // resto de tráfico extranjero — estos no deben bloquearse pese a no ser de Argentina.
-const ALLOWED_BOT_UA = /googlebot|bingbot|yandexbot|duckduckbot|applebot/i
+// Bing/Yandex/DuckDuckGo se sacaron el 21/7/2026: aportan tráfico marginal en Argentina
+// pero sus crawlers (IPs Microsoft/Azure datacenter) despertaban Neon en cada hit a
+// /promos/[slug] y /comercios/[slug] con UA que el rate-limit clasificaba como humano.
+const ALLOWED_BOT_UA = /googlebot|applebot/i
 
 // ── INSTRUMENTACIÓN TEMPORAL RFC-003 (18-19/7/2026) ──────────────────────────
 // Objetivo: medir distribución real de tráfico por ruta pública SSR antes de decidir
