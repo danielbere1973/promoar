@@ -69,8 +69,11 @@ jobs:
 
             echo "Delta desde la corrida anterior: wall_clock=${WALL_DELTA}s active_time=${ACTIVE_DELTA}s cpu_used=${CPU_DELTA}s -> idle_estimado=${IDLE_DELTA}s"
 
-            if [ "$IDLE_DELTA" -gt 60 ]; then
-              echo "::notice::Hubo ~${IDLE_DELTA}s de idle/suspend entre corridas (active_time avanzó menos que el reloj) — señal positiva de que Neon está pudiendo bajar a idle."
+            # Un resume real (started_at cambió) ya ES evidencia de idle, aunque el
+            # delta de active_time salga negativo/ruidoso por el propio reset de
+            # contadores en el restart — no lo pisamos, solo lo complementamos.
+            if [ "$IDLE_DELTA" -gt 60 ] || [ "$STARTED_AT" != "$PREV_STARTED_AT" ]; then
+              echo "::notice::Hubo idle/suspend entre corridas — señal positiva de que Neon está pudiendo bajar a idle."
               echo "idle_window_seen=true" >> "$GITHUB_OUTPUT"
             fi
           else
@@ -83,8 +86,17 @@ jobs:
           ELAPSED_H=$(( (NOW_EPOCH - DEPLOY_EPOCH) / 3600 ))
           echo "Horas transcurridas desde el deploy de RFC-004: $ELAPSED_H"
 
+          # idle_window_seen es un output de ESTE mismo step (GITHUB_OUTPUT), no una
+          # variable de shell — no se puede leer de vuelta en el mismo `run`. Se
+          # guarda en un archivo aparte para poder chequearlo acá abajo sin depender
+          # de otro step.
+          IDLE_SEEN_FLAG=/tmp/rfc004/idle_seen_this_run
+          if [ "$IDLE_DELTA" -gt 60 ] 2>/dev/null || [ "$STARTED_AT" != "$PREV_STARTED_AT" ]; then
+            touch "$IDLE_SEEN_FLAG" 2>/dev/null || true
+          fi
+
           if [ "$ELAPSED_H" -ge "$FIRST_CUT_HOURS" ] && [ "$ELAPSED_H" -lt "$((FIRST_CUT_HOURS + 4))" ]; then
-            if [ -z "$idle_window_seen" ]; then
+            if [ ! -f "$IDLE_SEEN_FLAG" ]; then
               echo "::warning::Corte de ${FIRST_CUT_HOURS}hs cumplido y todavía NO se vio ningún hueco de idle/suspend en Neon (last_active sigue avanzando sin pausas). Según el criterio del CPO, esto amerita revisar YA qué ruta/proceso sigue pegándole a la DB en vez de esperar pasivamente a las 48hs."
               echo "no_idle_at_first_cut=true" >> "$GITHUB_OUTPUT"
             fi
