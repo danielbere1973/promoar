@@ -159,8 +159,10 @@ function normalizeProvince(s: string): string {
   return n
 }
 
-// Por encima de esta cantidad de provincias distintas con sucursales, se considera
-// que el comercio tiene cobertura nacional y no se filtra por ubicación.
+// Compatibilidad temporal (ADR-001): para promos con geographicScope=UNKNOWN cuyo
+// comercio tampoco tiene locationModel clasificado, si tiene sucursales en 4+
+// provincias se considera cobertura nacional. Debe tender a desaparecer
+// a medida que se clasifiquen comercios y promos.
 const NATIONAL_COVERAGE_THRESHOLD = 4
 
 export interface PromoQueryParams {
@@ -363,6 +365,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
                 logoUrl: true,
                 instagramUrl: true,
                 activePromoCount: true,
+                locationModel: true,
                 ...(userProvince && !isAdmin ? { branches: { select: { province: true }, where: { province: { not: null } } } } : {}),
               },
             },
@@ -413,21 +416,54 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   })
 
 
-  // ── Filtro geográfico: comercios regionales sin sucursales en la provincia del usuario ──
-  // Solo aplica si conocemos la provincia del usuario (perfil o ?province=) y el comercio
-  // tiene sucursales con provincia cargada (CommerceBranch.province, ver punto 10 CLAUDE.md).
-  // Si no hay datos de sucursales, o si el comercio tiene presencia en muchas provincias
-  // (cadena nacional), no se filtra. Admins ven todo sin filtro geográfico.
+  // ── Filtro geográfico (ADR-001) ───────────────────────────────────────────────────────
+  // El filtro arranca por la promo (salesChannel + geographicScope), no por las sucursales.
+  // Admins ven todo sin filtro geográfico.
   if (userProvince && !isAdmin) {
     const userProvinceNorm = normalizeProvince(userProvince)
     filtered = filtered.filter(promo => {
+      const salesChannel   = (promo as any).salesChannel   ?? 'UNKNOWN'
+      const geographicScope = (promo as any).geographicScope ?? 'UNKNOWN'
+      const locationModel  = (promo as any).commerce?.locationModel ?? 'UNKNOWN'
+
+      // 1. Promos sin dependencia física → no evaluar proximidad
+      if (salesChannel === 'ONLINE') {
+        // Sin restricción territorial → siempre visible
+        if (geographicScope === 'NO_GEOGRAPHIC_RESTRICTION' || geographicScope === 'NATIONWIDE') return true
+        // Con restricción por provincia → respetar provinces[]
+        if (geographicScope === 'PROVINCES') {
+          const ps = (promo as any).provinces as string[]
+          if (!ps?.length) return true
+          return ps.some(p => normalizeProvince(p) === userProvinceNorm || ['todas', 'all'].includes(normalizeProvince(p)))
+        }
+        // UNKNOWN online → pass-through (safe default, sin badge de cercanía)
+        return true
+      }
+
+      // 2. Servicios móviles y sin ubicación fija → no filtrar por branches
+      if (locationModel === 'MOBILE_SERVICE' || locationModel === 'NO_FIXED_LOCATION') return true
+
+      // 3. Alcance nacional explícito → aplicabilidad territorial OK
+      //    (no implica cercanía — el badge "Cerca" lo maneja el cliente con branches reales)
+      if (geographicScope === 'NATIONWIDE') return true
+
+      // 4. Restricción por provincias explícita → respetar provinces[]
+      if (geographicScope === 'PROVINCES') {
+        const ps = (promo as any).provinces as string[]
+        if (!ps?.length) return true
+        return ps.some(p => normalizeProvince(p) === userProvinceNorm || ['todas', 'all'].includes(normalizeProvince(p)))
+      }
+
+      // 5. Basada en sucursales (BRANCHES) o UNKNOWN → evaluar branches en DB
       const branches = (promo as any).commerce?.branches as { province: string | null }[] | undefined
-      if (!branches?.length) return true
+      if (!branches?.length) return true  // sin datos = deuda de información, pass-through
 
-      const provinces = new Set(branches.map(b => normalizeProvince(b.province as string)))
-      if (provinces.size >= NATIONAL_COVERAGE_THRESHOLD) return true
+      const branchProvinces = new Set(branches.map(b => normalizeProvince(b.province as string)))
 
-      return provinces.has(userProvinceNorm)
+      // Compatibilidad temporal: comercio UNKNOWN con 4+ provincias → cobertura nacional inferida
+      if (locationModel === 'UNKNOWN' && branchProvinces.size >= NATIONAL_COVERAGE_THRESHOLD) return true
+
+      return branchProvinces.has(userProvinceNorm)
     })
   }
   // Ya no se necesita `branches` en la respuesta
