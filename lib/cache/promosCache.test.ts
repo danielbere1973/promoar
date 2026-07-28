@@ -16,9 +16,14 @@ const promoFindMany = vi.fn().mockResolvedValue([])
 const promoCount = vi.fn().mockResolvedValue(0)
 const userFindUnique = vi.fn().mockResolvedValue(null)
 const bankSegmentFindMany = vi.fn().mockResolvedValue([])
+// getPublicPromosPage (rama cacheable) resuelve IDs candidatos con $queryRaw
+// crudo antes del findMany real — ver comentario en getPromos.ts sobre por qué
+// el LIMIT/OFFSET tiene que vivir ahí. Mock por defecto: sin IDs candidatos.
+const queryRaw = vi.fn().mockResolvedValue([])
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
+    $queryRaw: (...args: any[]) => queryRaw(...args),
     promo: {
       findMany: (...args: any[]) => promoFindMany(...args),
       count: (...args: any[]) => promoCount(...args),
@@ -44,6 +49,7 @@ beforeEach(() => {
   promoFindMany.mockClear().mockResolvedValue([])
   promoCount.mockClear().mockResolvedValue(0)
   userFindUnique.mockClear().mockResolvedValue(null)
+  queryRaw.mockClear().mockResolvedValue([])
 })
 
 describe('RFC-002 Fase 1 — invalidatePublicPromosCache', () => {
@@ -73,21 +79,29 @@ describe('RFC-002 Fase 1 — rama cacheable de getPromosData', () => {
     expect(callArgs).not.toHaveProperty('isAdmin')
   })
 
-  it('invitado con provincia (paginate=true pero userProvince presente) NO usa la caché pública', async () => {
+  it('invitado con provincia (paginate=true, sin guest profile) SÍ usa la caché pública — provincia va en la clave de cache', async () => {
+    // Ampliación post-PR#8 + ADR-001: un invitado con `?province=X` sigue siendo
+    // un visitante sin perfil real — no hay motivo para sacarlo del path cacheado.
+    // El filtro grueso por provincia se resuelve en SQL crudo dentro de
+    // getPublicPromosPage (antes del LIMIT/OFFSET); el filtro fino ADR-001
+    // (branches) se aplica después, afuera, sobre el resultado ya cacheado —
+    // por eso acá el include SÍ pide `branches` (a diferencia del caso sin
+    // provincia), pero sigue siendo la rama cacheada, no la personalizada.
     await getPromosData(
-      { paginate: true, page: 1, pageSize: 500, province: 'Buenos Aires' } as any,
+      { paginate: true, page: 1, pageSize: 500, province: 'Buenos Aires', view: 'today' } as any,
       null,
       false,
     )
 
-    // Rama no-cacheada: pide también el count vía prisma.promo.count en lugar
-    // de compartir el count cacheado de getActiveTotalCount (paginate directo
-    // usa getActiveTotalCount igual, pero el punto clave es que el include
-    // trae `branches` para filtrar por provincia — señal inequívoca de que
-    // pasó por la rama personalizada, no por getPublicPromosPage).
     expect(promoFindMany).toHaveBeenCalledTimes(1)
     const callArgs = promoFindMany.mock.calls[0][0]
     expect(callArgs.include.commerce.select).toHaveProperty('branches')
+    // Señal de que pasó por la rama cacheada (getPublicPromosPage): resolvió
+    // los IDs candidatos con $queryRaw crudo antes del findMany.
+    expect(queryRaw).toHaveBeenCalled()
+    const sql = queryRaw.mock.calls[0][0].join('')
+    expect(sql).toMatch(/LIMIT/)
+    expect(sql).toMatch(/OFFSET/)
   })
 
   it('usuario con email (forMe) nunca es cacheable aunque no mande filtros', async () => {
