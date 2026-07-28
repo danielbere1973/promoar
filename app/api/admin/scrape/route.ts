@@ -29,7 +29,12 @@ const CENCOSUD_GENERIC_NAMES = new Set([
 
 // Palabras gen\u00e9ricas que pueden preceder el nombre de un comercio sin ser parte de su identidad
 // (ej. "Supermercados Disco" \u2192 comercio "Disco"; pero "Morena Disco" \u2192 comercio distinto)
-const GENERIC_PREFIXES = new Set(['super', 'supermercado', 'supermercados', 'hipermercado', 'hipermercados', 'farmacia', 'farmacias', 'tienda', 'tiendas', 'mercado', 'mercados', 'local', 'locales'])
+// 'farmacia'/'farmacias' se sacó de esta lista el 22/7/2026: "FARMACIA MITRE" (comercio
+// real distinto) matcheaba al supermercado "MITRE" porque "farmacia" se trataba como
+// prefijo genérico intercambiable con "tienda"/"mercado". A diferencia de esos prefijos
+// (que describen el tipo de local sin aportar identidad), "farmacia" antepuesto a un
+// nombre propio forma parte de la identidad del comercio (rubro salud, no supermercado).
+const GENERIC_PREFIXES = new Set(['super', 'supermercado', 'supermercados', 'hipermercado', 'hipermercados', 'tienda', 'tiendas', 'mercado', 'mercados', 'local', 'locales'])
 
 function hasOnlyGenericPrefix(fullNorm: string, commerceNorm: string): boolean {
   const idx = fullNorm.indexOf(commerceNorm)

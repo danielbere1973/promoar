@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
 
     // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal.
     // `forMe=true` sin sesión ni guest_profile no filtra nada (no hay perfil real
-    // detrás, ver hasProfile en getPromosData) — no debe tirar del path paginado/cacheable
-    // por sí solo, solo cuenta como "con perfil" si viene acompañado de guest_profile.
+    // detrás, ver hasProfile en getPromosData) — no debe tirar del path cacheable
+    // por sí solo, solo cuenta como "con perfil" si viene acompañado de alguno.
     const hasFilters = !!(
       params.bankIds?.length || params.walletIds?.length || params.networkIds?.length ||
       params.categorySlugs?.length || params.categorySlug || params.channels?.length ||

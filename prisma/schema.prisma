@@ -346,6 +346,7 @@ model Commerce {
   active            Boolean          @default(true)
   defaultCategoryId String?
   activePromoCount  Int              @default(0)
+  locationModel     LocationModel    @default(UNKNOWN)
   defaultCategory   Category?        @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
   promos                   Promo[]
   branches                 CommerceBranch[]
@@ -433,7 +434,8 @@ model Promo {
   updatedAt          DateTime           @updatedAt
   sourceText         String?
   specificDates      String?
-  salesChannel       String?
+  salesChannel       SalesChannel       @default(UNKNOWN)
+  geographicScope    GeographicScope    @default(UNKNOWN)
   provinces          String[]           @default([])
   slug               String?            @unique
   userReports        PromoReport[]
@@ -802,6 +804,33 @@ enum NotifType {
   COMMERCE
   PROXIMITY
   DIGEST
+}
+
+// ADR-001 — Modelo de Cobertura Geográfica
+
+enum LocationModel {
+  PHYSICAL_BRANCHES    // cadena con locales propios
+  DISTRIBUTED_NETWORK  // red de adheridos, concesionarios o franquicias
+  ONLINE_ONLY          // sin presencia física
+  MOBILE_SERVICE       // el servicio va al cliente (Uber, Cabify, etc.)
+  NO_FIXED_LOCATION    // sin punto fijo, sin ser servicio móvil
+  UNKNOWN              // sin clasificar — default de compatibilidad
+}
+
+enum SalesChannel {
+  ONLINE
+  PHYSICAL
+  BOTH
+  UNKNOWN
+}
+
+enum GeographicScope {
+  NATIONWIDE                // aplica en todo el país
+  PROVINCES                 // aplica en provincias específicas (ver provinces[])
+  BRANCHES                  // aplica solo en sucursales participantes
+  SERVICE_AREA              // aplica según área operativa del servicio
+  NO_GEOGRAPHIC_RESTRICTION // online sin restricción territorial
+  UNKNOWN                   // sin datos suficientes — default de compatibilidad
 }
 
 model SiteConfig {

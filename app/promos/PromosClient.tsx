@@ -99,6 +99,8 @@ type Promo = {
   sourceText?: string | null
   sourceUrl?: string | null
   salesChannel?: string | null
+  coverageStatus?: 'NEARBY' | 'TERRITORIAL' | 'ONLINE' | 'UNKNOWN' | null
+  coverageLabel?: string | null
   commerceNote?: string | null
   category: { name: string; slug?: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null; instagramUrl?: string | null }
