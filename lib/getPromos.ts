@@ -21,13 +21,32 @@ async function getActiveTotalCount(): Promise<number> {
   return cachedTotalCount
 }
 
+// Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
+// contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
+// y alias comunes de CABA / Buenos Aires.
+function normalizeProvince(s: string): string {
+  const n = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  if (['caba', 'capital federal', 'ciudad de buenos aires', 'ciudad autonoma de buenos aires', 'ciudad autonoma de bs. as.', 'ciudad autonoma de bs as'].includes(n)) {
+    return 'caba'
+  }
+  if (['buenos aires', 'bs as', 'bs. as.', 'pba', 'provincia de buenos aires', 'gba', 'gran buenos aires'].includes(n)) {
+    return 'buenos aires'
+  }
+  return n
+}
+
+// Por encima de esta cantidad de provincias distintas con sucursales, se considera
+// que el comercio tiene cobertura nacional y no se filtra por ubicación.
+const NATIONAL_COVERAGE_THRESHOLD = 4
+
 // RFC-002 Fase 1 — caché exclusiva de la rama pública de invitado sin filtros
-// (sin forMe, sin email, sin filtros, sin provincia): misma respuesta para
-// todos los visitantes de esa combinación page/pageSize/view. NUNCA debe
-// recibir email/isAdmin/userProvince como argumento — el guard que decide
-// llamar a esta función (isPublicCacheableView en getPromosData) ya excluye
-// esos casos por construcción; esta función no acepta esos parámetros en su
-// firma para que sea imposible colarlos por error.
+// de banco/wallet/red/categoría/etc (sin email, sin filtros). `province` entra
+// como parte de la clave de cache: cada provincia distinta cachea su propia
+// página. `forMe=true` sin guest_profile (ver hasRealProfile en route.ts) no
+// filtra nada y puede pasar por acá igual que un invitado común — el guard que
+// decide llamar a esta función (isPublicCacheableView en getPromosData) ya
+// excluye email/isAdmin/perfil real por construcción; esta función no acepta
+// esos parámetros en su firma para que sea imposible colarlos por error.
 //
 // Cache del count total de promos activas Y válidas hoy (por dayBit) — mismo criterio
 // que getActiveTotalCount pero acotado al bitmask del día, recalculado cada 5 minutos.
@@ -60,8 +79,8 @@ async function getActiveTodayCount(dayBit: number): Promise<number> {
 // clave de cache — sin esto, el resultado de hoy quedaría sirviéndose mañana
 // hasta vencer el TTL.
 const getPublicPromosPage = unstable_cache(
-  async (page: number, pageSize: number, view: string, dayBit: number) => {
-    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view} dayBit=${dayBit})`)
+  async (page: number, pageSize: number, view: string, dayBit: number, province: string | null) => {
+    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view} dayBit=${dayBit} province=${province})`)
 
     const today = new Date()
     const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
@@ -75,6 +94,17 @@ const getPublicPromosPage = unstable_cache(
       ],
     }
 
+    if (province) {
+      where.AND = [
+        {
+          OR: [
+            { provinces: { hasSome: ['Todas', 'TODAS', province] } },
+            { provinces: { isEmpty: true } },
+          ],
+        },
+      ]
+    }
+
     // view === 'week' no filtra por día — se mantiene el universo completo de activas.
     const dayFiltered = view !== 'week'
     if (dayFiltered) {
@@ -86,12 +116,17 @@ const getPublicPromosPage = unstable_cache(
       // (miles) para terminar usando sólo `pageSize` — generaba un `IN (...)` con
       // miles de parámetros en cada visita de invitado, manteniendo el compute de
       // Neon siempre activo (nunca llegaba a idle/suspend).
+      // El filtro de provincia (promos.provinces[]) se replica acá en SQL crudo —
+      // si solo se aplicara en el where de Prisma más abajo, el LIMIT/OFFSET de
+      // esta query ya habría cortado la página por dayBit sin tener en cuenta
+      // provincia, devolviendo menos de pageSize filas de las que corresponden.
       const idRows = await prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM "promos"
         WHERE status = 'ACTIVE'
           AND "validFrom" <= now()
           AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
           AND ("validDays" & ${dayBit}) != 0
+          AND (${province}::text IS NULL OR cardinality(provinces) = 0 OR provinces && ARRAY[${province}::text, 'Todas', 'TODAS'])
         ORDER BY
           "isCSIOnly" ASC,
           "maxDiscountPct" DESC NULLS LAST,
@@ -115,6 +150,7 @@ const getPublicPromosPage = unstable_cache(
               logoUrl: true,
               instagramUrl: true,
               activePromoCount: true,
+              ...(province ? { branches: { select: { province: true }, where: { province: { not: null } } } } : {}),
             },
           },
           requirements: {
@@ -139,29 +175,30 @@ const getPublicPromosPage = unstable_cache(
       view === 'week' ? getActiveTotalCount() : getActiveTodayCount(dayBit),
     ])
 
-    return [promos, totalCount] as const
+    // Filtro geográfico por sucursales de comercio (ver mismo criterio no-cacheado
+    // más abajo en getPromosData): comercios regionales sin sucursal en la provincia
+    // del usuario quedan afuera, salvo que no tengan datos de sucursales o cubran
+    // NATIONAL_COVERAGE_THRESHOLD+ provincias (cadena nacional).
+    let finalPromos = promos
+    if (province) {
+      const provinceNorm = normalizeProvince(province)
+      finalPromos = promos.filter((promo: any) => {
+        const branches = promo.commerce?.branches as { province: string | null }[] | undefined
+        if (!branches?.length) return true
+        const provinceSet = new Set(branches.map(b => normalizeProvince(b.province as string)))
+        if (provinceSet.size >= NATIONAL_COVERAGE_THRESHOLD) return true
+        return provinceSet.has(provinceNorm)
+      })
+      for (const p of finalPromos as any[]) {
+        if (p.commerce) delete p.commerce.branches
+      }
+    }
+
+    return [finalPromos, totalCount] as const
   },
   ['public-promos-page'],
   { revalidate: 600, tags: [PROMOS_PUBLIC_TAG] }, // 600s = 10min TTL de seguridad
 )
-
-// Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
-// contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
-// y alias comunes de CABA / Buenos Aires.
-function normalizeProvince(s: string): string {
-  const n = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
-  if (['caba', 'capital federal', 'ciudad de buenos aires', 'ciudad autonoma de buenos aires', 'ciudad autonoma de bs. as.', 'ciudad autonoma de bs as'].includes(n)) {
-    return 'caba'
-  }
-  if (['buenos aires', 'bs as', 'bs. as.', 'pba', 'provincia de buenos aires', 'gba', 'gran buenos aires'].includes(n)) {
-    return 'buenos aires'
-  }
-  return n
-}
-
-// Por encima de esta cantidad de provincias distintas con sucursales, se considera
-// que el comercio tiene cobertura nacional y no se filtra por ubicación.
-const NATIONAL_COVERAGE_THRESHOLD = 4
 
 export interface PromoQueryParams {
   categorySlug?: string | null
@@ -342,14 +379,16 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       ]
     : undefined
 
-  // RFC-002 Fase 1: la rama pública (invitado, sin filtros, sin provincia) va por
-  // una función cacheada (10 min TTL + invalidación por tag). Cualquier otra
-  // combinación (con perfil, con filtros, o invitado CON provincia — que ya es
-  // una forma de personalización) sigue el camino directo a Prisma, sin cambios.
-  const isPublicCacheableView = paginate && !userProvince
+  // RFC-002 Fase 1: la rama pública (invitado, sin filtros) va por una función
+  // cacheada (10 min TTL + invalidación por tag). `province` es parte de la
+  // clave de cache (cada provincia cachea su propia página) — un invitado con
+  // `?province=X` sigue siendo un visitante sin perfil real, no hace falta
+  // sacarlo del cache por eso. Cualquier otra combinación (con perfil real,
+  // con filtros) sigue el camino directo a Prisma, sin cambios.
+  const isPublicCacheableView = paginate
 
   const [promos, totalCount] = isPublicCacheableView
-    ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit)
+    ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit, userProvince)
     : await Promise.all([
         prisma.promo.findMany({
           where,
