@@ -22,12 +22,15 @@ async function getActiveTotalCount(): Promise<number> {
 }
 
 // RFC-002 Fase 1 — caché exclusiva de la rama pública de invitado sin filtros
-// (sin forMe, sin email, sin filtros, sin provincia): misma respuesta para
-// todos los visitantes de esa combinación page/pageSize/view. NUNCA debe
-// recibir email/isAdmin/userProvince como argumento — el guard que decide
-// llamar a esta función (isPublicCacheableView en getPromosData) ya excluye
-// esos casos por construcción; esta función no acepta esos parámetros en su
-// firma para que sea imposible colarlos por error.
+// (sin email, sin filtros): misma respuesta para todos los visitantes de esa
+// combinación page/pageSize/view, sin importar provincia — el filtro
+// geográfico se aplica en JS sobre `commerce.branches` DESPUÉS de leer el
+// resultado cacheado (ver isPublicCacheableView en getPromosData), igual que
+// ya se hacía en la rama no cacheada. NUNCA debe recibir email/isAdmin como
+// argumento — el guard que decide llamar a esta función ya excluye usuarios
+// logueados y perfiles reales (forMe con email o guest_profile) por
+// construcción; esta función no acepta esos parámetros en su firma para que
+// sea imposible colarlos por error.
 //
 // Cache del count total de promos activas Y válidas hoy (por dayBit) — mismo criterio
 // que getActiveTotalCount pero acotado al bitmask del día, recalculado cada 5 minutos.
@@ -115,6 +118,12 @@ const getPublicPromosPage = unstable_cache(
               logoUrl: true,
               instagramUrl: true,
               activePromoCount: true,
+              locationModel: true,
+              // Necesario para que getPromosData pueda aplicar el filtro
+              // geográfico (ADR-001) en JS sobre este resultado cacheado,
+              // igual que hace con la rama no cacheada — sin esto, invitados
+              // con provincia perderían el filtro de cercanía al pasar por acá.
+              branches: { select: { province: true }, where: { province: { not: null } } },
             },
           },
           requirements: {
@@ -157,6 +166,38 @@ function normalizeProvince(s: string): string {
     return 'buenos aires'
   }
   return n
+}
+
+// Nombre presentable para el badge de cobertura territorial (Title Case, sin acentos perdidos
+// en los casos comunes). No cubre absolutamente todas las provincias con tildes correctas —
+// alcanza para el uso como texto de UI, no como clave de comparación (para eso está normalizeProvince).
+export function displayProvinceName(normalized: string): string {
+  if (normalized === 'caba') return 'CABA'
+  const specialCases: Record<string, string> = {
+    'buenos aires': 'Buenos Aires',
+    'cordoba': 'Córdoba',
+    'rio negro': 'Río Negro',
+    'entre rios': 'Entre Ríos',
+    'santa fe': 'Santa Fe',
+    'san luis': 'San Luis',
+    'san juan': 'San Juan',
+    'la pampa': 'La Pampa',
+    'la rioja': 'La Rioja',
+    'tierra del fuego': 'Tierra del Fuego',
+    'santiago del estero': 'Santiago del Estero',
+  }
+  return specialCases[normalized] ?? normalized.replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// Arma el texto de `coverageLabel` para TERRITORIAL a partir del alcance real (no siempre nacional):
+// 1 provincia → nombre puntual; 2-3 → listado corto; 4+ o "todas" → "Todo el país".
+export function describeProvinceScope(provinces: string[]): string {
+  const normalized = Array.from(new Set(provinces.map(normalizeProvince)))
+  if (normalized.some(p => ['todas', 'all'].includes(p)) || normalized.length >= NATIONAL_COVERAGE_THRESHOLD) {
+    return 'Todo el país'
+  }
+  if (normalized.length === 1) return displayProvinceName(normalized[0])
+  return normalized.map(displayProvinceName).join(', ')
 }
 
 // Compatibilidad temporal (ADR-001): para promos con geographicScope=UNKNOWN cuyo
@@ -344,11 +385,14 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       ]
     : undefined
 
-  // RFC-002 Fase 1: la rama pública (invitado, sin filtros, sin provincia) va por
-  // una función cacheada (10 min TTL + invalidación por tag). Cualquier otra
-  // combinación (con perfil, con filtros, o invitado CON provincia — que ya es
-  // una forma de personalización) sigue el camino directo a Prisma, sin cambios.
-  const isPublicCacheableView = paginate && !userProvince
+  // RFC-002 Fase 1 (+ ampliación): la rama pública (invitado sin filtros, CON o
+  // sin provincia, siempre que no haya perfil real detrás) va por una función
+  // cacheada (10 min TTL + invalidación por tag) — el filtro geográfico por
+  // provincia se aplica después en JS sobre `commerce.branches`, ya incluido en
+  // el resultado cacheado. `paginate` (route.ts) ya excluye forMe/email/filtros;
+  // acá solo hace falta excluir además el guest profile (perfil temporal sin
+  // cuenta) para no cachear una vista personalizada por error.
+  const isPublicCacheableView = paginate && !guestProfileParam
 
   const [promos, totalCount] = isPublicCacheableView
     ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit)
@@ -418,7 +462,19 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
 
   // ── Filtro geográfico (ADR-001) ───────────────────────────────────────────────────────
   // El filtro arranca por la promo (salesChannel + geographicScope), no por las sucursales.
-  // Admins ven todo sin filtro geográfico.
+  // Admins ven todo sin filtro geográfico (y no reciben coverageStatus: no los necesitan).
+  //
+  // De paso, se calcula `coverageStatus` — una clasificación liviana de 4 valores que la UI
+  // de Explorar usa para mostrar un badge, en vez de mandar el array de `branches` al cliente
+  // (más pesado) o re-implementar esta misma cascada de reglas en React:
+  //   'NEARBY'      → hay sucursal confirmada en la provincia del usuario
+  //   'TERRITORIAL' → cobertura provincial/regional/nacional explícita o inferida (4+ provincias)
+  //   'ONLINE'      → sin dependencia de ubicación física (online, servicio móvil, etc.)
+  //   'UNKNOWN'     → sin datos suficientes para clasificar (pass-through, no es un rechazo)
+  //
+  // `coverageLabel` acompaña a TERRITORIAL con el alcance real (no siempre es "todo el país" —
+  // puede ser una provincia puntual, varias, o inferido de branches) para que el badge de la UI
+  // nunca generalice de más (el mismo error conceptual que ADR-001 vino a resolver).
   if (userProvince && !isAdmin) {
     const userProvinceNorm = normalizeProvince(userProvince)
     filtered = filtered.filter(promo => {
@@ -429,44 +485,68 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       // 1. Promos sin dependencia física → no evaluar proximidad
       if (salesChannel === 'ONLINE') {
         // Sin restricción territorial → siempre visible
-        if (geographicScope === 'NO_GEOGRAPHIC_RESTRICTION' || geographicScope === 'NATIONWIDE') return true
+        if (geographicScope === 'NO_GEOGRAPHIC_RESTRICTION' || geographicScope === 'NATIONWIDE') {
+          ;(promo as any).coverageStatus = 'ONLINE'
+          return true
+        }
         // Con restricción por provincia → respetar provinces[]
         if (geographicScope === 'PROVINCES') {
           const ps = (promo as any).provinces as string[]
-          if (!ps?.length) return true
-          return ps.some(p => normalizeProvince(p) === userProvinceNorm || ['todas', 'all'].includes(normalizeProvince(p)))
+          if (!ps?.length) { ;(promo as any).coverageStatus = 'UNKNOWN'; return true }
+          const matches = ps.some(p => normalizeProvince(p) === userProvinceNorm || ['todas', 'all'].includes(normalizeProvince(p)))
+          if (matches) (promo as any).coverageStatus = 'ONLINE'
+          return matches
         }
         // UNKNOWN online → pass-through (safe default, sin badge de cercanía)
+        ;(promo as any).coverageStatus = 'ONLINE'
         return true
       }
 
       // 2. Servicios móviles y sin ubicación fija → no filtrar por branches
-      if (locationModel === 'MOBILE_SERVICE' || locationModel === 'NO_FIXED_LOCATION') return true
+      if (locationModel === 'MOBILE_SERVICE' || locationModel === 'NO_FIXED_LOCATION') {
+        ;(promo as any).coverageStatus = 'ONLINE'
+        return true
+      }
 
       // 3. Alcance nacional explícito → aplicabilidad territorial OK
-      //    (no implica cercanía — el badge "Cerca" lo maneja el cliente con branches reales)
-      if (geographicScope === 'NATIONWIDE') return true
+      //    (no implica cercanía — 'NEARBY' solo se asigna con sucursal real en la provincia)
+      if (geographicScope === 'NATIONWIDE') {
+        ;(promo as any).coverageStatus = 'TERRITORIAL'
+        ;(promo as any).coverageLabel = 'Todo el país'
+        return true
+      }
 
       // 4. Restricción por provincias explícita → respetar provinces[]
       if (geographicScope === 'PROVINCES') {
         const ps = (promo as any).provinces as string[]
-        if (!ps?.length) return true
-        return ps.some(p => normalizeProvince(p) === userProvinceNorm || ['todas', 'all'].includes(normalizeProvince(p)))
+        if (!ps?.length) { ;(promo as any).coverageStatus = 'UNKNOWN'; return true }
+        const matches = ps.some(p => normalizeProvince(p) === userProvinceNorm || ['todas', 'all'].includes(normalizeProvince(p)))
+        if (matches) {
+          (promo as any).coverageStatus = 'TERRITORIAL'
+          ;(promo as any).coverageLabel = describeProvinceScope(ps)
+        }
+        return matches
       }
 
       // 5. Basada en sucursales (BRANCHES) o UNKNOWN → evaluar branches en DB
       const branches = (promo as any).commerce?.branches as { province: string | null }[] | undefined
-      if (!branches?.length) return true  // sin datos = deuda de información, pass-through
+      if (!branches?.length) { ;(promo as any).coverageStatus = 'UNKNOWN'; return true }  // sin datos = deuda de información, pass-through
 
       const branchProvinces = new Set(branches.map(b => normalizeProvince(b.province as string)))
 
       // Compatibilidad temporal: comercio UNKNOWN con 4+ provincias → cobertura nacional inferida
-      if (locationModel === 'UNKNOWN' && branchProvinces.size >= NATIONAL_COVERAGE_THRESHOLD) return true
+      if (locationModel === 'UNKNOWN' && branchProvinces.size >= NATIONAL_COVERAGE_THRESHOLD) {
+        ;(promo as any).coverageStatus = 'TERRITORIAL'
+        ;(promo as any).coverageLabel = describeProvinceScope(Array.from(branchProvinces))
+        return true
+      }
 
-      return branchProvinces.has(userProvinceNorm)
+      const hasNearbyBranch = branchProvinces.has(userProvinceNorm)
+      if (hasNearbyBranch) (promo as any).coverageStatus = 'NEARBY'
+      return hasNearbyBranch
     })
   }
-  // Ya no se necesita `branches` en la respuesta
+  // Ya no se necesita `branches` en la respuesta — coverageStatus ya quedó calculado arriba.
   for (const p of filtered) {
     if ((p as any).commerce) delete (p as any).commerce.branches
   }

@@ -18,7 +18,9 @@ import { prisma } from '../lib/prisma'
 const SOURCE = 'COLORSHOP'
 
 // Variables para la persisted query: page 0-based, pageSize 500 trae todo de una vez.
-const VARIABLES = Buffer.from(JSON.stringify({ page: 0, pageSize: 500, sortBy: '', where: '' })).toString('base64')
+// VTEX espera este parámetro como JSON plano (URL-encoded), no en base64 — un intento
+// anterior con base64 devolvía 500 "Unexpected token ... is not valid JSON".
+const VARIABLES = JSON.stringify({ page: 0, pageSize: 500, sortBy: '', where: '' })
 
 const API_URL =
   'https://www.colorshop.com.ar/_v/public/graphql/v1' +
@@ -106,44 +108,45 @@ async function main() {
   let inserted = 0, updated = 0, skipped = 0, errors = 0
 
   if (!dryRun) {
-    await prisma.$transaction(async tx => {
-      for (const b of withCoords) {
-        const lat = parseFloat(b.location.lat)
-        const lng = parseFloat(b.location.lng)
-        const osmId = b.id  // ID propio de ColorShop como clave de idempotencia
+    // Cada upsert ya es atómico por sí solo — no envolver 298 llamadas en una única
+    // transacción, porque el timeout por default (5s) de Prisma corta la transacción
+    // completa a mitad de camino contra el pooler de Neon (mayor latencia por conexión).
+    for (const b of withCoords) {
+      const lat = parseFloat(b.location.lat)
+      const lng = parseFloat(b.location.lng)
+      const osmId = b.id  // ID propio de ColorShop como clave de idempotencia
 
-        try {
-          const result = await tx.commerceBranch.upsert({
-            where: { source_osmId: { source: SOURCE, osmId } },
-            update: {
-              name: b.name,
-              address: b.address,
-              city: b.city,
-              province: b.province,
-              lat,
-              lng,
-            },
-            create: {
-              commerceId: commerce.id,
-              source: SOURCE,
-              osmId,
-              name: b.name,
-              address: b.address,
-              city: b.city,
-              province: b.province,
-              lat,
-              lng,
-            },
-          })
-          // createdAt === updatedAt solo en el instante de creación
-          if (result.createdAt.getTime() === result.updatedAt.getTime()) inserted++
-          else updated++
-        } catch (e) {
-          console.error(`  Error en sucursal ${b.id} (${b.name}):`, e)
-          errors++
-        }
+      try {
+        const result = await prisma.commerceBranch.upsert({
+          where: { source_osmId: { source: SOURCE, osmId } },
+          update: {
+            name: b.name,
+            address: b.address,
+            city: b.city,
+            province: b.province,
+            lat,
+            lng,
+          },
+          create: {
+            commerceId: commerce.id,
+            source: SOURCE,
+            osmId,
+            name: b.name,
+            address: b.address,
+            city: b.city,
+            province: b.province,
+            lat,
+            lng,
+          },
+        })
+        // createdAt === updatedAt solo en el instante de creación
+        if (result.createdAt.getTime() === result.updatedAt.getTime()) inserted++
+        else updated++
+      } catch (e) {
+        console.error(`  Error en sucursal ${b.id} (${b.name}):`, e)
+        errors++
       }
-    })
+    }
   } else {
     // Dry run: contar existentes vs nuevas
     const existingOsmIds = new Set(

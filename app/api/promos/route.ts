@@ -49,13 +49,17 @@ export async function GET(req: NextRequest) {
     const isAdmin = role === 'ADMIN' || role === 'MODERATOR'
     const forMe = params.forMe ?? false
 
-    // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal
+    // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal.
+    // `forMe=true` sin sesión ni guest_profile no filtra nada (no hay perfil real
+    // detrás, ver hasProfile en getPromosData) — no debe tirar del path cacheable
+    // por sí solo, solo cuenta como "con perfil" si viene acompañado de alguno.
     const hasFilters = !!(
       params.bankIds?.length || params.walletIds?.length || params.networkIds?.length ||
       params.categorySlugs?.length || params.categorySlug || params.channels?.length ||
       params.commerceIds?.length || params.discountRanges?.length || params.hasInstallments
     )
-    const paginate = !forMe && !email && !hasFilters
+    const hasRealProfile = !!email || !!params.guestProfileParam
+    const paginate = !(forMe && hasRealProfile) && !email && !hasFilters
     const page = parseInt(searchParams.get('page') ?? '1') || 1
 
     // Fechas clave: buscar si hoy está dentro del window de alguna fecha especial

@@ -18,6 +18,8 @@ type Promo = {
   slug?: string | null
   validDays: number
   salesChannel?: string | null
+  coverageStatus?: 'NEARBY' | 'TERRITORIAL' | 'ONLINE' | 'UNKNOWN' | null
+  coverageLabel?: string | null
   isSaved?: boolean
   category: { name: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null }
