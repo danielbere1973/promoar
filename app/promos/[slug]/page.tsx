@@ -597,7 +597,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
           {promo.sourceUrl && (
             <a
-              href={promo.sourceUrl}
+              href={`/api/r?url=${encodeURIComponent(promo.sourceUrl)}&promo=${promo.id}&src=promo_slug_page`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 font-semibold"

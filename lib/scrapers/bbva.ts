@@ -59,8 +59,13 @@ function extractDiscount(text: string): { value: number; type: string } | null {
 }
 
 function extractInstallments(text: string): number | null {
+  // BBVA no siempre incluye "sin interés" en la cabecera (ej. "Dexter 9 cuotas") —
+  // en el contexto de beneficios/comunicaciones de BBVA, "N cuotas" a secas ya
+  // implica CSI (si tuviera interés lo diría explícito, ej. "con interés").
+  if (/cuotas?\s+con\s+inter[eé]s/i.test(text)) return null;
   const m = text.match(/(\d+)\s+cuotas?\s+sin\s+inter[eé]s/i)
-    ?? text.match(/hasta\s+(\d+)\s+cuotas?/i);
+    ?? text.match(/hasta\s+(\d+)\s+cuotas?/i)
+    ?? text.match(/(\d+)\s+cuotas?\b/i);
   return m ? parseInt(m[1]) : null;
 }
 
@@ -176,7 +181,8 @@ export const BBVAScraper: Scraper = {
     // 2. Por cada rubro, paginar con los parámetros correctos: rubros= y pager=
     for (const rubro of rubros) {
       const { idRubro, nombre } = rubro;
-      let pager = 1;
+      // La API pagina desde 0 (pager=0 es la primera página real), no desde 1.
+      let pager = 0;
       let rubroCount = 0;
 
       while (true) {
@@ -196,8 +202,10 @@ export const BBVAScraper: Scraper = {
           rubroCount++;
         }
 
+        // "paginas: N" cuenta páginas de 1 origen (N páginas), pero pager es 0-origen,
+        // así que la última página válida es pager === totalPages - 1.
         const totalPages = parseInt(String(data.message ?? '').match(/paginas:\s*(\d+)/i)?.[1] ?? '1');
-        if (pager >= totalPages || data.data.length < 20) break;
+        if (pager >= totalPages - 1 || data.data.length < 20) break;
         pager++;
       }
 

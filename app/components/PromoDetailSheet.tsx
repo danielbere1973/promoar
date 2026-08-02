@@ -444,7 +444,7 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: {
               <p className="text-xs text-gray-400">No disponemos del texto legal.</p>
             )}
             {promo.sourceUrl && (
-              <a href={promo.sourceUrl} target="_blank" rel="noopener noreferrer"
+              <a href={`/api/r?url=${encodeURIComponent(promo.sourceUrl)}&promo=${promo.id}&src=promo_detail_sheet`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-xs font-semibold text-[#E8471C] hover:underline mt-2">
                 <ExternalLink size={12} /> Ver fuente oficial
               </a>

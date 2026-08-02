@@ -88,7 +88,9 @@ async function scrapeAll(): Promise<ScrapedPromo[]> {
   // El sitio migró su plugin de filtros a Search & Filter Elementor: el listado completo
   // (sin distinción de categoría en el markup) se obtiene de este único endpoint AJAX.
   // El parámetro de taxonomía viejo (_sft_vendedores_category) ya no filtra nada.
-  const url = `${BASE_URL}?sf_data=results`;
+  // _sf_ppp controla "resultados por página" (default ~12 sin el parámetro) — sin esto
+  // el scraper solo veía 12-29 promos en vez de las 100 reales del sitio.
+  const url = `${BASE_URL}?sf_data=results&_sf_ppp=100`;
   console.log('[MercadoPago] Scrapeando listado completo...');
 
   const { data: html } = await axios.get(url, { headers: HEADERS, timeout: 20000 });
