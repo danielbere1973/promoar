@@ -80,6 +80,23 @@ const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX = 15
 const hitLog = new Map<string, number[]>()
 
+// Googlebot rota IPs dentro de 66.249.64.0/19 (y rangos similares para otros bots
+// permitidos) — el rate-limit por IP de arriba nunca lo frena porque cada IP individual
+// se mantiene bajo el límite aunque el conjunto genere miles de hits/día a rutas SSR con
+// Prisma (detectado 2/8/2026: ~17.8k requests de Google LLC en 24hs en Cloudflare, disparando
+// consumo de Neon). Contador agregado (no por IP) solo para estas rutas pesadas: no bloquea
+// indexación normal, pero evita que el crawl agregado de Google inunde la DB.
+const GOOGLEBOT_RATE_LIMIT_WINDOW_MS = 60_000
+const GOOGLEBOT_RATE_LIMIT_MAX = 60
+let googlebotHits: number[] = []
+
+function isGooglebotRateLimited(): boolean {
+  const now = Date.now()
+  googlebotHits = googlebotHits.filter(t => now - t < GOOGLEBOT_RATE_LIMIT_WINDOW_MS)
+  googlebotHits.push(now)
+  return googlebotHits.length > GOOGLEBOT_RATE_LIMIT_MAX
+}
+
 // User-Agents típicos de navegador real. Un cliente sin UA de navegador (script/curl/bot
 // sin identificarse, salvo los bots de búsqueda ya permitidos arriba) pegando a estas rutas
 // es en sí mismo una señal fuerte de scraping — se le aplica un límite mucho más estricto.
@@ -157,9 +174,14 @@ export async function middleware(req: NextRequest) {
       'unknown'
     const userAgent = req.headers.get('user-agent') || ''
     const isLikelyBot = !BROWSER_UA.test(userAgent)
+    const isAllowedBotUA = ALLOWED_BOT_UA.test(userAgent)
     const ipMaskedRL = ip === 'unknown' ? 'unknown' : ip.split('.').slice(0, 3).join('.') + '.x'
     console.log(`[rate-limit-debug] ip=${ipMaskedRL} bot=${isLikelyBot} path=${pathname} ua="${userAgent.slice(0, 60)}"`)
-    if (ip !== 'unknown' && isRateLimited(ip, isLikelyBot)) {
+    if (isAllowedBotUA) {
+      if (isGooglebotRateLimited()) {
+        return new NextResponse('Too Many Requests', { status: 429 })
+      }
+    } else if (ip !== 'unknown' && isRateLimited(ip, isLikelyBot)) {
       return new NextResponse('Too Many Requests', { status: 429 })
     }
   }
