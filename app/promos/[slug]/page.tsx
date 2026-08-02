@@ -121,9 +121,17 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const networkNames = [...new Set(promo.requirements.flatMap(r => r.cardNetwork ? [r.cardNetwork.name] : []))]
   const title = `${discount} en ${promo.commerce.name}${bankWallet ? ` con ${bankWallet}` : ''}`
   const description = buildSeoDescription(promo, discount, bankWallet, networkNames)
+
+  // Post mortem (0-7 días vencida): noindex para que Google la retire del índice
+  // antes de que el día 8 pase a 404 real (ver PromoDetailPage)
+  const validUntilDate = promo.validUntil ? new Date(promo.validUntil) : null
+  const isExpiredNow = promo.status === 'EXPIRED' || (validUntilDate != null && validUntilDate < new Date())
+  const robots = isExpiredNow ? { index: false, follow: true } : undefined
+
   return {
     title,
     description,
+    robots,
     openGraph: {
       title,
       description,
@@ -178,6 +186,17 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   }
 
   const isExpired = promo.status === 'EXPIRED' || (promo.validUntil != null && promo.validUntil < startOfToday)
+
+  // Post mortem: día 0-7 vencida → 200 + noindex (ver generateMetadata). Día 8+ →
+  // 404 real, sin servir la página ni conservar la URL indexable. La fila de Promo
+  // (y PromoUsageEvent/PromoUsage/SavedPromo/PromoReport que dependen de ella) no
+  // se borra nunca — esto es puramente el estado público/SEO de la URL.
+  if (isExpired && promo.validUntil != null) {
+    const daysSinceExpiry = (startOfToday.getTime() - promo.validUntil.getTime()) / 86_400_000
+    if (daysSinceExpiry > 7) {
+      notFound()
+    }
+  }
 
   // Promo vencida — página 200 con link a promos vigentes del mismo comercio (sin query extra a Prisma)
   if (isExpired) {
