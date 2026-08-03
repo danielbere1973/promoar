@@ -86,8 +86,11 @@ const hitLog = new Map<string, number[]>()
 // Prisma (detectado 2/8/2026: ~17.8k requests de Google LLC en 24hs en Cloudflare, disparando
 // consumo de Neon). Contador agregado (no por IP) solo para estas rutas pesadas: no bloquea
 // indexación normal, pero evita que el crawl agregado de Google inunde la DB.
+// Bajado de 60 a 20/min el 3/8/2026: 17.8k req/24h promedia ~12/min, pero el log de eventos
+// mostró ráfagas sostenidas de ~1 req cada 2-4seg (15-30/min) — 60 dejaba pasar esas ráfagas
+// completas sin cortar.
 const GOOGLEBOT_RATE_LIMIT_WINDOW_MS = 60_000
-const GOOGLEBOT_RATE_LIMIT_MAX = 60
+const GOOGLEBOT_RATE_LIMIT_MAX = 20
 let googlebotHits: number[] = []
 
 function isGooglebotRateLimited(): boolean {
