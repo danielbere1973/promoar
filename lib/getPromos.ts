@@ -21,13 +21,37 @@ async function getActiveTotalCount(): Promise<number> {
   return cachedTotalCount
 }
 
+// Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
+// contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
+// y alias comunes de CABA / Buenos Aires.
+function normalizeProvince(s: string): string {
+  const n = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  if (['caba', 'capital federal', 'ciudad de buenos aires', 'ciudad autonoma de buenos aires', 'ciudad autonoma de bs. as.', 'ciudad autonoma de bs as'].includes(n)) {
+    return 'caba'
+  }
+  if (['buenos aires', 'bs as', 'bs. as.', 'pba', 'provincia de buenos aires', 'gba', 'gran buenos aires'].includes(n)) {
+    return 'buenos aires'
+  }
+  return n
+}
+
+// Por encima de esta cantidad de provincias distintas con sucursales, se considera
+// que el comercio tiene cobertura nacional y no se filtra por ubicación.
+const NATIONAL_COVERAGE_THRESHOLD = 4
+
 // RFC-002 Fase 1 — caché exclusiva de la rama pública de invitado sin filtros
-// (sin forMe, sin email, sin filtros, sin provincia): misma respuesta para
-// todos los visitantes de esa combinación page/pageSize/view. NUNCA debe
-// recibir email/isAdmin/userProvince como argumento — el guard que decide
+// de banco/wallet/red/categoría/etc (sin email, sin filtros). `province` entra
+// como parte de la clave de cache: cada provincia distinta cachea su propia
+// página — el filtro SQL por `provinces[]` sigue viviendo acá adentro (no se
+// puede mover a un post-filtro en JS sin volver a traer el universo completo
+// sin LIMIT, el mismo bug que motivó RFC-002). El filtro fino ADR-001
+// (salesChannel/geographicScope/locationModel/branches) se aplica una sola vez,
+// afuera, en getPromosData, sobre el resultado ya cacheado — ver ese bloque.
+// `forMe=true` sin guest_profile (ver hasRealProfile en route.ts) no filtra
+// nada y puede pasar por acá igual que un invitado común — el guard que decide
 // llamar a esta función (isPublicCacheableView en getPromosData) ya excluye
-// esos casos por construcción; esta función no acepta esos parámetros en su
-// firma para que sea imposible colarlos por error.
+// email/isAdmin/perfil real por construcción; esta función no acepta esos
+// parámetros en su firma para que sea imposible colarlos por error.
 //
 // Cache del count total de promos activas Y válidas hoy (por dayBit) — mismo criterio
 // que getActiveTotalCount pero acotado al bitmask del día, recalculado cada 5 minutos.
@@ -60,8 +84,8 @@ async function getActiveTodayCount(dayBit: number): Promise<number> {
 // clave de cache — sin esto, el resultado de hoy quedaría sirviéndose mañana
 // hasta vencer el TTL.
 const getPublicPromosPage = unstable_cache(
-  async (page: number, pageSize: number, view: string, dayBit: number) => {
-    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view} dayBit=${dayBit})`)
+  async (page: number, pageSize: number, view: string, dayBit: number, province: string | null) => {
+    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view} dayBit=${dayBit} province=${province})`)
 
     const today = new Date()
     const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
@@ -75,6 +99,17 @@ const getPublicPromosPage = unstable_cache(
       ],
     }
 
+    if (province) {
+      where.AND = [
+        {
+          OR: [
+            { provinces: { hasSome: ['Todas', 'TODAS', province] } },
+            { provinces: { isEmpty: true } },
+          ],
+        },
+      ]
+    }
+
     // view === 'week' no filtra por día — se mantiene el universo completo de activas.
     const dayFiltered = view !== 'week'
     if (dayFiltered) {
@@ -86,12 +121,17 @@ const getPublicPromosPage = unstable_cache(
       // (miles) para terminar usando sólo `pageSize` — generaba un `IN (...)` con
       // miles de parámetros en cada visita de invitado, manteniendo el compute de
       // Neon siempre activo (nunca llegaba a idle/suspend).
+      // El filtro de provincia (promos.provinces[]) se replica acá en SQL crudo —
+      // si solo se aplicara en el where de Prisma más abajo, el LIMIT/OFFSET de
+      // esta query ya habría cortado la página por dayBit sin tener en cuenta
+      // provincia, devolviendo menos de pageSize filas de las que corresponden.
       const idRows = await prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM "promos"
         WHERE status = 'ACTIVE'
           AND "validFrom" <= now()
           AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
           AND ("validDays" & ${dayBit}) != 0
+          AND (${province}::text IS NULL OR cardinality(provinces) = 0 OR provinces && ARRAY[${province}::text, 'Todas', 'TODAS'])
         ORDER BY
           "isCSIOnly" ASC,
           "maxDiscountPct" DESC NULLS LAST,
@@ -115,6 +155,14 @@ const getPublicPromosPage = unstable_cache(
               logoUrl: true,
               instagramUrl: true,
               activePromoCount: true,
+              // locationModel/branches solo hacen falta cuando hay provincia — el
+              // filtro ADR-001 completo (getPromosData, más abajo) solo corre bajo
+              // `if (userProvince && !isAdmin)`. Sin esto, invitados con provincia
+              // perderían el filtro de cercanía/cobertura al pasar por esta función.
+              ...(province ? {
+                locationModel: true,
+                branches: { select: { province: true }, where: { province: { not: null } } },
+              } : {}),
             },
           },
           requirements: {
@@ -139,30 +187,48 @@ const getPublicPromosPage = unstable_cache(
       view === 'week' ? getActiveTotalCount() : getActiveTodayCount(dayBit),
     ])
 
+    // El filtro geográfico fino (ADR-001: salesChannel/geographicScope/locationModel/
+    // branches) se aplica una sola vez, afuera de esta función cacheada, en
+    // getPromosData — tanto para este resultado cacheado como para el camino
+    // no-cacheado. Acá solo se resolvió el filtro grueso por `provinces[]` en SQL
+    // (necesario para no romper el LIMIT/OFFSET, ver comentario más arriba).
     return [promos, totalCount] as const
   },
   ['public-promos-page'],
   { revalidate: 600, tags: [PROMOS_PUBLIC_TAG] }, // 600s = 10min TTL de seguridad
 )
 
-// Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
-// contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
-// y alias comunes de CABA / Buenos Aires.
-function normalizeProvince(s: string): string {
-  const n = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
-  if (['caba', 'capital federal', 'ciudad de buenos aires', 'ciudad autonoma de buenos aires', 'ciudad autonoma de bs. as.', 'ciudad autonoma de bs as'].includes(n)) {
-    return 'caba'
+// Nombre presentable para el badge de cobertura territorial (Title Case, sin acentos perdidos
+// en los casos comunes). No cubre absolutamente todas las provincias con tildes correctas —
+// alcanza para el uso como texto de UI, no como clave de comparación (para eso está normalizeProvince).
+export function displayProvinceName(normalized: string): string {
+  if (normalized === 'caba') return 'CABA'
+  const specialCases: Record<string, string> = {
+    'buenos aires': 'Buenos Aires',
+    'cordoba': 'Córdoba',
+    'rio negro': 'Río Negro',
+    'entre rios': 'Entre Ríos',
+    'santa fe': 'Santa Fe',
+    'san luis': 'San Luis',
+    'san juan': 'San Juan',
+    'la pampa': 'La Pampa',
+    'la rioja': 'La Rioja',
+    'tierra del fuego': 'Tierra del Fuego',
+    'santiago del estero': 'Santiago del Estero',
   }
-  if (['buenos aires', 'bs as', 'bs. as.', 'pba', 'provincia de buenos aires', 'gba', 'gran buenos aires'].includes(n)) {
-    return 'buenos aires'
-  }
-  return n
+  return specialCases[normalized] ?? normalized.replace(/\b\w/g, c => c.toUpperCase())
 }
 
-// Por encima de esta cantidad de provincias distintas con sucursales, se considera
-// que el comercio tiene cobertura nacional y no se filtra por ubicación.
-const NATIONAL_COVERAGE_THRESHOLD = 4
-
+// Arma el texto de `coverageLabel` para TERRITORIAL a partir del alcance real (no siempre nacional):
+// 1 provincia → nombre puntual; 2-3 → listado corto; 4+ o "todas" → "Todo el país".
+export function describeProvinceScope(provinces: string[]): string {
+  const normalized = Array.from(new Set(provinces.map(normalizeProvince)))
+  if (normalized.some(p => ['todas', 'all'].includes(p)) || normalized.length >= NATIONAL_COVERAGE_THRESHOLD) {
+    return 'Todo el país'
+  }
+  if (normalized.length === 1) return displayProvinceName(normalized[0])
+  return normalized.map(displayProvinceName).join(', ')
+}
 export interface PromoQueryParams {
   categorySlug?: string | null
   categorySlugs?: string[]
@@ -342,14 +408,20 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       ]
     : undefined
 
-  // RFC-002 Fase 1: la rama pública (invitado, sin filtros, sin provincia) va por
-  // una función cacheada (10 min TTL + invalidación por tag). Cualquier otra
-  // combinación (con perfil, con filtros, o invitado CON provincia — que ya es
-  // una forma de personalización) sigue el camino directo a Prisma, sin cambios.
-  const isPublicCacheableView = paginate && !userProvince
+  // RFC-002 Fase 1 (+ ampliación provincia + ADR-001): la rama pública (invitado
+  // sin filtros, CON o sin provincia, siempre que no haya perfil real detrás) va
+  // por una función cacheada (10 min TTL + invalidación por tag). `province` es
+  // parte de la clave de cache — cada provincia cachea su propia página, con el
+  // filtro grueso por `provinces[]` ya resuelto en SQL dentro de la función. El
+  // filtro fino ADR-001 (salesChannel/geographicScope/locationModel/branches) se
+  // aplica después, en el bloque más abajo, sobre este resultado ya cacheado —
+  // igual que sobre el camino no-cacheado. `paginate` (route.ts) ya excluye
+  // forMe/email/filtros; acá además hace falta excluir el guest profile (perfil
+  // temporal sin cuenta) para no cachear una vista personalizada por error.
+  const isPublicCacheableView = paginate && !guestProfileParam
 
   const [promos, totalCount] = isPublicCacheableView
-    ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit)
+    ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit, userProvince)
     : await Promise.all([
         prisma.promo.findMany({
           where,
@@ -363,6 +435,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
                 logoUrl: true,
                 instagramUrl: true,
                 activePromoCount: true,
+                locationModel: true,
                 ...(userProvince && !isAdmin ? { branches: { select: { province: true }, where: { province: { not: null } } } } : {}),
               },
             },
@@ -413,24 +486,93 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   })
 
 
-  // ── Filtro geográfico: comercios regionales sin sucursales en la provincia del usuario ──
-  // Solo aplica si conocemos la provincia del usuario (perfil o ?province=) y el comercio
-  // tiene sucursales con provincia cargada (CommerceBranch.province, ver punto 10 CLAUDE.md).
-  // Si no hay datos de sucursales, o si el comercio tiene presencia en muchas provincias
-  // (cadena nacional), no se filtra. Admins ven todo sin filtro geográfico.
+  // ── Filtro geográfico (ADR-001) ───────────────────────────────────────────────────────
+  // El filtro arranca por la promo (salesChannel + geographicScope), no por las sucursales.
+  // Admins ven todo sin filtro geográfico (y no reciben coverageStatus: no los necesitan).
+  //
+  // De paso, se calcula `coverageStatus` — una clasificación liviana de 4 valores que la UI
+  // de Explorar usa para mostrar un badge, en vez de mandar el array de `branches` al cliente
+  // (más pesado) o re-implementar esta misma cascada de reglas en React:
+  //   'NEARBY'      → hay sucursal confirmada en la provincia del usuario
+  //   'TERRITORIAL' → cobertura provincial/regional/nacional explícita o inferida (4+ provincias)
+  //   'ONLINE'      → sin dependencia de ubicación física (online, servicio móvil, etc.)
+  //   'UNKNOWN'     → sin datos suficientes para clasificar (pass-through, no es un rechazo)
+  //
+  // `coverageLabel` acompaña a TERRITORIAL con el alcance real (no siempre es "todo el país" —
+  // puede ser una provincia puntual, varias, o inferido de branches) para que el badge de la UI
+  // nunca generalice de más (el mismo error conceptual que ADR-001 vino a resolver).
   if (userProvince && !isAdmin) {
     const userProvinceNorm = normalizeProvince(userProvince)
     filtered = filtered.filter(promo => {
+      const salesChannel   = (promo as any).salesChannel   ?? 'UNKNOWN'
+      const geographicScope = (promo as any).geographicScope ?? 'UNKNOWN'
+      const locationModel  = (promo as any).commerce?.locationModel ?? 'UNKNOWN'
+
+      // 1. Promos sin dependencia física → no evaluar proximidad
+      if (salesChannel === 'ONLINE') {
+        // Sin restricción territorial → siempre visible
+        if (geographicScope === 'NO_GEOGRAPHIC_RESTRICTION' || geographicScope === 'NATIONWIDE') {
+          ;(promo as any).coverageStatus = 'ONLINE'
+          return true
+        }
+        // Con restricción por provincia → respetar provinces[]
+        if (geographicScope === 'PROVINCES') {
+          const ps = (promo as any).provinces as string[]
+          if (!ps?.length) { ;(promo as any).coverageStatus = 'UNKNOWN'; return true }
+          const matches = ps.some(p => normalizeProvince(p) === userProvinceNorm || ['todas', 'all'].includes(normalizeProvince(p)))
+          if (matches) (promo as any).coverageStatus = 'ONLINE'
+          return matches
+        }
+        // UNKNOWN online → pass-through (safe default, sin badge de cercanía)
+        ;(promo as any).coverageStatus = 'ONLINE'
+        return true
+      }
+
+      // 2. Servicios móviles y sin ubicación fija → no filtrar por branches
+      if (locationModel === 'MOBILE_SERVICE' || locationModel === 'NO_FIXED_LOCATION') {
+        ;(promo as any).coverageStatus = 'ONLINE'
+        return true
+      }
+
+      // 3. Alcance nacional explícito → aplicabilidad territorial OK
+      //    (no implica cercanía — 'NEARBY' solo se asigna con sucursal real en la provincia)
+      if (geographicScope === 'NATIONWIDE') {
+        ;(promo as any).coverageStatus = 'TERRITORIAL'
+        ;(promo as any).coverageLabel = 'Todo el país'
+        return true
+      }
+
+      // 4. Restricción por provincias explícita → respetar provinces[]
+      if (geographicScope === 'PROVINCES') {
+        const ps = (promo as any).provinces as string[]
+        if (!ps?.length) { ;(promo as any).coverageStatus = 'UNKNOWN'; return true }
+        const matches = ps.some(p => normalizeProvince(p) === userProvinceNorm || ['todas', 'all'].includes(normalizeProvince(p)))
+        if (matches) {
+          (promo as any).coverageStatus = 'TERRITORIAL'
+          ;(promo as any).coverageLabel = describeProvinceScope(ps)
+        }
+        return matches
+      }
+
+      // 5. Basada en sucursales (BRANCHES) o UNKNOWN → evaluar branches en DB
       const branches = (promo as any).commerce?.branches as { province: string | null }[] | undefined
-      if (!branches?.length) return true
+      if (!branches?.length) { ;(promo as any).coverageStatus = 'UNKNOWN'; return true }  // sin datos = deuda de información, pass-through
 
-      const provinces = new Set(branches.map(b => normalizeProvince(b.province as string)))
-      if (provinces.size >= NATIONAL_COVERAGE_THRESHOLD) return true
+      const branchProvinces = new Set(branches.map(b => normalizeProvince(b.province as string)))
 
-      return provinces.has(userProvinceNorm)
+      // Compatibilidad temporal: comercio UNKNOWN con 4+ provincias → cobertura nacional inferida
+      if (locationModel === 'UNKNOWN' && branchProvinces.size >= NATIONAL_COVERAGE_THRESHOLD) {
+        ;(promo as any).coverageStatus = 'TERRITORIAL'
+        ;(promo as any).coverageLabel = describeProvinceScope(Array.from(branchProvinces))
+        return true
+      }
+
+      const hasNearbyBranch = branchProvinces.has(userProvinceNorm)
+      if (hasNearbyBranch) (promo as any).coverageStatus = 'NEARBY'
+      return hasNearbyBranch
     })
   }
-  // Ya no se necesita `branches` en la respuesta
+  // Ya no se necesita `branches` en la respuesta — coverageStatus ya quedó calculado arriba.
   for (const p of filtered) {
     if ((p as any).commerce) delete (p as any).commerce.branches
   }

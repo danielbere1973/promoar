@@ -99,6 +99,8 @@ type Promo = {
   sourceText?: string | null
   sourceUrl?: string | null
   salesChannel?: string | null
+  coverageStatus?: 'NEARBY' | 'TERRITORIAL' | 'ONLINE' | 'UNKNOWN' | null
+  coverageLabel?: string | null
   commerceNote?: string | null
   category: { name: string; slug?: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null; instagramUrl?: string | null }
@@ -228,7 +230,7 @@ function getFormasDePago(reqs: Req[]) {
     if (r.paymentChannel === 'NFC') c.add('Sin contacto (NFC)')
     if (r.paymentChannel === 'TRANSFERENCIA') c.add('Transferencia')
     if (r.paymentChannel === 'DINERO_EN_CUENTA') c.add('Dinero en Cuenta')
-    if (r.paymentChannel === 'TARJETA_FISICA') c.add('Física')
+    if (r.paymentChannel === 'TARJETA_FISICA') c.add('Tarjeta física')
   })
   return c.size > 0 ? Array.from(c).join(', ') : 'Cualquiera'
 }

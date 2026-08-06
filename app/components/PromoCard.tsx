@@ -1,6 +1,7 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react'
 import { Share2, Copy, Check, Heart, Star } from 'lucide-react'
+import { resolveCoverageBadge } from '@/lib/coverageBadge'
 
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -52,6 +53,8 @@ type Promo = {
   slug?: string | null
   validDays: number
   salesChannel?: string | null
+  coverageStatus?: 'NEARBY' | 'TERRITORIAL' | 'ONLINE' | 'UNKNOWN' | null
+  coverageLabel?: string | null
   isSaved?: boolean
   category: { name: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null }
@@ -133,6 +136,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   )]
 
   const days = formatDays(promo.validDays)
+  const coverageBadge = resolveCoverageBadge(promo.coverageStatus, promo.coverageLabel)
 
   const [showShare, setShowShare] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -205,8 +209,10 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </div>
         )}
 
-        {/* Canal exclusivo — ícono compacto top-left */}
-        {promo.salesChannel && (
+        {/* Canal exclusivo — ícono compacto top-left. Solo para ONLINE/PHYSICAL
+            (canal único real); BOTH no es "exclusivo" de nada y UNKNOWN no debe
+            mostrar ningún badge (ausencia de dato ≠ dato). */}
+        {(promo.salesChannel === 'ONLINE' || promo.salesChannel === 'PHYSICAL') && (
           <span
             title={promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
             className={`absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center text-sm shadow-sm ${
@@ -357,6 +363,23 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
                 </span>
               )
             ))}
+          </div>
+        )}
+
+        {/* Cobertura geográfica (ADR-001) — resuelto centralmente en lib/coverageBadge.ts.
+            UNKNOWN devuelve null: sin badge, sin ícono, sin color — ausencia de dato implica
+            ausencia de elemento visual, la tarjeta queda igual que hoy.
+            Se omite NEARBY si ya hay barra de sucursales cercanas abajo, para no duplicar el mensaje. */}
+        {coverageBadge && !(coverageBadge.status === 'NEARBY' && !!nearbyCount) && (
+          <div className="flex flex-wrap gap-1">
+            <span
+              className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-lg border ${coverageBadge.colorClass}`}
+              aria-label={coverageBadge.ariaLabel}
+            >
+              <span aria-hidden="true">{coverageBadge.icon}</span>
+              <span className="hidden sm:inline">{coverageBadge.label}</span>
+              <span className="sm:hidden">{coverageBadge.labelMobile}</span>
+            </span>
           </div>
         )}
 
