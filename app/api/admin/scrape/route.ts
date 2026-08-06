@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ALL_SCRAPERS } from '@/lib/scrapers';
 import { generatePromoSlug } from '@/lib/utils/promoSlug';
-import { detectCategoria, detectSalesChannel } from '@/lib/scrapers/bank-helpers';
+import { detectCategoria, detectSalesChannel, normalizeSalesChannel } from '@/lib/scrapers/bank-helpers';
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache';
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache';
 import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache';
@@ -604,7 +604,7 @@ export async function POST(req: NextRequest) {
           status: 'ACTIVE' as const,
           sourceUrl: p.sourceUrl ?? null,
           sourceText: p.sourceText ?? null,
-          salesChannel: salesChannel ?? null,
+          salesChannel: normalizeSalesChannel(salesChannel),
           commerceNote: p.note ?? null,
           maxDiscountPct,
           isCSIOnly,

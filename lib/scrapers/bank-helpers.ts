@@ -361,3 +361,27 @@ export function detectSalesChannel(text: string): 'ONLINE' | 'FISICA' | null {
   }
   return null
 }
+
+// Normaliza el salesChannel (legacy string de scrapers) al valor real del enum
+// Prisma `SalesChannel` (ONLINE|PHYSICAL|BOTH|UNKNOWN). 'FISICA' es el valor
+// histórico usado por los scrapers antes de que existiera el enum; cualquier
+// valor no reconocido cae a UNKNOWN con un warning en vez de fallar el upsert.
+export function normalizeSalesChannel(
+  value: string | null | undefined
+): 'ONLINE' | 'PHYSICAL' | 'BOTH' | 'UNKNOWN' {
+  switch (value) {
+    case 'ONLINE':
+      return 'ONLINE'
+    case 'FISICA':
+    case 'PHYSICAL':
+      return 'PHYSICAL'
+    case 'BOTH':
+      return 'BOTH'
+    case null:
+    case undefined:
+      return 'UNKNOWN'
+    default:
+      console.warn(`[normalizeSalesChannel] valor no reconocido: "${value}", usando UNKNOWN`)
+      return 'UNKNOWN'
+  }
+}

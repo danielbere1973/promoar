@@ -230,7 +230,7 @@ function getFormasDePago(reqs: Req[]) {
     if (r.paymentChannel === 'NFC') c.add('Sin contacto (NFC)')
     if (r.paymentChannel === 'TRANSFERENCIA') c.add('Transferencia')
     if (r.paymentChannel === 'DINERO_EN_CUENTA') c.add('Dinero en Cuenta')
-    if (r.paymentChannel === 'TARJETA_FISICA') c.add('Física')
+    if (r.paymentChannel === 'TARJETA_FISICA') c.add('Tarjeta física')
   })
   return c.size > 0 ? Array.from(c).join(', ') : 'Cualquiera'
 }
