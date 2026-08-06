@@ -185,8 +185,9 @@ export default function PromoDetailSheet({ promo, nearbyBranch, onClose }: {
             <X size={15} className="text-white" />
           </button>
 
-          {/* Canal */}
-          {promo.salesChannel && (
+          {/* Canal — solo ONLINE/PHYSICAL (canal único real); BOTH no es "exclusivo"
+              de nada y UNKNOWN no debe mostrar badge (ausencia de dato ≠ dato). */}
+          {(promo.salesChannel === 'ONLINE' || promo.salesChannel === 'PHYSICAL') && (
             <div className={`absolute top-4 left-4 text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-xl ${
               promo.salesChannel === 'ONLINE'
                 ? 'bg-[#E8471C] text-white'

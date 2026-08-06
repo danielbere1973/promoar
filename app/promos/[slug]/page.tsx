@@ -327,7 +327,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
         {/* ── HERO ── */}
         <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl overflow-hidden shadow-lg relative">
-          {promo.salesChannel && (
+          {(promo.salesChannel === 'ONLINE' || promo.salesChannel === 'PHYSICAL') && (
             <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-br-xl">
               {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
             </div>

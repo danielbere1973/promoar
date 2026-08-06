@@ -209,8 +209,10 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </div>
         )}
 
-        {/* Canal exclusivo — ícono compacto top-left */}
-        {promo.salesChannel && (
+        {/* Canal exclusivo — ícono compacto top-left. Solo para ONLINE/PHYSICAL
+            (canal único real); BOTH no es "exclusivo" de nada y UNKNOWN no debe
+            mostrar ningún badge (ausencia de dato ≠ dato). */}
+        {(promo.salesChannel === 'ONLINE' || promo.salesChannel === 'PHYSICAL') && (
           <span
             title={promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
             className={`absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center text-sm shadow-sm ${
