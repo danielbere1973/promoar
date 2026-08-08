@@ -103,9 +103,11 @@ type Props = {
   fullWidth?: boolean
   priority?: boolean
   onRegisterUsage?: (req: Req, promo: Promo, e: React.MouseEvent) => void
+  /** Razones causales del Recommendation Block ("por qué se eligió"), no descriptivas de la promo. */
+  reasons?: string[]
 }
 
-export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, fullWidth, priority, onRegisterUsage }: Props) {
+export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, fullWidth, priority, onRegisterUsage, reasons }: Props) {
   const bestReq = bestDiscountReq(promo.requirements)
   const { num, unit, label, isCsi } = discountDisplay(bestReq)
 
@@ -297,6 +299,19 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
               </span>
             )}
           </div>
+        )}
+
+        {/* Razones del Recommendation Block — solo presente cuando la card viene
+            del bloque de recomendaciones, nunca en el listado tradicional. */}
+        {reasons && reasons.length > 0 && (
+          <ul className="flex flex-col gap-0.5">
+            {reasons.map((r, i) => (
+              <li key={i} className="text-[9px] font-semibold text-[#1D3D6E] dark:text-[#8AADD4] flex items-start gap-1">
+                <span aria-hidden="true" className="shrink-0">✓</span>
+                <span className="line-clamp-1">{r}</span>
+              </li>
+            ))}
+          </ul>
         )}
 
         {/* Uso registrado — badge con tooltip. La card sigue mostrándose siempre,

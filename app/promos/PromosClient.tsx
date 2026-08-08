@@ -17,6 +17,9 @@ import { GuestProfile } from '../components/PromoWizard'
 import ThemeToggle from '../components/ThemeToggle'
 import SplashScreen from '../components/SplashScreen'
 import OnboardingBanner from '../components/OnboardingBanner'
+import RecommendationBlock from '../components/RecommendationBlock'
+import HomeHero from '../components/HomeHero'
+import { useRecommendations } from '../../lib/useRecommendations'
 import { useTracking } from '@/lib/useTracking'
 import { AdBannerEM } from '../components/AdBannerEM'
 
@@ -618,6 +621,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const productSearchRef = useRef<HTMLInputElement>(null)
   const productDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [province, setProvince] = useState<string | null>(initialProvince ?? null)
+  const sharedRecommendations = useRecommendations(province)
   const [showProvinceSelector, setShowProvinceSelector] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [favCategories, setFavCategories] = useState<string[]>([]) // slugs, max 3
@@ -2469,11 +2473,46 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 </div>
               )}
 
+              <HomeHero
+                data={sharedRecommendations.data}
+                loading={sharedRecommendations.loading}
+                onOpenPromo={openPromoDetail}
+                onGoToProfile={() => router.push('/perfil')}
+              />
+
               <OnboardingBanner
                 isLoggedIn={!!session?.user}
                 hasProfile={!!userProfile && (userProfile.banks.length > 0 || userProfile.wallets.length > 0)}
                 profileReady={profileReady}
               />
+
+              <RecommendationBlock
+                province={province}
+                onOpenPromo={openPromoDetail}
+                onGoToProfile={() => router.push('/perfil')}
+                onShareLocation={() => {
+                  if (!navigator.geolocation) return
+                  navigator.geolocation.getCurrentPosition(pos => {
+                    const { latitude: lat, longitude: lng } = pos.coords
+                    localStorage.setItem('userLocation', JSON.stringify({ lat, lng, ts: Date.now() }))
+                    fetch(`/api/branches/nearby?lat=${lat}&lng=${lng}&radius=10`)
+                      .then(r => r.json()).then(setNearbyBranches).catch(() => {})
+                  }, () => {}, { timeout: 8000 })
+                }}
+                skipFirst
+              />
+
+              {/* "Desde tu última visita" — espacio reservado por diseño (CPO Direction
+                  "Nueva Home", 5/8/2026). Sin lógica de comparación histórica todavía:
+                  no hay tracking de "última visita vs. ahora" implementado. No renderiza
+                  nada hasta que ese dato exista — evita rellenar con lógica ficticia. */}
+
+              <div className="px-4 pt-1 pb-3">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  Explorar
+                </p>
+                <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-2" />
+              </div>
 
               {destacadas.length > 0 && (
                 <Section title="⭐ Destacadas hoy" subtitle="Mejores descuentos del día" promoList={destacadas} isFirst />

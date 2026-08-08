@@ -24,7 +24,7 @@ async function getActiveTotalCount(): Promise<number> {
 // Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
 // contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
 // y alias comunes de CABA / Buenos Aires.
-function normalizeProvince(s: string): string {
+export function normalizeProvince(s: string): string {
   const n = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
   if (['caba', 'capital federal', 'ciudad de buenos aires', 'ciudad autonoma de buenos aires', 'ciudad autonoma de bs. as.', 'ciudad autonoma de bs as'].includes(n)) {
     return 'caba'
@@ -37,7 +37,7 @@ function normalizeProvince(s: string): string {
 
 // Por encima de esta cantidad de provincias distintas con sucursales, se considera
 // que el comercio tiene cobertura nacional y no se filtra por ubicación.
-const NATIONAL_COVERAGE_THRESHOLD = 4
+export const NATIONAL_COVERAGE_THRESHOLD = 4
 
 // RFC-002 Fase 1 — caché exclusiva de la rama pública de invitado sin filtros
 // de banco/wallet/red/categoría/etc (sin email, sin filtros). `province` entra
@@ -198,6 +198,91 @@ const getPublicPromosPage = unstable_cache(
   { revalidate: 600, tags: [PROMOS_PUBLIC_TAG] }, // 600s = 10min TTL de seguridad
 )
 
+// ─── Alternativa 2 (DR-004) — Candidate Selection con conocimiento de perfil ──
+// Filtro grueso en SQL crudo: estado + vigencia + día + provincia (misma lógica
+// que getPublicPromosPage) MÁS un filtro permisivo por bankId/walletId del
+// perfil del usuario, ANTES del matching financiero fino en JS.
+//
+// El filtro por banco/wallet es deliberadamente una SOBRE-aproximación: acepta
+// falsos positivos (promos que después matchesProfile() puede rechazar por
+// red/tipo/segmento/tier/cuenta), pero NUNCA produce falsos negativos, porque
+// toda rama de matchesProfile() que devuelve true ya implica que el bankId/
+// walletId del requirement (cuando existe) pertenece al perfil del usuario —
+// ver diseno-alternativa-2-candidate-selection.md §2 para la demostración
+// caso por caso de las 3 reglas de matchesProfile().
+//
+// No filtra por red/tipo/segmento/tier/cuenta — eso sigue siendo exclusivo de
+// matchesProfile() en TypeScript, sin cambios (ver DR-004: "no un WHERE que
+// replique matchesProfile()").
+//
+// Precedencia explícita (DR-004): el bypass de promos guardadas (savedPromoIds)
+// vive DENTRO del AND general de estado/vigencia/geografía, nunca como OR
+// externo — así una promo guardada vencida/suspendida/excluida geográficamente
+// sigue quedando afuera. El bypass solo exime del matching financiero (bankId/
+// walletId), no de vigencia/estado/geografía.
+//
+// LIMIT: medido contra 5 perfiles reales (1-9 bancos, 1-8 wallets), el WHERE
+// permisivo por sí solo reduce el universo ACTIVE (~24.4k) a 4.400-8.400 filas
+// según la amplitud del perfil — y ese conteo NO paga costo extra de query al
+// quitar el LIMIT (~1.0-1.5s con o sin límite, medido con $queryRaw directo:
+// el costo vive en el EXISTS/BitmapAnd, no en cuántas filas junta el ORDER BY).
+// Es decir, la reducción de universo la hace el WHERE (perfil-aware), no el
+// LIMIT — a diferencia de la Alternativa 1, acá el LIMIT ya no es el mecanismo
+// de reducción, es solo un techo de seguridad muy por encima de lo observado.
+// 3000 (heredado de Alternativa 1) truncaba al peor caso real (8406, perfil de
+// 9 bancos/8 wallets) — subir a 15000 deja ~1.8x de margen sobre ese máximo
+// observado. Si algún perfil futuro más amplio lo alcanza, el warning de abajo
+// avisa — no es un número mágico dado por cerrado, es un techo con telemetría.
+const CANDIDATE_LIMIT = 15000
+
+export async function getCandidatePromosForProfile(params: {
+  dayBit: number | null // null = view 'week', no filtra por día
+  province: string | null
+  userBankIds: string[]
+  userWalletIds: string[]
+  savedPromoIds: string[]
+}): Promise<{ ids: string[]; queryMs: number; hitLimit: boolean }> {
+  const t0 = Date.now()
+  const { dayBit, province, userBankIds, userWalletIds, savedPromoIds } = params
+
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT p.id FROM "promos" p
+    WHERE p.status = 'ACTIVE'
+      AND p."validFrom" <= now()
+      AND (p."validUntil" IS NULL OR p."validUntil" >= date_trunc('day', now()))
+      AND (${dayBit}::int IS NULL OR (p."validDays" & ${dayBit}::int) != 0)
+      AND (
+        ${province}::text IS NULL
+        OR p."geographicScope" != 'PROVINCES'
+        OR cardinality(p.provinces) = 0
+        OR p.provinces && ARRAY[${province}::text, 'Todas', 'TODAS']
+      )
+      AND (
+        p.id = ANY(${savedPromoIds}::text[])
+        OR EXISTS (
+          SELECT 1 FROM "promo_requirements" r
+          WHERE r."promoId" = p.id
+            AND (
+              (r."bankId" IS NULL AND r."walletId" IS NULL)
+              OR r."bankId" = ANY(${userBankIds}::text[])
+              OR r."walletId" = ANY(${userWalletIds}::text[])
+            )
+        )
+      )
+    ORDER BY
+      "isCSIOnly" ASC,
+      "maxDiscountPct" DESC NULLS LAST,
+      id ASC
+    LIMIT ${CANDIDATE_LIMIT}
+  `
+  const queryMs = Date.now() - t0
+  const hitLimit = rows.length === CANDIDATE_LIMIT
+  if (hitLimit) {
+    console.warn(`[candidate-query] LIMIT alcanzado (${CANDIDATE_LIMIT}) — riesgo de truncamiento de candidatas válidas. dayBit=${dayBit} province=${province} banks=${userBankIds.length} wallets=${userWalletIds.length}`)
+  }
+  return { ids: rows.map(r => r.id), queryMs, hitLimit }
+}
+
 // Nombre presentable para el badge de cobertura territorial (Title Case, sin acentos perdidos
 // en los casos comunes). No cubre absolutamente todas las provincias con tildes correctas —
 // alcanza para el uso como texto de UI, no como clave de comparación (para eso está normalizeProvince).
@@ -260,6 +345,10 @@ export interface PromoQueryParams {
   page?: number
   /** Cantidad de promos por página (default 500). */
   pageSize?: number
+  /** DR-003/DR-004: usa el filtro grueso SQL (candidate selection) en vez de traer
+   * el universo completo sin LIMIT. Solo tiene efecto cuando forMe=true y no hay
+   * filtros manuales de banco/wallet/red/etc (esos casos siguen el camino viejo). */
+  useCandidateQuery?: boolean
 }
 
 export async function getPromosData(params: PromoQueryParams, email?: string | null, isAdmin?: boolean) {
@@ -290,7 +379,11 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     paginate = false,
     page = 1,
     pageSize = 500,
+    useCandidateQuery = false,
   } = params
+
+  const perfStart = Date.now()
+  const perf: Record<string, any> = {}
 
   const today = new Date()
   const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
@@ -420,8 +513,106 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   // temporal sin cuenta) para no cachear una vista personalizada por error.
   const isPublicCacheableView = paginate && !guestProfileParam
 
+  // DR-003/DR-004: candidate selection solo cuando forMe=true, sin filtros manuales
+  // de requirements (bankIds/walletIds/etc — esos ya tienen su propio camino vía
+  // reqFilter) y sin paginate (paginate ya usa el camino cacheado de arriba).
+  const useCandidates = useCandidateQuery && forMe && !isPublicCacheableView && Object.keys(reqFilter).length === 0
+
+  type CandidatePerf = { queryMs: number; rows: number; hitLimit: boolean }
+  const candidatePerfBox: { value: CandidatePerf | null } = { value: null }
+
+  // DR-004 (Alternativa 2): si vamos a usar candidate selection, necesitamos
+  // bankIds/walletIds/savedPromoIds del perfil ANTES de armar la query candidata
+  // (el filtro fino de perfil, más abajo, sigue calculando lo mismo de nuevo con
+  // fetchedUser ya cacheado — no se duplica el fetch a DB, solo se adelanta la
+  // extracción de IDs que ya viven en el objeto).
+  let candidateUserBankIds: string[] = []
+  let candidateUserWalletIds: string[] = []
+  let candidateSavedPromoIds: string[] = []
+  if (useCandidates) {
+    if (email && !fetchedUser) {
+      fetchedUser = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          addressState: true,
+          financialProfile: { include: { banks: true, wallets: true, cards: true } },
+          savedPromos: { select: { promoId: true } },
+        }
+      }) as any
+    }
+    const profileForCandidates = (fetchedUser as any)?.financialProfile || null
+    let guestCardsForCandidates: any[] | null = null
+    if (!profileForCandidates && guestProfileParam) {
+      try {
+        const decoded = JSON.parse(Buffer.from(guestProfileParam, 'base64').toString('utf-8'))
+        if (Array.isArray(decoded?.cards)) guestCardsForCandidates = decoded.cards
+      } catch {}
+    }
+    const cardsForCandidates: any[] = profileForCandidates?.cards ?? guestCardsForCandidates ?? []
+    candidateUserBankIds = Array.from(new Set(
+      [...cardsForCandidates, ...(profileForCandidates?.banks ?? [])]
+        .map((c: any) => c.bankId)
+        .filter((id: any): id is string => !!id)
+    ))
+    candidateUserWalletIds = Array.from(new Set(
+      [...cardsForCandidates, ...(profileForCandidates?.wallets ?? [])]
+        .map((c: any) => c.walletId)
+        .filter((id: any): id is string => !!id)
+    ))
+    candidateSavedPromoIds = fetchedUser ? (fetchedUser as any).savedPromos.map((sp: any) => sp.promoId) : []
+  }
+
   const [promos, totalCount] = isPublicCacheableView
     ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit, userProvince)
+    : useCandidates
+    ? await (async () => {
+        // view='week' (caso de Recommendation Block) no filtra por día en SQL —
+        // el bitmask se re-aplica igual más abajo (líneas ~459-468) sobre el
+        // resultado, sin cambios respecto al camino viejo.
+        const dayBitForQuery = view === 'week' ? null : defaultDayBit
+        const candidates = await getCandidatePromosForProfile({
+          dayBit: dayBitForQuery,
+          province: userProvince,
+          userBankIds: candidateUserBankIds,
+          userWalletIds: candidateUserWalletIds,
+          savedPromoIds: candidateSavedPromoIds,
+        })
+        candidatePerfBox.value = { queryMs: candidates.queryMs, rows: candidates.ids.length, hitLimit: candidates.hitLimit }
+        if (!candidates.ids.length) return [[], 0] as const
+        const hydrationT0 = Date.now()
+        const rows = await prisma.promo.findMany({
+          where: { id: { in: candidates.ids } },
+          include: {
+            category: { select: { name: true, slug: true, icon: true, color: true } },
+            commerce: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                logoUrl: true,
+                instagramUrl: true,
+                activePromoCount: true,
+                locationModel: true,
+                ...(userProvince && !isAdmin ? { branches: { select: { province: true }, where: { province: { not: null } } } } : {}),
+              },
+            },
+            requirements: {
+              include: {
+                bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
+                wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
+                cardNetwork: { select: { id: true, name: true, slug: true } },
+              },
+            },
+          },
+        })
+        // Prisma no garantiza el orden del `where: {id: {in}}` — reordenar según
+        // el ORDER BY ya resuelto por la query de candidatas (mismo orden que
+        // usaría el camino viejo antes del sort final más abajo).
+        const orderIndex = new Map(candidates.ids.map((id, i) => [id, i]))
+        rows.sort((a, b) => (orderIndex.get(a.id) ?? 0) - (orderIndex.get(b.id) ?? 0))
+        if (candidatePerfBox.value) (candidatePerfBox.value as any).hydrationMs = Date.now() - hydrationT0
+        return [rows, rows.length] as const
+      })()
     : await Promise.all([
         prisma.promo.findMany({
           where,
@@ -453,6 +644,14 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
         // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
         paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
       ])
+
+  if (candidatePerfBox.value) {
+    perf.candidateQueryMs = candidatePerfBox.value.queryMs
+    perf.candidateRows = candidatePerfBox.value.rows
+    perf.candidateHitLimit = candidatePerfBox.value.hitLimit
+    perf.hydrationMs = (candidatePerfBox.value as any).hydrationMs
+  }
+  perf.fetchMs = Date.now() - perfStart
 
   // Day bitmask filtering
   let filtered = promos
@@ -741,6 +940,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       })
     }
 
+    const profileMatchStart = Date.now()
     filtered = filtered.filter(promo => {
       // Las promos guardadas siempre se muestran (favoritos del usuario)
       if (savedSet.has(promo.id)) return true
@@ -751,6 +951,8 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       // La promo aplica si AL MENOS UN requirement coincide con el perfil
       return promo.requirements.some(req => matchesProfile(req))
     })
+    perf.profileMatchMs = Date.now() - profileMatchStart
+    perf.matchedRows = filtered.length
   }
 
   // ── Filtro rango de descuento ─────────────────────────────────────────
@@ -961,6 +1163,13 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
 
     return a.name.localeCompare(b.name, 'es')
   }).map(d => d.p)
+
+  if (useCandidates) {
+    perf.totalMs = Date.now() - perfStart
+    perf.recommendationsCount = orderedPromos.length
+    console.log(`[candidate-selection] ${JSON.stringify(perf)}`)
+    return { promos: orderedPromos, totalCount, hasMore: false, perf }
+  }
 
   return { promos: orderedPromos, totalCount, hasMore: false }
 }
