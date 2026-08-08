@@ -198,7 +198,15 @@ export async function middleware(req: NextRequest) {
   }
 
   // 3. Obtener token para rutas protegidas
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  // secureCookie explícito: getToken() por defecto lo deriva de si
+  // NEXTAUTH_URL empieza con "https://", y NEXTAUTH_URL en Vercel quedó en
+  // "http://localhost:3000" — sin esto busca la cookie sin prefijo __Secure-
+  // y nunca encuentra la que sí setea authOptions (ver nota en lib/authOptions.ts).
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+    secureCookie: process.env.NODE_ENV === 'production',
+  })
 
   // 4. No autenticado -> redirigir al login
   if (!token) {

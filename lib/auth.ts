@@ -6,9 +6,10 @@ import { getToken } from 'next-auth/jwt'
  * Más seguro y confiable que confiar en headers enviados por el cliente.
  */
 export async function getAuthenticatedEmail(req: NextRequest): Promise<string | null> {
-  const token = await getToken({ 
-    req, 
-    secret: process.env.NEXTAUTH_SECRET 
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+    secureCookie: process.env.NODE_ENV === 'production',
   })
   return token?.email || null
 }
