@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
+import { getAuthToken } from '@/lib/auth'
 import { getPromosData } from '@/lib/getPromos'
 import { rankForHome } from '@/lib/decisionEngine'
 import { getNearbyBranchesByCommerce } from '@/lib/nearbyBranches'
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const lng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null
     const guestProfileParam = searchParams.get('guest_profile')
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    const token = await getAuthToken(req)
     const email = (token?.email as string | undefined) || req.headers.get('x-user-email')
     const role = token?.role as string | undefined
     const isAdmin = role === 'ADMIN' || role === 'MODERATOR'

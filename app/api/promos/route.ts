@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
-import { getToken } from 'next-auth/jwt'
+import { getAuthToken } from '@/lib/auth'
 import { getPromosData, PromoQueryParams } from '@/lib/getPromos'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       guestProfileParam: searchParams.get('guest_profile'),
     }
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    const token = await getAuthToken(req)
     const email = (token?.email as string | undefined) || req.headers.get('x-user-email')
     const role = token?.role as string | undefined
     const isAdmin = role === 'ADMIN' || role === 'MODERATOR'

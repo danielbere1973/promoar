@@ -1,13 +1,13 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
+import { getAuthToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
 
 export async function POST(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  const token = await getAuthToken(req)
   if (!token || (token.role !== 'ADMIN' && token.role !== 'MODERATOR')) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }

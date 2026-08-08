@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
+import { getAuthToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Resend } from 'resend'
 import { emailWrapper } from '@/lib/email/template'
@@ -26,7 +26,7 @@ function matchesProfile(
 }
 
 export async function POST(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  const token = await getAuthToken(req)
   if (!token || token.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { subject, themeId = 'top3-finde', preview, userIds } = await req.json()

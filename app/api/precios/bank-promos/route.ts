@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
-import { getToken } from 'next-auth/jwt'
+import { getAuthToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getPromosData } from '@/lib/getPromos'
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ promos: {} })
     }
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    const token = await getAuthToken(req)
     const email = (token?.email as string | undefined) || req.headers.get('x-user-email')
     const role = token?.role as string | undefined
     const isAdmin = role === 'ADMIN' || role === 'MODERATOR'
