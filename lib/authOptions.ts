@@ -5,6 +5,11 @@ import bcrypt from 'bcryptjs'
 import type { NextAuthOptions } from 'next-auth'
 
 export const authOptions: NextAuthOptions = {
+  // Necesario en Vercel Preview: cada deploy tiene un subdominio *.vercel.app
+  // random, distinto del NEXTAUTH_URL fijo configurado en el proyecto — sin
+  // esto NextAuth arma cookies/redirects contra el host equivocado y el login
+  // "funciona" pero el middleware nunca encuentra el token (loop de vuelta a /login).
+  trustHost: true,
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
   providers: [
