@@ -1244,6 +1244,17 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         return 0
       })
 
+  // Top 3 genérico (destacadas + mejor descuento), sin personalización — usado
+  // como teaser real (no ficticio) en el Hero cuando el usuario todavía no
+  // configuró su perfil financiero. Mismo criterio que la sección "Destacadas hoy".
+  const topGenericPromos = useMemo(() => {
+    const featured = promosFiltradas.filter(p => (p as any).isFeatured)
+    const byDiscount = [...promosFiltradas]
+      .filter(p => !(p as any).isFeatured && bestPercentageReq(p)?.discountValue)
+      .sort((a, b) => (bestPercentageReq(b)?.discountValue ?? 0) - (bestPercentageReq(a)?.discountValue ?? 0))
+    return [...featured, ...byDiscount].slice(0, 3)
+  }, [promosFiltradas])
+
   const toggleSave = async (id: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -2476,6 +2487,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               <HomeHero
                 data={sharedRecommendations.data}
                 loading={sharedRecommendations.loading}
+                teaserPromos={topGenericPromos}
                 onOpenPromo={openPromoDetail}
                 onGoToProfile={() => router.push('/perfil')}
               />

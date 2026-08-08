@@ -49,6 +49,8 @@ function isExpiringSoon(validUntil: string | Date | null | undefined): boolean {
 type Props = {
   data: RecommendationResponse | null
   loading: boolean
+  /** Top 3 genérico (no personalizado) para mostrar como teaser real cuando falta perfil. */
+  teaserPromos?: any[]
   onOpenPromo: (promo: any) => void
   onGoToProfile: () => void
 }
@@ -58,7 +60,7 @@ type Props = {
 // relevante, con la señal más fuerte que aplique (ahorro / vence / online /
 // cerca). Nunca inventa datos — si `data` todavía no llegó, muestra estructura
 // (skeleton), nunca un placeholder de marketing.
-export default function HomeHero({ data, loading, onOpenPromo, onGoToProfile }: Props) {
+export default function HomeHero({ data, loading, teaserPromos, onOpenPromo, onGoToProfile }: Props) {
   const router = useRouter()
 
   if (loading && !data) {
@@ -71,6 +73,7 @@ export default function HomeHero({ data, loading, onOpenPromo, onGoToProfile }: 
   }
 
   if (!data || data.status === 'incomplete_profile') {
+    const teaser = teaserPromos?.slice(0, 3) ?? []
     return (
       <div className="px-4 pt-3 pb-5">
         <h1 className="text-[21px] font-black text-[#0D1B2E] dark:text-white leading-tight mb-1">
@@ -79,11 +82,46 @@ export default function HomeHero({ data, loading, onOpenPromo, onGoToProfile }: 
         <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4 leading-snug">
           Cargá tus tarjetas y billeteras para que te mostremos solo lo que te sirve a vos.
         </p>
+
+        {teaser.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {teaser.map(promo => {
+              const req = bestDiscountReq(promo.requirements ?? [])
+              const { num, unit } = discountDisplay(req)
+              return (
+                <div
+                  key={promo.id}
+                  className="relative rounded-2xl bg-white dark:bg-[#0F2040] border border-[#E4E8EF] dark:border-slate-700 p-3 flex flex-col items-center text-center overflow-hidden"
+                >
+                  <div className="absolute inset-0 backdrop-blur-[1.5px] bg-white/55 dark:bg-[#0F2040]/55 pointer-events-none" />
+                  <div
+                    className="relative w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden mb-1.5"
+                    style={{ background: (promo.category?.color ?? '#1E3A5F') + '14' }}
+                  >
+                    {promo.commerce?.logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={promo.commerce.logoUrl} alt="" className="max-h-6 max-w-[80%] object-contain" />
+                    ) : (
+                      <span className="text-base">{promo.category?.icon ?? '🏷️'}</span>
+                    )}
+                  </div>
+                  <span className="relative text-[15px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-none tabular-nums">
+                    {num}{unit}
+                  </span>
+                  <span className="relative text-[9px] text-slate-400 dark:text-slate-500 truncate max-w-full mt-0.5">
+                    {promo.commerce?.name}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         <button
           onClick={onGoToProfile}
           className="inline-flex items-center gap-2 text-[13px] font-black text-white bg-[#1D3D6E] dark:bg-[#3A6BC4] rounded-2xl px-5 py-3 hover:opacity-90 transition-opacity"
         >
-          Configurar mi perfil →
+          {teaser.length > 0 ? 'Ver si aplican a mi tarjeta →' : 'Configurar mi perfil →'}
         </button>
       </div>
     )
