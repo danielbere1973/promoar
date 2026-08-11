@@ -4,6 +4,11 @@ import { Scraper, ScrapedPromo } from './types';
 import { extractProvinces } from './bank-helpers';
 
 const SOURCE_URL = 'https://coto.com.ar/legales/';
+// Coto migró a una SPA Angular: /legales/ y /terminos-descuentos ya no traen el
+// contenido en el HTML server-rendered. El mismo contenido (antes en un iframe
+// oculto) ahora se obtiene pidiendo la página Endeca en formato JSON — sin JS,
+// sin sesión de navegador. El HTML de las promos vive en Main[0].content.
+const JSON_SOURCE_URL = 'https://www.coto.com.ar/sitios/cdigi/terminos-descuentos?format=json';
 
 // Helper: simula matchAll sin requerir --downlevelIteration
 function execAll(regex: RegExp, text: string): RegExpExecArray[] {
@@ -468,29 +473,66 @@ export const CotoScraper: Scraper = {
   name: 'Coto',
 
   async run(): Promise<ScrapedPromo[]> {
-    const { data: html } = await axios.get(SOURCE_URL, {
+    const { data: pageJson } = await axios.get(JSON_SOURCE_URL, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PromoAR/1.0)' },
       timeout: 15000,
     });
-    const $ = cheerio.load(html);
-    const fullText = $('body').text();
+    const contentHtml: string = pageJson?.Main?.[0]?.content ?? '';
+    const $ = cheerio.load(contentHtml);
+    const container = $('.atg_store_company_content');
+    const paragraphs = (container.length ? container : $.root()).find('p').toArray();
 
-    // Coto separa cada promo con el patrón ** TITULO **
-    const titlePattern = /\*\*\s*([^*]+?)\s*\*\*/g;
-    const matches = execAll(titlePattern, fullText);
+    // Coto ya no separa cada promo con el patrón de texto ** TITULO **: ahora
+    // cada bloque arranca con un <p> cuyo primer nodo es un <strong> en
+    // mayúsculas (el título), y el cuerpo son los <p> siguientes hasta el
+    // próximo título. Reconstruimos el mismo formato "texto plano" que
+    // esperan los extractores de abajo (extractDates, extractDiscount, etc.)
+    // a partir de cada bloque de <p> del DOM en vez de un regex sobre texto.
+    type Block = { title: string; bodyText: string };
+    const blocks: Block[] = [];
+    let current: Block | null = null;
+
+    for (const el of paragraphs) {
+      const $p = $(el);
+      const firstNode = $p
+        .contents()
+        .filter((_, n) => (n.type === 'text' ? (n.data || '').trim().length > 0 : true))
+        .first()[0];
+
+      let strongText: string | null = null;
+      if (firstNode) {
+        const $first = $(firstNode);
+        if (firstNode.tagName === 'strong') {
+          strongText = $first.text().trim();
+        } else if (['span', 'b'].includes(firstNode.tagName || '') && $first.find('strong').length) {
+          strongText = $first.find('strong').first().text().trim();
+        }
+      }
+
+      const hasLower = strongText ? /[a-z]/.test(strongText.replace(/&[a-z]+;/gi, '')) : false;
+      const looksLikeTitle = !!strongText && strongText.length >= 5 && strongText.length <= 100 && !hasLower;
+
+      if (looksLikeTitle && strongText) {
+        current = { title: strongText, bodyText: '' };
+        blocks.push(current);
+        // El resto del <p> (después del <strong> del título, si comparte el mismo <p>
+        // separado por <br/>) es cuerpo de esa misma promo.
+        const restText = $p.text().replace(strongText, '').trim();
+        if (restText) current.bodyText += restText + '\n';
+      } else if (current) {
+        current.bodyText += $p.text().trim() + '\n';
+      }
+    }
+
     const promos: ScrapedPromo[] = [];
 
-    for (let i = 0; i < matches.length; i++) {
-      const titleMatch = matches[i];
-      const title = titleMatch[1].trim();
+    for (let i = 0; i < blocks.length; i++) {
+      const title = blocks[i].title.trim();
 
       // Ignorar títulos irrelevantes
       if (title.length < 5 || /promo rodados|publicidad/i.test(title)) continue;
 
-      // Cuerpo: texto entre este ** ** y el siguiente (o fin de página)
-      const start = titleMatch.index! + titleMatch[0].length;
-      const end = matches[i + 1] ? matches[i + 1].index! : fullText.length;
-      const bodyText = fullText.slice(start, end).trim();
+      const bodyText = blocks[i].bodyText.trim();
 
       // ── Extracción de datos ───────────────────────────────────────────────
       const { validFrom, validUntil, specificDates } = extractDates(bodyText);
