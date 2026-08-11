@@ -8,25 +8,27 @@ import { Scraper, ScrapedPromo } from './types';
 import { extractProvinces } from './bank-helpers';
 
 // ─── Lista de bancos ──────────────────────────────────────────────────────────
-// Parámetros ?bank= verificados directamente desde los links de la página.
-const BANKS: { param: string; displayName: string; type?: string }[] = [
-  { param: 'Santander',           displayName: 'Banco Santander' },
-  { param: 'Galicia',             displayName: 'Banco Galicia' },
-  { param: 'Banco Macro',         displayName: 'Banco Macro' },
-  { param: 'Nacion',              displayName: 'Banco Nación' },
-  { param: 'Banco Hipotecario',   displayName: 'Banco Hipotecario' },
-  { param: 'Banco Patagonia',     displayName: 'Banco Patagonia' },
-  { param: 'supervielle',         displayName: 'Banco Supervielle' },
-  { param: 'Banco Comafi',        displayName: 'Banco Comafi' },
-  { param: ' Tarjeta Naranja X',  displayName: 'Naranja X' },
-  { param: 'Amex',                displayName: 'American Express Banco' },
-  { param: 'Visa y Master',       displayName: 'Visa / Mastercard' },
-  { param: 'MODO',                displayName: 'MODO',        type: 'wallet' as const },
-  { param: 'Jumbo Mas Clarin',    displayName: 'Clarín 365' },
-  { param: 'Banco Patagonia 365', displayName: 'Banco Patagonia 365' },
-  { param: 'CencoPay',            displayName: 'Cencopay Mastercard',    type: 'wallet' as const },
-  { param: 'Tarjeta Sol',         displayName: 'Tarjeta Sol' },
-  { param: 'Medios de Pago',      displayName: 'Jubilados y Pensionados' },
+// `logoMatch` es un substring del filename del logo (src de <img>) usado para
+// ubicar el botón clicable correspondiente en la grilla "Por banco" — ver nota
+// en scrapeBankPage() sobre por qué no se navega directo con `?bank=`.
+const BANKS: { param: string; displayName: string; logoMatch: string; type?: string }[] = [
+  { param: 'Santander',           displayName: 'Banco Santander',            logoMatch: 'santander' },
+  { param: 'Galicia',             displayName: 'Banco Galicia',              logoMatch: 'galicia' },
+  { param: 'Banco Macro',         displayName: 'Banco Macro',                logoMatch: 'macroo' },
+  { param: 'Nacion',              displayName: 'Banco Nación',               logoMatch: 'nacion' },
+  { param: 'Banco Hipotecario',   displayName: 'Banco Hipotecario',          logoMatch: 'hipotecario' },
+  { param: 'Banco Patagonia',     displayName: 'Banco Patagonia',            logoMatch: 'patagonia' },
+  { param: 'supervielle',         displayName: 'Banco Supervielle',          logoMatch: 'superville' },
+  { param: 'Banco Comafi',        displayName: 'Banco Comafi',               logoMatch: 'comafi' },
+  { param: ' Tarjeta Naranja X',  displayName: 'Naranja X',                  logoMatch: 'naranjax' },
+  { param: 'Amex',                displayName: 'American Express Banco',     logoMatch: 'amex' },
+  { param: 'Visa y Master',       displayName: 'Visa / Mastercard',          logoMatch: 'fiserv' },
+  { param: 'MODO',                displayName: 'MODO',        type: 'wallet' as const, logoMatch: 'modo' },
+  { param: 'Jumbo Mas Clarin',    displayName: 'Clarín 365',                 logoMatch: 'clarin' },
+  { param: 'Banco Patagonia 365', displayName: 'Banco Patagonia 365',        logoMatch: 'patagonia365' },
+  { param: 'CencoPay',            displayName: 'Cencopay Mastercard',    type: 'wallet' as const, logoMatch: 'cencopay1' },
+  { param: 'Tarjeta Sol',         displayName: 'Tarjeta Sol',                logoMatch: 'tarjetasol' },
+  { param: 'Medios de Pago',      displayName: 'Jubilados y Pensionados',    logoMatch: 'jubilados' },
 ];
 
 const BASE_URL = 'https://www.vea.com.ar/descuentos-del-dia?type=por-banco';
@@ -265,7 +267,13 @@ function parsePageText(
   const promos: ScrapedPromo[] = [];
 
   // Normalize newlines
-  const text = fullText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  let text = fullText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Cortar el header fijo del sitio (nav, breadcrumbs) antes del primer bloque
+  // real — si no, ese texto ("¡Envío en el día!", "Comprá", ...) cuela como
+  // "título" del primer promo del banco (ver `let title` más abajo).
+  const firstBlockStart = text.search(/Planes de Financiaci[oó]n/i);
+  if (firstBlockStart >= 0) text = text.slice(firstBlockStart);
 
   // Split on the "+" / "Ver más" pattern that Vea/VTEX uses after each promo card's legal text.
   // Also split on "Exclusivo Online" header which starts some cards.
@@ -373,24 +381,34 @@ function parsePageText(
 }
 
 // ─── scrapeBankPage ───────────────────────────────────────────────────────────
+// IMPORTANTE: Vea es una SPA VTEX donde el filtro "?bank=X" en la URL NO
+// dispara el filtrado — sólo lo hace un click real sobre el logo del banco en
+// la grilla (el estado vive en React, no se lee del query param al montar).
+// Navegar directo con `page.goto(url + '&bank=...')` devuelve siempre el mismo
+// contenido genérico (la promo "3 cuotas sin interés" de Planes de
+// Financiación), sin importar el banco pedido — mismo bug diagnosticado y
+// corregido en jumbo.ts (11/8/2026), Vea comparte la misma plataforma.
 async function scrapeBankPage(
   page: Page,
-  bank: { param: string; displayName: string },
+  bank: { param: string; displayName: string; logoMatch: string; type?: string },
 ): Promise<ScrapedPromo[]> {
-  const url = `${BASE_URL}&bank=${encodeURIComponent(bank.param)}`;
-  console.log(`[Vea] Scrapeando ${bank.displayName}: ${url}`);
+  console.log(`[Vea] Scrapeando ${bank.displayName} (logo~"${bank.logoMatch}")`);
 
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Reset: volver a la grilla "Por banco" antes de cada click (si ya había
+    // una card seleccionada de una iteración anterior).
+    await page.locator('text=Por banco').first().click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(600);
 
-    // Esperar por el contenedor de promos o hasta 8s (SPA VTEX tarda en hidratar)
-    await page.waitForSelector(
-      '[class*="descuento"], [class*="promo"], [class*="discount"], .vtex-rich-text',
-      { timeout: 8000 }
-    ).catch(() => {
-      // Si no hay selector, igual esperamos un tiempo fijo para el rendering
-    });
-    await page.waitForTimeout(3000);
+    const logoBtn = page.locator(`img[src*="${bank.logoMatch}" i]`).first();
+    const found = await logoBtn.count();
+    if (found === 0) {
+      console.warn(`[Vea] Logo no encontrado en la grilla para ${bank.displayName} (sin promos activas hoy)`);
+      return [];
+    }
+
+    await logoBtn.click({ timeout: 8000 });
+    await page.waitForTimeout(2500);
 
     const fullText = await page.evaluate(() => document.body.innerText);
     console.log(`[Vea] ${bank.displayName}: ${fullText.length} chars`);
@@ -400,7 +418,7 @@ async function scrapeBankPage(
       return [];
     }
 
-    const promos = parsePageText(fullText, bank.displayName, url, bank.type === 'wallet');
+    const promos = parsePageText(fullText, bank.displayName, BASE_URL, bank.type === 'wallet');
     console.log(`[Vea] ${bank.displayName}: ${promos.length} promos`);
     return promos;
   } catch (err) {
@@ -435,6 +453,16 @@ export const VeaScraper: Scraper = {
 
       // Bloquear recursos innecesarios para acelerar el scraping
       await page.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf}', route => route.abort());
+
+      // Navegar una sola vez a la grilla "Por banco" sin filtro — cada banco
+      // se selecciona después con un click sobre su logo (ver nota en
+      // scrapeBankPage sobre por qué `?bank=` en la URL no sirve).
+      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForSelector(
+        '[class*="descuento"], [class*="promo"], [class*="discount"], .vtex-rich-text',
+        { timeout: 8000 }
+      ).catch(() => {});
+      await page.waitForTimeout(2000);
 
       for (const bank of BANKS) {
         const promos = await scrapeBankPage(page, bank);
