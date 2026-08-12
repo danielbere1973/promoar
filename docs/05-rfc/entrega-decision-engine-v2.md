@@ -1,7 +1,11 @@
 # Entrega — Decision Engine v2 (RFC-008 / DR-001)
 
 **Rama**: `feature/decision-engine-contract` (desde `feature/nueva-home` limpia, commit base `625eee4`)
-**Commit**: `d760fea` — "feat: Decision Engine v2 — implementación RFC-008 (HomeDecisionPayload)"
+**Commit inicial**: `d760fea` — "feat: Decision Engine v2 — implementación RFC-008 (HomeDecisionPayload)"
+**Commits de corrección post-revisión de aceptación**: eliminación de
+`reasonCodeToText`/`reasonsText` del motor (nuevo `lib/reasonText.ts`) y fix
+de determinismo (`buildValidityFact` usa `ctx.now`, no `new Date()`) — ver
+§6.
 **Fecha**: 11-12/8/2026
 
 Implementación de RFC-008 (contrato de salida) + RFC-007 §1-§6 (scoreAfinidad,
@@ -13,19 +17,19 @@ RFC-006 ni producción — según alcance pedido.
 
 ## 1. Diff completo
 
-4 archivos nuevos, 0 archivos existentes modificados (implementación
+5 archivos nuevos, 0 archivos existentes modificados (implementación
 puramente aditiva — `lib/decisionEngine.ts` v1 queda intacto y congelado):
 
-| Archivo | Líneas | Qué es |
-|---|---|---|
-| `lib/homeDecisionContract.ts` | 115 | Tipos RFC-008 §3, transcriptos literalmente del RFC aprobado |
-| `lib/rubroCatalog.ts` | 63 | Catálogo de 5 rubros, grounded en los 21 slugs reales de `Category` (verificado contra dev-promoar el 11/8) |
-| `lib/decisionEngineV2.ts` | 407 | Motor: scoreAfinidad, Facts, Reasons, confidence, agrupación por rubro, `buildHomeDecisionPayload()` |
-| `lib/decisionEngineV2.test.ts` | 171 | 10 casos de prueba (vitest), todos verdes |
+| Archivo | Qué es |
+|---|---|
+| `lib/homeDecisionContract.ts` | Tipos RFC-008 §3, transcriptos literalmente del RFC aprobado |
+| `lib/rubroCatalog.ts` | Catálogo de 5 rubros, grounded en los 21 slugs reales de `Category` (verificado contra dev-promoar el 11/8) |
+| `lib/decisionEngineV2.ts` | Motor: scoreAfinidad, Facts, Reasons, confidence, agrupación por rubro, `buildHomeDecisionPayload()` |
+| `lib/reasonText.ts` | **Nuevo tras revisión de aceptación** — adaptador de presentación que mapea `Reason[]` → `string[]`, movido acá desde el motor (ver §6) |
+| `lib/decisionEngineV2.test.ts` | 12 casos de prueba (vitest), todos verdes |
 
-Diff completo disponible con `git show d760fea` en la rama. No se listan
-inline acá por longitud — los 4 archivos están completos y son nuevos, así
-que el diff es idéntico al contenido final de cada archivo.
+Diff completo disponible con `git show d760fea` (implementación inicial) +
+el commit de corrección post-revisión en la rama.
 
 Puntos de diseño relevantes que el diff no deja obvios a simple lectura:
 
@@ -76,8 +80,7 @@ cuotas sin interés online) con ubicación activa y perfil completo.
           { "code": "mayor_ahorro" },
           { "code": "coincide_gasto_habitual" },
           { "code": "cercania", "params": { "metros": 300 } }
-        ],
-        "reasonsText": ["Es el mayor ahorro para tus tarjetas", "Es un gasto habitual para vos", "Está a 300 metros tuyo"]
+        ]
       },
       "alternativas": [
         {
@@ -124,7 +127,7 @@ lib/decisionEngineV2.test.ts`.
 | **Agrupación** | Ninguna — diversidad por categoría es una penalización blanda dentro de un único Top-3 global | Por rubro — cada uno de los 5 rubros se evalúa y rankea independientemente |
 | **Vacíos** | No existen — si no hay candidatas, el array vuelve vacío sin explicación | Estado explícito `{ status: 'empty', reason }` por rubro, con 3 motivos distinguibles (`sin_candidatos`, `bajo_confianza`, `perfil_incompleto`) |
 | **Principal vs resto** | No hay distinción — las 3 posiciones son igual de "destacadas" | `principal` (1) + `alternativas` (0-2) con roles y shapes de consumo distintos (RFC-008 §2.10) |
-| **Razones** | `string[]` en español, texto fijo embebido en el motor | `Reason[]` con `{ code, params? }` — desacoplado del idioma/copy; `reasonsText` queda como campo de transición opcional |
+| **Razones** | `string[]` en español, texto fijo embebido en el motor | `Reason[]` con `{ code, params? }` — el motor no arma copy; `lib/reasonText.ts` (fuera del motor) arma `reasonsText` bajo demanda como campo de transición opcional |
 | **Confidence** | No existe como concepto — el `score` hace las dos cosas (rankear y decidir si mostrar) | Campo propio `{ value, tier, source }`, distinto del `score` de ranking — decide si el rubro se muestra `ok` o pasa a `empty` |
 | **Facts** | No existen — el consumidor debe leer `promo` crudo para saber tipo de descuento, tope, medio de pago | `Facts` estructurado por candidata — toda la interpretación de reglas financieras ya resuelta |
 | **Metadata** | Ninguna | `generatedAt`, `latencyMs`, `engineVersion`, `missingProfile`, `status` a nivel payload |
@@ -142,7 +145,7 @@ Farmacias, Gastronomía e Indumentaria no tuvieron nada que mostrar ese día
 
 ## 4. Casos de prueba
 
-Los 10 tests en `lib/decisionEngineV2.test.ts` cubren exactamente lo
+Los 12 tests en `lib/decisionEngineV2.test.ts` cubren exactamente lo
 pedido:
 
 1. **Rubro con principal** (sin alternativas) — Coto solo en Supermercados.
@@ -153,10 +156,12 @@ pedido:
 6. **Los 5 tipos de `BenefitFact`** — `reintegro`, `pct_off`, `monto_fijo`, `nxm`, `cuotas_sin_interes`, uno por uno, verificando el mapeo exacto desde `DiscountType`.
 7. **`status: 'incomplete_profile'`** — sin perfil, `rubros` vacío, `missingProfile` propagado.
 8. **`status: 'all_empty'`** — con perfil pero sin ninguna promo, los 5 rubros en `empty`.
-9. **Reasons estructuradas** — verifica que cada `reason` tiene `code: string` y nunca una propiedad `text`, y que `reasonsText` (cuando está) tiene la misma longitud que `reasons`.
+9. **Reasons estructuradas, sin copy en el motor** — verifica que cada `reason` tiene `code: string`, nunca una propiedad `text`, y que el motor **no** agrega `reasonsText` por su cuenta (`toBeUndefined()`).
 10. **N=5 fijo** — el payload siempre devuelve exactamente 5 `RubroSlot`, estén vacíos o no (RFC-008 §2.3: posiciones nunca se omiten).
+11. **`reasonsToText` (adaptador, `lib/reasonText.ts`)** — construido fuera del motor a partir de `Reason[]`, arma el mismo compat field que antes generaba `decisionEngineV2.ts` internamente.
+12. **Determinismo con `ctx.now` fijo** — dos llamadas a `buildHomeDecisionPayload` con el mismo input y el mismo `ctx.now` producen `RubroSlot` idénticos (`toEqual`), incluyendo `facts.validity.expiresSoon`.
 
-Correr: `npm test -- lib/decisionEngineV2.test.ts` (10/10 verdes).
+Correr: `npm test -- lib/decisionEngineV2.test.ts` (12/12 verdes) o `npm test` (suite completa, 48/48 verdes).
 
 ---
 
@@ -187,12 +192,53 @@ ningún dato de `Facts` depende de que la UI toque `promo`.
 
 `reasons` tampoco obliga a la UI a interpretar nada financiero — son
 códigos (`mayor_ahorro`, `cercania`, etc.) que mapean a copy en la capa de
-presentación, sin que la UI necesite saber *por qué* ese código se activó.
+presentación (`lib/reasonText.ts`, fuera del motor), sin que la UI necesite
+saber *por qué* ese código se activó.
 
 **Confirmado**: con los tipos de `homeDecisionContract.ts`, un componente de
 Home puede renderizar cualquier `RubroSlot` sin importar Prisma, sin
 resolver `capUnlimited`, sin parsear bitmasks de días, y sin decidir qué
 `requirement` matchea al usuario — todo eso ya pasó una sola vez, acá.
+
+---
+
+## 6. Correcciones post-revisión de aceptación (12/8/2026)
+
+La revisión de aceptación contra los 8 puntos de RFC-008 encontró dos
+incumplimientos reales. Ambos corregidos en este PR antes de aprobar merge:
+
+1. **Copy en el motor (RFC-008 §2.5)**: `reasonCodeToText()` vivía dentro de
+   `decisionEngineV2.ts` y se invocaba para poblar `reasonsText` en cada
+   `DecisionCandidate` — exactamente el acoplamiento motor↔idioma que la RFC
+   dice haber resuelto con `reasons` estructurado. Fix: la función se movió
+   tal cual a `lib/reasonText.ts` (`reasonToText`/`reasonsToText`), el motor
+   dejó de importar/calcular `reasonsText`, y `toDecisionCandidate()` ahora
+   devuelve solo `reasons` (código+params). El campo `reasonsText` sigue
+   existiendo en el contrato (`homeDecisionContract.ts`, sin cambios) como
+   opcional de transición — quien lo necesite lo arma llamando al adaptador
+   con la salida del motor.
+2. **No determinismo por `new Date()` (criterio de aceptación #3)**:
+   `buildValidityFact()` llamaba `new Date()` directamente en vez de usar
+   `ctx.now`, que existía en el tipo `DecisionContext` pero nunca se leía.
+   Esto afectaba `expiresSoon` (parte de `Reason[]`, no solo metadata) cerca
+   del corte de 3 días. Fix: `buildHomeDecisionPayload` resuelve `now` una
+   sola vez (`ctx.now ?? new Date()`) y lo propaga explícitamente a
+   `buildRubroSlot` → `toDecisionCandidate` → `buildFacts` →
+   `buildValidityFact`. Con `ctx.now` fijo, el mismo input produce siempre el
+   mismo output (test nuevo #12, `toEqual` sobre el `RubroSlot` completo).
+
+**Deuda conocida, no resuelta en este PR** (según instrucción explícita de
+no ampliar alcance):
+
+- **Dedup conceptual entre `principal` y `alternativas`**: si dos promos del
+  mismo rubro tuvieran el mismo comercio + mismo tipo/valor de descuento,
+  nada en `buildRubroSlot` las distinguiría — simplemente toma las
+  posiciones 1..2 del array ordenado por score. RFC-008 no asigna esta
+  responsabilidad explícitamente al motor ni a higiene de datos upstream;
+  queda como decisión abierta para cuando haya un caso real que lo exija.
+- Cortes de umbral (`CONFIDENCE_THRESHOLD_OK = 0.35`,
+  `DIAS_PARA_VENCE_PRONTO = 3`) siguen siendo hipótesis de spike, no
+  calibración final (ya señalado en §1).
 
 ---
 

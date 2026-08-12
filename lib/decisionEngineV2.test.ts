@@ -151,7 +151,7 @@ describe('buildHomeDecisionPayload', () => {
     expect(payload.rubros.every(r => r.status === 'empty')).toBe(true)
   })
 
-  it('reasons son códigos estructurados, no strings libres', () => {
+  it('reasons son códigos estructurados, no strings libres, y el motor no arma copy', () => {
     const promo = makePromo({ commerceId: 'commerce-coto', commerce: { name: 'Coto' } })
     const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
     const slot = payload.rubros.find(r => r.rubro.id === 'supermercados')!
@@ -160,7 +160,42 @@ describe('buildHomeDecisionPayload', () => {
         expect(typeof reason.code).toBe('string')
         expect(reason).not.toHaveProperty('text')
       }
-      expect(slot.principal.reasonsText!.length).toBe(slot.principal.reasons.length)
+      // RFC-008 §2.5: el motor no calcula reasonsText — eso vive en la capa
+      // de presentación (lib/reasonText.ts). Acá solo se verifica que el
+      // motor no lo agregue por su cuenta.
+      expect(slot.principal.reasonsText).toBeUndefined()
+    }
+  })
+
+  it('reasonsToText (adaptador de presentación) arma el compat field fuera del motor', async () => {
+    const { reasonsToText } = await import('./reasonText')
+    const promo = makePromo({ commerceId: 'commerce-coto', commerce: { name: 'Coto' } })
+    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
+    const slot = payload.rubros.find(r => r.rubro.id === 'supermercados')!
+    if (slot.status === 'ok') {
+      const texts = reasonsToText(slot.principal.reasons)
+      expect(texts.length).toBe(slot.principal.reasons.length)
+      expect(texts.every(t => typeof t === 'string')).toBe(true)
+    }
+  })
+
+  it('buildHomeDecisionPayload es determinístico ante el mismo input y ctx.now fijo', () => {
+    const promo = makePromo({
+      commerceId: 'commerce-coto',
+      commerce: { name: 'Coto' },
+      validUntil: new Date('2026-08-14T00:00:00.000Z').toISOString(),
+    })
+    const fixedNow = new Date('2026-08-12T12:00:00.000Z')
+    const ctxWithNow: DecisionContext = { ...CTX, now: fixedNow }
+
+    const payloadA = buildHomeDecisionPayload([promo], ctxWithNow, PREFS, HAS_PROFILE)
+    const payloadB = buildHomeDecisionPayload([promo], ctxWithNow, PREFS, HAS_PROFILE)
+
+    const slotA = payloadA.rubros.find(r => r.rubro.id === 'supermercados')!
+    const slotB = payloadB.rubros.find(r => r.rubro.id === 'supermercados')!
+    expect(slotA).toEqual(slotB)
+    if (slotA.status === 'ok') {
+      expect(slotA.principal.facts.validity.expiresSoon).toBe(true) // vence en 2 días, umbral es 3
     }
   })
 

@@ -25,7 +25,6 @@ import type {
   HomeDecisionStatus,
   PaymentMethodFact,
   Reason,
-  ReasonCode,
   RubroSlot,
   ValidityFact,
 } from './homeDecisionContract'
@@ -224,7 +223,7 @@ function buildValidityFact(promo: any, now: Date): ValidityFact {
   return { validDaysLabel, expiresAt, expiresSoon }
 }
 
-function buildFacts(promo: any, rubroId: string): Facts {
+function buildFacts(promo: any, rubroId: string, now: Date): Facts {
   const best = promo.userBestDiscount ?? promo.globalMaxDiscount ?? null
   return {
     rubroId,
@@ -232,7 +231,7 @@ function buildFacts(promo: any, rubroId: string): Facts {
     benefit: buildBenefitFact(best),
     cap: buildCapFact(best),
     paymentMethod: buildPaymentMethodFact(best),
-    validity: buildValidityFact(promo, new Date()),
+    validity: buildValidityFact(promo, now),
   }
 }
 
@@ -278,48 +277,32 @@ function buildReasons(promo: any, factors: ScoredFactors, ctx: DecisionContext, 
   return reasons.slice(0, 3) as Reason[]
 }
 
-function reasonCodeToText(reason: Reason, ctx: DecisionContext, promo: any): string {
-  switch (reason.code) {
-    case 'mayor_ahorro': return 'Es el mayor ahorro para tus tarjetas'
-    case 'afinidad_declarada': return 'Elegiste esta categoría como prioritaria'
-    case 'coincide_gasto_habitual': return 'Es un gasto habitual para vos'
-    case 'afinidad_inferida': return 'Sueles usar promos de esta categoría'
-    case 'cercania': {
-      const p = reason.params ?? {}
-      const label = p.metros != null ? `${p.metros} metros` : `${p.km} km`
-      return `Está a ${label} tuyo`
-    }
-    case 'vence_pronto': return 'Vence pronto'
-    case 'valido_hoy': return 'Válido hoy'
-    case 'disponible_online': return 'Podés usarla ahora mismo, sin moverte'
-    case 'favorito': return 'La guardaste como favorita'
-    case 'oportunidad_infrecuente': return 'Es una oportunidad poco frecuente'
-    case 'maximiza_ahorro_mensual': return 'Maximiza tu ahorro del mes'
-    default: return 'Compatible con tu banco principal'
-  }
-}
-
 // ─── Construcción de candidatas por rubro ──────────────────────────────────
+// reasonsText NO se calcula acá — RFC-008 §2.5 es explícito: el mapeo
+// código→texto acopla el motor al idioma/copy de la UI y debe vivir en la
+// capa de presentación. Ver lib/reasonText.ts para el adaptador que arma
+// ese campo de transición/compatibilidad a partir de Reason[] estructurado.
 function toDecisionCandidate(
   promo: any,
   score: number,
   factors: ScoredFactors,
   ctx: DecisionContext,
   isTopSavingInRubro: boolean,
-  rubroId: string
+  rubroId: string,
+  now: Date
 ): DecisionCandidate {
-  const facts = buildFacts(promo, rubroId)
+  const facts = buildFacts(promo, rubroId, now)
   const confidence = buildConfidence(score, factors.afinidadSource)
   const reasons = buildReasons(promo, factors, ctx, isTopSavingInRubro, facts)
-  const reasonsText = reasons.map(r => reasonCodeToText(r, ctx, promo))
-  return { promo, facts, score, confidence, reasons, reasonsText, recurrence: null }
+  return { promo, facts, score, confidence, reasons, recurrence: null }
 }
 
 function buildRubroSlot(
   rubro: RubroConfig,
   promosInRubro: any[],
   ctx: DecisionContext,
-  prefs: PersonaPreferences | undefined
+  prefs: PersonaPreferences | undefined,
+  now: Date
 ): RubroSlot {
   const candidates = promosInRubro.filter(p => passesVigencia(p, ctx.todayBit))
   if (candidates.length === 0) {
@@ -340,11 +323,11 @@ function buildRubroSlot(
 
   const topSavingId = scoredList.reduce((max, cur) => (cur.factors.ahorro > max.factors.ahorro ? cur : max), scoredList[0]).promo.id
 
-  const principal = toDecisionCandidate(best.promo, best.score, best.factors, ctx, best.promo.id === topSavingId, rubro.id)
+  const principal = toDecisionCandidate(best.promo, best.score, best.factors, ctx, best.promo.id === topSavingId, rubro.id, now)
 
   const alternativas = scoredList
     .slice(1, 1 + MAX_ALTERNATIVAS)
-    .map(({ promo, score, factors }) => toDecisionCandidate(promo, score, factors, ctx, promo.id === topSavingId, rubro.id))
+    .map(({ promo, score, factors }) => toDecisionCandidate(promo, score, factors, ctx, promo.id === topSavingId, rubro.id, now))
 
   return { status: 'ok', rubro, principal, alternativas }
 }
@@ -374,6 +357,8 @@ export function buildHomeDecisionPayload(
     }
   }
 
+  const now = ctx.now ?? new Date()
+
   const promosByCategorySlug = new Map<string, any[]>()
   for (const promo of promos) {
     const slug = promo.category?.slug
@@ -384,7 +369,7 @@ export function buildHomeDecisionPayload(
 
   const rubros: RubroSlot[] = RUBRO_CATALOG.map(rubro => {
     const promosInRubro = rubro.categorySlugs.flatMap(slug => promosByCategorySlug.get(slug) ?? [])
-    return buildRubroSlot(rubro, promosInRubro, ctx, prefs)
+    return buildRubroSlot(rubro, promosInRubro, ctx, prefs, now)
   })
 
   const allEmpty = rubros.every(r => r.status === 'empty')
