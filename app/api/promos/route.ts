@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    invalidatePublicPromosCache()
+    await invalidatePublicPromosCache()
     invalidateCategoriesCache()
     invalidatePromoDetailCache()
     invalidateCommerceDetailCache()

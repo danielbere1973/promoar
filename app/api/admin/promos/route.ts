@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest) {
         where: { id: body.id },
         data: { isFeatured: body.isFeatured },
       })
-      invalidatePublicPromosCache()
+      await invalidatePublicPromosCache()
       invalidateCategoriesCache()
       invalidatePromoDetailCache()
       invalidateCommerceDetailCache()
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest) {
       })
     }
 
-    invalidatePublicPromosCache()
+    await invalidatePublicPromosCache()
     invalidateCategoriesCache()
     invalidatePromoDetailCache()
     invalidateCommerceDetailCache()

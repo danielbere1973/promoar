@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     data: { status: 'EXPIRED' },
   })
 
-  if (result.count > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
+  if (result.count > 0) { await invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
 
   return NextResponse.json({ expired: result.count })
 }

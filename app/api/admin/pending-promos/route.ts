@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest) {
     })
   }
 
-  invalidatePublicPromosCache()
+  await invalidatePublicPromosCache()
   invalidateCategoriesCache()
   invalidatePromoDetailCache()
   invalidateCommerceDetailCache()

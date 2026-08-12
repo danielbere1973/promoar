@@ -76,7 +76,7 @@ export async function POST(req: Request) {
 
     await prisma.commerce.delete({ where: { id: sourceId } })
 
-    if (promosResult.count > 0) invalidatePublicPromosCache()
+    if (promosResult.count > 0) await invalidatePublicPromosCache()
 
     return NextResponse.json({
       success: true,

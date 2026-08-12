@@ -20,10 +20,13 @@ const bankSegmentFindMany = vi.fn().mockResolvedValue([])
 // crudo antes del findMany real — ver comentario en getPromos.ts sobre por qué
 // el LIMIT/OFFSET tiene que vivir ahí. Mock por defecto: sin IDs candidatos.
 const queryRaw = vi.fn().mockResolvedValue([])
+// bumpCatalogVersion (invalidatePublicPromosCache) usa $executeRaw crudo.
+const executeRaw = vi.fn().mockResolvedValue(1)
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     $queryRaw: (...args: any[]) => queryRaw(...args),
+    $executeRaw: (...args: any[]) => executeRaw(...args),
     promo: {
       findMany: (...args: any[]) => promoFindMany(...args),
       count: (...args: any[]) => promoCount(...args),
@@ -50,19 +53,30 @@ beforeEach(() => {
   promoCount.mockClear().mockResolvedValue(0)
   userFindUnique.mockClear().mockResolvedValue(null)
   queryRaw.mockClear().mockResolvedValue([])
+  executeRaw.mockClear().mockResolvedValue(1)
 })
 
 describe('RFC-002 Fase 1 — invalidatePublicPromosCache', () => {
-  it('llama a revalidateTag con el tag público', () => {
-    invalidatePublicPromosCache()
+  it('llama a revalidateTag con el tag público', async () => {
+    await invalidatePublicPromosCache()
     expect(revalidateTagMock).toHaveBeenCalledWith(PROMOS_PUBLIC_TAG)
   })
 
-  it('nunca lanza, aunque revalidateTag falle (red de seguridad = TTL)', () => {
+  it('bumpea catalogVersion vía $executeRaw', async () => {
+    await invalidatePublicPromosCache()
+    expect(executeRaw).toHaveBeenCalled()
+  })
+
+  it('nunca lanza, aunque revalidateTag falle (red de seguridad = TTL)', async () => {
     revalidateTagMock.mockImplementationOnce(() => {
       throw new Error('revalidateTag boom')
     })
-    expect(() => invalidatePublicPromosCache()).not.toThrow()
+    await expect(invalidatePublicPromosCache()).resolves.not.toThrow()
+  })
+
+  it('nunca lanza, aunque bumpCatalogVersion falle (se loguea, no revienta al caller)', async () => {
+    executeRaw.mockRejectedValueOnce(new Error('executeRaw boom'))
+    await expect(invalidatePublicPromosCache()).resolves.not.toThrow()
   })
 })
 
