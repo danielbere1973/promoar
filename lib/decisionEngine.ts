@@ -88,7 +88,7 @@ function buildReasons(promo: any, factors: { ahorro: number; cercania: number; o
   if (nearby && factors.cercania > 0) {
     const km = nearby.minDistKm
     const label = km < 1 ? `${Math.round(km * 1000)} metros` : `${km.toFixed(1)} km`
-    reasons.push(`Está a ${label} de vos`)
+    reasons.push(`Está a ${label} tuyo`)
   }
 
   if (promo.validUntil) {
