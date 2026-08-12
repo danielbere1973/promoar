@@ -1,48 +1,13 @@
-import { getServerSession } from 'next-auth/next'
-import { cookies } from 'next/headers'
-import { getPromosData } from '@/lib/getPromos'
 import PromosClient from './PromosClient'
 
 export const revalidate = 0
 
-// Preview chico para el primer render (SEO/LCP): el catálogo completo de "hoy sin
-// filtros" tiene ~7000 promos / 38MB y tarda ~25s — el cliente lo trae igual que hoy
-// vía el fetch normal, este preview solo evita que el HTML inicial llegue vacío.
-const PREVIEW_TAKE = 50
-
-export default async function PromosPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string | undefined>
-}) {
-  const session = await getServerSession()
-  const cookieStore = await cookies()
-  const initialCats = searchParams.cats?.split(',').filter(Boolean) ?? []
-  const forMe = !!session?.user?.email
-  const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'MODERATOR'
-  const initialProvince = cookieStore.get('userProvince')?.value
-    ? decodeURIComponent(cookieStore.get('userProvince')!.value)
-    : null
-
-  // Mismo criterio que /api/promos (paginate = invitado sin filtros): permite que
-  // este preview SSR reutilice getPublicPromosPage (RFC-002/003), en vez de ir
-  // siempre directo a Prisma. isPublicCacheableView (lib/getPromos.ts) además
-  // exige !userProvince — con provincia seteada, cae solo al camino directo,
-  // igual que el fetch del cliente.
-  const noFilters = initialCats.length === 0
-  const paginate = !forMe && noFilters
-
-  const { promos: rawPromos, totalCount } = await getPromosData(
-    paginate
-      ? { forMe, view: 'today', categorySlugs: initialCats, paginate: true, page: 1, pageSize: PREVIEW_TAKE, province: initialProvince }
-      : { forMe, view: 'today', categorySlugs: initialCats, take: PREVIEW_TAKE, province: initialProvince },
-    session?.user?.email,
-    isAdmin,
-  ).catch(() => ({ promos: null, totalCount: 0 }))
-
-  // Mismo round-trip de serialización que NextResponse.json (convierte Date -> string ISO)
-  // para que coincida con el tipo `Promo` esperado por PromosClient
-  const initialPromos = rawPromos ? JSON.parse(JSON.stringify(rawPromos)) : null
-
-  return <PromosClient initialPromos={initialPromos} initialCats={initialCats} initialTotalCount={totalCount} initialProvince={initialProvince} />
+// Home v2 (CPO Direction, 9/8/2026): experiencia cerrada de decisión
+// (Spotlight + recomendaciones + señales + CTA), sin catálogo debajo.
+// Ya no hace falta el preview SSR de promos que tenía esta ruta —
+// las recomendaciones se resuelven client-side vía /api/promos/recommended
+// (useRecommendations), igual que en el resto de la Home v2.
+// El catálogo completo con SSR/paginación vive en /promos/explorar.
+export default function PromosPage() {
+  return <PromosClient />
 }

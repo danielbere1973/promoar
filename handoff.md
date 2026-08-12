@@ -1,218 +1,238 @@
-# Handoff — PromoAR
-
-_Generado: 2026-08-02_
+# Handoff — Home v2 (rediseño de la Home cerrada)
 
 ## 1) Estado actual del proyecto
 
-PromoAR es una app Next.js 14 (App Router) + Prisma + PostgreSQL (Neon) que agrega y
-muestra promociones bancarias de Argentina, con matching por perfil financiero del
-usuario (banco, tarjeta, billetera). Migrada de CockroachDB a Neon el 27/6/2026.
+Estamos rediseñando la Home de PromoAR (`/promos`) siguiendo dirección del CPO: pasar de
+"Home + catálogo en la misma pantalla" a una **experiencia cerrada de decisión** separada
+del catálogo tradicional.
 
-**Terminado y estable**: 23 scrapers de bancos/billeteras/redes, categorías dinámicas,
-filtros avanzados, búsqueda de productos por comercio, tarjetas agrupadas por comercio,
-SSR de `/promos`, auto-validador de promos DRAFT, tour guiado, paginación (rama
-`feature/pagination`, commiteada pero sin mergear a `main`).
+Estructura aprobada:
 
-**En curso ahora mismo — sprint `sprint/cobertura-ubicacion-explorar`**: ADR-001 (modelo
-de cobertura geográfica: `LocationModel`, `SalesChannel`, `GeographicScope`) implementado,
-PR #9 abierto hacia `main`. El Preview de ese PR estaba roto (P2022: `geographicScope` no
-existía en la DB que usaba el Preview) — **ya resuelto esta sesión** separando las
-variables de entorno de Vercel (ver sección 2). Falta mergear el PR.
+```
+/promos            → Home personalizada ("¿qué me conviene hoy?")
+                      Spotlight → recomendaciones #2 y #3 → señales útiles →
+                      CTA "Explorar todas las promociones" → FIN
 
-**Bug descubierto y arreglado esta sesión (sin commitear todavía)**: el scraper de BBVA
-tenía un off-by-one de paginación que hacía que 4 comercios (Dexter, Moov, Stock Center,
-Zara) nunca se descubrieran pese a existir. Fix aplicado en código, pendiente de correr
-localmente contra producción para confirmar y de commitear.
+/promos/explorar    → catálogo tradicional completo
+                      búsqueda, filtros, categorías, destacadas, cerca tuyo, listado
+```
 
-## 2) Decisiones importantes tomadas esta sesión
+**Ya terminado (esta sesión):**
+- 5 componentes nuevos en `app/components/`: `PaymentMethodBadge.tsx`,
+  `RecommendationSpotlight.tsx`, `RecommendationSecondaryCard.tsx`, `SignalStrip.tsx`,
+  `ExploreCatalogCta.tsx`.
+- `app/promos/explorar/` — nueva ruta con el catálogo completo (copia íntegra del
+  `PromosClient.tsx` original, con el bloque Home removido y el bug de rutas
+  hardcodeadas corregido).
+- `app/promos/page.tsx` y `app/promos/PromosClient.tsx` — reescritos desde cero como
+  la nueva Home cerrada (de 2805 líneas de catálogo a ~165 líneas de Home pura).
+- `npx tsc --noEmit` sin errores nuevos (los ~40 preexistentes son de archivos no
+  tocados: `page_old.tsx`, scrapers, etc. — verificado contra HEAD).
+- `npx next build` **exitoso**: `/promos` (7.89 kB) y `/promos/explorar` (22.9 kB)
+  compilan como rutas independientes.
 
-### a) Todos los Preview de Vercel usan `dev-promoar`, sin overrides por branch
-**Decisión**: `DATABASE_URL`/`DIRECTURL` con scope `Preview` (global, todo el proyecto)
-apuntan siempre a la base de desarrollo (`ep-cool-lake`, alias "dev-promoar"). Production
-sigue apuntando a `ep-fragrant-bird` (producción real). Ningún branch tiene su propio
-override.
+**Pendiente inmediato:** falta la prueba manual en browser (`npm run dev`) navegando
+`/promos` ↔ `/promos/explorar` — ver sección 3.
 
-**Por qué**: antes, Preview y Production compartían la misma variable — por eso el Preview
-de PR #9 fallaba (código con schema ADR-001 corriendo contra una base sin esa migración).
-El usuario prefirió esta solución global (en vez de un override específico para la rama del
-PR) para no tener que mantener configuraciones por branch en el futuro — menos fricción de
-mantenimiento a largo plazo.
+**Todavía sin commitear.** Todo el trabajo de esta sesión está en el working tree,
+sin `git add`/`git commit`. Rama actual: `main` (verificar antes de commitear si
+correspondía trabajar en una rama de feature — no se creó ninguna en esta sesión).
 
-**Alternativa descartada**: crear un override de `DATABASE_URL` específico solo para la
-branch `integration/cobertura-ubicacion` (Vercel permite scope Preview + branch puntual).
-Se descartó explícitamente porque obligaría a repetir la configuración en cada PR/branch
-nuevo — el usuario prefirió la solución global de una sola vez.
+## 2) Decisiones importantes
 
-**Cómo se hizo (importante para no repetir el problema)**: Vercel no permite tener dos
-variables con el mismo nombre si sus scopes se superponen. Como ya existía una variable
-`DATABASE_URL` con scope combinado `Production, Preview`, hubo que primero achicar su
-scope a solo `Production` (esto se hizo **manualmente por el dashboard de Vercel**, no por
-CLI, para evitar tener que re-tipear el valor de producción desde la CLI — `vercel env
-update` exige reingresar el valor incluso si solo cambiás el scope, y `vercel env pull`
-redacta los valores sensibles así que no hay forma de verificar que quedó igual). Recién
-después se agregó por CLI la nueva variable `DATABASE_URL`/`DIRECTURL` con scope `Preview`
-apuntando a dev-promoar.
+1. **Ruta separada (`/promos/explorar`) en vez de toggle de estado en la misma URL.**
+   - Por qué: permite loggear "el usuario eligió explorar" como una transición real
+     (evento de navegación), evita estados híbridos raros con el botón atrás o con
+     links directos a la Home que "recuerdan" que el usuario ya había expandido el
+     catálogo.
+   - Alternativa descartada: mismo `/promos` con un estado `showCatalog` en React que
+     revela el catálogo debajo del CTA sin cambiar de URL. Descartada explícitamente
+     por el CPO ("No quiero eso" — el catálogo NO debe seguir debajo en la misma
+     pantalla, ni siquiera vía toggle).
 
-### b) Nunca tocar producción sin autorización explícita — regla dura de la sesión
-**Decisión**: ninguna migración nueva, ningún cambio a `main`, ningún dato de producción
-tocado sin que el usuario lo pida explícitamente palabra por palabra.
+2. **Copiar el `PromosClient.tsx` monolítico entero a `/explorar` en vez de refactorizarlo
+   quirúrgicamente in-place.**
+   - Por qué: un agente de exploración mapeó el archivo original y encontró estado
+     profundamente entrelazado entre Home y catálogo, con `Section`/`ProductSection`
+     como componentes anidados dentro de un IIFE que cierran sobre variables locales
+     (no extraíbles sin refactor grande). Copiar todo y solo remover la porción Home
+     preserva 100% del comportamiento del catálogo sin riesgo de romperlo.
+   - Alternativa descartada: extraer `Section`/`ProductSection` a componentes
+     independientes reutilizables entre ambas rutas. Descartada por alto riesgo /
+     bajo beneficio inmediato — se puede revisar más adelante si hace falta compartir
+     código entre `/promos` y `/promos/explorar`.
 
-**Por qué**: instrucción explícita y repetida del usuario ("NADA DE PRODUCCION PUEDE
-CAMBIAR", "No tocar producción ni ejecutar migraciones nuevas"). Se mantuvo estricta incluso
-cuando hacía el trabajo más lento (ej. no reconstruir el valor de la connection string de
-producción de memoria, preferir que el usuario lo edite él mismo en el dashboard).
+3. **La nueva Home NO comparte estado/fetch con el catálogo** (arquitectura de
+   componentes totalmente independiente, no un padre común con hijos condicionales).
+   - Por qué: Home y catálogo ya no viven en el mismo árbol de render una vez separadas
+     las rutas, así que compartir estado cross-route habría requerido Context/store
+     global sin necesidad real. La Home hace su propio fetch liviano de perfil
+     (`/api/perfil`) en vez de heredarlo del catálogo.
+   - Alternativa descartada: layout compartido (`app/promos/layout.tsx`) con estado de
+     provincia/perfil elevado y compartido entre `/promos` y `/promos/explorar`.
+     Quedó identificada como posible mejora futura (el `layout.tsx` actual solo pone
+     metadata canónica), pero no se implementó — no era necesaria para este alcance.
 
-**Alternativa descartada**: en un momento fue necesario correr un chequeo de solo lectura
-contra la base de producción (ver si tenía el schema ADR-001) — el propio sistema de
-permisos bloqueó el intento por tener la connection string de producción embebida en un
-comando. No se buscó ningún workaround; se reportó el bloqueo al usuario en vez de
-sortearlo.
+4. **Tarjeta secundaria propia (`RecommendationSecondaryCard.tsx`) en vez de reutilizar
+   el `PromoCard` genérico del catálogo.**
+   - Por qué: `PromoCard` está pensado para el catálogo, con más metadata visible de
+     la necesaria en la Home (chips de tope/mínimo, badges de guardado, etc.). La
+     propuesta original de Home v2 ya había flaggeado esto como gap.
+   - Alternativa descartada: seguir usando `PromoCard` en las recomendaciones #2/#3
+     como hacía el viejo `RecommendationBlock.tsx`. Descartada porque el medio de
+     pago no era protagonista ahí (requisito explícito del CPO) y la densidad visual
+     no encajaba con la jerarquía reducida que pide la Home cerrada.
 
-### c) Diagnóstico del Preview vía bypass de Vercel Deployment Protection, no compartiendo credenciales del usuario
-**Decisión**: para poder hacer `curl` a un Preview con SSO activado, se usó el mecanismo
-oficial "Protection Bypass for Automation" de Vercel (secret por proyecto, pasado como
-query params `?x-vercel-protection-bypass=...&x-vercel-set-bypass-cookie=true`), no pedirle
-al usuario que comparta una sesión de navegador ni cookies personales.
+5. **Medio de pago como elemento protagonista vía componente compartido
+   (`PaymentMethodBadge.tsx`)**, con prioridad de logo banco > billetera > red de
+   tarjeta, en vez de texto plano dentro del "reason".
+   - Por qué: requisito explícito del CPO en la revisión de la propuesta original
+     (el medio de pago pasa de texto secundario a un badge visual con logo).
+   - Alternativa descartada: mantenerlo como parte del string de "reason" (como en
+     `HomeHero`/`RecommendationBlock` original) — insuficiente jerarquía visual.
 
-**Por qué**: es el mecanismo soportado por Vercel específicamente para este caso
-(automatización/testing contra Preview protegido), evita depender de sesión humana.
+6. **`SignalStrip.tsx` solo renderiza chips derivados de datos reales ya presentes en
+   la respuesta de recomendaciones** (vencimiento próximo, disponible online, cerca
+   tuyo si hay dato) y **no renderiza nada si no hay señales genuinas**.
+   - Por qué: requisito explícito del CPO — "algunas señales adicionales si aportan
+     valor real". Nunca texto promocional inventado.
+   - Alternativa descartada: agregar señales "de relleno" (ej. contador de comercios
+     totales, banner genérico de "hay más promos") para que la sección nunca esté
+     vacía. Descartada por ir contra el principio de no fabricar valor percibido.
 
-### d) Root cause del P2024 (`generateStaticParams` con 16.180 páginas) — reportado, NO arreglado
-**Decisión**: se identificó que `app/comercios/[slug]/page.tsx` intenta pre-renderizar
-16.180 páginas en build, saturando el pool de conexiones de `dev-promoar` (más chica/menos
-provisionada que producción). Se probaron 3 variantes de `connection_limit` en la connection
-string (sin setear, 10, 3) — ninguna resolvió el síntoma, confirmando que el cuello de
-botella es volumen de concurrencia en build, no tuning de pool por cliente.
+7. **`nearby` (sucursales cercanas) NO se implementó en la Home v1** — el prop existe
+   en `SignalStrip` pero se deja sin poblar por ahora.
+   - Por qué: en el catálogo, la cercanía se resuelve con un fetch por comercio
+     (`/api/branches/nearby?lat&lng&radius`), no una sola llamada agregada. Replicar
+     esa lógica en la Home habría inflado el alcance de esta sesión sin pedido
+     explícito del CPO sobre esto.
+   - Alternativa descartada: portar tal cual la lógica de `nearbyBranches` (fetch por
+     comercio + estado `Record<string, NearbyBranches>`) a la nueva Home. Queda como
+     mejora futura, no bloqueante — `SignalStrip` ya maneja el caso "sin dato" sin
+     romperse (simplemente no muestra el chip "cerca tuyo").
 
-**Por qué no se arregló**: no bloquea el deploy (Next.js hace fallback a render on-demand,
-`status: Ready` igual) y no afecta al endpoint que el usuario necesitaba validar
-(`/api/promos`, 0 ocurrencias de esa ruta en los logs de error). Se decidió reportarlo como
-hallazgo informativo y no tocar código sin pedido explícito del usuario — consistente con la
-regla de "no cambios no solicitados".
-
-**Alternativa descartada**: seguir ajustando `connection_limit`/`pgbouncer` en la connection
-string. Descartada porque ya se probó exhaustivamente (3 valores distintos, mismo error
-persistente) — no vale la pena reintentar por esa vía; si se ataca, hay que limitar la
-concurrencia de `generateStaticParams` o reducir cuántos slugs pre-renderiza.
-
-### e) Fix del bug de paginación de BBVA (off-by-one)
-**Decisión**: en `lib/scrapers/bbva.ts`, cambiar `let pager = 1` a `let pager = 0`, y el
-corte de página final de `pager >= totalPages` a `pager >= totalPages - 1`.
-
-**Por qué**: la API de BBVA (`communications?rubros={id}&pager={n}`) pagina desde `pager=0`
-(confirmado inspeccionando qué pide el navegador real: `pager=0` es la página 1 visible en
-el sitio). El scraper arrancaba en `pager=1`, saltándose siempre los primeros 20 resultados
-de cada uno de los 13 rubros. En el rubro "Moda" (`idRubro=170`), esos 20 items salteados
-incluían justo a Dexter, Moov, Stock Center y Zara (IDs 86596/86597/86598 y el de Zara) —
-por eso nunca se descubrían pese a existir y responder bien vía `/communication/{id}`
-directo.
-
-**Cómo se confirmó**: se comparó el request real que hace el navegador (`pager=0`, provisto
-por el usuario) contra `curl` manual — `pager=0` sí trae a los 4 comercios en la respuesta;
-`pager=1` (lo que usaba el scraper) no.
-
-**Alternativa descartada**: se había planteado inicialmente la hipótesis de que fuera un
-"gap estructural" de cómo BBVA expone su índice (promos accesibles solo por ID directo,
-nunca listadas) — se descartó una vez confirmado el patrón real (simple off-by-one), no
-hace falta investigar un endpoint alternativo de descubrimiento ni hacer range-scan de IDs.
-
-**Estado**: el fix está aplicado en el archivo, **sin commitear**. No se corrió el scraper
-completo contra producción todavía — el último intento de correrlo dio `403 No disponible
-fuera de Argentina` porque se corrió sin querer desde `promoar.com.ar` (Vercel, fuera de
-Argentina) en vez de localhost.
-
-### f) BBVA debe correrse siempre local, nunca desde Vercel/GitHub Actions
-**Decisión**: documentado en CLAUDE.md, mismo patrón que ya existía para ICBC.
-
-**Por qué**: BBVA devuelve `403 {"error":"No disponible fuera de Argentina"}` cuando el
-request viene de un servidor de Vercel (geo-IP fuera de Argentina). Confirmado que el mismo
-request desde `localhost` (IP residencial de Buenos Aires) responde `200` sin problema.
-
-**Alternativa descartada**: ninguna investigada aún (ej. proxy con IP argentina) — no se
-evaluó porque correr local ya es un patrón conocido y aceptado para ICBC, se aplicó el mismo
-criterio sin buscar alternativas más complejas.
+8. **La página de detalle real (`app/promos/[slug]/page.tsx`, SSR/SEO) no se tocó ni
+   se duplicó** — es independiente del `pushState` cosmético que abre `PromoDetailSheet`
+   como overlay dentro de `/promos/explorar`.
+   - Por qué: son dos mecanismos distintos (uno es navegación real de Next.js indexada
+     por Google, el otro es solo UX de "compartir/atrás" sobre un overlay del cliente).
+     No hay necesidad de que coincidan 1:1.
+   - Alternativa descartada: mover o duplicar `[slug]/page.tsx` a `explorar/[slug]/`.
+     Innecesaria — la SEO page sigue funcionando igual desde su ubicación original.
 
 ## 3) Próximo paso
 
-**Tarea inmediata pendiente**: correr el scraper de BBVA **localmente** (con `.env`
-apuntando a producción, que el usuario ya dejó configurado así) para confirmar que el fix
-de paginación efectivamente descubre las promos de Dexter, Moov, Stock Center y Zara. Una
-vez confirmado:
-1. Commitear el fix de `lib/scrapers/bbva.ts`.
-2. Volver a dejar `.env` apuntando a `dev-promoar` (no a producción) si corresponde al flujo
-   normal de trabajo local.
+**Tarea pendiente exacta:** levantar el servidor de desarrollo (`npm run dev`) y probar
+manualmente en el browser la navegación `/promos` ↔ `/promos/explorar`:
 
-**Después de eso**, según lo que quede abierto de esta sesión:
-- Decidir si mergear PR #9 (ADR-001) a `main` — el Preview ya está validado y funcionando.
-- Decidir si vale la pena atacar el issue de `generateStaticParams` en
-  `app/comercios/[slug]/page.tsx` (16.180 páginas, satura pool de `dev-promoar` en build) o
-  dejarlo como está dado que no bloquea nada hoy.
+- Verificar que `/promos` muestra Spotlight + recomendaciones secundarias + señales +
+  CTA, sin ningún rastro de catálogo debajo.
+- Click en el CTA "Explorar todas las promociones" → confirma que navega a
+  `/promos/explorar` y ahí sí aparece el catálogo completo (búsqueda, filtros,
+  categorías, "Destacadas hoy", "Cerca tuyo", listado).
+- Abrir el detalle de una promo desde el catálogo (`/promos/explorar`) y cerrarlo →
+  confirmar que el usuario permanece en `/promos/explorar` (no se lo redirige a
+  `/promos`) — este era el bug de `BASE_PATH` hardcodeado que se corrigió a ciegas
+  (sin test manual todavía) durante la construcción.
+- Abrir el detalle de una promo desde la Home (`/promos`, vía Spotlight o tarjeta
+  secundaria) y cerrarlo → confirmar que el usuario permanece en `/promos`.
+- Revisar el estado "sin perfil" (usuario invitado / logueado sin banco-billetera-tarjeta
+  cargados): confirmar que el Spotlight muestra el teaser genérico + botón
+  "Configurar mi perfil →" y que el copy nunca implica personalización falsa.
+- Revisar `OnboardingBanner` en la nueva Home (props `isLoggedIn`/`hasProfile`/
+  `profileReady`) — confirmar que aparece/desaparece según corresponda.
+- Mobile: la nueva Home no fue revisada aún en viewport mobile — validar que el layout
+  (grid de 2 columnas para las secundarias, spacing) se ve bien en pantallas chicas.
 
-## 4) Información útil para la próxima conversación
+Una vez validado esto, marcar completo el todo "Home v2: validar build local y probar
+navegación" y decidir junto al CPO si se commitea y en qué rama (no se creó rama de
+feature en esta sesión — el trabajo está directamente en el working tree de `main`,
+sin commitear).
 
-### Arquitectura / stack
-- Next.js 14 App Router, Prisma ORM, PostgreSQL en Neon (migrado de CockroachDB el
-  27/6/2026). Scrapers con Playwright + fetchers custom en `lib/scrapers/`.
-- `prisma/schema.prisma` línea 8: Prisma lee `DIRECTURL` (sin guion bajo), no `DIRECT_URL`
-  — error fácil de cometer al crear variables de entorno nuevas.
-- `lib/prisma.ts`: singleton `PrismaClient` correctamente implementado (dedupe dentro de
-  una invocación warm), pero no ayuda entre invocaciones serverless separadas — cada
-  función de Vercel es su propio proceso con su propio pool de conexiones.
+## 4) Información útil
 
-### Vercel — entornos y bases de datos (estado actual, post esta sesión)
-- **Production**: `DATABASE_URL`/`DIRECTURL` → `ep-fragrant-bird` (Neon prod real).
-- **Preview** (todos los branches, sin overrides): `DATABASE_URL`/`DIRECTURL` →
-  `ep-cool-lake` ("dev-promoar"), con `pgbouncer=true&channel_binding=require&connection_limit=3`
-  en `DATABASE_URL`.
-- **Localhost** (`.env` del repo): normalmente apunta a `ep-cool-lake` (dev-promoar) también
-  — el usuario lo cambia manualmente a producción cuando necesita correr un scraper real
-  (como BBVA) y probar contra datos reales. Recordar preguntar/confirmar a qué apunta antes
-  de correr algo que escriba en la DB.
-- `vercel env pull` redacta (blanquea) valores marcados como sensibles — no sirve para leer
-  secretos hacia atrás.
-- Deployment Protection (SSO) en Preview: bypass vía "Protection Bypass for Automation"
-  (secret por proyecto, Settings → Deployment Protection), pasado como
-  `?x-vercel-protection-bypass=<secret>&x-vercel-set-bypass-cookie=true` — primera respuesta
-  es un 307 que setea cookie `_vercel_jwt`; hay que reusar esa cookie en el siguiente
-  request para llegar a la respuesta real de la app.
+### Arquitectura del cambio
+- **Antes**: `app/promos/page.tsx` (SSR con preview de 50 promos) + `app/promos/PromosClient.tsx`
+  (2805 líneas, monolito Home+catálogo en un solo árbol de render).
+- **Ahora**:
+  - `app/promos/page.tsx` — server component mínimo, solo renderiza `<PromosClient />`
+    sin SSR de catálogo (las recomendaciones se resuelven 100% client-side vía
+    `useRecommendations`).
+  - `app/promos/PromosClient.tsx` — nueva Home cerrada, ~165 líneas, independiente.
+  - `app/promos/explorar/page.tsx` — copia exacta del viejo `page.tsx` (SSR con
+    `getPromosData`, `PREVIEW_TAKE=50`, misma lógica `paginate`/`forMe`/`noFilters`
+    que antes).
+  - `app/promos/explorar/PromosClient.tsx` — copia del monolito original con la
+    porción Home removida; contiene TODO el catálogo (2805 líneas menos el bloque Home).
 
-### Scrapers con restricción de origen (correr SIEMPRE local, nunca Vercel/GH Actions)
-- **ICBC** (`lib/scrapers/icbc.ts`): WAF de `utilidades-icbc-prod.pisol.net` bloquea IPs de
-  datacenter de GitHub Actions runners.
-- **BBVA** (`lib/scrapers/bbva.ts`): geo-IP block, `403 No disponible fuera de Argentina`
-  cuando el request no viene de una IP argentina (Vercel corre fuera de Argentina).
+### Componentes nuevos (`app/components/`)
+- **`PaymentMethodBadge.tsx`** — pill con logo (banco > billetera > red de tarjeta) +
+  nombre. Props: `{ req, size?: 'sm'|'md' }`. Usa `CARD_NETWORK_LOGOS` de
+  `EntitiesSheet.tsx`.
+- **`RecommendationSpotlight.tsx`** — reemplaza a `HomeHero.tsx` (que sigue existiendo,
+  sin usar, huérfano — ver "problemas conocidos"). Misma máquina de 4 estados
+  (loading / incomplete_profile con teaser / empty / ok), con `PaymentMethodBadge`
+  como protagonista. Props: `{ data, loading, teaserPromos?, onOpenPromo, onGoToProfile }`.
+  **Nota**: la nueva Home NO le pasa `teaserPromos` todavía (no hay fuente de datos
+  genérica sin catálogo cargado) — el estado teaser hoy se muestra sin promos de
+  ejemplo, solo el copy + botón. Posible mejora futura.
+- **`RecommendationSecondaryCard.tsx`** — tarjeta compacta para recomendaciones #2/#3.
+  Props: `{ promo, reasons, onClick }`.
+- **`SignalStrip.tsx`** — chips funcionales (vencen pronto / disponibles online / cerca
+  tuyo si hay dato) + CTA "Compartí tu ubicación" si `status === 'no_location'`. No
+  renderiza nada si no hay señales reales. Props: `{ data, nearby?, onShareLocation }`.
+- **`ExploreCatalogCta.tsx`** — único punto de salida de la Home hacia
+  `/promos/explorar`, dispara `recommendation_cta_clicked` (`cta: 'explorar_catalogo'`).
 
-### BBVA scraper — detalle técnico del fix de esta sesión
-- API pública: `https://go.bbva.com.ar/willgo/fgo/API/v3/communications?rubros={id}&pager={n}`.
-- Paginación 0-origen: `pager=0` es la primera página (20 items). El mensaje de respuesta
-  dice `"Comunicaciones: N   paginas: M"` con `M` en formato "cantidad de páginas" (1-origen
-  conceptualmente), así que la última página válida es `pager === M - 1`.
-- Rubros se obtienen dinámicamente de `GET /rubros/filtro?filtro_padre=true` (no hardcodeado
-  en el scraper) — 13 rubros activos, incluyendo `idRubro=170` = "Moda".
-- Fix aplicado en `lib/scrapers/bbva.ts` líneas ~184-206 (`let pager = 0` en vez de `1`,
-  corte en `pager >= totalPages - 1`). **Sin commitear.**
+### Hooks/libs reutilizados sin modificar
+- `lib/useRecommendations.ts` — fetch a `/api/promos/recommended`, lee `guestProfile`
+  y `userLocation` cacheados de `localStorage`. Diseñado para llamarse UNA VEZ por
+  pantalla (comentario en el propio código lo advierte) — la nueva Home lo llama una
+  sola vez, no hay duplicación.
+- `lib/recommendationEvents.ts` — `trackRecommendationEvent(eventType, payload)`, POST
+  a `/api/events`. Eventos usados en la nueva Home: `recommendation_block_shown`,
+  `recommendation_clicked`, `recommendation_cta_clicked`.
+- `app/components/OnboardingBanner.tsx`, `SplashScreen.tsx`, `BottomNav.tsx`,
+  `ThemeToggle.tsx`, `PromoDetailSheet.tsx` (`{ promo, nearbyBranch?, onClose }`),
+  `ProvinceSelector.tsx` (`{ onSelect, onDismiss, currentProvince? }`) — todos
+  reutilizados sin cambios, solo verificadas sus firmas de props antes de integrarlos.
 
-### Convención de trabajo con el usuario (importante)
-- Nunca tocar producción, nunca ejecutar migraciones, nunca mergear a `main` sin pedido
-  explícito y literal del usuario.
-- Ante cualquier acción irreversible o que exponga secretos (re-tipear connection strings,
-  etc.), preferir que el usuario la haga manualmente por el dashboard en vez de que el
-  agente reconstruya el valor de memoria.
-- El usuario se frustra fuerte si se pierde contexto de sesiones anteriores por
-  compactación automática — cuando se detecte que un tema "ya se habló" pero no está claro
-  el detalle, conviene grepear la transcripción completa en
-  `C:\Users\pablo\.claude\projects\c--Users-pablo-Proyectos-promoar\*.jsonl` antes de asumir
-  o re-preguntar desde cero.
-- Ver también memoria persistente en
-  `C:\Users\pablo\.claude\projects\c--Users-pablo-Proyectos-promoar\memory\MEMORY.md` — tiene
-  el estado acumulado de sesiones previas (Cencosud, MODO, SSR/paginación, Neon, ADR-001,
-  etc.), conviene revisarla al arrancar la próxima conversación.
+### Convenciones del proyecto (recordatorio, no específico de esta sesión)
+- Comunicación siempre en español.
+- `.env` apunta a Neon de **producción** (`ep-fragrant-bird-am3uvyq5`) — nunca tocar
+  directo. `.env.local` apunta a `dev-promoar` (`ep-cool-lake-ammkwaug`) — usar para
+  testing local.
+- Merge a `main` siempre requiere aprobación explícita separada del CPO/CEO — nunca
+  unilateral.
+- Nunca commitear archivos de scratch/análisis.
+- Roles: Daniel = CEO+CPO (emite decisiones/RFCs), Claude = CTO (implementa y
+  documenta).
 
-### Problemas conocidos, no resueltos, fuera del alcance de esta sesión
-- `generateStaticParams()` en `app/comercios/[slug]/page.tsx` pre-renderiza 16.180 páginas
-  en build, satura el pool de `dev-promoar` (errores P2024 en logs de build), no bloquea el
-  deploy pero es una señal de que el dev DB está sub-provisionado para el volumen actual.
-- Rama `feature/pagination` (Fase 2 de SSR+paginación) commiteada localmente, nunca
-  pusheada ni mergeada a `main`.
-- Detección de cambios en scrapers (evitar upsert de promos sin cambios) sigue pendiente,
-  prioritario según notas de sesiones previas.
+### Problemas conocidos / deuda técnica
+- **`app/components/HomeHero.tsx` y `RecommendationBlock.tsx` quedaron huérfanos** —
+  ya no los usa nadie (la Home vieja que los usaba fue reemplazada). No se borraron
+  esta sesión por si hace falta comparar/revertir. Candidatos a eliminar una vez
+  confirmada la validación manual.
+- **`BASE_PATH` hardcodeado corregido "a ciegas"** en
+  `app/promos/explorar/PromosClient.tsx` (constante `BASE_PATH = '/promos/explorar'`
+  reemplazando 3 usos de `/promos` hardcodeado en `openPromoDetail`/`closePromoDetail`/
+  popstate listener) — identificado proactivamente por un agente de exploración antes
+  de que causara un bug real, pero **todavía sin probar en browser** (ver sección 3).
+- El `tsc --noEmit` completo del proyecto tiene ~40 errores preexistentes en archivos
+  no relacionados (`app/page_old.tsx`, `app/page_WITH_TOOLTIPS.tsx`, varios
+  `lib/scrapers/*.ts`, `app/api/og/daily/route.tsx`, etc.) — no introducidos por esta
+  sesión, no se tocaron.
+- `npm run build` (con `prisma generate` incluido) falló por `EPERM` en Windows
+  (probablemente `npm run dev` corriendo en paralelo bloqueando el `.dll.node` de
+  Prisma) — se usó `npx next build` directo como workaround, que sí compiló limpio.
+  Si se vuelve a correr build completo, cerrar cualquier `next dev` activo primero.
+- Trabajo de esta sesión **sin commitear** — vive en el working tree de `main`.
+
+### Contexto no relacionado a Home v2, pero abierto en paralelo (no tocar sin pedido explícito)
+- Recommendation Snapshot v1: 8 validaciones pendientes, la #8 requiere medición
+  manual del CPO en Preview (no relacionado a Home v2 directamente, pero comparte
+  varios de los mismos componentes de recomendaciones).
+- Password temporal + `TrustedDevice` de prueba para `nerocketpin@gmail.com` en
+  dev-promoar — pendiente de revertir una vez cerrada la Validación 8.
+- Token de Vercel Protection Bypass — pendiente de revocar una vez cerradas todas las
+  validaciones del Recommendation Snapshot.
