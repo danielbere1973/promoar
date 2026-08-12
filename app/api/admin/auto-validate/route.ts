@@ -141,7 +141,7 @@ export async function POST() {
       where: { id: { in: toApprove } },
       data: { status: 'ACTIVE' },
     })
-    invalidatePublicPromosCache()
+    await invalidatePublicPromosCache()
     invalidateCategoriesCache()
     invalidatePromoDetailCache()
     invalidateCommerceDetailCache()

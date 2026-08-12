@@ -51,6 +51,7 @@ model User {
   accounts         Account[]
   posts            CommunityPost[]
   financialProfile FinancialProfile?
+  recommendationSnapshot RecommendationSnapshot?
   postLikes        PostLike[]
   promoReports     PromoReport[]
   savedPromos      SavedPromo[]
@@ -185,6 +186,26 @@ model FinancialProfile {
   wallets   UserWallet[]
 
   @@map("financial_profiles")
+}
+
+// Recommendation Snapshot v1 — Top 3 + reasons precalculados, una fila por
+// usuario. Fuente de verdad para /api/promos/recommended: la Home lee este
+// snapshot en vez de recalcular el pipeline pesado (candidate selection +
+// hidratación + matchesProfile) en cada request. Solo guarda promoId+reasons,
+// nunca el objeto Promo completo — la hidratación final sigue pasando por el
+// mismo camino de lectura que usa el resto del sitio.
+model RecommendationSnapshot {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  status         String
+  recommendations Json
+  profileHash    String
+  catalogVersion String
+  generatedAt    DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("recommendation_snapshots")
 }
 
 model UserBank {

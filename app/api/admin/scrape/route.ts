@@ -732,7 +732,7 @@ export async function POST(req: NextRequest) {
       }))
     }
 
-    if (processedCount > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
+    if (processedCount > 0) { await invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
 
     // Disparar notificaciones push para las promos nuevas (fire-and-forget)
     if (newPromoIds.length > 0) {

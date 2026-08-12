@@ -112,7 +112,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         requirements: { include: reqInclude },
       },
     })
-    invalidatePublicPromosCache()
+    await invalidatePublicPromosCache()
     invalidateCategoriesCache()
     invalidatePromoDetailCache()
     invalidateCommerceDetailCache()
@@ -129,14 +129,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         requirements: { include: reqInclude },
       },
     })
-    invalidatePublicPromosCache()
+    await invalidatePublicPromosCache()
     invalidateCategoriesCache()
     invalidatePromoDetailCache()
     invalidateCommerceDetailCache()
     return NextResponse.json({ promo: final })
   }
 
-  invalidatePublicPromosCache()
+  await invalidatePublicPromosCache()
   invalidateCategoriesCache()
   invalidatePromoDetailCache()
   invalidateCommerceDetailCache()

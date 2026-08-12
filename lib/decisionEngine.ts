@@ -88,7 +88,7 @@ function buildReasons(promo: any, factors: { ahorro: number; cercania: number; o
   if (nearby && factors.cercania > 0) {
     const km = nearby.minDistKm
     const label = km < 1 ? `${Math.round(km * 1000)} metros` : `${km.toFixed(1)} km`
-    reasons.push(`Está a ${label} de vos`)
+    reasons.push(`Está a ${label} tuyo`)
   }
 
   if (promo.validUntil) {
@@ -146,19 +146,35 @@ function selectWithDiversity(scored: { promo: any; score: number; factors: any }
 }
 
 /**
- * Rankea promos ya filtradas por gates de compatibilidad financiera y
- * cobertura geográfica (getPromosData con forMe=true) para el Recommendation
- * Block. Aplica el gate de vigencia restante, scorea por los 4 factores,
- * re-rankea por diversidad, y arma razones causales.
+ * Etapa 1 — gate de vigencia + scoring de los 4 factores para cada candidata,
+ * sin corte a Top-N ni diversidad ni reasons. Extraída de rankForHome (refactor
+ * estructural aprobado por CPO 9/8/2026, ver propuesta-refactor-decisionengine.md)
+ * para que Recommendation Snapshot pueda persistir un universo mayor a 3
+ * (Top-20) sin duplicar esta lógica en otro archivo. Comportamiento idéntico
+ * al que tenían las primeras líneas de rankForHome.
  */
-export function rankForHome(promos: any[], context: DecisionContext): RankedRecommendation[] {
+export function scoreCandidates(
+  promos: any[],
+  context: DecisionContext
+): { promo: any; score: number; factors: { ahorro: number; cercania: number; online: number; favoritos: number } }[] {
   const candidates = promos.filter(p => passesVigencia(p, context.todayBit))
-  if (!candidates.length) return []
-
-  const scored = candidates.map(promo => {
+  return candidates.map(promo => {
     const { score, factors } = scorePromo(promo, context)
     return { promo, score, factors }
   })
+}
+
+/**
+ * Etapa 2 — topSavingId + diversidad + corte a Top-3 + reasons causales.
+ * Extraída de rankForHome (mismo refactor). Recibe la salida de
+ * scoreCandidates. Comportamiento idéntico al que tenían las últimas líneas
+ * de rankForHome.
+ */
+export function selectTop3WithReasons(
+  scored: { promo: any; score: number; factors: { ahorro: number; cercania: number; online: number; favoritos: number } }[],
+  context: DecisionContext
+): RankedRecommendation[] {
+  if (!scored.length) return []
 
   const topSavingId = scored.reduce((max, cur) => (cur.factors.ahorro > max.factors.ahorro ? cur : max), scored[0])?.promo?.id
 
@@ -169,4 +185,20 @@ export function rankForHome(promos: any[], context: DecisionContext): RankedReco
     score,
     reasons: buildReasons(promo, factors, context, promo.id === topSavingId),
   }))
+}
+
+/**
+ * Rankea promos ya filtradas por gates de compatibilidad financiera y
+ * cobertura geográfica (getPromosData con forMe=true) para el Recommendation
+ * Block. Aplica el gate de vigencia restante, scorea por los 4 factores,
+ * re-rankea por diversidad, y arma razones causales.
+ *
+ * API pública sin cambios — composición literal de scoreCandidates +
+ * selectTop3WithReasons, mismo resultado que la implementación monolítica
+ * anterior para cualquier (promos, context) dado.
+ */
+export function rankForHome(promos: any[], context: DecisionContext): RankedRecommendation[] {
+  const scored = scoreCandidates(promos, context)
+  if (!scored.length) return []
+  return selectTop3WithReasons(scored, context)
 }

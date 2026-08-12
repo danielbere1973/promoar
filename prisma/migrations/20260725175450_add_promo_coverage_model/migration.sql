@@ -12,5 +12,5 @@ ALTER TABLE "commerces" ADD COLUMN     "locationModel" "LocationModel" NOT NULL 
 
 -- AlterTable
 ALTER TABLE "promos" ADD COLUMN     "geographicScope" "GeographicScope" NOT NULL DEFAULT 'UNKNOWN',
-DROP COLUMN "salesChannel",
+DROP COLUMN IF EXISTS "salesChannel",
 ADD COLUMN     "salesChannel" "SalesChannel" NOT NULL DEFAULT 'UNKNOWN';

@@ -31,6 +31,7 @@ const PUBLIC_PATHS = [
   '/privacidad',
   '/contacto',
   '/quienes-somos',
+  '/prototypes',
   '/api/contacto',
   '/comercios',
   '/bancos',

@@ -1,0 +1,1158 @@
+[
+  {
+    "label": "Real — cartera chica (1 banco)",
+    "poolSize": 1295,
+    "top3v1": [
+      {
+        "id": "cmpiqs6e200owdpxkgis9ug7c",
+        "commerce": "Rappi",
+        "category": "gastronomia",
+        "title": "50% de descuento – Rappi",
+        "discount": "50%",
+        "score": 0.65
+      },
+      {
+        "id": "cmpiqrxdu00nndpxk0frxfdid",
+        "commerce": "Pax Assistance",
+        "category": "salud-y-belleza",
+        "title": "50% de descuento – Pax Assistance",
+        "discount": "50%",
+        "score": 0.5
+      },
+      {
+        "id": "cmr8a1lmq00y1fhnem27ff9pp",
+        "commerce": "COLECTIVOS Y SUBTES NFC",
+        "category": "otros",
+        "title": "Hasta 100% en Transporte",
+        "discount": "100%",
+        "score": 0.5
+      }
+    ],
+    "top3v2": [
+      {
+        "id": "cmpvqqbg904uugr5rbhk6vp51",
+        "commerce": "Transporte",
+        "category": "transporte",
+        "title": "100% reintegro – Transporte",
+        "discount": "100%",
+        "score": 0.59
+      },
+      {
+        "id": "cmpiqs6e200owdpxkgis9ug7c",
+        "commerce": "Rappi",
+        "category": "gastronomia",
+        "title": "50% de descuento – Rappi",
+        "discount": "50%",
+        "score": 0.535
+      },
+      {
+        "id": "cmpvqqbga04v6gr5r74kifipb",
+        "commerce": "Transporte",
+        "category": "transporte",
+        "title": "50% reintegro – Transporte",
+        "discount": "50%",
+        "score": 0.59
+      }
+    ],
+    "categoriasV1": [
+      "gastronomia",
+      "salud-y-belleza",
+      "otros"
+    ],
+    "categoriasV2": [
+      "transporte",
+      "gastronomia"
+    ],
+    "categoriasQueSuben": [
+      "transporte"
+    ],
+    "categoriasQueBajan": [
+      "salud-y-belleza",
+      "otros"
+    ],
+    "diversidadV1": 3,
+    "diversidadV2": 2,
+    "entraronNuevas": [
+      {
+        "id": "cmpvqqbg904uugr5rbhk6vp51",
+        "commerce": "Transporte",
+        "category": "transporte",
+        "title": "100% reintegro – Transporte",
+        "discount": "100%",
+        "score": 0.59
+      },
+      {
+        "id": "cmpvqqbga04v6gr5r74kifipb",
+        "commerce": "Transporte",
+        "category": "transporte",
+        "title": "50% reintegro – Transporte",
+        "discount": "50%",
+        "score": 0.59
+      }
+    ],
+    "salieron": [
+      {
+        "id": "cmpiqrxdu00nndpxk0frxfdid",
+        "commerce": "Pax Assistance",
+        "category": "salud-y-belleza",
+        "title": "50% de descuento – Pax Assistance",
+        "discount": "50%",
+        "score": 0.5
+      },
+      {
+        "id": "cmr8a1lmq00y1fhnem27ff9pp",
+        "commerce": "COLECTIVOS Y SUBTES NFC",
+        "category": "otros",
+        "title": "Hasta 100% en Transporte",
+        "discount": "100%",
+        "score": 0.5
+      }
+    ],
+    "casosCotidianoVsFlashy": [
+      {
+        "entra": {
+          "id": "cmpvqqbga04v6gr5r74kifipb",
+          "commerce": "Transporte",
+          "category": "transporte",
+          "title": "50% reintegro – Transporte",
+          "discount": "50%",
+          "score": 0.59
+        },
+        "sale": {
+          "id": "cmr8a1lmq00y1fhnem27ff9pp",
+          "commerce": "COLECTIVOS Y SUBTES NFC",
+          "category": "otros",
+          "title": "Hasta 100% en Transporte",
+          "discount": "100%",
+          "score": 0.5
+        }
+      }
+    ]
+  },
+  {
+    "label": "Real — cartera mediana (2 bancos + wallets)",
+    "poolSize": 1040,
+    "top3v1": [
+      {
+        "id": "cmpiqs6e200owdpxkgis9ug7c",
+        "commerce": "Rappi",
+        "category": "gastronomia",
+        "title": "50% de descuento – Rappi",
+        "discount": "50%",
+        "score": 0.65
+      },
+      {
+        "id": "cmp7ip1s408k8i524g8l1oywv",
+        "commerce": "Cabify",
+        "category": "transporte",
+        "title": "100% descuento – Cabify",
+        "discount": "100%",
+        "score": 0.65
+      },
+      {
+        "id": "cmpiqrxdu00nndpxk0frxfdid",
+        "commerce": "Pax Assistance",
+        "category": "salud-y-belleza",
+        "title": "50% de descuento – Pax Assistance",
+        "discount": "50%",
+        "score": 0.5
+      }
+    ],
+    "top3v2": [
+      {
+        "id": "cmp7ip1s408k8i524g8l1oywv",
+        "commerce": "Cabify",
+        "category": "transporte",
+        "title": "100% descuento – Cabify",
+        "discount": "100%",
+        "score": 0.7
+      },
+      {
+        "id": "cmpiqs6e200owdpxkgis9ug7c",
+        "commerce": "Rappi",
+        "category": "gastronomia",
+        "title": "50% de descuento – Rappi",
+        "discount": "50%",
+        "score": 0.535
+      },
+      {
+        "id": "cmpvh71zr08chl5yma03ul1sz",
+        "commerce": "Changomas",
+        "category": "supermercados",
+        "title": "30% reintegro – Changomas",
+        "discount": "30%",
+        "score": 0.502
+      }
+    ],
+    "categoriasV1": [
+      "gastronomia",
+      "transporte",
+      "salud-y-belleza"
+    ],
+    "categoriasV2": [
+      "transporte",
+      "gastronomia",
+      "supermercados"
+    ],
+    "categoriasQueSuben": [
+      "supermercados"
+    ],
+    "categoriasQueBajan": [
+      "salud-y-belleza"
+    ],
+    "diversidadV1": 3,
+    "diversidadV2": 3,
+    "entraronNuevas": [
+      {
+        "id": "cmpvh71zr08chl5yma03ul1sz",
+        "commerce": "Changomas",
+        "category": "supermercados",
+        "title": "30% reintegro – Changomas",
+        "discount": "30%",
+        "score": 0.502
+      }
+    ],
+    "salieron": [
+      {
+        "id": "cmpiqrxdu00nndpxk0frxfdid",
+        "commerce": "Pax Assistance",
+        "category": "salud-y-belleza",
+        "title": "50% de descuento – Pax Assistance",
+        "discount": "50%",
+        "score": 0.5
+      }
+    ],
+    "casosCotidianoVsFlashy": [
+      {
+        "entra": {
+          "id": "cmpvh71zr08chl5yma03ul1sz",
+          "commerce": "Changomas",
+          "category": "supermercados",
+          "title": "30% reintegro – Changomas",
+          "discount": "30%",
+          "score": 0.502
+        },
+        "sale": {
+          "id": "cmpiqrxdu00nndpxk0frxfdid",
+          "commerce": "Pax Assistance",
+          "category": "salud-y-belleza",
+          "title": "50% de descuento – Pax Assistance",
+          "discount": "50%",
+          "score": 0.5
+        }
+      }
+    ]
+  },
+  {
+    "label": "Real — cartera mediana (3 bancos, incluye Naranja X)",
+    "poolSize": 1632,
+    "top3v1": [
+      {
+        "id": "cmpiqs6e200owdpxkgis9ug7c",
+        "commerce": "Rappi",
+        "category": "gastronomia",
+        "title": "50% de descuento – Rappi",
+        "discount": "50%",
+        "score": 0.65
+      },
+      {
+        "id": "cmpsk0jtf06vu25s0serjeycc",
+        "commerce": "Cinema La Plata",
+        "category": "entretenimiento",
+        "title": "50% descuento – Cinema La Plata",
+        "discount": "50%",
+        "score": 0.5
+      },
+      {
+        "id": "cmqxu9u1h00pibduvlcro9mgp",
+        "commerce": "Comercios que acepten MODO",
+        "category": "otros",
+        "title": "40% en Desayunos",
+        "discount": "40%",
+        "score": 0.5
+      }
+    ],
+    "top3v2": [
+      {
+        "id": "cmpiqs6e200owdpxkgis9ug7c",
+        "commerce": "Rappi",
+        "category": "gastronomia",
+        "title": "50% de descuento – Rappi",
+        "discount": "50%",
+        "score": 0.535
+      },
+      {
+        "id": "cmpiqrxdu00nndpxk0frxfdid",
+        "commerce": "Pax Assistance",
+        "category": "salud-y-belleza",
+        "title": "50% de descuento – Pax Assistance",
+        "discount": "50%",
+        "score": 0.5
+      },
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.489
+      }
+    ],
+    "categoriasV1": [
+      "gastronomia",
+      "entretenimiento",
+      "otros"
+    ],
+    "categoriasV2": [
+      "gastronomia",
+      "salud-y-belleza",
+      "supermercados"
+    ],
+    "categoriasQueSuben": [
+      "salud-y-belleza",
+      "supermercados"
+    ],
+    "categoriasQueBajan": [
+      "entretenimiento",
+      "otros"
+    ],
+    "diversidadV1": 3,
+    "diversidadV2": 3,
+    "entraronNuevas": [
+      {
+        "id": "cmpiqrxdu00nndpxk0frxfdid",
+        "commerce": "Pax Assistance",
+        "category": "salud-y-belleza",
+        "title": "50% de descuento – Pax Assistance",
+        "discount": "50%",
+        "score": 0.5
+      },
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.489
+      }
+    ],
+    "salieron": [
+      {
+        "id": "cmpsk0jtf06vu25s0serjeycc",
+        "commerce": "Cinema La Plata",
+        "category": "entretenimiento",
+        "title": "50% descuento – Cinema La Plata",
+        "discount": "50%",
+        "score": 0.5
+      },
+      {
+        "id": "cmqxu9u1h00pibduvlcro9mgp",
+        "commerce": "Comercios que acepten MODO",
+        "category": "otros",
+        "title": "40% en Desayunos",
+        "discount": "40%",
+        "score": 0.5
+      }
+    ],
+    "casosCotidianoVsFlashy": [
+      {
+        "entra": {
+          "id": "cmpycqlu409lwe03ejrbjo9lg",
+          "commerce": "RES",
+          "category": "supermercados",
+          "title": "30% en RES",
+          "discount": "30%",
+          "score": 0.489
+        },
+        "sale": {
+          "id": "cmpsk0jtf06vu25s0serjeycc",
+          "commerce": "Cinema La Plata",
+          "category": "entretenimiento",
+          "title": "50% descuento – Cinema La Plata",
+          "discount": "50%",
+          "score": 0.5
+        }
+      },
+      {
+        "entra": {
+          "id": "cmpycqlu409lwe03ejrbjo9lg",
+          "commerce": "RES",
+          "category": "supermercados",
+          "title": "30% en RES",
+          "discount": "30%",
+          "score": 0.489
+        },
+        "sale": {
+          "id": "cmqxu9u1h00pibduvlcro9mgp",
+          "commerce": "Comercios que acepten MODO",
+          "category": "otros",
+          "title": "40% en Desayunos",
+          "discount": "40%",
+          "score": 0.5
+        }
+      }
+    ]
+  },
+  {
+    "label": "Sintético — Familia con supermercado",
+    "description": "Banco tradicional + wallet, sin onboarding declarado. Caso base: ¿sube el súper cotidiano?",
+    "poolSize": 118,
+    "top3v1": [
+      {
+        "id": "cmqxu9u1h00pibduvlcro9mgp",
+        "commerce": "Comercios que acepten MODO",
+        "category": "otros",
+        "title": "40% en Desayunos",
+        "discount": "40%",
+        "score": 0.5
+      },
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.356
+      },
+      {
+        "id": "cmqxucqc702q3bduv45alzh3q",
+        "commerce": "Comercios vecinos",
+        "category": "otros",
+        "title": "30% en comercios vecinos",
+        "discount": "30%",
+        "score": 0.375
+      }
+    ],
+    "top3v2": [
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.489
+      },
+      {
+        "id": "cmqxu9u1h00pibduvlcro9mgp",
+        "commerce": "Comercios que acepten MODO",
+        "category": "otros",
+        "title": "40% en Desayunos",
+        "discount": "40%",
+        "score": 0.425
+      },
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      }
+    ],
+    "categoriasV1": [
+      "otros",
+      "supermercados"
+    ],
+    "categoriasV2": [
+      "supermercados",
+      "otros"
+    ],
+    "categoriasQueSuben": [],
+    "categoriasQueBajan": [],
+    "diversidadV1": 2,
+    "diversidadV2": 2,
+    "entraronNuevas": [
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      }
+    ],
+    "salieron": [
+      {
+        "id": "cmqxucqc702q3bduv45alzh3q",
+        "commerce": "Comercios vecinos",
+        "category": "otros",
+        "title": "30% en comercios vecinos",
+        "discount": "30%",
+        "score": 0.375
+      }
+    ],
+    "casosCotidianoVsFlashy": [
+      {
+        "entra": {
+          "id": "cmpycqi8q04cde03e2egxqo7k",
+          "commerce": "The Food Market",
+          "category": "supermercados",
+          "title": "25% en The Food Market",
+          "discount": "25%",
+          "score": 0.459
+        },
+        "sale": {
+          "id": "cmqxucqc702q3bduv45alzh3q",
+          "commerce": "Comercios vecinos",
+          "category": "otros",
+          "title": "30% en comercios vecinos",
+          "discount": "30%",
+          "score": 0.375
+        }
+      }
+    ]
+  },
+  {
+    "label": "Sintético — Estudiante",
+    "description": "Wallet-only (sin tarjeta de banco tradicional), perfil típico de usuario joven.",
+    "poolSize": 1,
+    "top3v1": [],
+    "top3v2": [],
+    "categoriasV1": [],
+    "categoriasV2": [],
+    "categoriasQueSuben": [],
+    "categoriasQueBajan": [],
+    "diversidadV1": 0,
+    "diversidadV2": 0,
+    "entraronNuevas": [],
+    "salieron": [],
+    "casosCotidianoVsFlashy": []
+  },
+  {
+    "label": "Sintético — Viajero (caso Cabify/Ezeiza, RFC-007 §8.5)",
+    "description": "Perfil con tarjeta premium, para ver si una promo puntual de Viajes/Transporte compite bien contra necesidad cotidiana.",
+    "poolSize": 157,
+    "top3v1": [
+      {
+        "id": "cmpycqfy600rie03evw9rlwj1",
+        "commerce": "Patio Bullrich",
+        "category": "indumentaria",
+        "title": "30% en Francesca",
+        "discount": "30%",
+        "score": 0.375
+      },
+      {
+        "id": "cmqxucyvf02zlbduv06cyddah",
+        "commerce": "La Banderita",
+        "category": "gastronomia",
+        "title": "30% en Banderita",
+        "discount": "30%",
+        "score": 0.375
+      },
+      {
+        "id": "cmqxucqc702q3bduv45alzh3q",
+        "commerce": "Comercios vecinos",
+        "category": "otros",
+        "title": "30% en comercios vecinos",
+        "discount": "30%",
+        "score": 0.375
+      }
+    ],
+    "top3v2": [
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.489
+      },
+      {
+        "id": "cmqkgv9te00fuhvoge6zyi5ok",
+        "commerce": "Subte y Colectivos",
+        "category": "transporte",
+        "title": "20% en transporte",
+        "discount": "20%",
+        "score": 0.415
+      },
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      }
+    ],
+    "categoriasV1": [
+      "indumentaria",
+      "gastronomia",
+      "otros"
+    ],
+    "categoriasV2": [
+      "supermercados",
+      "transporte"
+    ],
+    "categoriasQueSuben": [
+      "supermercados",
+      "transporte"
+    ],
+    "categoriasQueBajan": [
+      "indumentaria",
+      "gastronomia",
+      "otros"
+    ],
+    "diversidadV1": 3,
+    "diversidadV2": 2,
+    "entraronNuevas": [
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.489
+      },
+      {
+        "id": "cmqkgv9te00fuhvoge6zyi5ok",
+        "commerce": "Subte y Colectivos",
+        "category": "transporte",
+        "title": "20% en transporte",
+        "discount": "20%",
+        "score": 0.415
+      },
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      }
+    ],
+    "salieron": [
+      {
+        "id": "cmpycqfy600rie03evw9rlwj1",
+        "commerce": "Patio Bullrich",
+        "category": "indumentaria",
+        "title": "30% en Francesca",
+        "discount": "30%",
+        "score": 0.375
+      },
+      {
+        "id": "cmqxucyvf02zlbduv06cyddah",
+        "commerce": "La Banderita",
+        "category": "gastronomia",
+        "title": "30% en Banderita",
+        "discount": "30%",
+        "score": 0.375
+      },
+      {
+        "id": "cmqxucqc702q3bduv45alzh3q",
+        "commerce": "Comercios vecinos",
+        "category": "otros",
+        "title": "30% en comercios vecinos",
+        "discount": "30%",
+        "score": 0.375
+      }
+    ],
+    "casosCotidianoVsFlashy": [
+      {
+        "entra": {
+          "id": "cmqkgv9te00fuhvoge6zyi5ok",
+          "commerce": "Subte y Colectivos",
+          "category": "transporte",
+          "title": "20% en transporte",
+          "discount": "20%",
+          "score": 0.415
+        },
+        "sale": {
+          "id": "cmpycqfy600rie03evw9rlwj1",
+          "commerce": "Patio Bullrich",
+          "category": "indumentaria",
+          "title": "30% en Francesca",
+          "discount": "30%",
+          "score": 0.375
+        }
+      },
+      {
+        "entra": {
+          "id": "cmqkgv9te00fuhvoge6zyi5ok",
+          "commerce": "Subte y Colectivos",
+          "category": "transporte",
+          "title": "20% en transporte",
+          "discount": "20%",
+          "score": 0.415
+        },
+        "sale": {
+          "id": "cmqxucyvf02zlbduv06cyddah",
+          "commerce": "La Banderita",
+          "category": "gastronomia",
+          "title": "30% en Banderita",
+          "discount": "30%",
+          "score": 0.375
+        }
+      },
+      {
+        "entra": {
+          "id": "cmqkgv9te00fuhvoge6zyi5ok",
+          "commerce": "Subte y Colectivos",
+          "category": "transporte",
+          "title": "20% en transporte",
+          "discount": "20%",
+          "score": 0.415
+        },
+        "sale": {
+          "id": "cmqxucqc702q3bduv45alzh3q",
+          "commerce": "Comercios vecinos",
+          "category": "otros",
+          "title": "30% en comercios vecinos",
+          "discount": "30%",
+          "score": 0.375
+        }
+      },
+      {
+        "entra": {
+          "id": "cmpycqi8q04cde03e2egxqo7k",
+          "commerce": "The Food Market",
+          "category": "supermercados",
+          "title": "25% en The Food Market",
+          "discount": "25%",
+          "score": 0.459
+        },
+        "sale": {
+          "id": "cmpycqfy600rie03evw9rlwj1",
+          "commerce": "Patio Bullrich",
+          "category": "indumentaria",
+          "title": "30% en Francesca",
+          "discount": "30%",
+          "score": 0.375
+        }
+      },
+      {
+        "entra": {
+          "id": "cmpycqi8q04cde03e2egxqo7k",
+          "commerce": "The Food Market",
+          "category": "supermercados",
+          "title": "25% en The Food Market",
+          "discount": "25%",
+          "score": 0.459
+        },
+        "sale": {
+          "id": "cmqxucyvf02zlbduv06cyddah",
+          "commerce": "La Banderita",
+          "category": "gastronomia",
+          "title": "30% en Banderita",
+          "discount": "30%",
+          "score": 0.375
+        }
+      },
+      {
+        "entra": {
+          "id": "cmpycqi8q04cde03e2egxqo7k",
+          "commerce": "The Food Market",
+          "category": "supermercados",
+          "title": "25% en The Food Market",
+          "discount": "25%",
+          "score": 0.459
+        },
+        "sale": {
+          "id": "cmqxucqc702q3bduv45alzh3q",
+          "commerce": "Comercios vecinos",
+          "category": "otros",
+          "title": "30% en comercios vecinos",
+          "discount": "30%",
+          "score": 0.375
+        }
+      }
+    ]
+  },
+  {
+    "label": "Sintético — Dueño de mascota",
+    "description": "Declaró \"Mascotas\" en onboarding simulado — floor Declarada activo (RFC-006).",
+    "poolSize": 354,
+    "top3v1": [
+      {
+        "id": "cmqxucqc702q3bduv45alzh3q",
+        "commerce": "Comercios vecinos",
+        "category": "otros",
+        "title": "30% en comercios vecinos",
+        "discount": "30%",
+        "score": 0.375
+      },
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.356
+      },
+      {
+        "id": "cmqxuc57j02g8bduv503fljzj",
+        "commerce": "comercios adh",
+        "category": "otros",
+        "title": "30% en comercios adh",
+        "discount": "30%",
+        "score": 0.375
+      }
+    ],
+    "top3v2": [
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.489
+      },
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      },
+      {
+        "id": "cmp7iqhgs09dwi5244ygf6qqg",
+        "commerce": "MITRE",
+        "category": "supermercados",
+        "title": "20% reintegro – Mitre",
+        "discount": "20%",
+        "score": 0.415
+      }
+    ],
+    "categoriasV1": [
+      "otros",
+      "supermercados"
+    ],
+    "categoriasV2": [
+      "supermercados"
+    ],
+    "categoriasQueSuben": [],
+    "categoriasQueBajan": [
+      "otros"
+    ],
+    "diversidadV1": 2,
+    "diversidadV2": 1,
+    "entraronNuevas": [
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      },
+      {
+        "id": "cmp7iqhgs09dwi5244ygf6qqg",
+        "commerce": "MITRE",
+        "category": "supermercados",
+        "title": "20% reintegro – Mitre",
+        "discount": "20%",
+        "score": 0.415
+      }
+    ],
+    "salieron": [
+      {
+        "id": "cmqxucqc702q3bduv45alzh3q",
+        "commerce": "Comercios vecinos",
+        "category": "otros",
+        "title": "30% en comercios vecinos",
+        "discount": "30%",
+        "score": 0.375
+      },
+      {
+        "id": "cmqxuc57j02g8bduv503fljzj",
+        "commerce": "comercios adh",
+        "category": "otros",
+        "title": "30% en comercios adh",
+        "discount": "30%",
+        "score": 0.375
+      }
+    ],
+    "casosCotidianoVsFlashy": [
+      {
+        "entra": {
+          "id": "cmpycqi8q04cde03e2egxqo7k",
+          "commerce": "The Food Market",
+          "category": "supermercados",
+          "title": "25% en The Food Market",
+          "discount": "25%",
+          "score": 0.459
+        },
+        "sale": {
+          "id": "cmqxucqc702q3bduv45alzh3q",
+          "commerce": "Comercios vecinos",
+          "category": "otros",
+          "title": "30% en comercios vecinos",
+          "discount": "30%",
+          "score": 0.375
+        }
+      },
+      {
+        "entra": {
+          "id": "cmpycqi8q04cde03e2egxqo7k",
+          "commerce": "The Food Market",
+          "category": "supermercados",
+          "title": "25% en The Food Market",
+          "discount": "25%",
+          "score": 0.459
+        },
+        "sale": {
+          "id": "cmqxuc57j02g8bduv503fljzj",
+          "commerce": "comercios adh",
+          "category": "otros",
+          "title": "30% en comercios adh",
+          "discount": "30%",
+          "score": 0.375
+        }
+      },
+      {
+        "entra": {
+          "id": "cmp7iqhgs09dwi5244ygf6qqg",
+          "commerce": "MITRE",
+          "category": "supermercados",
+          "title": "20% reintegro – Mitre",
+          "discount": "20%",
+          "score": 0.415
+        },
+        "sale": {
+          "id": "cmqxucqc702q3bduv45alzh3q",
+          "commerce": "Comercios vecinos",
+          "category": "otros",
+          "title": "30% en comercios vecinos",
+          "discount": "30%",
+          "score": 0.375
+        }
+      },
+      {
+        "entra": {
+          "id": "cmp7iqhgs09dwi5244ygf6qqg",
+          "commerce": "MITRE",
+          "category": "supermercados",
+          "title": "20% reintegro – Mitre",
+          "discount": "20%",
+          "score": 0.415
+        },
+        "sale": {
+          "id": "cmqxuc57j02g8bduv503fljzj",
+          "commerce": "comercios adh",
+          "category": "otros",
+          "title": "30% en comercios adh",
+          "discount": "30%",
+          "score": 0.375
+        }
+      }
+    ]
+  },
+  {
+    "label": "Sintético — Dueño de auto",
+    "description": "Perfil con banco + wallet genérico, sin declarar nada — mide si Combustible/Automotores sube solo por Default de necesidad.",
+    "poolSize": 187,
+    "top3v1": [
+      {
+        "id": "cmr8a1lmq00y1fhnem27ff9pp",
+        "commerce": "COLECTIVOS Y SUBTES NFC",
+        "category": "otros",
+        "title": "Hasta 100% en Transporte",
+        "discount": "100%",
+        "score": 0.5
+      },
+      {
+        "id": "cmqkgx0mb08omhvogza2foap7",
+        "commerce": "Subte y Colectivos",
+        "category": "otros",
+        "title": "Hasta 100% en Transporte",
+        "discount": "100%",
+        "score": 0.5
+      },
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.356
+      }
+    ],
+    "top3v2": [
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.489
+      },
+      {
+        "id": "cmr8a1lmq00y1fhnem27ff9pp",
+        "commerce": "COLECTIVOS Y SUBTES NFC",
+        "category": "otros",
+        "title": "Hasta 100% en Transporte",
+        "discount": "100%",
+        "score": 0.425
+      },
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      }
+    ],
+    "categoriasV1": [
+      "otros",
+      "supermercados"
+    ],
+    "categoriasV2": [
+      "supermercados",
+      "otros"
+    ],
+    "categoriasQueSuben": [],
+    "categoriasQueBajan": [],
+    "diversidadV1": 2,
+    "diversidadV2": 2,
+    "entraronNuevas": [
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      }
+    ],
+    "salieron": [
+      {
+        "id": "cmqkgx0mb08omhvogza2foap7",
+        "commerce": "Subte y Colectivos",
+        "category": "otros",
+        "title": "Hasta 100% en Transporte",
+        "discount": "100%",
+        "score": 0.5
+      }
+    ],
+    "casosCotidianoVsFlashy": [
+      {
+        "entra": {
+          "id": "cmpycqi8q04cde03e2egxqo7k",
+          "commerce": "The Food Market",
+          "category": "supermercados",
+          "title": "25% en The Food Market",
+          "discount": "25%",
+          "score": 0.459
+        },
+        "sale": {
+          "id": "cmqkgx0mb08omhvogza2foap7",
+          "commerce": "Subte y Colectivos",
+          "category": "otros",
+          "title": "Hasta 100% en Transporte",
+          "discount": "100%",
+          "score": 0.5
+        }
+      }
+    ]
+  },
+  {
+    "label": "Sintético — Cartera amplia (multi-banco)",
+    "description": "Simula un power-user con muchos bancos/wallets, similar al perfil real más grande pero sin declarar nada.",
+    "poolSize": 427,
+    "top3v1": [
+      {
+        "id": "cmqxu9u1h00pibduvlcro9mgp",
+        "commerce": "Comercios que acepten MODO",
+        "category": "otros",
+        "title": "40% en Desayunos",
+        "discount": "40%",
+        "score": 0.5
+      },
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.356
+      },
+      {
+        "id": "cmqxucqc702q3bduv45alzh3q",
+        "commerce": "Comercios vecinos",
+        "category": "otros",
+        "title": "30% en comercios vecinos",
+        "discount": "30%",
+        "score": 0.375
+      }
+    ],
+    "top3v2": [
+      {
+        "id": "cmpycqlu409lwe03ejrbjo9lg",
+        "commerce": "RES",
+        "category": "supermercados",
+        "title": "30% en RES",
+        "discount": "30%",
+        "score": 0.489
+      },
+      {
+        "id": "cmqxu9u1h00pibduvlcro9mgp",
+        "commerce": "Comercios que acepten MODO",
+        "category": "otros",
+        "title": "40% en Desayunos",
+        "discount": "40%",
+        "score": 0.425
+      },
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      }
+    ],
+    "categoriasV1": [
+      "otros",
+      "supermercados"
+    ],
+    "categoriasV2": [
+      "supermercados",
+      "otros"
+    ],
+    "categoriasQueSuben": [],
+    "categoriasQueBajan": [],
+    "diversidadV1": 2,
+    "diversidadV2": 2,
+    "entraronNuevas": [
+      {
+        "id": "cmpycqi8q04cde03e2egxqo7k",
+        "commerce": "The Food Market",
+        "category": "supermercados",
+        "title": "25% en The Food Market",
+        "discount": "25%",
+        "score": 0.459
+      }
+    ],
+    "salieron": [
+      {
+        "id": "cmqxucqc702q3bduv45alzh3q",
+        "commerce": "Comercios vecinos",
+        "category": "otros",
+        "title": "30% en comercios vecinos",
+        "discount": "30%",
+        "score": 0.375
+      }
+    ],
+    "casosCotidianoVsFlashy": [
+      {
+        "entra": {
+          "id": "cmpycqi8q04cde03e2egxqo7k",
+          "commerce": "The Food Market",
+          "category": "supermercados",
+          "title": "25% en The Food Market",
+          "discount": "25%",
+          "score": 0.459
+        },
+        "sale": {
+          "id": "cmqxucqc702q3bduv45alzh3q",
+          "commerce": "Comercios vecinos",
+          "category": "otros",
+          "title": "30% en comercios vecinos",
+          "discount": "30%",
+          "score": 0.375
+        }
+      }
+    ]
+  }
+]

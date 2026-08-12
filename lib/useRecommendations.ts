@@ -57,6 +57,9 @@ export function useRecommendations(province?: string | null) {
       .then(r => r.json())
       .then((json: RecommendationResponse) => {
         if (cancelled) return
+        if ((json as any).perf) {
+          console.log('[recommendation-perf]', (json as any).perf)
+        }
         setData(json)
       })
       .catch(() => {})
