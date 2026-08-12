@@ -7,11 +7,9 @@ import BottomNav from '../components/BottomNav'
 import ThemeToggle from '../components/ThemeToggle'
 import SplashScreen from '../components/SplashScreen'
 import OnboardingBanner from '../components/OnboardingBanner'
-import RecommendationSpotlight from '../components/RecommendationSpotlight'
-import RecommendationSecondaryCard from '../components/RecommendationSecondaryCard'
-import SignalStrip from '../components/SignalStrip'
+import HomeRubros from '../components/home/HomeRubros'
 import ExploreCatalogCta from '../components/ExploreCatalogCta'
-import { useRecommendations } from '@/lib/useRecommendations'
+import { useHomeDecision } from '@/lib/useHomeDecision'
 import { trackRecommendationEvent } from '@/lib/recommendationEvents'
 
 const PromoDetailSheet = dynamic(() => import('../components/PromoDetailSheet'), { ssr: false })
@@ -23,9 +21,9 @@ type UserProfile = {
   cards: { cardNetworkId: string | null }[]
 } | null
 
-// Home v2 (CPO Direction, 9/8/2026): experiencia cerrada de decisión.
-// "¿Qué me conviene hoy?" — Spotlight + 2 recomendaciones + señales + CTA
-// hacia el catálogo. Nada de catálogo/búsqueda/filtros acá: eso vive en
+// Home v2 (CPO Direction "Integración Home + Decision Engine v2", 12/8/2026):
+// organizada por rubros prioritarios (HomeDecisionPayload real, RFC-008), no
+// por Top-3 global. Nada de catálogo/búsqueda/filtros acá: eso vive en
 // /promos/explorar. Componente independiente del viejo PromosClient
 // (ahora en app/promos/explorar/PromosClient.tsx) — no comparte estado
 // ni fetch con el catálogo.
@@ -40,7 +38,7 @@ export default function PromosClient() {
   const [profileReady, setProfileReady] = useState(false)
   const [detailPromo, setDetailPromo] = useState<any>(null)
 
-  const { data, loading } = useRecommendations(province)
+  const { data, loading } = useHomeDecision(province)
 
   // Provincia: cookie ya seteada por visitas previas (ver ProvinceSelector) o
   // pedirla si todavía no existe, para no arrancar cada sesión desde cero.
@@ -84,28 +82,11 @@ export default function PromosClient() {
 
   const hasProfile = !!userProfile && (userProfile.banks.length > 0 || userProfile.wallets.length > 0 || userProfile.cards.length > 0)
 
-  const handleOpenPromo = useCallback((promo: any) => setDetailPromo(promo), [])
+  const handleOpenPromo = useCallback((promo: unknown) => setDetailPromo(promo), [])
   const handleCloseDetail = useCallback(() => setDetailPromo(null), [])
   const handleGoToProfile = useCallback(() => {
     router.push(status === 'authenticated' ? '/perfil?tab=finance' : '/registro')
   }, [router, status])
-  const handleShareLocation = useCallback(() => setShowProvinceSelector(true), [])
-
-  const secondary = data?.status === 'ok' || data?.status === 'no_location' ? data.recommendations.slice(1, 3) : []
-
-  const handleSecondaryClick = useCallback((reco: { promo: any; reasons: string[] }, position: number) => {
-    if (!data) return
-    trackRecommendationEvent('recommendation_clicked', {
-      recommendation_position: position,
-      commerceId: reco.promo.commerce?.id,
-      promoId: reco.promo.id,
-      recommendation_reasons: reco.reasons,
-      recommendation_status: data.status,
-      generatedAt: data.generatedAt,
-      latency_ms: data.latencyMs,
-    })
-    setDetailPromo(reco.promo)
-  }, [data])
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0A1428] pb-24">
@@ -118,28 +99,27 @@ export default function PromosClient() {
 
       <OnboardingBanner isLoggedIn={status === 'authenticated'} hasProfile={hasProfile} profileReady={profileReady} />
 
-      <RecommendationSpotlight
-        data={data}
-        loading={loading}
-        onOpenPromo={handleOpenPromo}
-        onGoToProfile={handleGoToProfile}
-      />
-
-      {secondary.length > 0 && (
-        <div className="px-4 pb-2 grid grid-cols-2 gap-3">
-          {secondary.map((reco, i) => (
-            <RecommendationSecondaryCard
-              key={reco.promo.id}
-              promo={reco.promo}
-              reasons={reco.reasons}
-              onClick={() => handleSecondaryClick(reco, i + 2)}
-            />
-          ))}
+      {data?.status === 'incomplete_profile' && (
+        <div className="px-4 pt-3 pb-5">
+          <h1 className="text-[21px] font-black text-[#0D1B2E] dark:text-white leading-tight mb-1">
+            Encontrá las promos que valen la pena
+          </h1>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4 leading-snug">
+            Cargá tus tarjetas y billeteras para que te mostremos solo lo que te sirve a vos, rubro por rubro.
+          </p>
+          <button
+            onClick={handleGoToProfile}
+            className="inline-flex items-center gap-2 text-[13px] font-black text-white bg-[#1D3D6E] dark:bg-[#3A6BC4] rounded-2xl px-5 py-3 hover:opacity-90 transition-opacity"
+          >
+            Configurar mi perfil →
+          </button>
         </div>
       )}
 
-      {data && (
-        <SignalStrip data={data} onShareLocation={handleShareLocation} />
+      {data?.status !== 'incomplete_profile' && (
+        <div className="px-4 md:px-6 pt-3 pb-2">
+          <HomeRubros data={data} loading={loading} onOpenPromo={handleOpenPromo} />
+        </div>
       )}
 
       {data && (
