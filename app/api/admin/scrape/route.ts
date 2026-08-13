@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
     const branchesByCommerce = new Map<string, Array<{ lat: number; lng: number }>>();
 
     // ── FASE 1: Resolver entidades + crear comercios (secuencial) ─────────────
-    type ResolvedItem = { promoData: any; reqData: any[]; baseSlug: string; sourceUrl?: string | null; title: string; commerceId: string };
+    type ResolvedItem = { promoData: any; reqData: any[]; baseSlug: string; sourceUrl?: string | null; source?: string | null; externalId?: string | null; title: string; commerceId: string };
     const resolvedItems: ResolvedItem[] = [];
 
     for (const [, group] of Array.from(grouped.entries())) {
@@ -251,25 +251,29 @@ export async function POST(req: NextRequest) {
       if (!hasDiscount) continue;
 
       // ── Categoría ─────────────────────────────────────────────────────────
-      // 1. defaultCategoryId del comercio (curado manualmente) — pisa lo que diga el scraper
-      let catMatch: typeof categories[number] | undefined;
-      if (p.storeName) {
-        const knownCom = (commerces as any[]).find((c: any) => normalizeStr(c.name) === normalizeStr(p.storeName ?? ''));
-        if (knownCom?.defaultCategoryId) {
-          catMatch = categories.find(c => c.id === knownCom.defaultCategoryId) ?? undefined;
-        }
-      }
-      // 2. Categoría del scraper
-      if (!catMatch) {
-        catMatch = categories.find(c =>
-          normalizeStr(c.name) === normalizeStr(p.categoria ?? '')
-        );
-      }
-      // 3. detectCategoria como fallback
+      // Precedencia (RFC Club La Nación multi-beneficio, 12/8/2026): la señal de
+      // contenido (beneficio/scraper) pesa más que la curación por comercio,
+      // porque un mismo comercio puede tener beneficios de distinto rubro
+      // (ej. YPF: combustible vs. lubricante vs. tienda). defaultCategoryId
+      // queda como fallback, no como override — antes corría primero y forzaba
+      // TODOS los beneficios de un comercio a su categoría curada.
+      // 1. Categoría del scraper (ya puede incluir su propia cascada interna
+      //    beneficio-scoped > taxonomía de origen > nombre de comercio, ver clublanacion.ts)
+      let catMatch: typeof categories[number] | undefined = categories.find(c =>
+        normalizeStr(c.name) === normalizeStr(p.categoria ?? '')
+      );
+      // 2. detectCategoria sobre comercio+título como fallback genérico
       if (!catMatch) {
         const detected = detectCategoria(`${p.storeName ?? ''} ${p.title ?? ''}`);
         if (detected) {
           catMatch = categories.find(c => normalizeStr(c.name) === normalizeStr(detected));
+        }
+      }
+      // 3. defaultCategoryId del comercio (curado manualmente) — último fallback antes de Sin Categoría
+      if (!catMatch && p.storeName) {
+        const knownCom = (commerces as any[]).find((c: any) => normalizeStr(c.name) === normalizeStr(p.storeName ?? ''));
+        if (knownCom?.defaultCategoryId) {
+          catMatch = categories.find(c => c.id === knownCom.defaultCategoryId) ?? undefined;
         }
       }
       if (!catMatch) {
@@ -599,10 +603,12 @@ export async function POST(req: NextRequest) {
           })(),
           validDays: p.validDays ?? 127,
           specificDates: p.specificDates ? JSON.stringify(p.specificDates) : null,
-          categoryId: target.defaultCategoryId ?? catMatch.id,
+          categoryId: catMatch.id,
           commerceId: target.id,
           status: 'ACTIVE' as const,
           sourceUrl: p.sourceUrl ?? null,
+          source: p.source ?? null,
+          externalId: p.externalId ?? null,
           sourceText: p.sourceText ?? null,
           salesChannel: normalizeSalesChannel(salesChannel),
           commerceNote: p.note ?? null,
@@ -610,7 +616,7 @@ export async function POST(req: NextRequest) {
           isCSIOnly,
         };
 
-        resolvedItems.push({ promoData, reqData, baseSlug, sourceUrl: p.sourceUrl, title: p.title, commerceId: target.id });
+        resolvedItems.push({ promoData, reqData, baseSlug, sourceUrl: p.sourceUrl, source: p.source, externalId: p.externalId, title: p.title, commerceId: target.id });
       }
     }
 
@@ -623,7 +629,7 @@ export async function POST(req: NextRequest) {
         commerceId: { in: involvedCommerceIds }
       },
       select: {
-        id: true, title: true, commerceId: true, sourceUrl: true, slug: true, status: true,
+        id: true, title: true, commerceId: true, sourceUrl: true, source: true, externalId: true, slug: true, status: true,
         validFrom: true, validUntil: true, validDays: true, maxDiscountPct: true, isCSIOnly: true,
         salesChannel: true,
         requirements: {
@@ -641,6 +647,12 @@ export async function POST(req: NextRequest) {
       !!url && (url.includes('#') || /\/detalle\/\d+/.test(url));
     const byUrl = new Map(existingPromos.filter(p => isUniqueUrl(p.sourceUrl)).map(p => [p.sourceUrl!, p]));
     const byKey = new Map(existingPromos.map(p => [`${p.title}|${p.commerceId}`, p]));
+    // Identidad externa (source+externalId): clave primaria de matching cuando el scraper
+    // la provee (ej. Club La Nación, benefit-card id). Necesario para páginas multi-beneficio
+    // donde varias promos comparten el mismo sourceUrl y no pueden distinguirse por URL sola.
+    const byExternalId = new Map(
+      existingPromos.filter(p => p.source && p.externalId).map(p => [`${p.source}|${p.externalId}`, p])
+    );
     const existingSlugs = new Set((await prisma.promo.findMany({ select: { slug: true } })).map(p => p.slug).filter(Boolean));
 
     // Deduplicar resolvedItems: si el mismo (commerceId, título normalizado) aparece
@@ -660,14 +672,17 @@ export async function POST(req: NextRequest) {
     const newPromoIds: string[] = []
 
     const savePromo = async (item: ResolvedItem) => {
-      const { promoData, reqData, baseSlug, sourceUrl, title, commerceId } = item;
+      const { promoData, reqData, baseSlug, sourceUrl, source, externalId, title, commerceId } = item;
+      // Precedencia de matching: identidad externa (source+externalId) > sourceUrl única > title+commerceId.
+      // source+externalId es la más confiable (sobrevive cambios de título/descuento entre reruns),
+      // necesaria para páginas multi-beneficio (ej. Club La Nación) donde varias promos comparten sourceUrl.
+      const byExternalIdMatch = (source && externalId) ? byExternalId.get(`${source}|${externalId}`) : undefined;
       // byUrl puede mapear a una promo con distinto título si el scraper genera
       // múltiples promos del mismo item (misma URL, distinto discountType).
       // En ese caso ignorar byUrl y caer en byKey.
       const byUrlMatch = isUniqueUrl(sourceUrl) ? byUrl.get(sourceUrl!) : undefined;
-      const existing = (byUrlMatch && byUrlMatch.title === title)
-        ? byUrlMatch
-        : byKey.get(`${title}|${commerceId}`);
+      const existing = byExternalIdMatch
+        ?? ((byUrlMatch && byUrlMatch.title === title) ? byUrlMatch : byKey.get(`${title}|${commerceId}`));
 
       if (existing) {
         // Comparar fingerprint — si nada cambió, skip total (0 queries)

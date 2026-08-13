@@ -448,6 +448,8 @@ model Promo {
   maxDiscountPct     Int?
   isCSIOnly          Boolean            @default(false)
   sourceUrl          String?
+  source             String?
+  externalId         String?
   sourceNote         String?
   commerceNote       String?            // Ej: "Solo comercios con Openpay"
   verifiedAt         DateTime?
@@ -467,6 +469,7 @@ model Promo {
   usages             PromoUsage[]
   usageEvents        PromoUsageEvent[]
 
+  @@unique([source, externalId])
   @@index([categoryId])
   @@index([commerceId])
   @@index([status])

@@ -12,6 +12,8 @@ export interface ScrapedPromo {
   description: string;
   sourceText?: string;
   sourceUrl?: string;
+  source?: string;
+  externalId?: string;
   discount: string;
   discountType: string;
   cap?: number | null;
