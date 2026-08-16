@@ -268,6 +268,12 @@ export interface PromoQueryParams {
    * de usuario final, sin importar el rol. No cambia `isAdmin` en ningún otro
    * lugar de esta función (branches, filtro geográfico, etc. siguen igual). */
   forceProfileMatching?: boolean
+  /** Reservado — optimización de query por candidatos (rama feature/nueva-home,
+   * fuera del alcance aprobado del Commit 4). Declarado acá solo para que
+   * PromoQueryParams tipe correctamente a los callers que ya lo pasan
+   * (home-decision endpoint, tests); no tiene efecto en esta rama: el path
+   * de candidatos no fue traído, así que este flag se ignora en runtime. */
+  useCandidateQuery?: boolean
 }
 
 export async function getPromosData(params: PromoQueryParams, email?: string | null, isAdmin?: boolean) {

@@ -56,8 +56,19 @@ export async function GET(req: NextRequest) {
     const lng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null
     const guestProfileParam = searchParams.get('guest_profile')
 
+    // Identidad SOLO desde el JWT de sesión verificado — a diferencia de
+    // otros endpoints del proyecto (ej. /api/promos), acá NO se acepta el
+    // fallback a header `x-user-email` enviado por el cliente. Ese header lo
+    // setea PromosClient.tsx en el browser a partir de la sesión que el
+    // propio cliente lee (ver app/promos/PromosClient.tsx) — no hay nada del
+    // lado servidor que lo valide, así que un request sin cookie de sesión
+    // puede declarar cualquier email y el server confiaría en él. Esa brecha
+    // ya existe en /api/promos/route.ts (pre-existente, fuera de alcance de
+    // esta rama), pero este endpoint es nuevo: no hay motivo para heredarla
+    // acá cuando lo único que cambia es leer `token.email` en vez de aceptar
+    // también el header. CPO Final Gate — Seguridad endpoint antes de push.
     const token = await getAuthToken(req)
-    const email = (token?.email as string | undefined) || req.headers.get('x-user-email')
+    const email = (token?.email as string | undefined) || null
     const role = token?.role as string | undefined
     const isAdmin = role === 'ADMIN' || role === 'MODERATOR'
 
