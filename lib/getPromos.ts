@@ -260,6 +260,20 @@ export interface PromoQueryParams {
   page?: number
   /** Cantidad de promos por página (default 500). */
   pageSize?: number
+  /** Home v2 / Decision Engine (13/8/2026): fuerza el cálculo de `userBestDiscount`
+   * (matching financiero real contra bancos/tarjetas/wallets del perfil) aunque
+   * el usuario tenga rol ADMIN/MODERATOR. El bypass de perfil para admins existe
+   * para el catálogo/backoffice (ven todas las promos sin relación con su propio
+   * perfil) — pero la Home personalizada debe evaluarse siempre como experiencia
+   * de usuario final, sin importar el rol. No cambia `isAdmin` en ningún otro
+   * lugar de esta función (branches, filtro geográfico, etc. siguen igual). */
+  forceProfileMatching?: boolean
+  /** Reservado — optimización de query por candidatos (rama feature/nueva-home,
+   * fuera del alcance aprobado del Commit 4). Declarado acá solo para que
+   * PromoQueryParams tipe correctamente a los callers que ya lo pasan
+   * (home-decision endpoint, tests); no tiene efecto en esta rama: el path
+   * de candidatos no fue traído, así que este flag se ignora en runtime. */
+  useCandidateQuery?: boolean
 }
 
 export async function getPromosData(params: PromoQueryParams, email?: string | null, isAdmin?: boolean) {
@@ -290,6 +304,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     paginate = false,
     page = 1,
     pageSize = 500,
+    forceProfileMatching = false,
   } = params
 
   const today = new Date()
@@ -826,7 +841,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     const globalMaxDiscount = allReqs.length > 0 ? allReqs.reduce((max, r) => (r.discountValue ?? 0) > (max?.discountValue ?? 0) ? r : max, allReqs[0]) : null
 
     let userBestDiscount = null
-    if (!isAdmin) {
+    if (!isAdmin || forceProfileMatching) {
       const uCards = [...(effectiveCards ?? []), ...walletVirtualCards]
       // Reutilizar la misma lógica estricta de matchesProfile para calcular el mejor descuento
       const matching = allReqs.filter(req => {
