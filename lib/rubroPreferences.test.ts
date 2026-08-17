@@ -1,11 +1,14 @@
-// Casos de prueba de selectRubrosForHome — CPO Approval "Preferencias →
-// selección personalizada de rubros v2" (15/8/2026). Función pura, sin
-// Prisma: getDeclaredActivePreferences/getActiveHomeRubroIds (I/O) no se
-// testean acá con mocks de red — se testea el contrato de selección con
-// inputs ya materializados, que es exactamente lo que reciben desde la ruta.
+// Casos de prueba de resolveDeclaredUniverse — CPO Approval "Tus rubros"
+// (16/8/2026). Función pura, sin Prisma: getDeclaredActivePreferences/
+// getActiveHomeRubroIds (I/O) no se testean acá con mocks de red — se
+// testea el contrato de resolución con inputs ya materializados, que es
+// exactamente lo que reciben desde la ruta. Reemplaza el suite anterior de
+// selectRubrosForHome (fallback + fill hasta N), función eliminada: ya no
+// hay relleno con el catálogo — ver decisionEngineV2.test.ts para el
+// scoring/selección de los N mejores (selectTopRubroSlots).
 import { describe, expect, it } from 'vitest'
-import { selectRubrosForHome, type DeclaredPreference } from './rubroPreferences'
-import { RUBRO_CATALOG, HOME_RUBRO_COUNT, type RubroConfig } from './rubroCatalog'
+import { resolveDeclaredUniverse, type DeclaredPreference } from './rubroPreferences'
+import { RUBRO_CATALOG, type RubroConfig } from './rubroCatalog'
 
 const ALL_ACTIVE = new Set(RUBRO_CATALOG.map(r => r.id))
 
@@ -13,105 +16,63 @@ function declared(...rubroIds: string[]): DeclaredPreference[] {
   return rubroIds.map(rubroId => ({ rubroId }))
 }
 
-describe('selectRubrosForHome', () => {
-  it('usuario sin preferencias mantiene los 5 defaults actuales (orden de catálogo)', () => {
-    const selection = selectRubrosForHome([], ALL_ACTIVE)
-    expect(selection).toHaveLength(HOME_RUBRO_COUNT)
-    expect(selection.map(s => s.rubro.id)).toEqual(['supermercados', 'combustible', 'farmacias', 'gastronomia', 'indumentaria'])
-    expect(selection.every(s => s.isDeclared === false)).toBe(true)
+describe('resolveDeclaredUniverse', () => {
+  it('usuario sin preferencias devuelve universo vacío — sin fallback al catálogo', () => {
+    const universe = resolveDeclaredUniverse([], ALL_ACTIVE)
+    expect(universe).toEqual([])
   })
 
-  it('2 declaradas se completan con 3 defaults hasta N — declaradas primero, orden de catálogo entre ellas', () => {
-    const selection = selectRubrosForHome(declared('tecnologia', 'hogar'), ALL_ACTIVE)
-    expect(selection).toHaveLength(5)
-    // declaradas ocupan los primeros slots (orden de catálogo ENTRE ellas:
-    // tecnologia antes que hogar), luego los defaults en orden de catálogo.
-    expect(selection.map(s => s.rubro.id)).toEqual(['tecnologia', 'hogar', 'supermercados', 'combustible', 'farmacias'])
-    const byId = Object.fromEntries(selection.map(s => [s.rubro.id, s.isDeclared]))
-    expect(byId['tecnologia']).toBe(true)
-    expect(byId['supermercados']).toBe(false)
+  it('2 declaradas devuelven exactamente esas 2, en orden de catálogo (no de declaración)', () => {
+    const universe = resolveDeclaredUniverse(declared('hogar', 'tecnologia'), ALL_ACTIVE)
+    expect(universe.map(r => r.id)).toEqual(['tecnologia', 'hogar'])
   })
 
-  it('CPO Review ejemplo A — declara tecnologia + viajes-y-turismo → [tecnologia, viajes-y-turismo, supermercados, combustible, farmacias]', () => {
-    const selection = selectRubrosForHome(declared('tecnologia', 'viajes-y-turismo'), ALL_ACTIVE)
-    expect(selection.map(s => s.rubro.id)).toEqual(['tecnologia', 'viajes-y-turismo', 'supermercados', 'combustible', 'farmacias'])
-    expect(selection.map(s => s.isDeclared)).toEqual([true, true, false, false, false])
+  it('todas las declaradas en orden inverso quedan ordenadas por catálogo, no por orden de declaración', () => {
+    const universe = resolveDeclaredUniverse(declared('viajes-y-turismo', 'tecnologia'), ALL_ACTIVE)
+    expect(universe.map(r => r.id)).toEqual(['tecnologia', 'viajes-y-turismo'])
   })
 
-  it('CPO Review ejemplo B — declara transporte + hogar + salud-y-belleza → [transporte, hogar, salud-y-belleza, supermercados, combustible]', () => {
-    const selection = selectRubrosForHome(declared('transporte', 'hogar', 'salud-y-belleza'), ALL_ACTIVE)
-    expect(selection.map(s => s.rubro.id)).toEqual(['transporte', 'hogar', 'salud-y-belleza', 'supermercados', 'combustible'])
-    expect(selection.map(s => s.isDeclared)).toEqual([true, true, true, false, false])
-  })
-
-  it('declaradas en orden inverso al de declaración quedan igual ordenadas por catálogo entre sí (no por orden de declaración)', () => {
-    // declara viajes-y-turismo antes que tecnologia -> el resultado debe
-    // seguir siendo tecnologia primero (orden de RUBRO_CATALOG), no el orden
-    // en que el usuario los tildó.
-    const selection = selectRubrosForHome(declared('viajes-y-turismo', 'tecnologia'), ALL_ACTIVE)
-    expect(selection.slice(0, 2).map(s => s.rubro.id)).toEqual(['tecnologia', 'viajes-y-turismo'])
-  })
-
-  it('5 declaradas no dejan lugar para fill (0 defaults)', () => {
-    const selection = selectRubrosForHome(
-      declared('viajes-y-turismo', 'salud-y-belleza', 'hogar', 'tecnologia', 'transporte'),
+  it('10 declaradas (todo el catálogo) devuelven las 10 — sin cap a N', () => {
+    const universe = resolveDeclaredUniverse(
+      declared(...RUBRO_CATALOG.map(r => r.id)),
       ALL_ACTIVE
     )
-    expect(selection).toHaveLength(5)
-    expect(selection.every(s => s.isDeclared)).toBe(true)
-    // orden de catálogo entre las declaradas
-    expect(selection.map(s => s.rubro.id)).toEqual(['transporte', 'tecnologia', 'hogar', 'salud-y-belleza', 'viajes-y-turismo'])
+    expect(universe).toHaveLength(10)
   })
 
-  it('más de N declaradas trunca a N respetando orden de catálogo', () => {
-    const selection = selectRubrosForHome(
-      declared('viajes-y-turismo', 'salud-y-belleza', 'hogar', 'tecnologia', 'transporte', 'indumentaria', 'gastronomia'),
+  it('más de N (8) declaradas no truncan — resolveDeclaredUniverse no aplica HOME_RUBRO_COUNT', () => {
+    const universe = resolveDeclaredUniverse(
+      declared('viajes-y-turismo', 'salud-y-belleza', 'hogar', 'tecnologia', 'transporte', 'indumentaria', 'gastronomia', 'farmacias'),
       ALL_ACTIVE
     )
-    expect(selection).toHaveLength(5)
-    expect(selection.every(s => s.isDeclared)).toBe(true)
-    expect(selection.map(s => s.rubro.id)).toEqual(['gastronomia', 'indumentaria', 'transporte', 'tecnologia', 'hogar'])
+    expect(universe).toHaveLength(8)
   })
 
   it('rubroId declarado que no está en el catálogo activo se descarta silenciosamente', () => {
-    const activeMinusHogar = new Set([...ALL_ACTIVE].filter(id => id !== 'hogar'))
-    const selection = selectRubrosForHome(declared('hogar', 'tecnologia'), activeMinusHogar)
-    expect(selection.map(s => s.rubro.id)).not.toContain('hogar')
-    const byId = Object.fromEntries(selection.map(s => [s.rubro.id, s.isDeclared]))
-    expect(byId['tecnologia']).toBe(true)
+    const activeMinusHogar = new Set(Array.from(ALL_ACTIVE).filter(id => id !== 'hogar'))
+    const universe = resolveDeclaredUniverse(declared('hogar', 'tecnologia'), activeMinusHogar)
+    expect(universe.map(r => r.id)).not.toContain('hogar')
+    expect(universe.map(r => r.id)).toEqual(['tecnologia'])
   })
 
   it('rubroId declarado duplicado se dedupea', () => {
-    const selection = selectRubrosForHome(declared('tecnologia', 'tecnologia', 'hogar'), ALL_ACTIVE)
-    const tecnologiaCount = selection.filter(s => s.rubro.id === 'tecnologia').length
+    const universe = resolveDeclaredUniverse(declared('tecnologia', 'tecnologia', 'hogar'), ALL_ACTIVE)
+    const tecnologiaCount = universe.filter(r => r.id === 'tecnologia').length
     expect(tecnologiaCount).toBe(1)
-    expect(selection).toHaveLength(5)
+    expect(universe).toHaveLength(2)
   })
 
-  it('User A y User B con preferencias distintas producen sets de 5 distintos', () => {
-    const userA = selectRubrosForHome(declared('viajes-y-turismo', 'tecnologia'), ALL_ACTIVE)
-    const userB = selectRubrosForHome(declared('transporte', 'salud-y-belleza'), ALL_ACTIVE)
-    expect(userA.map(s => s.rubro.id)).not.toEqual(userB.map(s => s.rubro.id))
+  it('User A y User B con preferencias distintas producen universos distintos', () => {
+    const userA = resolveDeclaredUniverse(declared('viajes-y-turismo', 'tecnologia'), ALL_ACTIVE)
+    const userB = resolveDeclaredUniverse(declared('transporte', 'salud-y-belleza'), ALL_ACTIVE)
+    expect(userA.map(r => r.id)).not.toEqual(userB.map(r => r.id))
   })
 
-  it('rubro inactivo (HomeRubro.active=false) nunca entra como declarado ni como default fill', () => {
-    const activeMinusTransporte = new Set([...ALL_ACTIVE].filter(id => id !== 'transporte'))
-    // declarado pero inactivo: no debe aparecer
-    const withDeclared = selectRubrosForHome(declared('transporte'), activeMinusTransporte)
-    expect(withDeclared.map(s => s.rubro.id)).not.toContain('transporte')
-
-    // inactivo y ninguna preferencia declarada por él: tampoco debe aparecer en el fill
-    const onlyFiveActive = new Set(['supermercados', 'combustible', 'farmacias', 'gastronomia', 'transporte'])
-    const withoutTransporte = new Set([...onlyFiveActive].filter(id => id !== 'transporte'))
-    const fillSelection = selectRubrosForHome([], withoutTransporte)
-    expect(fillSelection.map(s => s.rubro.id)).not.toContain('transporte')
-    expect(fillSelection).toHaveLength(4) // solo 4 activos disponibles, no hay 5to para completar
-  })
-
-  it('catálogo=10 / N=5: siempre máximo 5 slots aunque el catálogo activo tenga más', () => {
-    const selection = selectRubrosForHome([], ALL_ACTIVE)
-    expect(ALL_ACTIVE.size).toBe(10)
-    expect(selection.length).toBeLessThanOrEqual(5)
+  it('rubro declarado pero inactivo (HomeRubro.active=false) nunca entra al universo', () => {
+    const activeMinusTransporte = new Set(Array.from(ALL_ACTIVE).filter(id => id !== 'transporte'))
+    const universe = resolveDeclaredUniverse(declared('transporte', 'hogar'), activeMinusTransporte)
+    expect(universe.map(r => r.id)).not.toContain('transporte')
+    expect(universe.map(r => r.id)).toEqual(['hogar'])
   })
 
   it('invariante: RUBRO_CATALOG refleja los 10 ids aprobados', () => {

@@ -29,7 +29,6 @@ import type {
   ValidityFact,
 } from './homeDecisionContract'
 import { RUBRO_CATALOG, HOME_RUBRO_COUNT, type RubroConfig } from './rubroCatalog'
-import type { RubroSelection } from './rubroPreferences'
 
 export type NearbyMap = Record<string, { count: number; minDistKm: number }>
 
@@ -333,32 +332,39 @@ function buildRubroSlot(
   return { status: 'ok', rubro, principal, alternativas }
 }
 
-// ─── Disponibilidad diaria / fallback — RFC-008, CPO Direction 12/8/2026 +
-// CPO Approval v2 15/8/2026. Un rubro DECLARADO sin oportunidad hoy (slot
-// 'empty') cede su lugar a otro rubro del universo completo (RUBRO_CATALOG,
-// no solo la selección de N) que sí tenga una oportunidad por encima del
-// mismo threshold — nunca se relaja CONFIDENCE_THRESHOLD_OK para el
-// sustituto. `usedIds` se acumula por el caller a medida que se resuelven
-// los slots, para que dos rubros declarados sin oportunidad el mismo día
-// reciban sustitutos distintos entre sí (no el mismo candidato repetido).
-// No persiste nada — la preferencia declarada original queda intacta en DB.
-function pickFallbackRubro(
-  usedIds: Set<string>,
+// ─── Selección de los N mejores rubros — CPO Approval "Tus rubros" (16/8/2026).
+// Reemplaza el fallback externo del Bloque A: ya no hay sustitución de rubros
+// declarados sin oportunidad ni relleno hasta N con el catálogo completo. Se
+// puntúa cada rubro DECLARADO/ACTIVO del universo (declaredUniverse, resuelto
+// por rubroPreferences.resolveDeclaredUniverse), se descartan los 'empty', y
+// se muestran hasta N ordenados por score de la candidata principal —
+// desempate exacto (sin epsilon) por orden de RUBRO_CATALOG. Un usuario con
+// menos de N declarados ve menos de N slots; nunca se completa con rubros no
+// declarados.
+function selectTopRubroSlots(
+  declaredUniverse: RubroConfig[],
   promosByCategorySlug: Map<string, any[]>,
   ctx: DecisionContext,
   prefs: PersonaPreferences | undefined,
-  now: Date
-): RubroSlot | null {
-  for (const candidate of RUBRO_CATALOG) {
-    if (usedIds.has(candidate.id)) continue
-    const promosInCandidate = candidate.categorySlugs.flatMap(slug => promosByCategorySlug.get(slug) ?? [])
-    const slot = buildRubroSlot(candidate, promosInCandidate, ctx, prefs, now)
-    if (slot.status === 'ok') {
-      usedIds.add(candidate.id)
-      return slot
-    }
-  }
-  return null
+  now: Date,
+  n: number = HOME_RUBRO_COUNT
+): RubroSlot[] {
+  const built = declaredUniverse.map(rubro => {
+    const promosInRubro = rubro.categorySlugs.flatMap(slug => promosByCategorySlug.get(slug) ?? [])
+    return { rubro, slot: buildRubroSlot(rubro, promosInRubro, ctx, prefs, now) }
+  })
+
+  const ok = built.filter(
+    (b): b is { rubro: RubroConfig; slot: Extract<RubroSlot, { status: 'ok' }> } => b.slot.status === 'ok'
+  )
+
+  const catalogIndex = new Map(RUBRO_CATALOG.map((r, i) => [r.id, i]))
+  ok.sort((a, b) => {
+    if (b.slot.principal.score !== a.slot.principal.score) return b.slot.principal.score - a.slot.principal.score
+    return (catalogIndex.get(a.rubro.id) ?? 0) - (catalogIndex.get(b.rubro.id) ?? 0)
+  })
+
+  return ok.slice(0, n).map(c => c.slot)
 }
 
 // ─── Composición del payload completo ──────────────────────────────────────
@@ -367,17 +373,12 @@ export interface BuildHomeDecisionOptions {
   missingProfile?: string[]
 }
 
-// Compat hacia atrás (callers sin rubroSelection, ej. tests viejos): mismo
-// comportamiento histórico de N=5, no el universo completo de 10 — HOME_RUBRO_COUNT
-// sigue siendo la cantidad mostrada, RUBRO_CATALOG es solo el universo (CPO Approval v2).
-const DEFAULT_RUBRO_SELECTION: RubroSelection[] = RUBRO_CATALOG.slice(0, HOME_RUBRO_COUNT).map(rubro => ({ rubro, isDeclared: false }))
-
 export function buildHomeDecisionPayload(
   promos: any[],
   ctx: DecisionContext,
   prefs: PersonaPreferences | undefined,
   opts: BuildHomeDecisionOptions,
-  rubroSelection: RubroSelection[] = DEFAULT_RUBRO_SELECTION
+  declaredUniverse: RubroConfig[] = []
 ): HomeDecisionPayload {
   const startedAt = Date.now()
 
@@ -402,25 +403,9 @@ export function buildHomeDecisionPayload(
     promosByCategorySlug.get(slug)!.push(promo)
   }
 
-  // usedIds acumula, en orden, todos los rubros ya mostrados (selección
-  // inicial + sustitutos ya asignados) — es lo que evita que dos fallbacks
-  // en la misma corrida elijan el mismo rubro de reemplazo (CPO Approval v2:
-  // "implementar fallback acumulando correctamente los rubros ya usados").
-  const usedIds = new Set(rubroSelection.map(s => s.rubro.id))
+  const rubros: RubroSlot[] = selectTopRubroSlots(declaredUniverse, promosByCategorySlug, ctx, prefs, now)
 
-  const rubros: RubroSlot[] = rubroSelection.map(({ rubro, isDeclared }) => {
-    const promosInRubro = rubro.categorySlugs.flatMap(slug => promosByCategorySlug.get(slug) ?? [])
-    let slot = buildRubroSlot(rubro, promosInRubro, ctx, prefs, now)
-
-    if (isDeclared && slot.status === 'empty') {
-      const fallback = pickFallbackRubro(usedIds, promosByCategorySlug, ctx, prefs, now)
-      if (fallback) slot = fallback
-    }
-
-    return slot
-  })
-
-  const allEmpty = rubros.every(r => r.status === 'empty')
+  const allEmpty = rubros.length === 0 || rubros.every(r => r.status === 'empty')
   // no_location es informativo, no bloqueante (RFC-008 §3: "afecta factor
   // cercanía, no bloquea el resto") — solo se reporta cuando además no hay
   // ninguna oportunidad, que es el caso donde probablemente importa que la
