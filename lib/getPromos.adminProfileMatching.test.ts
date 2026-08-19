@@ -28,6 +28,7 @@ vi.mock('@/lib/prisma', () => ({
     commerce: { findMany: async () => [] },
     bankSegment: { findMany: async () => [] },
     promoUsage: { findMany: async () => [] },
+    financialMatchIndex: { findMany: async () => [] },
   },
 }))
 vi.mock('next/cache', () => ({ unstable_cache: (fn: any) => fn }))
