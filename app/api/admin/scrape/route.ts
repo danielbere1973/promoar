@@ -658,6 +658,7 @@ export async function POST(req: NextRequest) {
 
     // ── FASE 3: Guardar en batches paralelos de 10 ────────────────────────────
     const newPromoIds: string[] = []
+    const updatedPromoIds: string[] = []
 
     const savePromo = async (item: ResolvedItem) => {
       const { promoData, reqData, baseSlug, sourceUrl, title, commerceId } = item;
@@ -693,6 +694,7 @@ export async function POST(req: NextRequest) {
           const renewedAndValid = existing.status === 'EXPIRED' && (!newValidUntil || newValidUntil >= new Date())
           const nextStatus = renewedAndValid ? 'ACTIVE' : existing.status;
           await prisma.promo.update({ where: { id: existing.id }, data: { ...promoData, slug, status: nextStatus, requirements: { create: reqData } } });
+          updatedPromoIds.push(existing.id);
         } catch (e: any) {
           if (e?.code === 'P2002') {
             // Slug duplicado al actualizar — skipear, ya existe una promo con ese slug
@@ -733,6 +735,19 @@ export async function POST(req: NextRequest) {
     }
 
     if (processedCount > 0) { invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
+
+    // Invalidación incremental del Financial Match Index para las promos
+    // tocadas en este run (fire-and-forget, no bloquea la respuesta del scraper).
+    // Ver lib/financialMatchIndex.ts.
+    const touchedPromoIds = [...newPromoIds, ...updatedPromoIds]
+    if (touchedPromoIds.length > 0) {
+      import('@/lib/financialMatchIndex')
+        .then(({ invalidateForPromoIds }) => invalidateForPromoIds(touchedPromoIds))
+        .then(({ profilesRecalculated, rows }) => {
+          console.log(`[FinancialMatchIndex] Invalidación incremental: ${profilesRecalculated} perfiles recalculados, ${rows} filas`)
+        })
+        .catch((e) => console.error('[FinancialMatchIndex] Error en invalidación incremental:', e))
+    }
 
     // Disparar notificaciones push para las promos nuevas (fire-and-forget)
     if (newPromoIds.length > 0) {

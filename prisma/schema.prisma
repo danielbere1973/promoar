@@ -231,6 +231,26 @@ model HomeDecisionSnapshot {
   @@map("home_decision_snapshots")
 }
 
+// Financial Match Index — Variante B (por firma de perfil), ver
+// financial-match-index.md. Precomputa el resultado de matchesProfile() para
+// no recalcular matching financiero en cada request. Clave por profileHash
+// (hash determinístico de la combinación de cards/wallets de un perfil, no
+// por userId) para soportar guest profiles nativamente, sin clave sintética.
+// Se llena/invalida en background — nunca se calcula en el camino de un
+// request HTTP. Fuente de verdad de las reglas sigue siendo matchesProfile().
+model FinancialMatchIndex {
+  id          String   @id @default(cuid())
+  profileHash String
+  promoId     String
+  generatedAt DateTime @default(now())
+  promo       Promo    @relation(fields: [promoId], references: [id], onDelete: Cascade)
+
+  @@unique([profileHash, promoId])
+  @@index([profileHash])
+  @@index([promoId])
+  @@map("financial_match_index")
+}
+
 model UserBank {
   id                 String           @id @default(cuid())
   financialProfileId String
@@ -491,6 +511,7 @@ model Promo {
   savedByUsers       SavedPromo[]
   usages             PromoUsage[]
   usageEvents        PromoUsageEvent[]
+  matchIndexEntries  FinancialMatchIndex[]
 
   @@unique([source, externalId])
   @@index([categoryId])
