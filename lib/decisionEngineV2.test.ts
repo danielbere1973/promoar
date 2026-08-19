@@ -1,10 +1,15 @@
 // Casos de prueba del Decision Engine v2 (RFC-008). Fixtures con shape real
 // de promo (el mismo que produce getPromosData: commerce/category/requirements
 // con relations, userBestDiscount ya resuelto) — no mocks de tipos inventados.
+//
+// CPO Approval "Tus rubros" (16/8/2026): buildHomeDecisionPayload ya no recibe
+// un RubroSelection[] con fallback/relleno — recibe declaredUniverse
+// (RubroConfig[], desde rubroPreferences.resolveDeclaredUniverse) y selecciona
+// los N mejores por score entre ESE universo, sin sustituir por otros rubros
+// del catálogo ni completar con defaults. Universo vacío -> 0 slots, siempre.
 import { describe, expect, it } from 'vitest'
 import { buildHomeDecisionPayload, type DecisionContext, type PersonaPreferences } from './decisionEngineV2'
-import { RUBRO_CATALOG } from './rubroCatalog'
-import type { RubroSelection } from './rubroPreferences'
+import { RUBRO_CATALOG, type RubroConfig } from './rubroCatalog'
 
 const ALL_DAYS = 127
 const CTX: DecisionContext = {
@@ -39,8 +44,17 @@ function makePromo(overrides: Record<string, any>) {
   }
 }
 
+function rubroById(id: string): RubroConfig {
+  return RUBRO_CATALOG.find(r => r.id === id)!
+}
+
+function universeOf(...ids: string[]): RubroConfig[] {
+  return ids.map(rubroById)
+}
+
 const HAS_PROFILE = { hasProfile: true }
 const PREFS: PersonaPreferences | undefined = undefined
+const FULL_UNIVERSE = RUBRO_CATALOG
 
 describe('buildHomeDecisionPayload', () => {
   it('produce un rubro ok con principal cuando hay una sola candidata fuerte', () => {
@@ -50,7 +64,7 @@ describe('buildHomeDecisionPayload', () => {
       commerce: { name: 'Coto' },
       category: { name: 'Supermercados', slug: 'supermercados' },
     })
-    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
+    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universeOf('supermercados'))
 
     expect(payload.status).toBe('ok')
     const superSlot = payload.rubros.find(r => r.rubro.id === 'supermercados')!
@@ -69,7 +83,7 @@ describe('buildHomeDecisionPayload', () => {
       makePromo({ id: 'p2', commerceId: 'commerce-dia', commerce: { name: 'Día' }, userBestDiscount: { discountType: 'PERCENTAGE_REINTEGRO', discountValue: 15, cap: 3000, capUnlimited: false, bank: { name: 'Banco Macro' } } }),
       makePromo({ id: 'p3', commerceId: 'commerce-vea', commerce: { name: 'Vea' }, userBestDiscount: { discountType: 'PERCENTAGE_DESCUENTO', discountValue: 10, cap: 2000, capUnlimited: false, wallet: { name: 'MODO' } } }),
     ]
-    const payload = buildHomeDecisionPayload(promos, CTX, PREFS, HAS_PROFILE)
+    const payload = buildHomeDecisionPayload(promos, CTX, PREFS, HAS_PROFILE, universeOf('supermercados'))
     const slot = payload.rubros.find(r => r.rubro.id === 'supermercados')!
 
     expect(slot.status).toBe('ok')
@@ -80,40 +94,35 @@ describe('buildHomeDecisionPayload', () => {
     }
   })
 
-  it('devuelve slot empty (sin_candidatos) cuando el rubro no tiene ninguna promo vigente hoy', () => {
-    // combustible sin ninguna promo en el input
+  it('rubro sin ninguna promo vigente hoy queda excluido de payload.rubros (slot empty se descarta)', () => {
+    // combustible sin ninguna promo en el input -> empty -> selectTopRubroSlots lo filtra
     const promo = makePromo({ category: { name: 'Supermercados', slug: 'supermercados' } })
-    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
+    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universeOf('supermercados', 'combustible'))
 
-    const combustibleSlot = payload.rubros.find(r => r.rubro.id === 'combustible')!
-    expect(combustibleSlot.status).toBe('empty')
-    if (combustibleSlot.status === 'empty') {
-      expect(combustibleSlot.reason).toBe('sin_candidatos')
-    }
+    expect(payload.rubros.find(r => r.rubro.id === 'combustible')).toBeUndefined()
+    expect(payload.rubros.find(r => r.rubro.id === 'supermercados')?.status).toBe('ok')
   })
 
-  it('devuelve slot empty (sin_candidatos) cuando la única candidata no es válida hoy', () => {
+  it('rubro cuya única candidata no es válida hoy queda excluido de payload.rubros', () => {
     const otherDayBit = 1 << ((new Date().getDay() + 1) % 7)
     const promo = makePromo({ validDays: otherDayBit, category: { name: 'Farmacias', slug: 'farmacias' } })
-    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
+    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universeOf('farmacias'))
 
-    const slot = payload.rubros.find(r => r.rubro.id === 'farmacias')!
-    expect(slot.status).toBe('empty')
-    if (slot.status === 'empty') expect(slot.reason).toBe('sin_candidatos')
+    expect(payload.rubros.find(r => r.rubro.id === 'farmacias')).toBeUndefined()
+    expect(payload.rubros).toHaveLength(0)
   })
 
-  it('devuelve slot empty (bajo_confianza) cuando la mejor candidata no supera el umbral', () => {
+  it('rubro cuya mejor candidata no supera el umbral de confianza queda excluido de payload.rubros', () => {
     // Descuento mínimo, sin cercanía, sin canal online, categoría discrecional (afinidad baja)
     const promo = makePromo({
       commerceId: 'commerce-lejos',
       category: { name: 'Indumentaria', slug: 'indumentaria' },
       userBestDiscount: { discountType: 'PERCENTAGE_DESCUENTO', discountValue: 3, cap: 500, capUnlimited: false, bank: { name: 'Banco X' } },
     })
-    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
+    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universeOf('indumentaria'))
 
-    const slot = payload.rubros.find(r => r.rubro.id === 'indumentaria')!
-    expect(slot.status).toBe('empty')
-    if (slot.status === 'empty') expect(slot.reason).toBe('bajo_confianza')
+    expect(payload.rubros.find(r => r.rubro.id === 'indumentaria')).toBeUndefined()
+    expect(payload.rubros).toHaveLength(0)
   })
 
   it('mapea correctamente los 5 tipos de BenefitFact', () => {
@@ -131,7 +140,7 @@ describe('buildHomeDecisionPayload', () => {
         commerce: { name: 'Coto' },
         userBestDiscount: { ...best, cap: null, capUnlimited: true, bank: { name: 'Banco Galicia' } },
       })
-      const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
+      const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universeOf('supermercados'))
       const slot = payload.rubros.find(r => r.rubro.id === 'supermercados')!
       expect(slot.status).toBe('ok')
       if (slot.status === 'ok') {
@@ -141,21 +150,21 @@ describe('buildHomeDecisionPayload', () => {
   })
 
   it('status incomplete_profile cuando no hay perfil suficiente, sin evaluar rubros', () => {
-    const payload = buildHomeDecisionPayload([], CTX, PREFS, { hasProfile: false, missingProfile: ['tarjetas'] })
+    const payload = buildHomeDecisionPayload([], CTX, PREFS, { hasProfile: false, missingProfile: ['tarjetas'] }, FULL_UNIVERSE)
     expect(payload.status).toBe('incomplete_profile')
     expect(payload.rubros).toHaveLength(0)
     expect(payload.missingProfile).toEqual(['tarjetas'])
   })
 
-  it('status all_empty cuando hay perfil pero ningún rubro tiene oportunidades', () => {
-    const payload = buildHomeDecisionPayload([], CTX, PREFS, HAS_PROFILE)
+  it('status all_empty cuando hay universo declarado pero ningún rubro tiene oportunidades', () => {
+    const payload = buildHomeDecisionPayload([], CTX, PREFS, HAS_PROFILE, universeOf('supermercados', 'combustible'))
     expect(payload.status).toBe('all_empty')
-    expect(payload.rubros.every(r => r.status === 'empty')).toBe(true)
+    expect(payload.rubros).toHaveLength(0)
   })
 
   it('reasons son códigos estructurados, no strings libres, y el motor no arma copy', () => {
     const promo = makePromo({ commerceId: 'commerce-coto', commerce: { name: 'Coto' } })
-    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
+    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universeOf('supermercados'))
     const slot = payload.rubros.find(r => r.rubro.id === 'supermercados')!
     if (slot.status === 'ok') {
       for (const reason of slot.principal.reasons) {
@@ -172,7 +181,7 @@ describe('buildHomeDecisionPayload', () => {
   it('reasonsToText (adaptador de presentación) arma el compat field fuera del motor', async () => {
     const { reasonsToText } = await import('./reasonText')
     const promo = makePromo({ commerceId: 'commerce-coto', commerce: { name: 'Coto' } })
-    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
+    const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universeOf('supermercados'))
     const slot = payload.rubros.find(r => r.rubro.id === 'supermercados')!
     if (slot.status === 'ok') {
       const texts = reasonsToText(slot.principal.reasons)
@@ -190,8 +199,8 @@ describe('buildHomeDecisionPayload', () => {
     const fixedNow = new Date('2026-08-12T12:00:00.000Z')
     const ctxWithNow: DecisionContext = { ...CTX, now: fixedNow }
 
-    const payloadA = buildHomeDecisionPayload([promo], ctxWithNow, PREFS, HAS_PROFILE)
-    const payloadB = buildHomeDecisionPayload([promo], ctxWithNow, PREFS, HAS_PROFILE)
+    const payloadA = buildHomeDecisionPayload([promo], ctxWithNow, PREFS, HAS_PROFILE, universeOf('supermercados'))
+    const payloadB = buildHomeDecisionPayload([promo], ctxWithNow, PREFS, HAS_PROFILE, universeOf('supermercados'))
 
     const slotA = payloadA.rubros.find(r => r.rubro.id === 'supermercados')!
     const slotB = payloadB.rubros.find(r => r.rubro.id === 'supermercados')!
@@ -201,24 +210,14 @@ describe('buildHomeDecisionPayload', () => {
     }
   })
 
-  it('el catálogo de rubros respeta N=5 y siempre devuelve exactamente N slots', () => {
-    const payload = buildHomeDecisionPayload([], CTX, PREFS, HAS_PROFILE)
-    expect(payload.rubros).toHaveLength(5)
-  })
-
-  it('sin rubroSelection (5to param) usa el default de RUBRO_CATALOG completo — compat hacia atrás', () => {
+  it('sin declaredUniverse (5to param omitido) no devuelve ningún rubro — sin default al catálogo completo', () => {
     const promo = makePromo({ commerceId: 'commerce-coto', commerce: { name: 'Coto' } })
     const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE)
-    // comportamiento histórico: primeros 5 ids del catálogo, ninguno declarado
-    expect(payload.rubros.map(r => r.rubro.id)).toEqual(RUBRO_CATALOG.slice(0, 5).map(r => r.id))
+    expect(payload.rubros).toHaveLength(0)
+    expect(payload.status).toBe('all_empty')
   })
 
-  describe('rubroSelection — CPO Approval v2 (fallback y personalización)', () => {
-    function rubroById(id: string) {
-      const rubro = RUBRO_CATALOG.find(r => r.id === id)!
-      return rubro
-    }
-
+  describe('selectTopRubroSlots — CPO Approval "Tus rubros" (16/8/2026)', () => {
     // Promo fuerte para forzar score > CONFIDENCE_THRESHOLD_OK (0.35) incluso
     // en rubros sin afinidad "alta" (ej. tecnologia/hogar no están en
     // NECESIDAD_ALTA/MEDIA -> afinidad default 0.25): 40%+ reintegro sin tope
@@ -230,56 +229,55 @@ describe('buildHomeDecisionPayload', () => {
       })
     }
 
-    it('un rubro declarado sin oportunidad hoy recibe un sustituto del catálogo completo (fallback)', () => {
-      // declared: solo 'combustible' (sin promos en el input -> empty) — el
-      // resto del universo (no incluido en la selección inicial) debe poder
-      // proveer un sustituto.
+    it('un rubro declarado sin oportunidad hoy queda empty — sin sustituto de otro rubro del catálogo', () => {
+      // declared: solo 'combustible' (sin promos en el input -> empty).
+      // tecnologia SÍ tiene una promo fuerte, pero no está en el universo
+      // declarado -> no puede aparecer como slot (fin del fallback externo).
       const promo = strongPromo({ commerceId: 'commerce-coto', commerce: { name: 'Coto' }, category: { name: 'Tecnología', slug: 'tecnologia' } })
-      const selection: RubroSelection[] = [{ rubro: rubroById('combustible'), isDeclared: true }]
 
-      const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, selection)
-      expect(payload.rubros).toHaveLength(1)
-      const slot = payload.rubros[0]
-      // combustible no tenía candidatos -> se sustituyó por tecnologia, que sí tiene una promo válida
-      expect(slot.status).toBe('ok')
-      if (slot.status === 'ok') {
-        expect(slot.rubro.id).toBe('tecnologia')
-      }
+      const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universeOf('combustible'))
+      expect(payload.rubros).toHaveLength(0) // 'combustible' quedó empty, se descarta del resultado
     })
 
-    it('si no hay ningún candidato en todo el catálogo, el slot declarado queda empty (no relaja el umbral)', () => {
-      const selection: RubroSelection[] = [{ rubro: rubroById('combustible'), isDeclared: true }]
-      const payload = buildHomeDecisionPayload([], CTX, PREFS, HAS_PROFILE, selection)
-      expect(payload.rubros).toHaveLength(1)
-      expect(payload.rubros[0].status).toBe('empty')
-      if (payload.rubros[0].status === 'empty') {
-        expect(payload.rubros[0].rubro.id).toBe('combustible')
-      }
+    it('universo con más rubros ok que N (HOME_RUBRO_COUNT=5) devuelve como máximo N', () => {
+      // 8 declarados, todos con oportunidad -> debe truncar a 5 (HOME_RUBRO_COUNT), no devolver 8
+      const declaredIds = ['supermercados', 'combustible', 'farmacias', 'gastronomia', 'tecnologia', 'hogar', 'indumentaria', 'transporte']
+      const promos = declaredIds.map(id => {
+        const rubro = rubroById(id)
+        return strongPromo({ id: `p-${id}`, commerceId: `commerce-${id}`, commerce: { name: id }, category: { name: rubro.label, slug: rubro.categorySlugs[0] } })
+      })
+      const universe = universeOf(...declaredIds)
+
+      const payload = buildHomeDecisionPayload(promos, CTX, PREFS, HAS_PROFILE, universe)
+      expect(payload.rubros).toHaveLength(5)
     })
 
-    it('dos declarados sin oportunidad el mismo día reciben sustitutos distintos entre sí (acumulación de usedIds)', () => {
+    it('universo con menos rubros ok que N devuelve solo los que están ok — no completa con otros', () => {
+      const promo = strongPromo({ commerceId: 'commerce-coto', commerce: { name: 'Coto' }, category: { name: 'Supermercados', slug: 'supermercados' } })
+      const universe = universeOf('supermercados', 'combustible', 'farmacias')
+
+      const payload = buildHomeDecisionPayload([promo], CTX, PREFS, HAS_PROFILE, universe)
+      expect(payload.rubros).toHaveLength(1)
+      expect(payload.rubros[0].rubro.id).toBe('supermercados')
+    })
+
+    it('empate exacto de score desempata por orden de RUBRO_CATALOG (no por orden de declaración)', () => {
+      // tecnologia y viajes-y-turismo comparten afinidad default (0.25, ninguno
+      // está en NECESIDAD_ALTA/MEDIA) -> con la misma promo fuerte y mismo
+      // contexto (sin cercanía en ninguno de los dos commerceId), el score
+      // queda exactamente empatado.
       const promoTec = strongPromo({ id: 'p-tec', commerceId: 'commerce-tec', commerce: { name: 'Compumundo' }, category: { name: 'Tecnología', slug: 'tecnologia' } })
-      const promoHogar = strongPromo({ id: 'p-hogar', commerceId: 'commerce-hogar', commerce: { name: 'Sodimac' }, category: { name: 'Hogar', slug: 'hogar' } })
-      const selection: RubroSelection[] = [
-        { rubro: rubroById('combustible'), isDeclared: true },
-        { rubro: rubroById('farmacias'), isDeclared: true },
-      ]
+      const promoViajes = strongPromo({ id: 'p-viajes', commerceId: 'commerce-viajes', commerce: { name: 'Despegar' }, category: { name: 'Viajes y Turismo', slug: 'viajes-y-turismo' } })
+      const universe = universeOf('viajes-y-turismo', 'tecnologia') // orden de declaración invertido a propósito
 
-      const payload = buildHomeDecisionPayload([promoTec, promoHogar], CTX, PREFS, HAS_PROFILE, selection)
+      const payload = buildHomeDecisionPayload([promoTec, promoViajes], CTX, PREFS, HAS_PROFILE, universe)
       expect(payload.rubros).toHaveLength(2)
-      const ids = payload.rubros.map(r => r.rubro.id)
-      expect(new Set(ids).size).toBe(2) // sustitutos distintos, ninguno repetido
-      expect(ids).toEqual(expect.arrayContaining(['tecnologia', 'hogar']))
-    })
-
-    it('rubro no declarado (default fill) con slot empty NO dispara fallback — solo aplica a declarados', () => {
-      const selection: RubroSelection[] = [{ rubro: rubroById('combustible'), isDeclared: false }]
-      const payload = buildHomeDecisionPayload([], CTX, PREFS, HAS_PROFILE, selection)
-      expect(payload.rubros).toHaveLength(1)
-      expect(payload.rubros[0].status).toBe('empty')
-      if (payload.rubros[0].status === 'empty') {
-        expect(payload.rubros[0].rubro.id).toBe('combustible')
-      }
+      const [slotA, slotB] = payload.rubros
+      if (slotA.status !== 'ok' || slotB.status !== 'ok') throw new Error('esperaba ambos slots en status ok')
+      expect(slotA.principal.score).toBe(slotB.principal.score) // confirma que es un empate real
+      const catalogIndex = new Map(RUBRO_CATALOG.map((r, i) => [r.id, i]))
+      const [first, second] = payload.rubros.map(r => r.rubro.id)
+      expect(catalogIndex.get(first)!).toBeLessThan(catalogIndex.get(second)!)
     })
   })
 })

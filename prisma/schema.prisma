@@ -52,6 +52,7 @@ model User {
   posts                   CommunityPost[]
   financialProfile        FinancialProfile?
   recommendationSnapshot  RecommendationSnapshot?
+  homeDecisionSnapshot    HomeDecisionSnapshot?
   postLikes               PostLike[]
   promoReports            PromoReport[]
   savedPromos             SavedPromo[]
@@ -208,6 +209,26 @@ model RecommendationSnapshot {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("recommendation_snapshots")
+}
+
+// Home Decision Snapshot — RFC-008 Etapa 1 "Tus rubros". Cachea el payload de
+// buildHomeDecisionPayload por usuario para evitar recalcular scoring en cada
+// GET /api/promos/home-decision. Se invalida (recalcula) cuando cualquiera de
+// las 5 llaves (4 hashes + operationalDay) difiere de la actual — nunca se lee stale.
+model HomeDecisionSnapshot {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  payload               Json
+  operationalDay        String
+  declaredUniverseHash  String // hash determinístico del conjunto de rubros DECLARED/ACTIVE — observabilidad
+  decisionContextHash   String // hash determinístico de perfil financiero + favoritos + PersonaPreferences (no incluye proximidad — ver proximityContextHash)
+  proximityContextHash  String // hash determinístico de nearbyByCommerceId (commerceId + minDistKm + count por comercio) — CPO decisión 17/8/2026: columna propia para observabilidad/debug de invalidación por cercanía, separada de decisionContextHash
+  promoPoolVersion      String
+  generatedAt           DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("home_decision_snapshots")
 }
 
 model UserBank {

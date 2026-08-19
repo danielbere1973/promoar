@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { getAuthToken } from '@/lib/auth'
 import { getPromosData } from '@/lib/getPromos'
-import { buildHomeDecisionPayload, type DecisionContext } from '@/lib/decisionEngineV2'
+import { buildHomeDecisionPayload, type DecisionContext, type NearbyMap } from '@/lib/decisionEngineV2'
 import { getNearbyBranchesByCommerce } from '@/lib/nearbyBranches'
-import { getDeclaredActivePreferences, getActiveHomeRubroIds, selectRubrosForHome, type RubroSelection } from '@/lib/rubroPreferences'
+import { getDeclaredActivePreferences, getActiveHomeRubroIds, resolveDeclaredUniverse } from '@/lib/rubroPreferences'
+import { RUBRO_CATALOG } from '@/lib/rubroCatalog'
 import type { HomeDecisionPayload } from '@/lib/homeDecisionContract'
 
 export const dynamic = 'force-dynamic'
@@ -13,20 +15,34 @@ export const dynamic = 'force-dynamic'
 // "Integración Home + Decision Engine v2", 12/8/2026). Reusa exactamente el
 // mismo patrón de auth/ubicación/fetch de promos que /api/promos/recommended
 // (v1) — la diferencia es que acá se llama a buildHomeDecisionPayload (v2,
-// por rubros) en lugar de rankForHome (v1, Top-3 plano). Sin snapshot todavía:
-// el snapshot de /api/promos/recommended es una optimización propia de v1
-// (stale-while-revalidate sobre RankedRecommendation[]) que no está definida
-// para HomeDecisionPayload — queda fuera de esta etapa (RFC-008 §4).
+// por rubros) en lugar de rankForHome (v1, Top-3 plano).
+//
+// Cache — CPO Approval "Tus rubros" (16/8/2026, tercera/cuarta ronda), ajustado
+// por CPO decisión 17/8/2026: usa HomeDecisionSnapshot (Postgres, no memoria de
+// proceso — necesario porque Vercel no garantiza reuso de instancia serverless
+// entre requests) con 5 llaves de vigencia independientes: operationalDay,
+// declaredUniverseHash, decisionContextHash, proximityContextHash,
+// promoPoolVersion. Solo aplica a usuarios autenticados (requiere userId) —
+// guests siempre recalculan, sin pasar por este cache.
 const NEARBY_RADIUS_KM = 5
+
+function sha256(input: string): string {
+  return createHash('sha256').update(input).digest('hex')
+}
 
 function todayDayBit(): number {
   const argNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
   return 1 << argNow.getDay()
 }
 
+function currentOperationalDay(): string {
+  const argNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
+  return argNow.toISOString().slice(0, 10)
+}
+
 async function getHasLocationNearby(lat: number | null, lng: number | null) {
   const hasLocation = lat != null && lng != null && !isNaN(lat) && !isNaN(lng)
-  let nearbyByCommerceId: DecisionContext['nearbyByCommerceId'] = {}
+  let nearbyByCommerceId: NearbyMap = {}
   if (hasLocation) {
     const nearby = await getNearbyBranchesByCommerce(lat as number, lng as number, NEARBY_RADIUS_KM)
     nearbyByCommerceId = Object.fromEntries(
@@ -45,6 +61,80 @@ function incompleteProfilePayload(missingProfile: string[]): HomeDecisionPayload
     latencyMs: 0,
     engineVersion: 'decision-engine-v2.0.0',
   }
+}
+
+// ─── Hashing — CPO Approval "Tus rubros" (16/8/2026, segunda/tercera/cuarta
+// ronda). Viven acá (no en lib/) porque route.ts es el único consumidor —
+// spec §2/§3 deja la ubicación abierta "a decidir por convención al
+// implementar"; cada colección se ordena antes de serializar para que el
+// resultado no dependa del orden de lectura de Prisma.
+
+function computeDeclaredUniverseHash(rows: { rubroId: string; updatedAt: Date }[]): string {
+  const canonical = rows
+    .map(r => `${r.rubroId}:${r.updatedAt.toISOString()}`)
+    .sort()
+    .join('|')
+  return sha256(canonical)
+}
+
+// CPO decisión 17/8/2026: incluye count además de minDistKm — un cambio en la
+// cantidad de sucursales cercanas (sin que la más cercana cambie) es un cambio
+// relevante en el contexto de cercanía y antes no invalidaba el snapshot.
+export function computeProximityContextHash(nearbyByCommerceId: NearbyMap): string {
+  const entries = Object.entries(nearbyByCommerceId)
+  if (entries.length === 0) return 'no-proximity-context'
+  const canonical = entries
+    .map(([commerceId, v]) => `${commerceId}:${v.minDistKm}:${v.count}`)
+    .sort()
+    .join('|')
+  return sha256(canonical)
+}
+
+function computeDecisionContextHash(input: {
+  effectiveCards: { bankId?: string | null; walletId?: string | null; cardNetworkId?: string | null; cardSegmentId?: string | null }[] | null
+  favoritedPromoIds: string[]
+  declaredCategorySlugs: string[] | undefined
+}): string {
+  const canonical = JSON.stringify({
+    cards: [...(input.effectiveCards ?? [])]
+      .map(c => `${c.bankId ?? ''}:${c.walletId ?? ''}:${c.cardNetworkId ?? ''}:${c.cardSegmentId ?? ''}`)
+      .sort(),
+    favorites: [...input.favoritedPromoIds].sort(),
+    afinidad: [...(input.declaredCategorySlugs ?? [])].sort(),
+  })
+  return sha256(canonical)
+}
+
+// promoPoolVersion — granularidad elegida al implementar (spec §2 lo deja
+// abierto, "a confirmar con evidencia real"): MAX(updatedAt) sobre promos
+// ACTIVE en las categorías cubiertas por RUBRO_CATALOG (universo relevante
+// para cualquier declaredUniverse posible), más el conteo — cambia tanto si
+// una promo existente se edita como si el pool crece/se achica.
+async function currentPromoPoolVersion(): Promise<string> {
+  const categorySlugs = Array.from(new Set(RUBRO_CATALOG.flatMap(r => r.categorySlugs)))
+  const where = { status: 'ACTIVE' as const, category: { slug: { in: categorySlugs } } }
+  const [agg, count] = await Promise.all([
+    prisma.promo.aggregate({ where, _max: { updatedAt: true } }),
+    prisma.promo.count({ where }),
+  ])
+  return `${agg._max.updatedAt?.toISOString() ?? 'none'}:${count}`
+}
+
+async function getEffectiveCards(userId: string) {
+  const profile = await prisma.financialProfile.findUnique({
+    where: { userId },
+    include: { banks: true, wallets: true, cards: true },
+  })
+  if (!profile) return []
+  const cards = profile.cards.map(c => ({
+    bankId: c.bankId,
+    walletId: c.walletId,
+    cardNetworkId: c.cardNetworkId,
+    cardSegmentId: c.cardSegmentId,
+  }))
+  const banksOnly = profile.banks.map(b => ({ bankId: b.bankId, walletId: null, cardNetworkId: null, cardSegmentId: null }))
+  const walletsOnly = profile.wallets.map(w => ({ bankId: null, walletId: w.walletId, cardNetworkId: null, cardSegmentId: null }))
+  return [...cards, ...banksOnly, ...walletsOnly]
 }
 
 export async function GET(req: NextRequest) {
@@ -77,60 +167,137 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(incompleteProfilePayload(['cards']))
     }
 
-    const result = await getPromosData(
-      {
-        forMe: true,
-        view: 'week',
-        province: province ?? undefined,
-        guestProfileParam,
-        paginate: false,
-        useCandidateQuery: true,
-        // Home v2 evalúa siempre como experiencia de usuario final: el rol
-        // ADMIN/MODERATOR sigue existiendo (permisos, backoffice), pero acá
-        // no debe apagar el matching financiero personal — ver comentario en
-        // PromoQueryParams.forceProfileMatching (lib/getPromos.ts).
-        forceProfileMatching: true,
-      },
-      email,
-      isAdmin,
-    )
-    const promos = (result as any).promos ?? []
+    // Resolución de identidad + universo declarado — antes de fetchear
+    // promos, porque un userId habilita el path de cache (HomeDecisionSnapshot).
+    const user = email ? await prisma.user.findUnique({ where: { email }, select: { id: true } }) : null
 
-    if (!promos.length) {
-      return NextResponse.json(incompleteProfilePayload(['cards']))
-    }
+    const [declaredRows, activeRubroIds] = await Promise.all([
+      user
+        ? prisma.userRubroPreference.findMany({
+            where: { userId: user.id, source: 'DECLARED', status: 'ACTIVE' },
+            select: { rubroId: true, updatedAt: true },
+          })
+        : Promise.resolve([]),
+      getActiveHomeRubroIds(),
+    ])
+    const declaredUniverse = resolveDeclaredUniverse(declaredRows, activeRubroIds)
+    const declaredUniverseHash = computeDeclaredUniverseHash(declaredRows)
 
     const { hasLocation, nearbyByCommerceId } = await getHasLocationNearby(lat, lng)
+    const proximityContextHash = computeProximityContextHash(nearbyByCommerceId)
 
-    const ctx: DecisionContext = { hasLocation, nearbyByCommerceId, todayBit: todayDayBit() }
+    const operationalDay = currentOperationalDay()
 
-    // Selección personalizada de rubros — CPO Approval "Preferencias →
-    // selección personalizada de rubros v2" (15/8/2026). Guests (sin email,
-    // solo guest_profile) no tienen userId para leer preferencias declaradas
-    // — caen al catálogo default filtrado por activos, mismo comportamiento
-    // que un usuario logueado sin preferencias.
-    let rubroSelection: RubroSelection[]
-    if (email) {
-      const user = await prisma.user.findUnique({ where: { email }, select: { id: true } })
-      const [declared, activeRubroIds] = await Promise.all([
-        user ? getDeclaredActivePreferences(user.id) : Promise.resolve([]),
-        getActiveHomeRubroIds(),
+    // Cache — solo para usuarios autenticados (requiere userId). Guests
+    // (guest_profile sin email) siempre recalculan.
+    if (user) {
+      const [snapshot, decisionContextHash, promoPoolVersion] = await Promise.all([
+        prisma.homeDecisionSnapshot.findUnique({ where: { userId: user.id } }),
+        (async () => {
+          const [effectiveCards, savedPromos] = await Promise.all([
+            getEffectiveCards(user.id),
+            prisma.savedPromo.findMany({ where: { userId: user.id }, select: { promoId: true } }),
+          ])
+          return computeDecisionContextHash({
+            effectiveCards,
+            favoritedPromoIds: savedPromos.map(sp => sp.promoId),
+            declaredCategorySlugs: undefined,
+          })
+        })(),
+        currentPromoPoolVersion(),
       ])
-      rubroSelection = selectRubrosForHome(declared, activeRubroIds)
-    } else {
-      const activeRubroIds = await getActiveHomeRubroIds()
-      rubroSelection = selectRubrosForHome([], activeRubroIds)
+
+      const vigente =
+        !!snapshot &&
+        snapshot.operationalDay === operationalDay &&
+        snapshot.declaredUniverseHash === declaredUniverseHash &&
+        snapshot.decisionContextHash === decisionContextHash &&
+        snapshot.proximityContextHash === proximityContextHash &&
+        snapshot.promoPoolVersion === promoPoolVersion
+
+      if (vigente) {
+        const payload = snapshot!.payload as unknown as HomeDecisionPayload
+        return NextResponse.json({ ...payload, latencyMs: Date.now() - startedAt })
+      }
+
+      const payload = await buildPayloadForUser(email!, isAdmin, province, declaredUniverse, {
+        hasLocation,
+        nearbyByCommerceId,
+      })
+
+      await prisma.homeDecisionSnapshot.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          payload: payload as any,
+          operationalDay,
+          declaredUniverseHash,
+          decisionContextHash,
+          proximityContextHash,
+          promoPoolVersion,
+        },
+        update: {
+          payload: payload as any,
+          operationalDay,
+          declaredUniverseHash,
+          decisionContextHash,
+          proximityContextHash,
+          promoPoolVersion,
+        },
+      })
+
+      return NextResponse.json({ ...payload, latencyMs: Date.now() - startedAt })
     }
 
-    const payload = buildHomeDecisionPayload(promos, ctx, undefined, { hasProfile: true }, rubroSelection)
+    // Guest (guest_profile sin sesión) — sin userId, sin cache, sin universo declarado.
+    const payload = await buildPayloadForUser(email, isAdmin, province, declaredUniverse, {
+      hasLocation,
+      nearbyByCommerceId,
+    }, guestProfileParam)
 
-    return NextResponse.json({
-      ...payload,
-      status: !hasLocation && payload.status === 'all_empty' ? 'no_location' : payload.status,
-      latencyMs: Date.now() - startedAt,
-    })
+    return NextResponse.json({ ...payload, latencyMs: Date.now() - startedAt })
   } catch (error) {
     console.error('[GET /api/promos/home-decision]', error)
     return NextResponse.json({ error: 'Error al obtener recomendaciones por rubro' }, { status: 500 })
+  }
+}
+
+async function buildPayloadForUser(
+  email: string | null,
+  isAdmin: boolean,
+  province: string | null,
+  declaredUniverse: ReturnType<typeof resolveDeclaredUniverse>,
+  location: { hasLocation: boolean; nearbyByCommerceId: NearbyMap },
+  guestProfileParam?: string | null
+): Promise<HomeDecisionPayload> {
+  const result = await getPromosData(
+    {
+      forMe: true,
+      view: 'week',
+      province: province ?? undefined,
+      guestProfileParam: guestProfileParam ?? undefined,
+      paginate: false,
+      useCandidateQuery: true,
+      // Home v2 evalúa siempre como experiencia de usuario final: el rol
+      // ADMIN/MODERATOR sigue existiendo (permisos, backoffice), pero acá
+      // no debe apagar el matching financiero personal — ver comentario en
+      // PromoQueryParams.forceProfileMatching (lib/getPromos.ts).
+      forceProfileMatching: true,
+    },
+    email,
+    isAdmin,
+  )
+  const promos = (result as any).promos ?? []
+
+  if (!promos.length) {
+    return incompleteProfilePayload(['cards'])
+  }
+
+  const ctx: DecisionContext = { ...location, todayBit: todayDayBit() }
+  const payload = buildHomeDecisionPayload(promos, ctx, undefined, { hasProfile: true }, declaredUniverse)
+
+  return {
+    ...payload,
+    status: !location.hasLocation && payload.status === 'all_empty' ? 'no_location' : payload.status,
   }
 }
