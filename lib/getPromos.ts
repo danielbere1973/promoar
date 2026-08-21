@@ -417,6 +417,53 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     where.requirements = { some: reqFilter }
   }
 
+  // Pre-filtro SQL por perfil (reliability fix 21/8/2026, ver
+  // cto-a-cpo-fix-getpromos-bind-variables-21-8-2026.md): con forMe+perfil,
+  // el `promo.findMany` sin este filtro traía TODAS las promos activas
+  // (25k+, ~86s con includes anidados) para descartar la mayoría en JS vía
+  // matchesProfile más abajo. matchesProfile (lib/matchesProfile.ts, REGLA 1)
+  // ya rechaza cualquier requirement sin bankId/walletId/cardNetworkId/
+  // cardType/accountType cuando hay perfil activo — así que exigir en SQL
+  // que el requirement tenga bankId o walletId dentro del perfil del usuario
+  // es una condición necesaria (nunca descarta una promo que matchesProfile
+  // hubiera aceptado), no una reimplementación del matching real. Achica el
+  // pool de 25k a las promos relevantes al perfil antes del include pesado;
+  // matchesProfile sigue siendo la única fuente de verdad para el resultado final.
+  if (forMe && email && fetchedUser?.financialProfile) {
+    const profileBankIds = new Set<string>()
+    const profileWalletIds = new Set<string>()
+    for (const c of fetchedUser.financialProfile.cards ?? []) {
+      if (c.bankId) profileBankIds.add(c.bankId)
+      if (c.walletId) profileWalletIds.add(c.walletId)
+    }
+    for (const w of fetchedUser.financialProfile.wallets ?? []) {
+      if (w.walletId) profileWalletIds.add(w.walletId)
+    }
+    if (profileBankIds.size || profileWalletIds.size) {
+      const profileOr: any[] = []
+      if (profileBankIds.size) profileOr.push({ bankId: { in: Array.from(profileBankIds) } })
+      if (profileWalletIds.size) profileOr.push({ walletId: { in: Array.from(profileWalletIds) } })
+      const profileFilteredWhere = {
+        AND: [
+          Object.keys(reqFilter).length > 0 ? reqFilter : {},
+          { OR: profileOr },
+        ],
+      }
+      // Las promos guardadas (favoritos) siempre deben mostrarse aunque su
+      // requirement no matchee el perfil (ver "savedSet.has" más abajo) — el
+      // pre-filtro SQL no puede excluirlas, así que se les da un OR a nivel
+      // de promo, por fuera del filtro por requirements.
+      const savedPromoIds = (fetchedUser.savedPromos ?? []).map((sp: any) => sp.promoId)
+      const narrowedByProfile = { requirements: { some: profileFilteredWhere } }
+      where.AND = [
+        ...(where.AND ?? []),
+        savedPromoIds.length
+          ? { OR: [narrowedByProfile, { id: { in: savedPromoIds } }] }
+          : narrowedByProfile,
+      ]
+    }
+  }
+
   const paginateOrderBy = paginate
     ? [
         { isCSIOnly: 'asc' as const },
@@ -722,17 +769,31 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   if (forMe && email && filtered.length) {
     const userForUsage = await prisma.user.findUnique({ where: { email }, select: { id: true } })
     if (userForUsage) {
-      const reqIds = filtered.flatMap(p => (p as any).requirements?.map((r: any) => r.id) ?? [])
+      const reqIds = [...new Set(filtered.flatMap(p => (p as any).requirements?.map((r: any) => r.id) ?? []))]
       if (reqIds.length) {
-        const usages = await prisma.promoUsage.findMany({
-          where: {
-            userId: userForUsage.id,
-            requirementId: { in: reqIds },
-            periodEnd: { gte: new Date() },
-          },
-        })
-        for (const u of usages) {
-          usageByRequirementId.set(u.requirementId, { amountUsed: u.amountUsed, periodEnd: u.periodEnd })
+        // Postgres limita a ~32767 bind variables por prepared statement. Con pools
+        // grandes de promos (ej. filtrado por ubicación) reqIds puede superarlo y
+        // Prisma tira P2035. Se trocea en lotes muy por debajo del límite.
+        const REQ_IDS_CHUNK_SIZE = 5000
+        const chunks: string[][] = []
+        for (let i = 0; i < reqIds.length; i += REQ_IDS_CHUNK_SIZE) {
+          chunks.push(reqIds.slice(i, i + REQ_IDS_CHUNK_SIZE))
+        }
+        const usageChunks = await Promise.all(
+          chunks.map(chunk =>
+            prisma.promoUsage.findMany({
+              where: {
+                userId: userForUsage.id,
+                requirementId: { in: chunk },
+                periodEnd: { gte: new Date() },
+              },
+            })
+          )
+        )
+        for (const usages of usageChunks) {
+          for (const u of usages) {
+            usageByRequirementId.set(u.requirementId, { amountUsed: u.amountUsed, periodEnd: u.periodEnd })
+          }
         }
       }
     }
