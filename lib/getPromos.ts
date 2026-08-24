@@ -687,6 +687,79 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     })
   }
 
+  // ── Alerta Inteligente de Oportunidad (RFC dictamen CPO 24/8/2026) ─────────
+  // En modo "Hoy" (view !== 'week', sin day/dayIndices explícito), para cada
+  // comercio que ya quedó en `filtered`, se adjuntan sus promos activas de
+  // otros días de la semana que matcheen el perfil del usuario — sin alterar
+  // `filtered` (no cambia el conteo de "promos hoy" ni el modo Semana). El
+  // frontend (CommerceGroupCard) decide si dispara el aviso comparando %.
+  const isDefaultTodayView = view !== 'week' && !dayIndices?.length && day === null
+  if (isDefaultTodayView && filtered.length) {
+    const commerceIds = Array.from(new Set(filtered.map(p => (p as any).commerceId).filter(Boolean)))
+    if (commerceIds.length) {
+      const otherDayWhere: any = {
+        status: 'ACTIVE',
+        commerceId: { in: commerceIds },
+        validFrom: { lte: today },
+        OR: [
+          { validUntil: null },
+          { validUntil: { gte: startOfToday } },
+        ],
+      }
+      const otherDayCandidates = await prisma.promo.findMany({
+        where: otherDayWhere,
+        select: {
+          id: true,
+          commerceId: true,
+          validDays: true,
+          requirements: {
+            include: {
+              bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
+              wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
+              cardNetwork: { select: { id: true, name: true, slug: true } },
+            },
+          },
+        },
+      })
+
+      const uCards = [...(effectiveCards ?? []), ...walletVirtualCards]
+      const byCommerce = new Map<string, any[]>()
+      for (const cand of otherDayCandidates) {
+        // Ya válida hoy → no es "otro día", el usuario ya la ve en la lista principal.
+        if ((cand.validDays & defaultDayBit) !== 0) continue
+        // Con perfil activo, solo adjuntar promos que matcheen — sin perfil, no hay
+        // base para comparar "mejor descuento para vos", se omite el cálculo.
+        if (hasProfile) {
+          const matches = cand.requirements.some((req: any) => matchesProfileShared(req, uCards, tierToSegmentId))
+          if (!matches) continue
+        } else {
+          continue
+        }
+        const list = byCommerce.get(cand.commerceId!) ?? []
+        list.push(cand)
+        byCommerce.set(cand.commerceId!, list)
+      }
+
+      if (byCommerce.size) {
+        for (const p of filtered as any[]) {
+          const candidates = byCommerce.get(p.commerceId)
+          if (!candidates?.length) continue
+          p.otherDayPromos = candidates.map((c: any) => {
+            const bestReq = c.requirements.reduce((max: any, r: any) => (r.discountValue ?? 0) > (max?.discountValue ?? 0) ? r : max, c.requirements[0])
+            return {
+              id: c.id,
+              validDays: c.validDays,
+              bestDiscountValue: bestReq?.discountValue ?? 0,
+              bestDiscountType: bestReq?.discountType ?? null,
+              bankName: bestReq?.bank?.name ?? null,
+              walletName: bestReq?.wallet?.name ?? null,
+            }
+          })
+        }
+      }
+    }
+  }
+
   // ── Filtro rango de descuento ─────────────────────────────────────────
   if (discountRanges.length > 0) {
     filtered = filtered.filter(promo => {
