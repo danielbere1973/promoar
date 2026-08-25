@@ -65,3 +65,4 @@ reporte_*.md
 
 # datos sensibles
 recovery-codes-vercel.txt
+.env*

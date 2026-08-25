@@ -95,7 +95,7 @@ describe('RFC-002 Fase 1 — rama cacheable de getPromosData', () => {
 
     expect(promoFindMany).toHaveBeenCalledTimes(1)
     const callArgs = promoFindMany.mock.calls[0][0]
-    expect(callArgs.include.commerce.select).toHaveProperty('branches')
+    expect(callArgs.select.commerce.select).toHaveProperty('branches')
     // Señal de que pasó por la rama cacheada (getPublicPromosPage): resolvió
     // los IDs candidatos con $queryRaw crudo antes del findMany.
     expect(queryRaw).toHaveBeenCalled()
