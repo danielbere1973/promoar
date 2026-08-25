@@ -536,6 +536,10 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [loadingAll, setLoadingAll] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
+  // Guardrail OOM — UX-3: true cuando la API respondió con fallback a
+  // destacadas/populares porque `for_me=true` no tenía perfil con tarjetas.
+  const [profileIncomplete, setProfileIncomplete] = useState(false)
+  const [profileIncompleteBannerDismissed, setProfileIncompleteBannerDismissed] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [showProximas, setShowProximas] = useState(false)
   const [proximas, setProximas] = useState<Promo[]>([])
@@ -599,7 +603,13 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     commerces: [], discountRanges: [], hasInstallments: null,
   }
   const [activeFilters, setActiveFilters] = useState<FilterState>(initialFilters)
-  const [forMe, setForMe] = useState(status === 'authenticated')
+  // Guardrail OOM (cpo-a-cto-aprobacion-rfc-guardrail-oom-y-autorizacion-spike-25-8-2026.md,
+  // directiva de toggle): arranca en `false` — recién se activa en `true` una vez
+  // que se confirma que el usuario autenticado tiene tarjetas cargadas (ver
+  // effect de `fetchUserProfile` más abajo). Evita que el escenario de mayor
+  // riesgo (usuario recién registrado, perfil vacío) sea el default de la Home.
+  const [forMe, setForMe] = useState(false)
+  const forMeAutoSetRef = useRef(false)
   const [timeFilter, setTimeFilter] = useState<'today' | 'week'>('today')
   const [wizardOpen, setWizardOpen] = useState(false)
   const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null)
@@ -796,7 +806,17 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         const r = await fetch('/api/perfil')
         if (r.ok) {
           const data = await r.json()
-          if (data.profile) setUserProfile(data.profile)
+          if (data.profile) {
+            setUserProfile(data.profile)
+            // Guardrail OOM — directiva de toggle: recién acá se sabe si el
+            // usuario autenticado tiene tarjetas cargadas. Solo se auto-activa
+            // una vez (forMeAutoSetRef) para no pisar un toggle manual del
+            // usuario si este effect corriera de nuevo.
+            if (!forMeAutoSetRef.current && (data.profile.cards?.length ?? 0) > 0) {
+              forMeAutoSetRef.current = true
+              setForMe(true)
+            }
+          }
         }
       } catch (err) {
         console.error('Error fetching user profile:', err)
@@ -948,6 +968,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             setVisibleCount(20)
           }
           setHasMore(data.hasMore ?? false)
+          setProfileIncomplete(!!data.profileIncomplete)
         }
       } catch (e: any) {
         if (e?.name !== 'AbortError') console.error(e)
@@ -1914,6 +1935,31 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 Registrarse
               </button>
               <button onClick={() => setGuestBannerDismissed(true)} className="text-indigo-300 hover:text-indigo-500 p-1">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Banner UX-3: perfil incompleto (guardrail OOM) — fallback a destacadas
+            cuando for_me=true no tenía tarjetas cargadas para filtrar */}
+        {forMe && profileIncomplete && !profileIncompleteBannerDismissed && (
+          <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-xl shrink-0">💳</span>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-amber-900">Te mostramos las promos más populares</p>
+                <p className="text-[11px] text-amber-700 truncate">Completá tu perfil para ver las promos filtradas para vos</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <button
+                onClick={() => router.push('/perfil')}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 text-white text-[11px] font-black hover:bg-amber-600 transition-colors whitespace-nowrap"
+              >
+                Completar perfil
+              </button>
+              <button onClick={() => setProfileIncompleteBannerDismissed(true)} className="text-amber-300 hover:text-amber-500 p-1">
                 <X size={14} />
               </button>
             </div>

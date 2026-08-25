@@ -5,6 +5,12 @@ import { PROMOS_PUBLIC_TAG } from '@/lib/cache/promosCache'
 import { matchesProfile as matchesProfileShared } from '@/lib/matchesProfile'
 import { buildProfileSignature } from '@/lib/financialMatchIndex'
 
+// Guardrail OOM (cpo-a-cto-aprobacion-rfc-guardrail-oom-y-autorizacion-spike-25-8-2026.md):
+// límite defensivo genérico para cualquier findMany sin paginar ni `take`
+// explícito — evita instanciar miles de filas con requirements anidados en
+// memoria ante un `where` inesperadamente amplio.
+const HARD_CAP_TAKE = 200
+
 // Prisma/Postgres `contains`+`insensitive` solo ignora mayúsculas, no acentos —
 // "cafe" no matchea "Café" sin este normalizado en ambos lados de la comparación.
 function normalizeAccents(s: string): string {
@@ -468,6 +474,17 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   const candidateEffectiveCards: any[] | null =
     candidateUserProfile?.cards ?? (candidateGuestCards && forMe ? candidateGuestCards : null)
 
+  // Guardrail OOM (cpo-a-cto-aprobacion-rfc-guardrail-oom-y-autorizacion-spike-25-8-2026.md,
+  // Opción C): forMe=true sin ninguna tarjeta efectiva (perfil inexistente o
+  // vacío) no debe caer en el findMany sin narrowing SQL — ese camino no tiene
+  // `take` cuando `paginate=false` (cualquier usuario logueado) y puede traer
+  // miles de filas con requirements anidados a memoria. En vez de intentar
+  // filtrar por perfil (no hay con qué), se corta el corte temprano: se ignora
+  // `forMe` para efectos de la query y se responde con el mismo criterio que un
+  // invitado (destacadas/populares), marcando `profileIncomplete: true` para
+  // que el frontend muestre el aviso UX-3 sin bloquear la Home.
+  const profileIncomplete = forMe && !candidateEffectiveCards?.length
+
   // Precondición (RFC 3.1): solo se activa con forMe=true + al menos 1 tarjeta
   // efectiva. Sin esto, el código sigue exactamente como hoy — cero riesgo de
   // regresión para invitados, admins sin forceProfileMatching, o usuarios sin
@@ -577,7 +594,10 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             },
           },
           orderBy: paginateOrderBy ?? (take ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }] : { createdAt: 'desc' }),
-          ...(paginate ? { take: pageSize, skip: (page - 1) * pageSize } : take ? { take } : {}),
+          // Hard cap defensivo (guardrail OOM, Opción C): ningún findMany sin
+          // paginar ni `take` explícito debe salir sin límite — red de
+          // seguridad genérica además del corte temprano de `profileIncomplete`.
+          ...(paginate ? { take: pageSize, skip: (page - 1) * pageSize } : { take: take ?? HARD_CAP_TAKE }),
         }),
         // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
         paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
@@ -982,7 +1002,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   // Para el path paginado (invitados sin filtros), el orden viene de la DB y no hay dedup por tier.
   // Solo se aplican los filtros JS de bitmask y specificDates (ya aplicados en `filtered`).
   if (paginate) {
-    return { promos: filtered as any[], totalCount, hasMore: totalCount > page * pageSize }
+    return { promos: filtered as any[], totalCount, hasMore: totalCount > page * pageSize, profileIncomplete }
   }
 
   // ── Ordenamiento (path no-paginado: usuarios con perfil o filtros complejos) ────────────
@@ -1044,5 +1064,5 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   }).map(d => d.p)
   __mark('before return (after final sort)')
 
-  return { promos: orderedPromos, totalCount, hasMore: false }
+  return { promos: orderedPromos, totalCount, hasMore: false, profileIncomplete }
 }
