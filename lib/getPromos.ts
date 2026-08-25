@@ -147,7 +147,24 @@ const getPublicPromosPage = unstable_cache(
     const [promos, totalCount] = await Promise.all([
       prisma.promo.findMany({
         where,
-        include: {
+        select: {
+          // Mismo angostamiento que el findMany de getPromosData (RFC
+          // perf-payload-and-sort, 25/8/2026) — ver comentario ahí para el
+          // detalle de qué campos se sacan y por qué.
+          id: true,
+          slug: true,
+          title: true,
+          validDays: true,
+          validDaysNote: true,
+          specificDates: true,
+          salesChannel: true,
+          geographicScope: true,
+          provinces: true,
+          validFrom: true,
+          validUntil: true,
+          categoryId: true,
+          commerceId: true,
+          isFeatured: true,
           category: { select: { name: true, slug: true, icon: true, color: true } },
           commerce: {
             select: {
@@ -516,7 +533,28 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     : await Promise.all([
         prisma.promo.findMany({
           where,
-          include: {
+          select: {
+            // Payload angostado (RFC perf-payload-and-sort, 25/8/2026): se sacan
+            // `description`/`sourceText`/`sourceUrl`/`commerceNote`/`stackable*`/
+            // `uniqueUsePerPeriod`/`maxUsesPerPeriod`/`validFromHour`/`validToHour`
+            // — ninguno se lee en PromosClient.tsx ni en el cálculo de coverageStatus/
+            // globalMaxDiscount/userBestDiscount más abajo en este archivo. La página
+            // de detalle (/promos/[slug]) usa su propio `findUnique` con todos los
+            // campos, así que esto no afecta esa vista.
+            id: true,
+            slug: true,
+            title: true,
+            validDays: true,
+            validDaysNote: true,
+            specificDates: true,
+            salesChannel: true,
+            geographicScope: true,
+            provinces: true,
+            validFrom: true,
+            validUntil: true,
+            categoryId: true,
+            commerceId: true,
+            isFeatured: true,
             category: { select: { name: true, slug: true, icon: true, color: true } },
             commerce: {
               select: {
@@ -998,7 +1036,11 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     // Luego mayor descuento %
     if (b.maxPct !== a.maxPct) return b.maxPct - a.maxPct
 
-    return a.name.localeCompare(b.name, 'es')
+    // Comparación plana en vez de localeCompare('es') (RFC perf-payload-and-sort,
+    // 25/8/2026): localeCompare invoca colación ICU por llamada, ~2.4s sobre 3199
+    // elementos en el peor caso. Es el último criterio de desempate — nadie nota
+    // si "Árbol" ordena antes o después de "Auto" acá (decisión CPO 25/8).
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
   }).map(d => d.p)
   __mark('before return (after final sort)')
 
