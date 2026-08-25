@@ -277,7 +277,6 @@ async function buildPayloadForUser(
       province: province ?? undefined,
       guestProfileParam: guestProfileParam ?? undefined,
       paginate: false,
-      useCandidateQuery: true,
       // Home v2 evalúa siempre como experiencia de usuario final: el rol
       // ADMIN/MODERATOR sigue existiendo (permisos, backoffice), pero acá
       // no debe apagar el matching financiero personal — ver comentario en

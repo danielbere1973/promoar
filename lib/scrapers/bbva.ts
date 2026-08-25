@@ -34,6 +34,25 @@ function parseDias(diasPromo: string | null): number {
   return mask > 0 ? mask : 127;
 }
 
+// La API de BBVA no siempre completa `diasPromo` (queda vacío incluso cuando la
+// promo sí está restringida a días puntuales) — el dato real vive únicamente en
+// el texto de bases y condiciones (ej. "Disfrutá los martes y jueves de 20% de
+// reintegro..."). Cuando parseDias cae al default de 127 (todos los días),
+// intentamos extraer los días explícitos de ese texto antes de aceptar 127.
+const DAY_NAMES: [string, number][] = [
+  ['domingo', 0], ['lunes', 1], ['martes', 2], ['miércoles', 3], ['miercoles', 3],
+  ['jueves', 4], ['viernes', 5], ['sábado', 6], ['sabado', 6],
+];
+
+function parseDiasFromText(text: string): number | null {
+  const lower = text.toLowerCase();
+  let mask = 0;
+  for (const [name, bit] of DAY_NAMES) {
+    if (new RegExp(`\\b${name}\\b`).test(lower)) mask |= 1 << bit;
+  }
+  return mask > 0 ? mask : null;
+}
+
 function extractStoreName(cabecera: string): string {
   const norm = cabecera.trim();
   const enMatch = norm.match(/\ben\s+(.+?)(?:\s*\.|$)/i);
@@ -86,7 +105,6 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
   const installments = extractInstallments(fullText);
   if (!discount && !installments) return [];
 
-  const validDays  = parseDias(item.diasPromo);
   const validFrom  = item.fechaDesde ?? undefined;
   const validUntil = item.fechaHasta ?? undefined;
   const cap        = item.montoTope ? parseFloat(String(item.montoTope).replace(/\./g, '')) : null;
@@ -105,7 +123,12 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
   const requisitosText = decodeHtmlEntities((detail?.requisitos ?? []).join(' '));
   const basesCondiciones = decodeHtmlEntities(detail?.basesCondiciones ?? '').replace(/<[^>]+>/g, ' ').trim();
 
-  const allText = `${fullText} ${item.descripcion ?? ''} ${requisitosText} ${basesCondiciones}`.toUpperCase();
+  const rawAllText = `${fullText} ${item.descripcion ?? ''} ${requisitosText} ${basesCondiciones}`;
+  const allText = rawAllText.toUpperCase();
+
+  const validDays = parseDias(item.diasPromo) === 127
+    ? parseDiasFromText(rawAllText) ?? 127
+    : parseDias(item.diasPromo);
   const paymentChannel: ScrapedPromo['paymentChannel'] =
     /\bQR\b|CODIGO\s+QR/.test(allText)        ? 'QR'  :
     /\bNFC\b|CONTACTLESS|SIN\s+CONTACTO/.test(allText) ? 'NFC' :

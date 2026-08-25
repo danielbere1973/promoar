@@ -556,6 +556,10 @@ model PromoRequirement {
   usages         PromoUsage[]
   usageEvents    PromoUsageEvent[]
 
+  @@index([promoId])
+  @@index([bankId])
+  @@index([walletId])
+  @@index([cardNetworkId])
   @@map("promo_requirements")
 }
 

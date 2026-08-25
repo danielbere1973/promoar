@@ -22,6 +22,20 @@
 // varias preferencias declaradas (ver rubroPreferences.ts::selectRubrosForHome)
 // — es una decisión de producto (prioridad por necesidad, RFC-007 §5.1
 // Dimensión A), no una consecuencia del ranking (RFC-008 §2.3).
+//
+// Ampliación 10 → 18 (CPO Approval "Ampliación de Universo de Rubros",
+// 21/8/2026, en respuesta a hallazgo CTO sobre categorías faltantes): el
+// universo pasa a cubrir todas las categorías activas de PromoAR salvo
+// "Otros" y "Sin Categoría" — directiva explícita de Pablo (CEO/CPO), no
+// heurística de código. El approval original habla de "17" (recuento
+// aproximado); el conteo real contra prisma/seed.ts da 18 categorías activas
+// (20 filas totales - Otros - Sin Categoría), notificado a CPO como
+// corrección aritmética junto con la entrega de este gate. Los 8 agregados:
+// mascotas (categoría "Mascotas", llamada "Petshops" en referencias
+// históricas de CLAUDE.md — el slug real en Category/seed.ts es 'mascotas'),
+// heladerias, entretenimiento, deportes, jugueterias, librerias, shoppings,
+// automotores. HOME_RUBRO_COUNT (cantidad mostrada por usuario) no cambia —
+// sigue en 5, independiente del tamaño del universo seleccionable.
 
 import type { RubroDisplayInfo, RubroId } from './homeDecisionContract'
 
@@ -101,6 +115,62 @@ export const RUBRO_CATALOG: RubroConfig[] = [
     icon: '✈️',
     categoryIds: [],
     categorySlugs: ['viajes-y-turismo'],
+  },
+  {
+    id: 'mascotas',
+    label: 'Mascotas',
+    icon: '🐾',
+    categoryIds: [],
+    categorySlugs: ['mascotas'],
+  },
+  {
+    id: 'heladerias',
+    label: 'Heladerías',
+    icon: '🍦',
+    categoryIds: [],
+    categorySlugs: ['heladerias'],
+  },
+  {
+    id: 'entretenimiento',
+    label: 'Entretenimiento',
+    icon: '🎭',
+    categoryIds: [],
+    categorySlugs: ['entretenimiento'],
+  },
+  {
+    id: 'deportes',
+    label: 'Deportes',
+    icon: '⚽',
+    categoryIds: [],
+    categorySlugs: ['deportes'],
+  },
+  {
+    id: 'jugueterias',
+    label: 'Jugueterías',
+    icon: '🧸',
+    categoryIds: [],
+    categorySlugs: ['jugueterias'],
+  },
+  {
+    id: 'librerias',
+    label: 'Librerías',
+    icon: '📚',
+    categoryIds: [],
+    categorySlugs: ['librerias'],
+  },
+  {
+    id: 'shoppings',
+    label: 'Shoppings',
+    icon: '🛍️',
+    categoryIds: [],
+    categorySlugs: ['shoppings'],
+  },
+  {
+    id: 'automotores',
+    label: 'Automotores',
+    icon: '🚗',
+    categoryIds: [],
+    categorySlugs: ['automotores'],
   },
 ]
 

@@ -32,12 +32,12 @@ describe('resolveDeclaredUniverse', () => {
     expect(universe.map(r => r.id)).toEqual(['tecnologia', 'viajes-y-turismo'])
   })
 
-  it('10 declaradas (todo el catálogo) devuelven las 10 — sin cap a N', () => {
+  it('18 declaradas (todo el catálogo) devuelven las 18 — sin cap a N', () => {
     const universe = resolveDeclaredUniverse(
       declared(...RUBRO_CATALOG.map(r => r.id)),
       ALL_ACTIVE
     )
-    expect(universe).toHaveLength(10)
+    expect(universe).toHaveLength(18)
   })
 
   it('más de N (8) declaradas no truncan — resolveDeclaredUniverse no aplica HOME_RUBRO_COUNT', () => {
@@ -75,16 +75,24 @@ describe('resolveDeclaredUniverse', () => {
     expect(universe.map(r => r.id)).toEqual(['hogar'])
   })
 
-  it('invariante: RUBRO_CATALOG refleja los 10 ids aprobados', () => {
+  it('invariante: RUBRO_CATALOG refleja los 18 ids aprobados (CPO Approval 21/8/2026)', () => {
     const ids = RUBRO_CATALOG.map((r: RubroConfig) => r.id).sort()
     expect(ids).toEqual(
       [
+        'automotores',
         'combustible',
+        'deportes',
+        'entretenimiento',
         'farmacias',
         'gastronomia',
+        'heladerias',
         'hogar',
         'indumentaria',
+        'jugueterias',
+        'librerias',
+        'mascotas',
         'salud-y-belleza',
+        'shoppings',
         'supermercados',
         'tecnologia',
         'transporte',

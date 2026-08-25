@@ -86,7 +86,7 @@ beforeEach(() => {
 describe('forceProfileMatching — cuenta ADMIN con perfil financiero', () => {
   it('sin forceProfileMatching, isAdmin=true deja userBestDiscount en null (comportamiento actual de catálogo/backoffice)', async () => {
     const result: any = await getPromosData(
-      { forMe: true, view: 'week', useCandidateQuery: true, paginate: false },
+      { forMe: true, view: 'week', paginate: false },
       'admin@example.com',
       true, // isAdmin
     )
@@ -96,7 +96,7 @@ describe('forceProfileMatching — cuenta ADMIN con perfil financiero', () => {
 
   it('con forceProfileMatching=true, isAdmin=true SÍ calcula userBestDiscount real (Home v2)', async () => {
     const result: any = await getPromosData(
-      { forMe: true, view: 'week', useCandidateQuery: true, paginate: false, forceProfileMatching: true },
+      { forMe: true, view: 'week', paginate: false, forceProfileMatching: true },
       'admin@example.com',
       true, // isAdmin
     )
@@ -107,12 +107,12 @@ describe('forceProfileMatching — cuenta ADMIN con perfil financiero', () => {
 
   it('usuario no-admin no se ve afectado por el flag (mismo resultado con o sin forceProfileMatching)', async () => {
     const withoutFlag: any = await getPromosData(
-      { forMe: true, view: 'week', useCandidateQuery: true, paginate: false },
+      { forMe: true, view: 'week', paginate: false },
       'user@example.com',
       false,
     )
     const withFlag: any = await getPromosData(
-      { forMe: true, view: 'week', useCandidateQuery: true, paginate: false, forceProfileMatching: true },
+      { forMe: true, view: 'week', paginate: false, forceProfileMatching: true },
       'user@example.com',
       false,
     )

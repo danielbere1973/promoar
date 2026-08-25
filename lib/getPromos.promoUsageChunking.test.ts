@@ -92,7 +92,7 @@ beforeEach(() => {
 describe('promoUsage.findMany — chunking de reqIds (fix P2035)', () => {
   it('no envía un solo chunk con más de 32767 bind variables', async () => {
     await getPromosData(
-      { forMe: true, view: 'week', useCandidateQuery: true, paginate: false },
+      { forMe: true, view: 'week', paginate: false },
       'user@example.com',
       false,
     )
@@ -105,7 +105,7 @@ describe('promoUsage.findMany — chunking de reqIds (fix P2035)', () => {
 
   it('cubre todos los requirementIds a través de los chunks combinados, sin duplicados', async () => {
     await getPromosData(
-      { forMe: true, view: 'week', useCandidateQuery: true, paginate: false },
+      { forMe: true, view: 'week', paginate: false },
       'user@example.com',
       false,
     )
