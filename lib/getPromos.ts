@@ -270,15 +270,12 @@ export interface PromoQueryParams {
    * de usuario final, sin importar el rol. No cambia `isAdmin` en ningún otro
    * lugar de esta función (branches, filtro geográfico, etc. siguen igual). */
   forceProfileMatching?: boolean
-  /** Reservado — optimización de query por candidatos (rama feature/nueva-home,
-   * fuera del alcance aprobado del Commit 4). Declarado acá solo para que
-   * PromoQueryParams tipe correctamente a los callers que ya lo pasan
-   * (home-decision endpoint, tests); no tiene efecto en esta rama: el path
-   * de candidatos no fue traído, así que este flag se ignora en runtime. */
-  useCandidateQuery?: boolean
 }
 
 export async function getPromosData(params: PromoQueryParams, email?: string | null, isAdmin?: boolean) {
+  const __t0 = Date.now()
+  const __PERF = process.env.PERF_DEBUG === '1'
+  const __mark = (label: string) => { if (__PERF) console.log(`[perf] ${label}: ${Date.now() - __t0}ms`) }
   const {
     categorySlug = null,
     categorySlugs = [],
@@ -357,6 +354,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   } else {
     userProvince = paramProvince
   }
+  __mark('after initial user fetch')
 
   if (userProvince) {
     where.AND = [
@@ -417,6 +415,75 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     where.requirements = { some: reqFilter }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // PRE-FILTRO SQL POR PERFIL FINANCIERO (RFC useCandidateQuery, aprobado por
+  // CPO 25/8/2026 — automático, sin flag). Se resuelve el perfil ACÁ, antes
+  // del findMany, para poder acotar `where.requirements` a nivel DB en vez de
+  // traer todo el pool ACTIVE y filtrar en JS después (el costo real de la
+  // latencia de forMe=true — ver RFC en ColabClaudeGemini/). Duplica parte
+  // del cálculo de más abajo (línea ~600, effectiveCards/userProfile) porque
+  // ese bloque también alimenta el filtro geográfico/dedup por tier que corre
+  // sobre `filtered` — no se elimina, solo se adelanta lo mínimo necesario.
+  // ═══════════════════════════════════════════════════════════════════════
+  let candidateFetchedUser: any = fetchedUser
+  let candidateUserProfile: any = null
+  if (forMe && email) {
+    if (!candidateFetchedUser) {
+      candidateFetchedUser = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          addressState: true,
+          financialProfile: { include: { banks: true, wallets: true, cards: true } },
+          savedPromos: { select: { promoId: true } },
+        }
+      })
+      fetchedUser = candidateFetchedUser
+    }
+    candidateUserProfile = candidateFetchedUser?.financialProfile || null
+  }
+  let candidateGuestCards: any[] | null = null
+  if (guestProfileParam) {
+    try {
+      const decoded = JSON.parse(Buffer.from(guestProfileParam, 'base64').toString('utf-8'))
+      if (Array.isArray(decoded?.cards)) candidateGuestCards = decoded.cards
+    } catch {}
+  }
+  const candidateEffectiveCards: any[] | null =
+    candidateUserProfile?.cards ?? (candidateGuestCards && forMe ? candidateGuestCards : null)
+
+  // Precondición (RFC 3.1): solo se activa con forMe=true + al menos 1 tarjeta
+  // efectiva. Sin esto, el código sigue exactamente como hoy — cero riesgo de
+  // regresión para invitados, admins sin forceProfileMatching, o usuarios sin
+  // perfil cargado.
+  if (forMe && candidateEffectiveCards?.length) {
+    // Un `OR` por cada tarjeta efectiva: matchea un requirement si su
+    // bankId/walletId/cardNetworkId son null (sin restricción en ese campo) O
+    // coinciden con la tarjeta. Replica la semántica de matchesProfile.ts
+    // (lib/matchesProfile.ts) para bankId/walletId/cardNetworkId — cardSegmentId
+    // y cardTier quedan fuera (se resuelven en JS más abajo, sin cambios).
+    // No se agrega una rama fija para requirements "sin entidad financiera"
+    // (los 3 campos null): matchesProfile.ts REGLA 1 los excluye explícitamente
+    // cuando hay perfil activo, así que esa rama solo agregaría candidatos que
+    // el paso JS descarta igual — sería una rama sin beneficio real.
+    const cardOrBranches = candidateEffectiveCards.map((c: any) => ({
+      AND: [
+        { OR: [{ bankId: null }, { bankId: c.bankId ?? undefined }] },
+        { OR: [{ walletId: null }, { walletId: c.walletId ?? undefined }] },
+        { OR: [{ cardNetworkId: null }, { cardNetworkId: c.cardNetworkId ?? undefined }] },
+      ],
+    }))
+    const profileReqFilter = { OR: cardOrBranches }
+
+    if (Object.keys(reqFilter).length > 0) {
+      // Ya hay un filtro explícito de UI (bankIds/walletIds/etc) — ambos deben
+      // cumplirse: el candidato tiene que matchear el filtro de UI Y matchear
+      // alguna tarjeta del perfil.
+      where.AND = [...(where.AND ?? []), { requirements: { some: profileReqFilter } }]
+    } else {
+      where.requirements = { some: profileReqFilter }
+    }
+  }
+
   const paginateOrderBy = paginate
     ? [
         { isCSIOnly: 'asc' as const },
@@ -436,6 +503,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   // forMe/email/filtros; acá además hace falta excluir el guest profile (perfil
   // temporal sin cuenta) para no cachear una vista personalizada por error.
   const isPublicCacheableView = paginate && !guestProfileParam
+  __mark('before findMany')
 
   const [promos, totalCount] = isPublicCacheableView
     ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit, userProvince)
@@ -470,6 +538,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
         // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
         paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
       ])
+  __mark(`after findMany (promos=${promos.length}, totalCount=${totalCount})`)
 
   // Day bitmask filtering
   let filtered = promos
@@ -483,6 +552,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     // DEFAULT: Filter by today unless view is 'week'
     filtered = filtered.filter(p => (p.validDays & defaultDayBit) !== 0)
   }
+  __mark(`after day bitmask filter (filtered=${filtered.length})`)
 
   // Filtrar promos con specificDates — mostrar solo si HOY está en las fechas
   const todayStr = today.toISOString().split('T')[0]
@@ -593,50 +663,29 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   for (const p of filtered) {
     if ((p as any).commerce) delete (p as any).commerce.branches
   }
+  __mark(`after geo filter (filtered=${filtered.length})`)
 
   // ═══════════════════════════════════════════════════════════════════════
   // FILTRADO POR PERFIL FINANCIERO
   // Admins también filtran por perfil cuando piden "Para mí" — el bypass
   // geográfico ya está arriba. La vista "Todas" no manda forMe=true.
   // ═══════════════════════════════════════════════════════════════════════
-  let userProfile = null
-
-  // Guest profile: perfil temporal sin registro (viene en query param base64)
-  let guestCards: any[] | null = null
-  if (guestProfileParam) {
-    try {
-      const decoded = JSON.parse(Buffer.from(guestProfileParam, 'base64').toString('utf-8'))
-      if (Array.isArray(decoded?.cards)) guestCards = decoded.cards
-    } catch {}
-  }
+  // userProfile/guestCards ya se resolvieron arriba (candidateUserProfile/
+  // candidateGuestCards, bloque del pre-filtro SQL por perfil) — se reutilizan
+  // acá para no repetir el decode de guestProfileParam ni la query de usuario.
+  const userProfile = candidateUserProfile
 
   // Mapa cardTier → segmentId: para matchear tiers (Selecta, Eminent) con segmentos del perfil
   const tierToSegmentId = new Map<string, string>()
-  if (forMe && email) {
-    // fetchedUser ya fue cargado arriba junto con la provincia (evita segunda query)
-    if (!fetchedUser) {
-      fetchedUser = await prisma.user.findUnique({
-        where: { email },
-        select: {
-          addressState: true,
-          financialProfile: { include: { banks: true, wallets: true, cards: true } },
-          savedPromos: { select: { promoId: true } },
-        }
-      }) as any
-    }
-    userProfile = (fetchedUser as any)?.financialProfile || null
-
-    // Cargar segmentos bancarios en paralelo con otras operaciones si es necesario
-    if (userProfile) {
-      const allSegments = await prisma.bankSegment.findMany({ select: { id: true, name: true } })
-      for (const seg of allSegments) {
-        tierToSegmentId.set(seg.name.toUpperCase(), seg.id)
-      }
+  if (forMe && email && userProfile) {
+    const allSegments = await prisma.bankSegment.findMany({ select: { id: true, name: true } })
+    for (const seg of allSegments) {
+      tierToSegmentId.set(seg.name.toUpperCase(), seg.id)
     }
   }
 
   // Usar guest profile si no hay usuario logueado con perfil en DB
-  const effectiveCards = userProfile?.cards ?? (guestCards && forMe ? guestCards : null)
+  const effectiveCards = candidateEffectiveCards
 
   // Tarjetas virtuales desde UserWallet — excluye MODO porque toda promo MODO
   // requiere un banco asociado; MODO sin banco no existe en la práctica.
@@ -686,6 +735,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       return promo.requirements.some(req => matchesProfile(req))
     })
   }
+  __mark(`after profile matching filter (filtered=${filtered.length})`)
 
   // ── Alerta Inteligente de Oportunidad (RFC dictamen CPO 24/8/2026) ─────────
   // En modo "Hoy" (view !== 'week', sin day/dayIndices explícito), para cada
@@ -930,6 +980,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
 
     return a.name.localeCompare(b.name, 'es')
   }).map(d => d.p)
+  __mark('before return (after final sort)')
 
   return { promos: orderedPromos, totalCount, hasMore: false }
 }

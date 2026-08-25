@@ -11,8 +11,9 @@ import { describe, expect, it } from 'vitest'
 import { RUBRO_IDS } from './rubroCatalog'
 
 // Debe reflejar exactamente los ids insertados en el seed de
-// prisma/migrations/20260813025226_add_user_rubro_preferences/migration.sql
+// prisma/migrations/20260815065148_add_user_rubro_preferences/migration.sql
 // + prisma/migrations/20260815155431_expand_home_rubros/migration.sql
+// + prisma/migrations/20260821000000_expand_home_rubros_v2/migration.sql
 const HOME_RUBRO_SEED_IDS = [
   'supermercados',
   'combustible',
@@ -24,6 +25,14 @@ const HOME_RUBRO_SEED_IDS = [
   'hogar',
   'salud-y-belleza',
   'viajes-y-turismo',
+  'mascotas',
+  'heladerias',
+  'entretenimiento',
+  'deportes',
+  'jugueterias',
+  'librerias',
+  'shoppings',
+  'automotores',
 ]
 
 describe('RUBRO_CATALOG <-> HomeRubro sync', () => {
