@@ -141,23 +141,29 @@ async function getEffectiveCards(userId: string) {
 // cpo-a-cto-dictamen-arquitectura-snapshot-async-25-8-2026.md). Recalcula las
 // 5 claves de vigencia + snapshot para un usuario puntual; devuelve si hubo
 // hit o si se recalculó. Sin `req`/`searchParams` porque el warm job no tiene
-// contexto de proximidad de un visitante real — usa el snapshot existente
-// (si lo hay) solo para decidir si está vencido en las claves que no dependen
-// de ubicación; `proximityContextHash` de un warm sin ubicación queda
-// 'no-proximity-context', igual que cualquier usuario sin geolocalización.
+// contexto de proximidad de un visitante real — usa `FinancialProfile.lastKnownLat/Lng`
+// (Prioridad 2 Parte B — cpo-a-cto-dictamen-proximity-hash-y-last-known-coords-25-8-2026.md)
+// cuando existe, para calentar con el mismo proximityContextHash que va a pedir
+// el cliente real. Si el usuario nunca mandó coordenadas, cae a
+// 'no-proximity-context' como antes.
 export async function warmSnapshotForUser(userId: string, email: string, isAdmin: boolean): Promise<{ userId: string; action: 'hit' | 'recomputed' | 'error'; latencyMs: number }> {
   const startedAt = Date.now()
   try {
-    const [declaredRows, activeRubroIds] = await Promise.all([
+    const [declaredRows, activeRubroIds, financialProfile] = await Promise.all([
       prisma.userRubroPreference.findMany({
         where: { userId, source: 'DECLARED', status: 'ACTIVE' },
         select: { rubroId: true, updatedAt: true },
       }),
       getActiveHomeRubroIds(),
+      prisma.financialProfile.findUnique({ where: { userId }, select: { lastKnownLat: true, lastKnownLng: true } }),
     ])
     const declaredUniverse = resolveDeclaredUniverse(declaredRows, activeRubroIds)
     const declaredUniverseHash = computeDeclaredUniverseHash(declaredRows)
-    const proximityContextHash = computeProximityContextHash({})
+    const { hasLocation, nearbyByCommerceId } = await getHasLocationNearby(
+      financialProfile?.lastKnownLat ?? null,
+      financialProfile?.lastKnownLng ?? null
+    )
+    const proximityContextHash = computeProximityContextHash(nearbyByCommerceId)
     const operationalDay = currentOperationalDay()
 
     const [snapshot, decisionContextHash, promoPoolVersion] = await Promise.all([
@@ -189,8 +195,8 @@ export async function warmSnapshotForUser(userId: string, email: string, isAdmin
     }
 
     const payload = await buildPayloadForUser(email, isAdmin, null, declaredUniverse, {
-      hasLocation: false,
-      nearbyByCommerceId: {},
+      hasLocation,
+      nearbyByCommerceId,
     })
 
     await prisma.homeDecisionSnapshot.upsert({
@@ -254,6 +260,21 @@ export async function GET(req: NextRequest) {
 
     const { hasLocation, nearbyByCommerceId } = await getHasLocationNearby(lat, lng)
     const proximityContextHash = computeProximityContextHash(nearbyByCommerceId)
+
+    // Persistencia oportunista de la última coordenada conocida — Prioridad 2
+    // Parte B (cpo-a-cto-dictamen-proximity-hash-y-last-known-coords-25-8-2026.md).
+    // Fire-and-forget, no bloquea la respuesta: alimenta a warmSnapshotForUser en
+    // el próximo ciclo del warm job para que precaliente con proximityContextHash
+    // real en vez de 'no-proximity-context'. Solo para usuarios con sesión —
+    // no hay FinancialProfile de guest donde guardar esto.
+    if (user && hasLocation) {
+      // updateMany en vez de update: no todos los usuarios con sesión tienen
+      // FinancialProfile creado (recién se crea al cargar tarjetas en /perfil).
+      // No-op silencioso si no existe, en vez de lanzar P2025.
+      prisma.financialProfile
+        .updateMany({ where: { userId: user.id }, data: { lastKnownLat: lat, lastKnownLng: lng } })
+        .catch(err => console.error(`[home-decision] lastKnownCoords persist failed userId=${user.id}`, err))
+    }
 
     const operationalDay = currentOperationalDay()
 
