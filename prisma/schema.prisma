@@ -219,6 +219,27 @@ model RecommendationSnapshot {
   @@map("recommendation_snapshots")
 }
 
+// Guest Home Snapshot — CPO Dictamen "Optimización Warmup Batch y Ratificación
+// Guests" (26/8/2026): visitantes sin sesión (user == null) no tienen userId
+// para HomeDecisionSnapshot (FK real a User), así que se precalienta un
+// snapshot separado por región (`regionKey`, ej. "__GUEST__:AR",
+// "__GUEST__:Buenos Aires") durante el warm job. Universo declarado = todos
+// los rubros activos (Opción A, ver resolveGuestUniverse en
+// lib/rubroPreferences.ts) — no depende de ningún usuario individual, así que
+// no necesita declaredUniverseHash/decisionContextHash/proximityContextHash:
+// solo operationalDay + promoPoolVersion invalidan.
+model GuestHomeSnapshot {
+  id                String   @id @default(cuid())
+  regionKey         String   @unique
+  payload           Json
+  operationalDay    String
+  promoPoolVersion  String
+  generatedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("guest_home_snapshots")
+}
+
 // Home Decision Snapshot — RFC-008 Etapa 1 "Tus rubros". Cachea el payload de
 // buildHomeDecisionPayload por usuario para evitar recalcular scoring en cada
 // GET /api/promos/home-decision. Se invalida (recalcula) cuando cualquiera de

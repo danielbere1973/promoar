@@ -5,7 +5,7 @@ import { getAuthToken } from '@/lib/auth'
 import { getPromosData } from '@/lib/getPromos'
 import { buildHomeDecisionPayload, type DecisionContext, type NearbyMap } from '@/lib/decisionEngineV2'
 import { getNearbyBranchesByCommerce } from '@/lib/nearbyBranches'
-import { getDeclaredActivePreferences, getActiveHomeRubroIds, resolveDeclaredUniverse } from '@/lib/rubroPreferences'
+import { getDeclaredActivePreferences, getActiveHomeRubroIds, resolveDeclaredUniverse, resolveGuestUniverse } from '@/lib/rubroPreferences'
 import { RUBRO_CATALOG } from '@/lib/rubroCatalog'
 import type { HomeDecisionPayload } from '@/lib/homeDecisionContract'
 
@@ -110,7 +110,7 @@ function computeDecisionContextHash(input: {
 // ACTIVE en las categorías cubiertas por RUBRO_CATALOG (universo relevante
 // para cualquier declaredUniverse posible), más el conteo — cambia tanto si
 // una promo existente se edita como si el pool crece/se achica.
-async function currentPromoPoolVersion(): Promise<string> {
+export async function currentPromoPoolVersion(): Promise<string> {
   const categorySlugs = Array.from(new Set(RUBRO_CATALOG.flatMap(r => r.categorySlugs)))
   const where = { status: 'ACTIVE' as const, category: { slug: { in: categorySlugs } } }
   const [agg, count] = await Promise.all([
@@ -118,6 +118,31 @@ async function currentPromoPoolVersion(): Promise<string> {
     prisma.promo.count({ where }),
   ])
   return `${agg._max.updatedAt?.toISOString() ?? 'none'}:${count}`
+}
+
+// CPO Directiva "Optimización Warmup Batch" (26/8/2026), Sección 2.3: cache en
+// memoria a nivel módulo con TTL 30-60s para currentPromoPoolVersion() en el
+// endpoint unitario GET — asegura que los cache-hits individuales respondan
+// holgadamente dentro del SLA <100ms sin repetir 2 queries agregadas por
+// request. Vive fuera del batch warm job a propósito: ese ya resuelve el
+// problema con sharedContext (una vez por corrida completa, no por request),
+// así que el warm job sigue llamando currentPromoPoolVersion() directo, sin
+// pasar por este cache. Instancia por proceso — coherente con que Next.js en
+// producción sirve requests desde múltiples instancias de función serverless,
+// cada una con su propio TTL local; el peor caso es servir una versión hasta
+// 60s desactualizada, aceptable para este dato (cambia con cada scrape run,
+// no en tiempo real).
+const PROMO_POOL_VERSION_TTL_MS = 45_000
+let promoPoolVersionCache: { value: string; expiresAt: number } | null = null
+
+async function cachedPromoPoolVersion(): Promise<string> {
+  const now = Date.now()
+  if (promoPoolVersionCache && promoPoolVersionCache.expiresAt > now) {
+    return promoPoolVersionCache.value
+  }
+  const value = await currentPromoPoolVersion()
+  promoPoolVersionCache = { value, expiresAt: now + PROMO_POOL_VERSION_TTL_MS }
+  return value
 }
 
 async function getEffectiveCards(userId: string) {
@@ -146,7 +171,19 @@ async function getEffectiveCards(userId: string) {
 // cuando existe, para calentar con el mismo proximityContextHash que va a pedir
 // el cliente real. Si el usuario nunca mandó coordenadas, cae a
 // 'no-proximity-context' como antes.
-export async function warmSnapshotForUser(userId: string, email: string, isAdmin: boolean): Promise<{ userId: string; action: 'hit' | 'recomputed' | 'error'; latencyMs: number }> {
+// sharedContext — CPO Directiva "Optimización Warmup Batch" (26/8/2026):
+// promoPoolVersion y activeRubroIds no dependen del usuario, así que un batch
+// de N usuarios los precalcula UNA vez (ver POST /api/admin/snapshots/warm) y
+// se los pasa acá en vez de que cada llamada individual repita esas 2 queries
+// agregadas de Prisma. Si se omite (llamada aislada, ej. desde un futuro
+// trigger por-usuario), se computan igual que antes — la función sigue siendo
+// usable standalone.
+export async function warmSnapshotForUser(
+  userId: string,
+  email: string,
+  isAdmin: boolean,
+  sharedContext?: { promoPoolVersion?: string; activeRubroIds?: Set<string> }
+): Promise<{ userId: string; action: 'hit' | 'recomputed' | 'error'; latencyMs: number }> {
   const startedAt = Date.now()
   try {
     const [declaredRows, activeRubroIds, financialProfile] = await Promise.all([
@@ -154,7 +191,7 @@ export async function warmSnapshotForUser(userId: string, email: string, isAdmin
         where: { userId, source: 'DECLARED', status: 'ACTIVE' },
         select: { rubroId: true, updatedAt: true },
       }),
-      getActiveHomeRubroIds(),
+      sharedContext?.activeRubroIds ? Promise.resolve(sharedContext.activeRubroIds) : getActiveHomeRubroIds(),
       prisma.financialProfile.findUnique({ where: { userId }, select: { lastKnownLat: true, lastKnownLng: true } }),
     ])
     const declaredUniverse = resolveDeclaredUniverse(declaredRows, activeRubroIds)
@@ -179,7 +216,7 @@ export async function warmSnapshotForUser(userId: string, email: string, isAdmin
           declaredCategorySlugs: undefined,
         })
       })(),
-      currentPromoPoolVersion(),
+      sharedContext?.promoPoolVersion ? Promise.resolve(sharedContext.promoPoolVersion) : currentPromoPoolVersion(),
     ])
 
     const vigente =
@@ -255,7 +292,14 @@ export async function GET(req: NextRequest) {
         : Promise.resolve([]),
       getActiveHomeRubroIds(),
     ])
-    const declaredUniverse = resolveDeclaredUniverse(declaredRows, activeRubroIds)
+    // CPO Ratificación "Opción A" (25/8/2026, ratificada 26/8/2026): un guest
+    // nunca tiene UserRubroPreference — su declaredUniverse es el universo
+    // completo de rubros activos, no un subconjunto vacío. resolveDeclaredUniverse
+    // sigue siendo el camino correcto para usuarios logueados (intersección con
+    // lo que declararon).
+    const declaredUniverse = user
+      ? resolveDeclaredUniverse(declaredRows, activeRubroIds)
+      : resolveGuestUniverse(activeRubroIds)
     const declaredUniverseHash = computeDeclaredUniverseHash(declaredRows)
 
     const { hasLocation, nearbyByCommerceId } = await getHasLocationNearby(lat, lng)
@@ -294,7 +338,7 @@ export async function GET(req: NextRequest) {
             declaredCategorySlugs: undefined,
           })
         })(),
-        currentPromoPoolVersion(),
+        cachedPromoPoolVersion(),
       ])
 
       const vigente =
@@ -343,7 +387,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ...payload, latencyMs, cacheStatus: 'miss' })
     }
 
-    // Guest (guest_profile sin sesión) — sin userId, sin cache, sin universo declarado.
+    // Guest (guest_profile sin sesión) — sin userId, siempre recalcula acá.
+    // declaredUniverse ya es Opción A (todos los rubros activos, ver arriba).
+    // El snapshot regional __GUEST__:{province} (GuestHomeSnapshot) no se lee
+    // en este path: ese cache es para el warm job precalentando la vista
+    // genérica por región, mientras que un request real de guest trae su
+    // propio guestProfileParam/lat/lng, que varían por visitante y no son
+    // representables por una sola clave de región.
     const payload = await buildPayloadForUser(email, isAdmin, province, declaredUniverse, {
       hasLocation,
       nearbyByCommerceId,
@@ -355,6 +405,44 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error('[GET /api/promos/home-decision]', error)
     return NextResponse.json({ error: 'Error al obtener recomendaciones por rubro' }, { status: 500 })
+  }
+}
+
+// Snapshot regional de guests — CPO Directiva "Ratificación del Universo de
+// Rubros para Guests" (26/8/2026): precalienta la vista genérica por región
+// (`__GUEST__:{province ?? 'AR'}`) durante el warm job, para que un visitante
+// sin sesión que llegue pidiendo esa misma región tenga, en el futuro, un
+// cache-hit disponible (el consumo de este snapshot desde GET queda para una
+// iteración siguiente — por ahora el warm job solo lo genera/actualiza, ver
+// Sección 6 de cto-a-cpo-metricas-warm-job-y-bug-middleware-26-8-2026.md).
+// Sin guestProfileParam ni lat/lng propios: es la vista "por defecto" de la
+// región, no la de un visitante puntual — mismo motivo por el que GET no lee
+// este snapshot para requests reales (ver comentario en el path guest de GET).
+export async function warmGuestRegionSnapshot(
+  province: string | null,
+  sharedContext: { promoPoolVersion: string; activeRubroIds: Set<string> }
+): Promise<{ regionKey: string; action: 'recomputed' | 'error'; latencyMs: number }> {
+  const startedAt = Date.now()
+  const regionKey = `__GUEST__:${province ?? 'AR'}`
+  try {
+    const declaredUniverse = resolveGuestUniverse(sharedContext.activeRubroIds)
+    const operationalDay = currentOperationalDay()
+
+    const payload = await buildPayloadForUser(null, false, province, declaredUniverse, {
+      hasLocation: false,
+      nearbyByCommerceId: {},
+    })
+
+    await prisma.guestHomeSnapshot.upsert({
+      where: { regionKey },
+      create: { regionKey, payload: payload as any, operationalDay, promoPoolVersion: sharedContext.promoPoolVersion },
+      update: { payload: payload as any, operationalDay, promoPoolVersion: sharedContext.promoPoolVersion },
+    })
+
+    return { regionKey, action: 'recomputed', latencyMs: Date.now() - startedAt }
+  } catch (error) {
+    console.error(`[warmGuestRegionSnapshot] regionKey=${regionKey}`, error)
+    return { regionKey, action: 'error', latencyMs: Date.now() - startedAt }
   }
 }
 
