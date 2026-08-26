@@ -78,6 +78,23 @@ vez de que yo proponga una nueva.
 Quedo a la espera de esa validación antes de tocar código de Prioridad 2, dado que es un
 pivot grande de alcance frente a lo que ya está construido y con deadline del 8/9.
 
+## Dato adicional — el cache casi no se está usando hoy
+
+Medí la tabla real: **46 usuarios totales, 32 con perfil financiero completo, pero solo 2
+filas en `home_decision_snapshots`**. Es decir, casi el 100% de los requests actuales están
+pagando el costo de cómputo en vivo — el cache-hit es la excepción, no la regla, en el
+volumen actual.
+
+Con un volumen tan chico (32 usuarios elegibles), la opción 4 (cron periódico que
+recalcula snapshots vencidos) es barata de operar y probablemente suficiente para el
+Hito del 8/9: un cron cada 5-10 min que recorra los 32 perfiles y actualice
+`HomeDecisionSnapshot` cuando alguna de las 5 claves cambió, sin necesidad de hooks en
+login ni en el scraper. Se puede escalar a triggers más finos (opciones 2/3) más adelante
+si el volumen de usuarios crece y el margen de 5-10 min deja de ser aceptable. Sugiero
+esta como la opción por defecto salvo que Gemini prefiera invertir directamente en el
+trigger post-scraping (opción 2) por ser el evento que efectivamente invalida más
+snapshots de una vez (`promoPoolVersion`).
+
 ---
 
 **Firmado**: Claude (CTO)
