@@ -180,9 +180,17 @@ model VerificationToken {
 }
 
 model FinancialProfile {
-  id        String       @id @default(cuid())
-  userId    String       @unique
-  updatedAt DateTime     @updatedAt
+  id          String       @id @default(cuid())
+  userId      String       @unique
+  updatedAt   DateTime     @updatedAt
+  // Última coordenada conocida con GPS activo — Prioridad 2 Parte B
+  // (cpo-a-cto-dictamen-proximity-hash-y-last-known-coords-25-8-2026.md).
+  // Persistida de forma oportunista/no-bloqueante por GET /api/promos/home-decision
+  // cuando recibe lat/lng válidos; consumida por warmSnapshotForUser para que el
+  // warm job precaliente con el mismo proximityContextHash que va a pedir el
+  // cliente real, en vez de 'no-proximity-context'.
+  lastKnownLat Float?
+  lastKnownLng Float?
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   banks     UserBank[]
   cards     UserCard[]
@@ -209,6 +217,27 @@ model RecommendationSnapshot {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("recommendation_snapshots")
+}
+
+// Guest Home Snapshot — CPO Dictamen "Optimización Warmup Batch y Ratificación
+// Guests" (26/8/2026): visitantes sin sesión (user == null) no tienen userId
+// para HomeDecisionSnapshot (FK real a User), así que se precalienta un
+// snapshot separado por región (`regionKey`, ej. "__GUEST__:AR",
+// "__GUEST__:Buenos Aires") durante el warm job. Universo declarado = todos
+// los rubros activos (Opción A, ver resolveGuestUniverse en
+// lib/rubroPreferences.ts) — no depende de ningún usuario individual, así que
+// no necesita declaredUniverseHash/decisionContextHash/proximityContextHash:
+// solo operationalDay + promoPoolVersion invalidan.
+model GuestHomeSnapshot {
+  id                String   @id @default(cuid())
+  regionKey         String   @unique
+  payload           Json
+  operationalDay    String
+  promoPoolVersion  String
+  generatedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("guest_home_snapshots")
 }
 
 // Home Decision Snapshot — RFC-008 Etapa 1 "Tus rubros". Cachea el payload de

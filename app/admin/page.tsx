@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import StatsView from './StatsView'
+import RetentionAnalyticsView from './RetentionAnalyticsView'
 import ClassifyButton from './ClassifyButton'
 import NotifPrefsTab from './NotifPrefsTab'
 import PendingPromosTab from './PendingPromosTab'
@@ -356,7 +357,7 @@ function normalizeSearch(s: string): string {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter' | 'analytics'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -1017,6 +1018,9 @@ export default function AdminPage() {
         <TabButton active={tab === 'pending'} icon={ClipboardList} onClick={() => setTab('pending')}>
           Pendientes
         </TabButton>
+        <TabButton active={tab === 'analytics'} icon={TrendingUp} onClick={() => setTab('analytics')}>
+          Analytics
+        </TabButton>
         <TabButton active={tab === 'newsletter'} icon={Mail} onClick={() => setTab('newsletter')}>
           Newsletter
         </TabButton>
@@ -1105,6 +1109,9 @@ export default function AdminPage() {
           </>
         )}
         {tab === 'scheduler' && <ScraperSchedulerTab />}
+
+        {/* ══════════ TAB ANALYTICS (Paso 0 — Mi Ahorro de Hoy) ══════════ */}
+        {tab === 'analytics' && <RetentionAnalyticsView />}
 
         {/* ══════════ TAB ALERTAS ══════════ */}
         {tab === 'alertas' && <NotifPrefsTab />}

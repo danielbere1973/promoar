@@ -47,3 +47,15 @@ export function resolveDeclaredUniverse(
   const declaredIds = new Set(declared.map(d => d.rubroId))
   return catalog.filter(r => activeRubroIds.has(r.id) && declaredIds.has(r.id))
 }
+
+// CPO Ratificación "Opción A" (dictamen 25/8/2026, ratificado 26/8/2026): un guest
+// (user == null) nunca tiene UserRubroPreference — usar resolveDeclaredUniverse con
+// declared=[] siempre da universo vacío. Para guests el universo declarado ES el
+// universo completo de rubros activos, no un subconjunto declarado. Función pura,
+// mismo criterio de activación (activeRubroIds) que resolveDeclaredUniverse.
+export function resolveGuestUniverse(
+  activeRubroIds: Set<string>,
+  catalog: RubroConfig[] = RUBRO_CATALOG
+): RubroConfig[] {
+  return catalog.filter(r => activeRubroIds.has(r.id))
+}

@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import type { HomeDecisionPayload } from '@/lib/homeDecisionContract'
 import RubroSection from './RubroSection'
 import BottomNav from '@/app/components/BottomNav'
+import { useTracking } from '@/lib/useTracking'
 
 function HomeV2Header() {
   return (
@@ -34,6 +36,14 @@ type LoadState =
 export default function HomeV2Client() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const requestedRef = useRef(false)
+  const { status } = useSession()
+  const { track } = useTracking()
+  const impressionsSentRef = useRef(false)
+
+  useEffect(() => {
+    track({ type: 'HOME_VIEW', authenticated: status === 'authenticated' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -122,6 +132,21 @@ export default function HomeV2Client() {
 
   const { payload } = state
 
+  if (payload.status === 'ok' && !impressionsSentRef.current) {
+    impressionsSentRef.current = true
+    for (const slot of payload.rubros) {
+      if (slot.status !== 'empty') {
+        track({
+          type: 'RECOMMENDATION_IMPRESSION',
+          rubroId: slot.rubro.id,
+          promoId: (slot.principal.promo as { id?: string } | null)?.id,
+          commerceName: slot.principal.facts.commerceName,
+          variant: 'spotlight',
+        })
+      }
+    }
+  }
+
   if (payload.status === 'incomplete_profile') {
     return (
       <>
@@ -196,7 +221,7 @@ export default function HomeV2Client() {
       <HomeV2Header />
       <div className="max-w-2xl mx-auto px-4 py-6 pb-24 lg:pb-6">
         {payload.rubros.map(slot => (
-          <RubroSection key={slot.rubro.id} slot={slot} />
+          <RubroSection key={slot.rubro.id} slot={slot} track={track} />
         ))}
       </div>
       <BottomNav />

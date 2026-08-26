@@ -4,10 +4,13 @@ import Link from 'next/link'
 import type { DecisionCandidate } from '@/lib/homeDecisionContract'
 import { benefitDisplay } from '@/lib/benefitDisplay'
 import { reasonsToText } from '@/lib/reasonText'
+import type { useTracking } from '@/lib/useTracking'
 
 type Props = {
   candidate: DecisionCandidate
   variant: 'spotlight' | 'secondary'
+  rubroId: string
+  track: ReturnType<typeof useTracking>['track']
 }
 
 function promoHref(promo: unknown): string | null {
@@ -18,17 +21,29 @@ function promoHref(promo: unknown): string | null {
   return null
 }
 
-export default function DecisionCard({ candidate, variant }: Props) {
+export default function DecisionCard({ candidate, variant, rubroId, track }: Props) {
   const { facts } = candidate
   const { num, unit, label, isCsi } = benefitDisplay(facts.benefit)
   const reasons = candidate.reasonsText ?? reasonsToText(candidate.reasons)
   const topReason = reasons[0] ?? null
   const href = promoHref(candidate.promo)
+  const promoId = (candidate.promo as { id?: string } | null)?.id
+
+  function handleClick() {
+    track({
+      type: 'RECOMMENDATION_CLICK',
+      rubroId,
+      promoId,
+      commerceName: facts.commerceName,
+      variant,
+    })
+  }
 
   if (variant === 'spotlight') {
     return (
       <Link
         href={href ?? '/promos'}
+        onClick={handleClick}
         className="block rounded-2xl bg-[#1E3A5F] dark:bg-[#142840] text-white p-5 shadow-lg relative overflow-hidden transition-transform active:scale-[0.98] hover:brightness-110"
       >
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -71,6 +86,7 @@ export default function DecisionCard({ candidate, variant }: Props) {
   return (
     <Link
       href={href ?? '/promos'}
+      onClick={handleClick}
       className="block rounded-xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 p-3.5 transition-transform active:scale-[0.98] hover:border-gray-200 dark:hover:border-slate-600"
     >
       <div className="flex items-start justify-between gap-2 mb-1.5">
