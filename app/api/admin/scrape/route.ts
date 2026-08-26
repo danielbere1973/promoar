@@ -762,6 +762,19 @@ export async function POST(req: NextRequest) {
       }).catch((e) => console.error('[push/notify] Error:', e))
     }
 
+    // Trigger post-scraping del batch warm de HomeDecisionSnapshot (Prioridad 2,
+    // Parte A — cpo-a-cto-dictamen-arquitectura-snapshot-async-25-8-2026.md):
+    // si hubo promos nuevas/actualizadas, promoPoolVersion cambió para todos los
+    // usuarios con perfil, invalidando sus snapshots. Fire-and-forget para que la
+    // DB "amanezca" con los snapshots recalculados antes del próximo login.
+    if (processedCount > 0) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+      fetch(`${baseUrl}/api/admin/snapshots/warm`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.VTEX_SESSION_SECRET}` },
+      }).catch((e) => console.error('[snapshots/warm] Error:', e))
+    }
+
     return NextResponse.json({
       message: 'Scraping completado con éxito',
       totalFound: flatPromos.length,

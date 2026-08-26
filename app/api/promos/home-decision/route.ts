@@ -137,6 +137,75 @@ async function getEffectiveCards(userId: string) {
   return [...cards, ...banksOnly, ...walletsOnly]
 }
 
+// Extraído para reuso desde el batch warm job (Prioridad 2, Parte A —
+// cpo-a-cto-dictamen-arquitectura-snapshot-async-25-8-2026.md). Recalcula las
+// 5 claves de vigencia + snapshot para un usuario puntual; devuelve si hubo
+// hit o si se recalculó. Sin `req`/`searchParams` porque el warm job no tiene
+// contexto de proximidad de un visitante real — usa el snapshot existente
+// (si lo hay) solo para decidir si está vencido en las claves que no dependen
+// de ubicación; `proximityContextHash` de un warm sin ubicación queda
+// 'no-proximity-context', igual que cualquier usuario sin geolocalización.
+export async function warmSnapshotForUser(userId: string, email: string, isAdmin: boolean): Promise<{ userId: string; action: 'hit' | 'recomputed' | 'error'; latencyMs: number }> {
+  const startedAt = Date.now()
+  try {
+    const [declaredRows, activeRubroIds] = await Promise.all([
+      prisma.userRubroPreference.findMany({
+        where: { userId, source: 'DECLARED', status: 'ACTIVE' },
+        select: { rubroId: true, updatedAt: true },
+      }),
+      getActiveHomeRubroIds(),
+    ])
+    const declaredUniverse = resolveDeclaredUniverse(declaredRows, activeRubroIds)
+    const declaredUniverseHash = computeDeclaredUniverseHash(declaredRows)
+    const proximityContextHash = computeProximityContextHash({})
+    const operationalDay = currentOperationalDay()
+
+    const [snapshot, decisionContextHash, promoPoolVersion] = await Promise.all([
+      prisma.homeDecisionSnapshot.findUnique({ where: { userId } }),
+      (async () => {
+        const [effectiveCards, savedPromos] = await Promise.all([
+          getEffectiveCards(userId),
+          prisma.savedPromo.findMany({ where: { userId }, select: { promoId: true } }),
+        ])
+        return computeDecisionContextHash({
+          effectiveCards,
+          favoritedPromoIds: savedPromos.map(sp => sp.promoId),
+          declaredCategorySlugs: undefined,
+        })
+      })(),
+      currentPromoPoolVersion(),
+    ])
+
+    const vigente =
+      !!snapshot &&
+      snapshot.operationalDay === operationalDay &&
+      snapshot.declaredUniverseHash === declaredUniverseHash &&
+      snapshot.decisionContextHash === decisionContextHash &&
+      snapshot.proximityContextHash === proximityContextHash &&
+      snapshot.promoPoolVersion === promoPoolVersion
+
+    if (vigente) {
+      return { userId, action: 'hit', latencyMs: Date.now() - startedAt }
+    }
+
+    const payload = await buildPayloadForUser(email, isAdmin, null, declaredUniverse, {
+      hasLocation: false,
+      nearbyByCommerceId: {},
+    })
+
+    await prisma.homeDecisionSnapshot.upsert({
+      where: { userId },
+      create: { userId, payload: payload as any, operationalDay, declaredUniverseHash, decisionContextHash, proximityContextHash, promoPoolVersion },
+      update: { payload: payload as any, operationalDay, declaredUniverseHash, decisionContextHash, proximityContextHash, promoPoolVersion },
+    })
+
+    return { userId, action: 'recomputed', latencyMs: Date.now() - startedAt }
+  } catch (error) {
+    console.error(`[warmSnapshotForUser] userId=${userId}`, error)
+    return { userId, action: 'error', latencyMs: Date.now() - startedAt }
+  }
+}
+
 export async function GET(req: NextRequest) {
   const startedAt = Date.now()
   try {
@@ -217,7 +286,9 @@ export async function GET(req: NextRequest) {
 
       if (vigente) {
         const payload = snapshot!.payload as unknown as HomeDecisionPayload
-        return NextResponse.json({ ...payload, latencyMs: Date.now() - startedAt })
+        const latencyMs = Date.now() - startedAt
+        console.log(`[home-decision] cacheStatus=hit latencyMs=${latencyMs} userId=${user.id}`)
+        return NextResponse.json({ ...payload, latencyMs, cacheStatus: 'hit' })
       }
 
       const payload = await buildPayloadForUser(email!, isAdmin, province, declaredUniverse, {
@@ -246,7 +317,9 @@ export async function GET(req: NextRequest) {
         },
       })
 
-      return NextResponse.json({ ...payload, latencyMs: Date.now() - startedAt })
+      const latencyMs = Date.now() - startedAt
+      console.log(`[home-decision] cacheStatus=miss latencyMs=${latencyMs} userId=${user.id}`)
+      return NextResponse.json({ ...payload, latencyMs, cacheStatus: 'miss' })
     }
 
     // Guest (guest_profile sin sesión) — sin userId, sin cache, sin universo declarado.
@@ -255,7 +328,9 @@ export async function GET(req: NextRequest) {
       nearbyByCommerceId,
     }, guestProfileParam)
 
-    return NextResponse.json({ ...payload, latencyMs: Date.now() - startedAt })
+    const latencyMs = Date.now() - startedAt
+    console.log(`[home-decision] cacheStatus=guest-miss latencyMs=${latencyMs} hasGuestProfile=${!!guestProfileParam}`)
+    return NextResponse.json({ ...payload, latencyMs, cacheStatus: 'guest-miss' })
   } catch (error) {
     console.error('[GET /api/promos/home-decision]', error)
     return NextResponse.json({ error: 'Error al obtener recomendaciones por rubro' }, { status: 500 })
