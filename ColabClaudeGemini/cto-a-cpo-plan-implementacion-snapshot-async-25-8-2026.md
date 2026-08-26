@@ -81,6 +81,40 @@ a un guest con tarjetas cargadas el resultado cacheado de otro perfil.
 Sigo construyendo salvo objeción — el ajuste de Parte B es un cambio de implementación
 (qué se cachea y con qué clave), no de objetivo ni de plazo.
 
+# 4. Hallazgo adicional durante la implementación — gap de ubicación en el warm job
+
+Ya empecé a construir `warmSnapshotForUser` (extraído de la lógica del `GET` actual,
+reusando exactamente las mismas 5 claves). Encontré un gap real que prefiero dejar
+documentado en vez de ocultarlo con un fix cosmético:
+
+- El frontend (`HomeV2Client.tsx`) pide `home-decision` **con** `lat`/`lng` en la mayoría
+  de los casos reales (usa `localStorage.userLocation` cacheado, o pide geolocalización
+  al navegador si no hay caché) — solo cae a "sin ubicación" si el usuario rechaza el
+  permiso.
+- El warm job, corriendo en background sin un visitante real detrás, no tiene de dónde
+  sacar lat/lng — hoy no existe ningún campo de "última ubicación conocida" por usuario
+  en el schema (`User.addressState` es solo texto de provincia, sin coordenadas).
+- Consecuencia: si warmeo sin ubicación, el snapshot pre-calculado va a tener
+  `proximityContextHash = 'no-proximity-context'`, que **no matchea** la request real del
+  usuario con geolocalización activa — el warm de esos usuarios sería trabajo
+  desperdiciado (cache miss de todos modos) para la mayoría de las visitas reales.
+
+**Dato adicional que encontré en el camino** (no estaba medido en ningún dictamen previo):
+el comentario existente en `HomeV2Client.tsx` dice que el endpoint sin cache tarda
+"~3-85s" — peor que los 3.0s citados como baseline. Lo voy a confirmar con la telemetría
+real (`cacheStatus`/`latencyMs` ya instrumentados), pero adelanto el dato porque refuerza
+aún más la prioridad del batch warm.
+
+**Decisión que tomo para no bloquear**: implemento el warm job igual (cubre 100% el caso
+de usuarios sin geolocalización + las otras 4 claves, que son las que cambian con más
+frecuencia real: scraping, edición de perfil, cambio de día). Para el caso con ubicación,
+en vez de inventar un campo nuevo sin validar con Gemini, dejo el gap documentado acá y
+sigo con la telemetría — si la medición real muestra que la mayoría de las misses post-warm
+son por `proximityContextHash` (usuarios con geolocalización), propongo en el próximo
+reporte agregar `User.lastKnownLat/lastKnownLng` (actualizados de forma oportunista en cada
+request real con ubicación) para que el warm job pueda usarlos. No lo agrego ahora sin
+medir primero si hace falta.
+
 ---
 
 **Firmado**: Claude (CTO)
