@@ -652,12 +652,21 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
           // truncaba resultados legítimos sin necesidad (bug reportado:
           // usuario logueado veía 96-104 promos de un total real de 3765,
           // categorías enteras casi vacías). Con narrowing real por perfil ya
-          // aplicado, se usa un cap más generoso (HARD_CAP_TAKE_NARROWED);
-          // sin narrowing (perfil vacío/incompleto, o invitado con filtros
-          // libres) se mantiene el cap original de 200 como red de seguridad.
+          // aplicado, se usa un cap más generoso (HARD_CAP_TAKE_NARROWED).
+          //
+          // Segundo bug relacionado (27/8/2026): un usuario LOGUEADO en modo
+          // "Todas" (forMe=false, toggle "Todas/Para Mí") también caía acá con
+          // el cap de 200 — `paginate` (route.ts) excluye cualquier request
+          // con `email`, así que nunca usa el `pageSize` (1500+) que sí recibe
+          // un invitado viendo el mismo catálogo sin perfil. No hay riesgo de
+          // OOM distinto al de un invitado (mismo `where`, sin narrowing por
+          // perfil en ningún caso) — se lo trata igual: cap generoso en vez
+          // del cap de 200. Solo se mantiene el cap de 200 para el caso con
+          // riesgo real de `where` amplio sin ningún narrowing conocido: sin
+          // sesión Y sin perfil de invitado (guest_profile).
           ...(paginate
             ? { take: pageSize, skip: (page - 1) * pageSize }
-            : { take: take ?? (forMe && candidateEffectiveCards?.length ? HARD_CAP_TAKE_NARROWED : HARD_CAP_TAKE) }),
+            : { take: take ?? ((forMe && candidateEffectiveCards?.length) || email ? HARD_CAP_TAKE_NARROWED : HARD_CAP_TAKE) }),
         }),
         // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
         paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
