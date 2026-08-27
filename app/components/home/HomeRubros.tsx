@@ -10,6 +10,7 @@ type Props = {
   data: HomeDecisionPayload | null
   loading: boolean
   onOpenPromo: (promo: unknown) => void
+  onOpenNearby: (commerceId: string, commerceName: string) => void
 }
 
 // Home organizada por rubros prioritarios (CPO Direction "Integración Home +
@@ -19,7 +20,7 @@ type Props = {
 // copy (lib/homeCopy.ts). Desktop usa V7 (principal) + V8 (alternativas);
 // mobile usa V1 (narrativa), con ambos layouts montados y alternados por
 // breakpoint Tailwind (md:) para no duplicar el fetch ni el estado.
-export default function HomeRubros({ data, loading, onOpenPromo }: Props) {
+export default function HomeRubros({ data, loading, onOpenPromo, onOpenNearby }: Props) {
   if (loading && !data) {
     return (
       <div className="flex flex-col gap-4 px-4 md:px-0">
@@ -57,11 +58,11 @@ export default function HomeRubros({ data, loading, onOpenPromo }: Props) {
           <div key={slot.rubro.id} className="flex flex-col gap-2.5">
             {/* Desktop: V7 principal + V8 alternativas en fila */}
             <div className="hidden md:flex md:flex-col md:gap-2.5 px-0">
-              <RubroPrincipalCard rubro={slot.rubro} principal={slot.principal} onOpenPromo={onOpenPromo} />
+              <RubroPrincipalCard rubro={slot.rubro} principal={slot.principal} onOpenPromo={onOpenPromo} onOpenNearby={onOpenNearby} />
               {slot.alternativas.length > 0 && (
                 <div className="grid grid-cols-2 gap-2.5">
                   {slot.alternativas.map(alt => (
-                    <RubroAlternativaCard key={alt.facts.commerceName} alternativa={alt} onOpenPromo={onOpenPromo} />
+                    <RubroAlternativaCard key={alt.facts.commerceName} alternativa={alt} onOpenPromo={onOpenPromo} onOpenNearby={onOpenNearby} />
                   ))}
                 </div>
               )}
@@ -74,6 +75,7 @@ export default function HomeRubros({ data, loading, onOpenPromo }: Props) {
                 principal={slot.principal}
                 alternativas={slot.alternativas}
                 onOpenPromo={onOpenPromo}
+                onOpenNearby={onOpenNearby}
               />
             </div>
           </div>

@@ -7,15 +7,17 @@ import { buildCandidateCopy, visualIdentity, candidatePromo } from '@/lib/homeCo
 type Props = {
   alternativa: DecisionCandidate
   onOpenPromo: (promo: unknown) => void
+  onOpenNearby: (commerceId: string, commerceName: string) => void
 }
 
 // Alternativas del mismo rubro — lógica compacta variante 8 (Design Lab,
 // CPO Direction 12/8/2026): fila horizontal logo | comercio+beneficio |
 // medio+vigencia | reason dominante. Compacta a propósito: no repite todo lo
 // que ya muestra la principal.
-export default function RubroAlternativaCard({ alternativa, onOpenPromo }: Props) {
+export default function RubroAlternativaCard({ alternativa, onOpenPromo, onOpenNearby }: Props) {
   const copy = buildCandidateCopy(alternativa)
   const identity = visualIdentity(alternativa)
+  const commerceId = (alternativa.promo as any)?.commerceId ?? null
 
   return (
     <div className="flex flex-col gap-1">
@@ -42,6 +44,18 @@ export default function RubroAlternativaCard({ alternativa, onOpenPromo }: Props
           <p className="text-[10px] font-semibold text-[#5A6B85] dark:text-slate-400 truncate">{copy.paymentMethod}</p>
         </div>
       </button>
+
+      {copy.nearby && commerceId && (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={e => { e.stopPropagation(); onOpenNearby(commerceId, alternativa.facts.commerceName) }}
+          onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); onOpenNearby(commerceId, alternativa.facts.commerceName) } }}
+          className="self-start inline-flex items-center text-[10px] font-semibold text-[#5A6B85] dark:text-slate-400 bg-[#F0F2F5] dark:bg-slate-800 rounded-full px-2 py-0.5 mx-0.5 hover:bg-[#E4E8EF] dark:hover:bg-slate-700 transition-colors"
+        >
+          {copy.nearby}
+        </span>
+      )}
 
       {copy.futureUpsell && (
         <div className="flex items-center gap-1.5 rounded-lg bg-[#FEF6E7] dark:bg-[#2A2110] border border-[#F3D488] dark:border-[#5A480F] px-2.5 py-1.5">

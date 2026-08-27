@@ -8,6 +8,7 @@ type Props = {
   rubro: RubroDisplayInfo
   principal: DecisionCandidate
   onOpenPromo: (promo: unknown) => void
+  onOpenNearby: (commerceId: string, commerceName: string) => void
 }
 
 // Desktop — lógica de Recommendation Card variante 7 (Design Lab, CPO
@@ -15,9 +16,10 @@ type Props = {
 // Ya no usa la fixture `data.ts` — todo sale de DecisionCandidate real vía
 // la capa de copy (lib/homeCopy.ts). No lee `promo` para renderizar: solo lo
 // reenvía como handle opaco al click.
-export default function RubroPrincipalCard({ rubro, principal, onOpenPromo }: Props) {
+export default function RubroPrincipalCard({ rubro, principal, onOpenPromo, onOpenNearby }: Props) {
   const copy = buildCandidateCopy(principal)
   const identity = visualIdentity(principal)
+  const commerceId = (principal.promo as any)?.commerceId ?? null
 
   return (
     <div className="w-full">
@@ -55,7 +57,18 @@ export default function RubroPrincipalCard({ rubro, principal, onOpenPromo }: Pr
           )}
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-[11px] font-semibold text-[#5A6B85] dark:text-slate-400 truncate">{copy.paymentMethod}</p>
-            {copy.nearby && (
+            {copy.nearby && commerceId && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={e => { e.stopPropagation(); onOpenNearby(commerceId, principal.facts.commerceName) }}
+                onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); onOpenNearby(commerceId, principal.facts.commerceName) } }}
+                className="inline-flex items-center text-[10px] font-semibold text-[#5A6B85] dark:text-slate-400 bg-[#F0F2F5] dark:bg-slate-800 rounded-full px-2 py-0.5 shrink-0 hover:bg-[#E4E8EF] dark:hover:bg-slate-700 transition-colors"
+              >
+                {copy.nearby}
+              </span>
+            )}
+            {copy.nearby && !commerceId && (
               <span className="inline-flex items-center text-[10px] font-semibold text-[#5A6B85] dark:text-slate-400 bg-[#F0F2F5] dark:bg-slate-800 rounded-full px-2 py-0.5 shrink-0">
                 {copy.nearby}
               </span>

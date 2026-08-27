@@ -10,6 +10,7 @@ import SplashScreen from '../components/SplashScreen'
 import OnboardingBanner from '../components/OnboardingBanner'
 import HomeRubros from '../components/home/HomeRubros'
 import QuickCardSelector from '../components/home/QuickCardSelector'
+import NearbyBranchesSheet from '../components/home/NearbyBranchesSheet'
 import ExploreCatalogCta from '../components/ExploreCatalogCta'
 import { useHomeDecision } from '@/lib/useHomeDecision'
 import { trackRecommendationEvent } from '@/lib/recommendationEvents'
@@ -41,6 +42,7 @@ export default function PromosClient() {
   const [profileReady, setProfileReady] = useState(false)
   const [detailPromo, setDetailPromo] = useState<any>(null)
   const [selectedCardKey, setSelectedCardKey] = useState<string | null>(null)
+  const [nearbyTarget, setNearbyTarget] = useState<{ commerceId: string; commerceName: string } | null>(null)
 
   const { data, loading } = useHomeDecision(province)
 
@@ -97,6 +99,10 @@ export default function PromosClient() {
 
   const handleOpenPromo = useCallback((promo: unknown) => setDetailPromo(promo), [])
   const handleCloseDetail = useCallback(() => setDetailPromo(null), [])
+  const handleOpenNearby = useCallback((commerceId: string, commerceName: string) => {
+    setNearbyTarget({ commerceId, commerceName })
+  }, [])
+  const handleCloseNearby = useCallback(() => setNearbyTarget(null), [])
   const handleGoToProfile = useCallback(() => {
     router.push(status === 'authenticated' ? '/perfil?tab=finance' : '/registro')
   }, [router, status])
@@ -154,7 +160,7 @@ export default function PromosClient() {
               <h1 className="text-[15px] font-black text-[#0D1B2E] dark:text-white">Recomendado para vos</h1>
               <span className="text-[11px] text-slate-400 dark:text-slate-500">según tu perfil, no todo el catálogo</span>
             </div>
-            <HomeRubros data={filteredData} loading={loading} onOpenPromo={handleOpenPromo} />
+            <HomeRubros data={filteredData} loading={loading} onOpenPromo={handleOpenPromo} onOpenNearby={handleOpenNearby} />
           </div>
         )}
 
@@ -167,6 +173,14 @@ export default function PromosClient() {
 
       {detailPromo && (
         <PromoDetailSheet promo={detailPromo} onClose={handleCloseDetail} />
+      )}
+
+      {nearbyTarget && (
+        <NearbyBranchesSheet
+          commerceId={nearbyTarget.commerceId}
+          commerceName={nearbyTarget.commerceName}
+          onClose={handleCloseNearby}
+        />
       )}
 
       {showProvinceSelector && (
