@@ -489,6 +489,30 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const router = useRouter()
   const DIAS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
+  // Bump manual para forzar refetch ignorando la caché de módulo (ver
+  // visibilitychange más abajo) — cambia cuando el usuario vuelve a la pestaña
+  // después de haber editado su perfil financiero en otra pestaña/sesión
+  // (ej. admin), caso que `filterKey`/`cacheKey` no detectan porque no dependen
+  // de nada que viva en la URL o en el estado del componente.
+  const [refreshTick, setRefreshTick] = useState(0)
+  const lastHiddenAtRef = useRef<number | null>(null)
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        lastHiddenAtRef.current = Date.now()
+        return
+      }
+      const hiddenAt = lastHiddenAtRef.current
+      if (hiddenAt && Date.now() - hiddenAt > CACHE_TTL_MS) {
+        _promoCache = null
+        setRefreshTick(t => t + 1)
+      }
+      lastHiddenAtRef.current = null
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+
   const [promos, setPromos] = useState<Promo[]>(initialPromos ?? [])
   // loading=true cuando no hay nada que mostrar (null o []) — el splash espera esto
   const [loading, setLoading] = useState(!initialPromos?.length)
@@ -913,7 +937,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       if (province) qParams.set('province', province)
 
       // Detectar cambio de filtros para resetear paginación
-      const filterKey = `${status}|${forMe}|${selectedCats.join(',')}|${JSON.stringify(activeFilters)}|${timeFilter}|${province}|${session?.user?.email}`
+      const filterKey = `${status}|${forMe}|${selectedCats.join(',')}|${JSON.stringify(activeFilters)}|${timeFilter}|${province}|${session?.user?.email}|${refreshTick}`
       const isFirstFetch = prevFilterKeyRef.current === ''
       const filtersChanged = filterKey !== prevFilterKeyRef.current
       if (filtersChanged) {
@@ -982,7 +1006,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     }
     load()
     return () => controller.abort()
-  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode, page])
+  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode, page, refreshTick])
 
   // Próximamente: fetch cuando se activa el toggle
   useEffect(() => {
