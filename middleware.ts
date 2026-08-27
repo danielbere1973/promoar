@@ -19,6 +19,11 @@ const PUBLIC_PATHS = [
   '/api/public',
   '/api/precios',
   '/api/internal',
+  // Warm job de snapshots: auth propia (Bearer VTEX_SESSION_SECRET o sesión
+  // ADMIN) en app/api/admin/snapshots/warm/route.ts — necesita quedar fuera del
+  // gate de sesión de este middleware para que el trigger fire-and-forget
+  // post-scraping (solo manda el header Bearer) no sea redirigido a /login.
+  '/api/admin/snapshots/warm',
   '/api/r',
   '/api/track',
   '/promos',

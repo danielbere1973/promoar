@@ -1,6 +1,6 @@
 'use client'
 import React, { useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Zap } from 'lucide-react'
 import PromoCard from './PromoCard'
 
 type Req = {
@@ -10,6 +10,15 @@ type Req = {
   discountValue?: number
   nxmN?: number | null
   nxmM?: number | null
+}
+
+type OtherDayPromo = {
+  id: string
+  validDays: number
+  bestDiscountValue: number
+  bestDiscountType: string | null
+  bankName: string | null
+  walletName: string | null
 }
 
 type Promo = {
@@ -24,6 +33,34 @@ type Promo = {
   category: { name: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null }
   requirements: Req[]
+  otherDayPromos?: OtherDayPromo[]
+}
+
+const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+function firstDayLabel(validDays: number): string {
+  for (let d = 0; d < 7; d++) {
+    if (validDays & (1 << d)) return DAY_NAMES[d]
+  }
+  return 'otro día'
+}
+
+function discountLabel(op: OtherDayPromo): string {
+  const kind = op.bestDiscountType === 'PERCENTAGE_REINTEGRO' ? 'de reintegro' : 'de descuento'
+  return `${op.bestDiscountValue}% ${kind}`
+}
+
+// Alerta Inteligente de Oportunidad (dictamen CPO 24/8/2026): entre las promos de otros
+// días adjuntadas por el backend, junta TODAS las que superen estrictamente a la destacada
+// de hoy — no solo la mejor. El usuario decide cuál le conviene según su propia tarjeta,
+// nunca se le oculta una alternativa para simplificar el mensaje.
+function findBetterOtherDayPromos(featured: Promo): OtherDayPromo[] {
+  const otherDays = featured.otherDayPromos
+  if (!otherDays?.length) return []
+  const todayBest = discountValue(featured)
+  return otherDays
+    .filter(op => op.bestDiscountValue > todayBest)
+    .sort((a, b) => b.bestDiscountValue - a.bestDiscountValue)
 }
 
 function bestPercentageReq(p: Promo): Req | null {
@@ -65,6 +102,7 @@ type Props<P extends Promo> = {
 export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, nearbyCount, priority, onRegisterUsage }: Props<P>) {
   const [expanded, setExpanded] = useState(false)
   const [showOtherDays, setShowOtherDays] = useState(false)
+  const [showAlertDetail, setShowAlertDetail] = useState(false)
 
   if (promos.length === 0) return null
 
@@ -74,11 +112,24 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
   const others = sorted.filter(p => !isValidToday(p, todayMask))
   const featured = today[0] ?? sorted[0]
   const restToday = today.filter(p => p.id !== featured.id)
+  const betterOtherDays = findBetterOtherDayPromos(featured)
+  const bestOtherDay = betterOtherDays[0] ?? null
 
   if (!expanded) {
     return (
       <div className="flex-shrink-0 relative" style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}>
         <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} onToggleSaveCommerce={onToggleSaveCommerce} isCommerceSaved={isCommerceSaved} fullWidth priority={priority} onRegisterUsage={onRegisterUsage} />
+        {bestOtherDay && (
+          <button
+            onClick={() => setExpanded(true)}
+            className="mt-1.5 w-full text-[11px] font-black text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl py-1.5 px-2 flex items-center justify-center gap-1 shadow-sm shadow-amber-500/30 animate-pulse"
+          >
+            <Zap size={12} className="shrink-0 fill-white" />
+            {betterOtherDays.length > 1
+              ? `Hay ${betterOtherDays.length} días con mejores condiciones`
+              : `${firstDayLabel(bestOtherDay.validDays)} tenés ${bestOtherDay.bestDiscountValue}%`}
+          </button>
+        )}
         {promos.length > 1 && (
           <button
             onClick={() => setExpanded(true)}
@@ -112,6 +163,40 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
           <ChevronUp size={14} />
         </button>
       </div>
+
+      {/* Alerta Inteligente de Oportunidad */}
+      {bestOtherDay && (
+        <div className="mx-3 mt-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-3 py-2.5 shadow-md shadow-amber-500/20">
+          <div className="flex items-start gap-2">
+            <Zap size={16} className="shrink-0 mt-0.5 fill-white text-white" />
+            <p className="text-[12px] font-bold text-white leading-snug flex-1">
+              ¡Atención! El {firstDayLabel(bestOtherDay.validDays)}, con{' '}
+              {bestOtherDay.bankName ?? bestOtherDay.walletName ?? 'otro medio de pago'}, tenés un{' '}
+              {discountLabel(bestOtherDay)} en este local.
+            </p>
+          </div>
+          {betterOtherDays.length > 1 && (
+            <>
+              <button
+                onClick={() => setShowAlertDetail(s => !s)}
+                className="mt-1.5 ml-6 text-[11px] font-bold text-white/90 underline flex items-center gap-1"
+              >
+                {showAlertDetail ? 'Ocultar' : `Ver las otras ${betterOtherDays.length - 1} opciones`}
+                {showAlertDetail ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              </button>
+              {showAlertDetail && (
+                <ul className="mt-2 ml-6 space-y-1">
+                  {betterOtherDays.slice(1).map(op => (
+                    <li key={op.id} className="text-[11px] text-white/95 font-semibold">
+                      • {firstDayLabel(op.validDays)}, con {op.bankName ?? op.walletName ?? 'otro medio de pago'}: {discountLabel(op)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Hoy */}
       {today.length > 0 && (

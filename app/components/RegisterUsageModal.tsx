@@ -1,6 +1,7 @@
 'use client'
 import React, { useState } from 'react'
 import { X } from 'lucide-react'
+import { useTracking } from '@/lib/useTracking'
 
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -64,6 +65,7 @@ type Props = {
 }
 
 export default function RegisterUsageModal({ requirement, commerceName, discountLabel, onClose, onSaved }: Props) {
+  const { track } = useTracking()
   const hasCap = requirement.cap != null && !!requirement.capPeriod
   const currentUsed = requirement.usage?.amountUsed ?? 0
   const cap = requirement.cap ?? 0
@@ -98,6 +100,7 @@ export default function RegisterUsageModal({ requirement, commerceName, discount
         return
       }
       const data = await res.json()
+      track({ type: 'ACTION_SAVE_OR_USE', commerceName, source: 'promo_card' })
       if (!data.usage) {
         onSaved(null)
         return

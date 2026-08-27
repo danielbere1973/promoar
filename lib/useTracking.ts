@@ -46,6 +46,10 @@ type TrackEvent =
   | { type: 'PUSH_PERMISSION_GRANTED' }
   | { type: 'PUSH_PERMISSION_DENIED' }
   | { type: 'PUSH_PROMPT_DISMISS' }
+  | { type: 'HOME_VIEW'; authenticated: boolean }
+  | { type: 'RECOMMENDATION_IMPRESSION'; rubroId: string; promoId?: string; commerceName: string; variant: 'spotlight' | 'secondary' }
+  | { type: 'RECOMMENDATION_CLICK'; rubroId: string; promoId?: string; commerceName: string; variant: 'spotlight' | 'secondary' }
+  | { type: 'ACTION_SAVE_OR_USE'; promoId?: string; commerceName?: string; source: 'home_v2' | 'promo_card' }
 
 export function useTracking() {
   const sessionId = useRef<string>('')

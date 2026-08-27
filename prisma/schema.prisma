@@ -20,48 +20,51 @@ model TrustedDevice {
 }
 
 model User {
-  id               String            @id @default(cuid())
-  name             String?
-  email            String            @unique
-  emailVerified    DateTime?
-  image            String?
-  password         String?
-  role             Role              @default(USER)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  lastLoginAt      DateTime?
-  codeExpires      DateTime?
-  verificationCode String?
-  addressApt       String?
-  addressCity      String?
-  addressCountry   String?
-  addressFloor     String?
-  addressNumber    String?
-  addressState     String?
-  addressStreet    String?
-  addressZipCode   String?
-  documentNumber   String?
-  documentType     String?
-  lastName         String?
-  phoneFixed       String?
-  phoneMobile      String?
-  active           Boolean           @default(true)
-  newsletterOptIn  Boolean           @default(false)
-  newsletterOptInAt DateTime?
-  accounts         Account[]
-  posts            CommunityPost[]
-  financialProfile FinancialProfile?
-  recommendationSnapshot RecommendationSnapshot?
-  postLikes        PostLike[]
-  promoReports     PromoReport[]
-  savedPromos      SavedPromo[]
-  promoUsages      PromoUsage[]
-  promoUsageEvents PromoUsageEvent[]
-  sessions         Session[]
-  trustedDevices   TrustedDevice[]
-  events           UserEvent[]
-  pushSubscriptions        PushSubscription[]
-  notificationPreferences  NotificationPreference[]
+  id                      String                   @id @default(cuid())
+  name                    String?
+  email                   String                   @unique
+  emailVerified           DateTime?
+  image                   String?
+  password                String?
+  role                    Role                     @default(USER)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  lastLoginAt             DateTime?
+  codeExpires             DateTime?
+  verificationCode        String?
+  addressApt              String?
+  addressCity             String?
+  addressCountry          String?
+  addressFloor            String?
+  addressNumber           String?
+  addressState            String?
+  addressStreet           String?
+  addressZipCode          String?
+  documentNumber          String?
+  documentType            String?
+  lastName                String?
+  phoneFixed              String?
+  phoneMobile             String?
+  active                  Boolean                  @default(true)
+  newsletterOptIn         Boolean                  @default(false)
+  newsletterOptInAt       DateTime?
+  accounts                Account[]
+  posts                   CommunityPost[]
+  financialProfile        FinancialProfile?
+  recommendationSnapshot  RecommendationSnapshot?
+  homeDecisionSnapshot    HomeDecisionSnapshot?
+  postLikes               PostLike[]
+  promoReports            PromoReport[]
+  savedPromos             SavedPromo[]
+  promoUsages             PromoUsage[]
+  promoUsageEvents        PromoUsageEvent[]
+  sessions                Session[]
+  trustedDevices          TrustedDevice[]
+  events                  UserEvent[]
+  pushSubscriptions       PushSubscription[]
+  notificationPreferences NotificationPreference[]
+  rubroPreferences        UserRubroPreference[]
+  shoppingLists           shopping_lists[] @ignore
 
   @@map("users")
 }
@@ -82,54 +85,54 @@ model PushSubscription {
 }
 
 model NotificationPreference {
-  id             String     @id @default(cuid())
-  userId         String
-  type           NotifType
+  id     String    @id @default(cuid())
+  userId String
+  type   NotifType
 
   // Objetivo: categoría y/o comercio específico
-  categoryId     String?
-  commerceId     String?
+  categoryId String?
+  commerceId String?
 
   // Condiciones de entidad financiera
-  bankId         String?
-  walletId       String?
-  cardNetworkId  String?
-  cardSegmentId  String?
+  bankId        String?
+  walletId      String?
+  cardNetworkId String?
+  cardSegmentId String?
 
   // Condiciones de beneficio
   minDiscount    Int?
-  discountFilter String     @default("ALL")   // ALL | DISCOUNT_ONLY | CSI_ONLY
+  discountFilter String @default("ALL") // ALL | DISCOUNT_ONLY | CSI_ONLY
 
   // Periodicidad y vigencia
-  maxPerWeek     Int        @default(3)
-  sentThisWeek   Int        @default(0)
-  weekStartedAt  DateTime?
-  lastSentAt     DateTime?
-  active         Boolean    @default(true)
-  validUntil     DateTime?
-  createdAt      DateTime   @default(now())
+  maxPerWeek    Int       @default(3)
+  sentThisWeek  Int       @default(0)
+  weekStartedAt DateTime?
+  lastSentAt    DateTime?
+  active        Boolean   @default(true)
+  validUntil    DateTime?
+  createdAt     DateTime  @default(now())
 
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category      Category?     @relation(fields: [categoryId], references: [id])
-  commerce      Commerce?     @relation(fields: [commerceId], references: [id])
-  bank          Bank?         @relation(fields: [bankId], references: [id])
-  wallet        Wallet?       @relation(fields: [walletId], references: [id])
-  cardNetwork   CardNetwork?  @relation(fields: [cardNetworkId], references: [id])
-  cardSegment   BankSegment?  @relation(fields: [cardSegmentId], references: [id])
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category?    @relation(fields: [categoryId], references: [id])
+  commerce    Commerce?    @relation(fields: [commerceId], references: [id])
+  bank        Bank?        @relation(fields: [bankId], references: [id])
+  wallet      Wallet?      @relation(fields: [walletId], references: [id])
+  cardNetwork CardNetwork? @relation(fields: [cardNetworkId], references: [id])
+  cardSegment BankSegment? @relation(fields: [cardSegmentId], references: [id])
 
   @@index([userId, active])
   @@map("notification_preferences")
 }
 
 model UserEvent {
-  id         String   @id @default(cuid())
-  userId     String?
-  sessionId  String
-  eventType  String
-  payload    Json
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String?
+  sessionId String
+  eventType String
+  payload   Json
+  createdAt DateTime @default(now())
 
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([sessionId])
@@ -177,9 +180,17 @@ model VerificationToken {
 }
 
 model FinancialProfile {
-  id        String       @id @default(cuid())
-  userId    String       @unique
-  updatedAt DateTime     @updatedAt
+  id          String       @id @default(cuid())
+  userId      String       @unique
+  updatedAt   DateTime     @updatedAt
+  // Última coordenada conocida con GPS activo — Prioridad 2 Parte B
+  // (cpo-a-cto-dictamen-proximity-hash-y-last-known-coords-25-8-2026.md).
+  // Persistida de forma oportunista/no-bloqueante por GET /api/promos/home-decision
+  // cuando recibe lat/lng válidos; consumida por warmSnapshotForUser para que el
+  // warm job precaliente con el mismo proximityContextHash que va a pedir el
+  // cliente real, en vez de 'no-proximity-context'.
+  lastKnownLat Float?
+  lastKnownLng Float?
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   banks     UserBank[]
   cards     UserCard[]
@@ -195,17 +206,78 @@ model FinancialProfile {
 // nunca el objeto Promo completo — la hidratación final sigue pasando por el
 // mismo camino de lectura que usa el resto del sitio.
 model RecommendationSnapshot {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  status         String
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  status          String
   recommendations Json
-  profileHash    String
-  catalogVersion String
-  generatedAt    DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileHash     String
+  catalogVersion  String
+  generatedAt     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("recommendation_snapshots")
+}
+
+// Guest Home Snapshot — CPO Dictamen "Optimización Warmup Batch y Ratificación
+// Guests" (26/8/2026): visitantes sin sesión (user == null) no tienen userId
+// para HomeDecisionSnapshot (FK real a User), así que se precalienta un
+// snapshot separado por región (`regionKey`, ej. "__GUEST__:AR",
+// "__GUEST__:Buenos Aires") durante el warm job. Universo declarado = todos
+// los rubros activos (Opción A, ver resolveGuestUniverse en
+// lib/rubroPreferences.ts) — no depende de ningún usuario individual, así que
+// no necesita declaredUniverseHash/decisionContextHash/proximityContextHash:
+// solo operationalDay + promoPoolVersion invalidan.
+model GuestHomeSnapshot {
+  id                String   @id @default(cuid())
+  regionKey         String   @unique
+  payload           Json
+  operationalDay    String
+  promoPoolVersion  String
+  generatedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("guest_home_snapshots")
+}
+
+// Home Decision Snapshot — RFC-008 Etapa 1 "Tus rubros". Cachea el payload de
+// buildHomeDecisionPayload por usuario para evitar recalcular scoring en cada
+// GET /api/promos/home-decision. Se invalida (recalcula) cuando cualquiera de
+// las 5 llaves (4 hashes + operationalDay) difiere de la actual — nunca se lee stale.
+model HomeDecisionSnapshot {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  payload               Json
+  operationalDay        String
+  declaredUniverseHash  String // hash determinístico del conjunto de rubros DECLARED/ACTIVE — observabilidad
+  decisionContextHash   String // hash determinístico de perfil financiero + favoritos + PersonaPreferences (no incluye proximidad — ver proximityContextHash)
+  proximityContextHash  String // hash determinístico de nearbyByCommerceId (commerceId + minDistKm + count por comercio) — CPO decisión 17/8/2026: columna propia para observabilidad/debug de invalidación por cercanía, separada de decisionContextHash
+  promoPoolVersion      String
+  generatedAt           DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("home_decision_snapshots")
+}
+
+// Financial Match Index — Variante B (por firma de perfil), ver
+// financial-match-index.md. Precomputa el resultado de matchesProfile() para
+// no recalcular matching financiero en cada request. Clave por profileHash
+// (hash determinístico de la combinación de cards/wallets de un perfil, no
+// por userId) para soportar guest profiles nativamente, sin clave sintética.
+// Se llena/invalida en background — nunca se calcula en el camino de un
+// request HTTP. Fuente de verdad de las reglas sigue siendo matchesProfile().
+model FinancialMatchIndex {
+  id          String   @id @default(cuid())
+  profileHash String
+  promoId     String
+  generatedAt DateTime @default(now())
+  promo       Promo    @relation(fields: [promoId], references: [id], onDelete: Cascade)
+
+  @@unique([profileHash, promoId])
+  @@index([profileHash])
+  @@index([promoId])
+  @@map("financial_match_index")
 }
 
 model UserBank {
@@ -265,10 +337,10 @@ model UserCard {
 }
 
 model BankSegment {
-  id                String             @id @default(cuid())
+  id                String                   @id @default(cuid())
   name              String
   bankId            String
-  bank              Bank               @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  bank              Bank                     @relation(fields: [bankId], references: [id], onDelete: Cascade)
   promoRequirements PromoRequirement[]
   userCards         UserCard[]
   notifPreferences  NotificationPreference[]
@@ -278,20 +350,20 @@ model BankSegment {
 }
 
 model Bank {
-  id                String             @id @default(cuid())
-  name              String             @unique
-  slug              String             @unique
+  id                String                   @id @default(cuid())
+  name              String                   @unique
+  slug              String                   @unique
   logoUrl           String?
-  active            Boolean            @default(true)
-  bcraCode          String?            @unique
+  active            Boolean                  @default(true)
+  bcraCode          String?                  @unique
   codigoModo        String?
   bank_modo_codes   bank_modo_codes[]
   segments          BankSegment[]
   promoRequirements PromoRequirement[]
   userBanks         UserBank[]
   userCards         UserCard[]
-  cardNetworks      CardNetwork[]      @relation("BankToCardNetwork")
-  cardSegments      CardSegment[]      @relation("BankToCardSegment")
+  cardNetworks      CardNetwork[]            @relation("BankToCardNetwork")
+  cardSegments      CardSegment[]            @relation("BankToCardSegment")
   notifPreferences  NotificationPreference[]
 
   @@index([codigoModo], map: "banks_codigo_modo_idx")
@@ -299,30 +371,30 @@ model Bank {
 }
 
 model Wallet {
-  id                String             @id @default(cuid())
-  name              String             @unique
-  slug              String             @unique
+  id                String                   @id @default(cuid())
+  name              String                   @unique
+  slug              String                   @unique
   logoUrl           String?
-  active            Boolean            @default(true)
+  active            Boolean                  @default(true)
   promoRequirements PromoRequirement[]
   userCards         UserCard[]
   userWallets       UserWallet[]
-  cardNetworks      CardNetwork[]      @relation("WalletToCardNetwork")
-  cardSegments      CardSegment[]      @relation("WalletToCardSegment")
+  cardNetworks      CardNetwork[]            @relation("WalletToCardNetwork")
+  cardSegments      CardSegment[]            @relation("WalletToCardSegment")
   notifPreferences  NotificationPreference[]
 
   @@map("wallets")
 }
 
 model CardNetwork {
-  id                String             @id @default(cuid())
-  name              String             @unique
-  slug              String             @unique
+  id                String                   @id @default(cuid())
+  name              String                   @unique
+  slug              String                   @unique
   promoRequirements PromoRequirement[]
   userCards         UserCard[]
-  banks             Bank[]             @relation("BankToCardNetwork")
+  banks             Bank[]                   @relation("BankToCardNetwork")
   cardSegments      CardSegment[]
-  wallets           Wallet[]           @relation("WalletToCardNetwork")
+  wallets           Wallet[]                 @relation("WalletToCardNetwork")
   notifPreferences  NotificationPreference[]
 
   @@map("card_networks")
@@ -344,36 +416,36 @@ model CardSegment {
 }
 
 model Category {
-  id               String     @id @default(cuid())
-  name             String     @unique
-  slug             String     @unique
-  icon             String
-  color            String
-  order            Int        @default(0)
-  promos                   Promo[]
-  defaultCommerce          Commerce[]               @relation("CommerceDefaultCategory")
-  notificationPreferences  NotificationPreference[]
+  id                      String                   @id @default(cuid())
+  name                    String                   @unique
+  slug                    String                   @unique
+  icon                    String
+  color                   String
+  order                   Int                      @default(0)
+  promos                  Promo[]
+  defaultCommerce         Commerce[]               @relation("CommerceDefaultCategory")
+  notificationPreferences NotificationPreference[]
 
   @@map("categories")
 }
 
 model Commerce {
-  id                String           @id @default(cuid())
-  name              String           @unique
-  slug              String           @unique
-  logoUrl           String?
-  website           String?
-  instagramUrl      String?
-  active            Boolean          @default(true)
-  defaultCategoryId String?
-  activePromoCount  Int              @default(0)
-  locationModel     LocationModel    @default(UNKNOWN)
-  defaultCategory   Category?        @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
-  promos                   Promo[]
-  branches                 CommerceBranch[]
-  products                 CommerceProduct[]
-  aliases                  CommerceAlias[]
-  notificationPreferences  NotificationPreference[]
+  id                      String                   @id @default(cuid())
+  name                    String                   @unique
+  slug                    String                   @unique
+  logoUrl                 String?
+  website                 String?
+  instagramUrl            String?
+  active                  Boolean                  @default(true)
+  defaultCategoryId       String?
+  activePromoCount        Int                      @default(0)
+  locationModel           LocationModel            @default(UNKNOWN)
+  defaultCategory         Category?                @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
+  promos                  Promo[]
+  branches                CommerceBranch[]
+  products                CommerceProduct[]
+  aliases                 CommerceAlias[]
+  notificationPreferences NotificationPreference[]
 
   @@map("commerces")
 }
@@ -451,7 +523,7 @@ model Promo {
   source             String?
   externalId         String?
   sourceNote         String?
-  commerceNote       String?            // Ej: "Solo comercios con Openpay"
+  commerceNote       String? // Ej: "Solo comercios con Openpay"
   verifiedAt         DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
@@ -468,6 +540,7 @@ model Promo {
   savedByUsers       SavedPromo[]
   usages             PromoUsage[]
   usageEvents        PromoUsageEvent[]
+  matchIndexEntries  FinancialMatchIndex[]
 
   @@unique([source, externalId])
   @@index([categoryId])
@@ -479,39 +552,43 @@ model Promo {
 }
 
 model PromoRequirement {
-  id              String                @id @default(cuid())
-  promoId         String
-  bankId          String?
-  walletId        String?
-  cardNetworkId   String?
-  cardType        CardType?
-  cardTier        CardTier?
-  cardSegmentId   String?
-  note            String?
-  accountType     AccountType           @default(ANY)
-  paymentChannel  PaymentChannel        @default(ANY)
-  cap             Float?
-  capUnlimited    Boolean               @default(false)
-  capPeriod       CapPeriod?
-  discountType    DiscountType          @default(PERCENTAGE_REINTEGRO)
-  discountValue   Float                 @default(0)
-  minPurchase     Float?
-  nxmM            Int?
-  nxmN            Int?
-  segment         String?
-  segmentId       String?
-  accountTypeId   String?
-  capTarget       CapTarget?            @default(USER)
-  accountTypeRef  FinancialAccountType? @relation(fields: [accountTypeId], references: [id])
-  bank            Bank?                 @relation(fields: [bankId], references: [id])
-  cardNetwork     CardNetwork?          @relation(fields: [cardNetworkId], references: [id])
-  cardSegmentRef  CardSegment?          @relation(fields: [cardSegmentId], references: [id])
-  promo           Promo                 @relation(fields: [promoId], references: [id], onDelete: Cascade)
-  segmentRef      BankSegment?          @relation(fields: [segmentId], references: [id])
-  wallet          Wallet?               @relation(fields: [walletId], references: [id])
-  usages          PromoUsage[]
-  usageEvents     PromoUsageEvent[]
+  id             String                @id @default(cuid())
+  promoId        String
+  bankId         String?
+  walletId       String?
+  cardNetworkId  String?
+  cardType       CardType?
+  cardTier       CardTier?
+  cardSegmentId  String?
+  note           String?
+  accountType    AccountType           @default(ANY)
+  paymentChannel PaymentChannel        @default(ANY)
+  cap            Float?
+  capUnlimited   Boolean               @default(false)
+  capPeriod      CapPeriod?
+  discountType   DiscountType          @default(PERCENTAGE_REINTEGRO)
+  discountValue  Float                 @default(0)
+  minPurchase    Float?
+  nxmM           Int?
+  nxmN           Int?
+  segment        String?
+  segmentId      String?
+  accountTypeId  String?
+  capTarget      CapTarget?            @default(USER)
+  accountTypeRef FinancialAccountType? @relation(fields: [accountTypeId], references: [id])
+  bank           Bank?                 @relation(fields: [bankId], references: [id])
+  cardNetwork    CardNetwork?          @relation(fields: [cardNetworkId], references: [id])
+  cardSegmentRef CardSegment?          @relation(fields: [cardSegmentId], references: [id])
+  promo          Promo                 @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  segmentRef     BankSegment?          @relation(fields: [segmentId], references: [id])
+  wallet         Wallet?               @relation(fields: [walletId], references: [id])
+  usages         PromoUsage[]
+  usageEvents    PromoUsageEvent[]
 
+  @@index([promoId])
+  @@index([bankId])
+  @@index([walletId])
+  @@index([cardNetworkId])
   @@map("promo_requirements")
 }
 
@@ -674,7 +751,7 @@ model PromoClick {
   id        String   @id @default(cuid())
   promoId   String?
   url       String
-  source    String   // promos | precios | detalle
+  source    String // promos | precios | detalle
   userId    String?
   createdAt DateTime @default(now())
 
@@ -684,27 +761,28 @@ model PromoClick {
 }
 
 model ScraperSchedule {
-  id          String    @id @default(cuid())
-  scraperId   String    @unique
-  frequency   String    @default("manual") // manual | daily | weekly | monthly
-  dayOfWeek   Int?      // 0-6 (para weekly)
-  dayOfMonth  Int?      // 1-31 (para monthly)
-  hour        Int       @default(6) // hora UTC
-  active      Boolean   @default(true)
-  nextRunAt   DateTime?
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(cuid())
+  scraperId  String    @unique
+  frequency  String    @default("manual") // manual | daily | weekly | monthly
+  dayOfWeek  Int? // 0-6 (para weekly)
+  dayOfMonth Int? // 1-31 (para monthly)
+  hour       Int       @default(6) // hora UTC
+  active     Boolean   @default(true)
+  nextRunAt  DateTime?
+  updatedAt  DateTime  @updatedAt
+
   @@map("scraper_schedules")
 }
 
 model ScraperRun {
-  id          String    @id @default(cuid())
-  scraperId   String
-  status      String    // running | success | error
-  startedAt   DateTime  @default(now())
-  finishedAt  DateTime?
-  found       Int?
-  processed   Int?
-  message     String?
+  id         String    @id @default(cuid())
+  scraperId  String
+  status     String // running | success | error
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  found      Int?
+  processed  Int?
+  message    String?
 
   @@index([scraperId, startedAt])
   @@map("scraper_runs")
@@ -833,12 +911,12 @@ enum NotifType {
 // ADR-001 — Modelo de Cobertura Geográfica
 
 enum LocationModel {
-  PHYSICAL_BRANCHES    // cadena con locales propios
-  DISTRIBUTED_NETWORK  // red de adheridos, concesionarios o franquicias
-  ONLINE_ONLY          // sin presencia física
-  MOBILE_SERVICE       // el servicio va al cliente (Uber, Cabify, etc.)
-  NO_FIXED_LOCATION    // sin punto fijo, sin ser servicio móvil
-  UNKNOWN              // sin clasificar — default de compatibilidad
+  PHYSICAL_BRANCHES // cadena con locales propios
+  DISTRIBUTED_NETWORK // red de adheridos, concesionarios o franquicias
+  ONLINE_ONLY // sin presencia física
+  MOBILE_SERVICE // el servicio va al cliente (Uber, Cabify, etc.)
+  NO_FIXED_LOCATION // sin punto fijo, sin ser servicio móvil
+  UNKNOWN // sin clasificar — default de compatibilidad
 }
 
 enum SalesChannel {
@@ -849,12 +927,12 @@ enum SalesChannel {
 }
 
 enum GeographicScope {
-  NATIONWIDE                // aplica en todo el país
-  PROVINCES                 // aplica en provincias específicas (ver provinces[])
-  BRANCHES                  // aplica solo en sucursales participantes
-  SERVICE_AREA              // aplica según área operativa del servicio
+  NATIONWIDE // aplica en todo el país
+  PROVINCES // aplica en provincias específicas (ver provinces[])
+  BRANCHES // aplica solo en sucursales participantes
+  SERVICE_AREA // aplica según área operativa del servicio
   NO_GEOGRAPHIC_RESTRICTION // online sin restricción territorial
-  UNKNOWN                   // sin datos suficientes — default de compatibilidad
+  UNKNOWN // sin datos suficientes — default de compatibilidad
 }
 
 model SiteConfig {
@@ -873,4 +951,91 @@ model NewsletterLog {
   sentAt  DateTime @default(now())
 
   @@map("newsletter_log")
+}
+
+// Ancla de identidad persistente del rubro (propuesta-modelo-preferencias-usuario.md v2,
+// CPO Approval 13/8/2026). label/icon/categorySlugs siguen viviendo en RUBRO_CATALOG
+// (lib/rubroCatalog.ts) — esta tabla NO es la fuente de verdad de composición/display
+// todavía, solo el punto de integridad referencial para UserRubroPreference. id coincide
+// exactamente con RubroId (ej. 'supermercados', 'combustible').
+model HomeRubro {
+  id        String   @id
+  label     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  rubroPreferences UserRubroPreference[]
+
+  @@map("home_rubros")
+}
+
+// Preferencia de usuario por rubro de Home. Declarada e inferida son filas independientes
+// para el mismo (userId, rubroId) — ver propuesta-modelo-preferencias-usuario.md v2 §3 para
+// el caso completo declarada→inferida→supresión sin pérdida de información. El default no
+// se persiste acá (regla global de Producto, vive en decisionEngineV2.ts). Disponibilidad
+// diaria (capa 3 del modelo de 3 capas) no se persiste — responsabilidad del Decision Engine.
+model UserRubroPreference {
+  id      String @id @default(cuid())
+  userId  String
+  rubroId String
+
+  source PreferenceSource
+  status PreferenceStatus @default(ACTIVE)
+
+  score Float? // null para DECLARED; intensidad para INFERRED (sin escritor todavía)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  suppressedAt DateTime?
+
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rubro HomeRubro @relation(fields: [rubroId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, rubroId, source])
+  @@index([userId, status])
+  @@map("user_rubro_preferences")
+}
+
+enum PreferenceSource {
+  DECLARED
+  INFERRED
+}
+
+enum PreferenceStatus {
+  ACTIVE
+  SUPPRESSED
+}
+
+// BASELINE 14-15/8/2026: shopping_lists / shopping_list_items existen físicamente en
+// PROD (residuo pre-Prisma, sin código de producto que las use — ver
+// auditoria-drift-shopping-salesbackup-14-8-2026.md). @@ignore: Prisma las trackea a
+// nivel de migración/drift-check para que migrate dev no las reporte como drift ni
+// proponga DROP, pero no genera ningún método de Client sobre ellas. No exponen
+// funcionalidad. No borrar de este schema sin decisión de producto explícita.
+model shopping_lists {
+  id        String   @id
+  userId    String
+  name      String   @default("Mi lista")
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+
+  user  User                  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  items shopping_list_items[]
+
+  @@index([userId])
+  @@ignore
+}
+
+model shopping_list_items {
+  id             String   @id
+  shoppingListId String
+  query          String
+  productName    String
+  quantity       Int      @default(1)
+  createdAt      DateTime @default(now())
+
+  list shopping_lists @relation(fields: [shoppingListId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([shoppingListId])
+  @@ignore
 }

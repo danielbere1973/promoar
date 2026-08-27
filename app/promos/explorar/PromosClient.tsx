@@ -515,6 +515,30 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     ssrCacheSeeded.current = true
   }, [])
 
+  // Bump manual para forzar refetch ignorando la caché de módulo (ver
+  // visibilitychange más abajo) — cambia cuando el usuario vuelve a la pestaña
+  // después de haber editado su perfil financiero en otra pestaña/sesión
+  // (ej. admin), caso que `filterKey`/`cacheKey` no detectan porque no dependen
+  // de nada que viva en la URL o en el estado del componente.
+  const [refreshTick, setRefreshTick] = useState(0)
+  const lastHiddenAtRef = useRef<number | null>(null)
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        lastHiddenAtRef.current = Date.now()
+        return
+      }
+      const hiddenAt = lastHiddenAtRef.current
+      if (hiddenAt && Date.now() - hiddenAt > CACHE_TTL_MS) {
+        _promoCache = null
+        setRefreshTick(t => t + 1)
+      }
+      lastHiddenAtRef.current = null
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+
   // Splash siempre en la primera visita de la sesión (logo ahora webp ~45KB, no afecta LCP).
   // splashLoading se mantiene true mínimo 2s para que la animación llegue al 70% antes de completar.
   const [showSplash, setShowSplash] = useState(false)
@@ -545,6 +569,11 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [showAccessDenied, setShowAccessDenied] = useState(
     searchParams.get('error') === 'no-autorizado'
   )
+
+  // Guardrail OOM — UX-3: true cuando la API respondió con fallback a
+  // destacadas/populares porque `for_me=true` no tenía perfil con tarjetas.
+  const [profileIncomplete, setProfileIncomplete] = useState(false)
+  const [profileIncompleteBannerDismissed, setProfileIncompleteBannerDismissed] = useState(false)
 
   const categoriaParam = searchParams.get('categoria')
   const [selectedCats, setSelectedCats] = useState<string[]>(initialCats)
@@ -602,7 +631,13 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     commerces: [], discountRanges: [], hasInstallments: null,
   }
   const [activeFilters, setActiveFilters] = useState<FilterState>(initialFilters)
-  const [forMe, setForMe] = useState(status === 'authenticated')
+  // Guardrail OOM (cpo-a-cto-aprobacion-rfc-guardrail-oom-y-autorizacion-spike-25-8-2026.md,
+  // directiva de toggle): arranca en `false` — recién se activa en `true` una vez
+  // que se confirma que el usuario autenticado tiene tarjetas cargadas (ver
+  // effect de `fetchUserProfile` más abajo). Evita que el escenario de mayor
+  // riesgo (usuario recién registrado, perfil vacío) sea el default de la Home.
+  const [forMe, setForMe] = useState(false)
+  const forMeAutoSetRef = useRef(false)
   const [timeFilter, setTimeFilter] = useState<'today' | 'week'>('today')
   const [wizardOpen, setWizardOpen] = useState(false)
   const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null)
@@ -799,7 +834,17 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         const r = await fetch('/api/perfil')
         if (r.ok) {
           const data = await r.json()
-          if (data.profile) setUserProfile(data.profile)
+          if (data.profile) {
+            setUserProfile(data.profile)
+            // Guardrail OOM — directiva de toggle: recién acá se sabe si el
+            // usuario autenticado tiene tarjetas cargadas. Solo se auto-activa
+            // una vez (forMeAutoSetRef) para no pisar un toggle manual del
+            // usuario si este effect corriera de nuevo.
+            if (!forMeAutoSetRef.current && (data.profile.cards?.length ?? 0) > 0) {
+              forMeAutoSetRef.current = true
+              setForMe(true)
+            }
+          }
         }
       } catch (err) {
         console.error('Error fetching user profile:', err)
@@ -896,7 +941,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       if (province) qParams.set('province', province)
 
       // Detectar cambio de filtros para resetear paginación
-      const filterKey = `${status}|${forMe}|${selectedCats.join(',')}|${JSON.stringify(activeFilters)}|${timeFilter}|${province}|${session?.user?.email}`
+      const filterKey = `${status}|${forMe}|${selectedCats.join(',')}|${JSON.stringify(activeFilters)}|${timeFilter}|${province}|${session?.user?.email}|${refreshTick}`
       const isFirstFetch = prevFilterKeyRef.current === ''
       const filtersChanged = filterKey !== prevFilterKeyRef.current
       if (filtersChanged) {
@@ -951,6 +996,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             setVisibleCount(20)
           }
           setHasMore(data.hasMore ?? false)
+          setProfileIncomplete(!!data.profileIncomplete)
         }
       } catch (e: any) {
         if (e?.name !== 'AbortError') console.error(e)
@@ -964,7 +1010,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     }
     load()
     return () => controller.abort()
-  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode, page])
+  }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode, page, refreshTick])
 
   // Próximamente: fetch cuando se activa el toggle
   useEffect(() => {
@@ -1952,6 +1998,30 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           </div>
         )}
 
+        {/* Banner UX-3: perfil incompleto (guardrail OOM) — fallback a destacadas
+            cuando for_me=true no tenía tarjetas cargadas para filtrar */}
+        {forMe && profileIncomplete && !profileIncompleteBannerDismissed && (
+          <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-xl shrink-0">💳</span>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-amber-900">Te mostramos las promos más populares</p>
+                <p className="text-[11px] text-amber-700 truncate">Completá tu perfil para ver las promos filtradas para vos</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <button
+                onClick={() => router.push('/perfil')}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 text-white text-[11px] font-black hover:bg-amber-600 transition-colors whitespace-nowrap"
+              >
+                Completar perfil
+              </button>
+              <button onClick={() => setProfileIncompleteBannerDismissed(true)} className="text-amber-300 hover:text-amber-500 p-1">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Modal PIN admin */}
         {showPinModal && (

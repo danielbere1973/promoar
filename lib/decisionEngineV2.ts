@@ -28,7 +28,7 @@ import type {
   RubroSlot,
   ValidityFact,
 } from './homeDecisionContract'
-import { RUBRO_CATALOG, type RubroConfig } from './rubroCatalog'
+import { RUBRO_CATALOG, HOME_RUBRO_COUNT, type RubroConfig } from './rubroCatalog'
 
 export type NearbyMap = Record<string, { count: number; minDistKm: number }>
 
@@ -332,6 +332,41 @@ function buildRubroSlot(
   return { status: 'ok', rubro, principal, alternativas }
 }
 
+// ─── Selección de los N mejores rubros — CPO Approval "Tus rubros" (16/8/2026).
+// Reemplaza el fallback externo del Bloque A: ya no hay sustitución de rubros
+// declarados sin oportunidad ni relleno hasta N con el catálogo completo. Se
+// puntúa cada rubro DECLARADO/ACTIVO del universo (declaredUniverse, resuelto
+// por rubroPreferences.resolveDeclaredUniverse), se descartan los 'empty', y
+// se muestran hasta N ordenados por score de la candidata principal —
+// desempate exacto (sin epsilon) por orden de RUBRO_CATALOG. Un usuario con
+// menos de N declarados ve menos de N slots; nunca se completa con rubros no
+// declarados.
+function selectTopRubroSlots(
+  declaredUniverse: RubroConfig[],
+  promosByCategorySlug: Map<string, any[]>,
+  ctx: DecisionContext,
+  prefs: PersonaPreferences | undefined,
+  now: Date,
+  n: number = HOME_RUBRO_COUNT
+): RubroSlot[] {
+  const built = declaredUniverse.map(rubro => {
+    const promosInRubro = rubro.categorySlugs.flatMap(slug => promosByCategorySlug.get(slug) ?? [])
+    return { rubro, slot: buildRubroSlot(rubro, promosInRubro, ctx, prefs, now) }
+  })
+
+  const ok = built.filter(
+    (b): b is { rubro: RubroConfig; slot: Extract<RubroSlot, { status: 'ok' }> } => b.slot.status === 'ok'
+  )
+
+  const catalogIndex = new Map(RUBRO_CATALOG.map((r, i) => [r.id, i]))
+  ok.sort((a, b) => {
+    if (b.slot.principal.score !== a.slot.principal.score) return b.slot.principal.score - a.slot.principal.score
+    return (catalogIndex.get(a.rubro.id) ?? 0) - (catalogIndex.get(b.rubro.id) ?? 0)
+  })
+
+  return ok.slice(0, n).map(c => c.slot)
+}
+
 // ─── Composición del payload completo ──────────────────────────────────────
 export interface BuildHomeDecisionOptions {
   hasProfile: boolean
@@ -342,7 +377,8 @@ export function buildHomeDecisionPayload(
   promos: any[],
   ctx: DecisionContext,
   prefs: PersonaPreferences | undefined,
-  opts: BuildHomeDecisionOptions
+  opts: BuildHomeDecisionOptions,
+  declaredUniverse: RubroConfig[] = []
 ): HomeDecisionPayload {
   const startedAt = Date.now()
 
@@ -367,12 +403,9 @@ export function buildHomeDecisionPayload(
     promosByCategorySlug.get(slug)!.push(promo)
   }
 
-  const rubros: RubroSlot[] = RUBRO_CATALOG.map(rubro => {
-    const promosInRubro = rubro.categorySlugs.flatMap(slug => promosByCategorySlug.get(slug) ?? [])
-    return buildRubroSlot(rubro, promosInRubro, ctx, prefs, now)
-  })
+  const rubros: RubroSlot[] = selectTopRubroSlots(declaredUniverse, promosByCategorySlug, ctx, prefs, now)
 
-  const allEmpty = rubros.every(r => r.status === 'empty')
+  const allEmpty = rubros.length === 0 || rubros.every(r => r.status === 'empty')
   // no_location es informativo, no bloqueante (RFC-008 §3: "afecta factor
   // cercanía, no bloquea el resto") — solo se reporta cuando además no hay
   // ninguna oportunidad, que es el caso donde probablemente importa que la

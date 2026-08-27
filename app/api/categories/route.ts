@@ -67,7 +67,9 @@ export async function GET(req: NextRequest) {
     const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
     // Servidor en UTC (Vercel) — ajustar a Argentina (UTC-3 fijo) para no adelantar el día
     const argNow = new Date(today.getTime() - 3 * 60 * 60 * 1000)
-    const dayBit = 1 << argNow.getDay()
+    // getUTCDay(), no getDay() — evita doble desplazamiento de zona horaria en
+    // localhost/Windows (bug 27/8/2026).
+    const dayBit = 1 << argNow.getUTCDay()
 
     let userCards: any[] = []
     if (forMe && email) {
