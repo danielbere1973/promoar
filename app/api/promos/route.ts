@@ -65,7 +65,9 @@ export async function GET(req: NextRequest) {
     // Fechas clave: buscar si hoy está dentro del window de alguna fecha especial
     // Servidor en UTC (Vercel) — ajustar a Argentina (UTC-3 fijo) para no adelantar el día
     const argNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
-    const isWeekend = [5, 6, 0].includes(argNow.getDay())
+    // getUTCDay(), no getDay() — evita el doble desplazamiento de zona horaria en
+    // localhost/Windows (ya en UTC-3) que adelantaba el día (bug 27/8/2026).
+    const isWeekend = [5, 6, 0].includes(argNow.getUTCDay())
     const windowMax = new Date(); windowMax.setDate(windowMax.getDate() + 30)
     const keyDate = paginate ? await prisma.promoCalendar.findFirst({
       where: { date: { gte: new Date(), lte: windowMax } },
@@ -81,11 +83,6 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(parseInt(searchParams.get('pageSize') ?? String(defaultPageSize)) || defaultPageSize, 7000)
 
     const result = await getPromosData({ ...params, paginate, page, pageSize }, email, isAdmin)
-    // DEBUG TEMPORAL (27/8/2026) — diagnóstico discrepancia totalCount Vercel vs
-    // verificación local. Sacar apenas se confirme el host real. No expone
-    // password, solo el hostname de DATABASE_URL.
-    ;(result as any)._dbHost = process.env.DATABASE_URL?.split('@')[1]?.split('/')[0]
-    ;(result as any)._emailUsed = email
     return NextResponse.json(result)
   } catch (error) {
     console.error('[GET /api/promos]', error)

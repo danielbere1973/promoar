@@ -32,7 +32,10 @@ function sha256(input: string): string {
 
 function todayDayBit(): number {
   const argNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
-  return 1 << argNow.getDay()
+  // getUTCDay(), no getDay() — el resultado no debe depender de la zona horaria del
+  // SO donde corre Node (bug 27/8/2026: en localhost/Windows ya en UTC-3, .getDay()
+  // aplicaba un segundo desplazamiento de -3hs sobre argNow).
+  return 1 << argNow.getUTCDay()
 }
 
 function currentOperationalDay(): string {

@@ -350,10 +350,13 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   // Servidor corre en UTC (Vercel) — Argentina es UTC-3 fijo (sin horario de verano).
   // Sin este ajuste, getDay() adelanta el día ~3hs antes de tiempo (ej. jueves 21hs ARG
   // ya es viernes 00hs UTC, mostrando promos de "mañana" como si fueran de "hoy").
+  // getUTCDay() (no getDay()) para que el resultado no dependa de la zona horaria del
+  // SO donde corre Node — en Windows/localhost (ya UTC-3) .getDay() aplicaba un segundo
+  // desplazamiento de -3hs sobre argNow, adelantando el día equivocado (bug 27/8/2026).
   const argNow = new Date(today.getTime() - 3 * 60 * 60 * 1000)
 
   // Default to today if no specific day filter is provided
-  const defaultDayBit = 1 << argNow.getDay()
+  const defaultDayBit = 1 << argNow.getUTCDay()
 
   // Construct Prisma where clause
   const where: any = {
