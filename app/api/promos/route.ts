@@ -81,6 +81,11 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(parseInt(searchParams.get('pageSize') ?? String(defaultPageSize)) || defaultPageSize, 7000)
 
     const result = await getPromosData({ ...params, paginate, page, pageSize }, email, isAdmin)
+    // DEBUG TEMPORAL (27/8/2026) — diagnóstico discrepancia totalCount Vercel vs
+    // verificación local. Sacar apenas se confirme el host real. No expone
+    // password, solo el hostname de DATABASE_URL.
+    ;(result as any)._dbHost = process.env.DATABASE_URL?.split('@')[1]?.split('/')[0]
+    ;(result as any)._emailUsed = email
     return NextResponse.json(result)
   } catch (error) {
     console.error('[GET /api/promos]', error)
