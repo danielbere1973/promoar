@@ -38,6 +38,14 @@ export default function HomeRubros({ data, loading, onOpenPromo }: Props) {
     if (data.rubros.length === 0) return null
   }
 
+  if (data.rubros.length === 0) {
+    return (
+      <p className="text-[13px] text-slate-400 dark:text-slate-500 px-4 md:px-0 py-6 text-center">
+        No encontramos promos para esa tarjeta hoy. Probá con otra o mirá "Todas".
+      </p>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-5 md:gap-6">
       {data.rubros.map(slot => {

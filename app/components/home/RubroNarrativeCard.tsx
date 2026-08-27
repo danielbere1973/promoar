@@ -48,13 +48,34 @@ export default function RubroNarrativeCard({ rubro, principal, alternativas, onO
             </p>
           </div>
 
-          {copy.cap && <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-1.5">{copy.cap}</p>}
+          {copy.cap && (
+            <span className="inline-flex w-fit items-center text-[11px] font-extrabold text-[#0F6B3C] dark:text-[#4ADE80] bg-[#E7F6EC] dark:bg-[#123322] rounded-full px-2.5 py-0.5 mb-2">
+              {copy.cap}
+            </span>
+          )}
 
-          <span className="inline-flex items-center text-[11px] font-extrabold text-[#1D3D6E] dark:text-[#8AADD4] bg-[#EEF2F8] dark:bg-[#16294B] border border-[#D0DBF0] dark:border-[#26406F] rounded-full px-3 py-1 mb-2">
-            {copy.paymentMethod}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+            <span className="inline-flex items-center text-[11px] font-extrabold text-[#1D3D6E] dark:text-[#8AADD4] bg-[#EEF2F8] dark:bg-[#16294B] border border-[#D0DBF0] dark:border-[#26406F] rounded-full px-3 py-1">
+              {copy.paymentMethod}
+            </span>
+            {copy.nearby && (
+              <span className="inline-flex items-center text-[10px] font-semibold text-[#5A6B85] dark:text-slate-400 bg-[#F0F2F5] dark:bg-slate-800 rounded-full px-2 py-0.5">
+                {copy.nearby}
+              </span>
+            )}
+          </div>
 
           {copy.validity && <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-2">{copy.validity}</p>}
+
+          {copy.futureUpsell && (
+            <div className="mb-2 flex items-center gap-2 rounded-xl bg-[#FEF6E7] dark:bg-[#2A2110] border border-[#F3D488] dark:border-[#5A480F] px-3 py-2">
+              <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#E8A317] dark:bg-[#F5C860] opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#E8A317] dark:bg-[#F5C860]" />
+              </span>
+              <p className="text-[11px] font-semibold text-[#8A5A0A] dark:text-[#F5C860] leading-snug">{copy.futureUpsell}</p>
+            </div>
+          )}
 
           {copy.reasonsText.length > 0 && (
             <div className="mt-2 pt-3 border-t border-[#F0F2F5] dark:border-slate-700">
@@ -81,26 +102,36 @@ export default function RubroNarrativeCard({ rubro, principal, alternativas, onO
             const altCopy = buildCandidateCopy(alt)
             const altIdentity = visualIdentity(alt)
             return (
-              <button
-                key={alt.facts.commerceName}
-                onClick={() => onOpenPromo(candidatePromo(alt))}
-                className="flex items-center gap-3 bg-[#F7F8FA] dark:bg-slate-800/60 border border-[#E4E8EF] dark:border-slate-700 rounded-2xl px-3 py-2.5 text-left"
-              >
-                <LogoImg
-                  src={altIdentity.logoUrl ?? ''}
-                  fallbackInitial={altIdentity.fallbackInitial}
-                  fallbackColor={altIdentity.fallbackColor}
-                  alt={alt.facts.commerceName}
-                  size={36}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold text-[#0D1B2E] dark:text-white truncate">{alt.facts.commerceName}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{altCopy.paymentMethod}</p>
-                </div>
-                <span className="shrink-0 text-[15px] font-black text-[#1D3D6E] dark:text-[#8AADD4] tabular-nums">
-                  {altCopy.benefit.headline}{altCopy.benefit.unit}
-                </span>
-              </button>
+              <div key={alt.facts.commerceName} className="flex flex-col gap-1">
+                <button
+                  onClick={() => onOpenPromo(candidatePromo(alt))}
+                  className="w-full flex items-center gap-3 bg-[#F7F8FA] dark:bg-slate-800/60 border border-[#E4E8EF] dark:border-slate-700 rounded-2xl px-3 py-2.5 text-left"
+                >
+                  <LogoImg
+                    src={altIdentity.logoUrl ?? ''}
+                    fallbackInitial={altIdentity.fallbackInitial}
+                    fallbackColor={altIdentity.fallbackColor}
+                    alt={alt.facts.commerceName}
+                    size={36}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-[#0D1B2E] dark:text-white truncate">{alt.facts.commerceName}</p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{altCopy.paymentMethod}</p>
+                  </div>
+                  <span className="shrink-0 text-[15px] font-black text-[#1D3D6E] dark:text-[#8AADD4] tabular-nums">
+                    {altCopy.benefit.headline}{altCopy.benefit.unit}
+                  </span>
+                </button>
+                {altCopy.futureUpsell && (
+                  <div className="flex items-center gap-1.5 rounded-lg bg-[#FEF6E7] dark:bg-[#2A2110] border border-[#F3D488] dark:border-[#5A480F] px-2.5 py-1.5 mx-0.5">
+                    <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#E8A317] dark:bg-[#F5C860] opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#E8A317] dark:bg-[#F5C860]" />
+                    </span>
+                    <p className="text-[10px] font-semibold text-[#8A5A0A] dark:text-[#F5C860] leading-snug truncate">{altCopy.futureUpsell}</p>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
