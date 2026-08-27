@@ -8,8 +8,19 @@ import { buildProfileSignature } from '@/lib/financialMatchIndex'
 // Guardrail OOM (cpo-a-cto-aprobacion-rfc-guardrail-oom-y-autorizacion-spike-25-8-2026.md):
 // límite defensivo genérico para cualquier findMany sin paginar ni `take`
 // explícito — evita instanciar miles de filas con requirements anidados en
-// memoria ante un `where` inesperadamente amplio.
+// memoria ante un `where` inesperadamente amplio. Se usa cuando NO hay
+// narrowing SQL real por perfil (forMe sin tarjetas efectivas, o invitado
+// con filtros libres).
 const HARD_CAP_TAKE = 200
+
+// Cap para el caso forMe=true CON tarjetas efectivas: el `where` ya viene
+// acotado por matching de perfil financiero + validDays en SQL (bloque
+// "PRE-FILTRO SQL POR PERFIL FINANCIERO" más abajo), así que el universo
+// resultante ya es relevante para el usuario y no amerita el cap genérico de
+// 200 — eso truncaba a usuarios con perfil completo (bug reportado 27/8/2026:
+// usuario con 3765 promos matcheadas veía solo ~100 en la Home). Sigue habiendo
+// un techo por las dudas, más alto, hasta que exista paginación real logueada.
+const HARD_CAP_TAKE_NARROWED = 1000
 
 // Prisma/Postgres `contains`+`insensitive` solo ignora mayúsculas, no acentos —
 // "cafe" no matchea "Café" sin este normalizado en ambos lados de la comparación.
@@ -631,10 +642,22 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
           orderBy: paginateOrderBy ?? (take
             ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }]
             : [{ isCSIOnly: 'asc' as const }, { maxDiscountPct: { sort: 'desc' as const, nulls: 'last' as const } }, { id: 'asc' as const }]),
-          // Hard cap defensivo (guardrail OOM, Opción C): ningún findMany sin
-          // paginar ni `take` explícito debe salir sin límite — red de
-          // seguridad genérica además del corte temprano de `profileIncomplete`.
-          ...(paginate ? { take: pageSize, skip: (page - 1) * pageSize } : { take: take ?? HARD_CAP_TAKE }),
+          // Hard cap defensivo (guardrail OOM, Opción C, 25/8/2026): pensado
+          // para el caso "forMe=true sin narrowing real" (profileIncomplete
+          // ya cubre perfil vacío) — pero se aplicaba incondicionalmente a
+          // TODO camino no paginado, incluyendo usuarios con perfil real ya
+          // acotado por SQL (matching de perfil + validDays, ver bloque
+          // "PRE-FILTRO SQL POR PERFIL FINANCIERO" más arriba), donde el
+          // universo real (ej. 3765 filas) es manejable y el cap de 200
+          // truncaba resultados legítimos sin necesidad (bug reportado:
+          // usuario logueado veía 96-104 promos de un total real de 3765,
+          // categorías enteras casi vacías). Con narrowing real por perfil ya
+          // aplicado, se usa un cap más generoso (HARD_CAP_TAKE_NARROWED);
+          // sin narrowing (perfil vacío/incompleto, o invitado con filtros
+          // libres) se mantiene el cap original de 200 como red de seguridad.
+          ...(paginate
+            ? { take: pageSize, skip: (page - 1) * pageSize }
+            : { take: take ?? (forMe && candidateEffectiveCards?.length ? HARD_CAP_TAKE_NARROWED : HARD_CAP_TAKE) }),
         }),
         // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
         paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
