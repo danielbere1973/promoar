@@ -545,6 +545,33 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   const isPublicCacheableView = paginate && !guestProfileParam
   __mark('before findMany')
 
+  // Fix mismo bug ya resuelto para invitados (ver comentario línea ~87): en el
+  // camino no paginado (cualquier usuario logueado, o invitado con filtros),
+  // `take: HARD_CAP_TAKE` se aplicaba ANTES del filtro de `validDays` (línea
+  // ~611, en JS), recortando por `createdAt desc` y dejando afuera a la
+  // mayoría de las promos válidas hoy que no estaban entre las 200 más
+  // recientemente creadas (bug: usuario logueado veía ~88 promos en vez de
+  // miles, ej. categoría "Supermercados" con 1 sola promo). Se acota `where`
+  // a los IDs válidos hoy en SQL (bitmask), igual que getPublicPromosPage,
+  // antes de aplicar el `take`. `view === 'week'` no filtra por día, igual
+  // que el camino público.
+  if (!isPublicCacheableView && view !== 'week') {
+    const dayBitForFilter = dayIndices?.length
+      ? dayIndices.reduce((mask, d) => mask | (1 << d), 0)
+      : day !== null ? (1 << parseInt(day)) : defaultDayBit
+    const validTodayIds = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "promos"
+      WHERE status = 'ACTIVE'
+        AND "validFrom" <= now()
+        AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
+        AND ("validDays" & ${dayBitForFilter}) != 0
+    `
+    where.AND = [
+      ...(where.AND ?? []),
+      { id: { in: validTodayIds.map(r => r.id) } },
+    ]
+  }
+
   const [promos, totalCount] = isPublicCacheableView
     ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit, userProvince)
     : await Promise.all([
@@ -593,7 +620,17 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
               },
             },
           },
-          orderBy: paginateOrderBy ?? (take ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }] : { createdAt: 'desc' }),
+          // Antes del fix de narrowing por `validDays` (ver más arriba), este
+          // camino ordenaba por `createdAt desc` — dentro del universo ya
+          // acotado a "válidas hoy" seguía sesgando el `take: HARD_CAP_TAKE`
+          // hacia las promos más recientemente creadas, dejando afuera
+          // categorías con pocas altas recientes (ej. Supermercados). Se usa
+          // el mismo criterio de relevancia que ya tenía el camino público
+          // (isCSIOnly asc, maxDiscountPct desc, id asc) para que el cap
+          // recorte por mejor descuento, no por fecha de alta.
+          orderBy: paginateOrderBy ?? (take
+            ? [{ isFeatured: 'desc' }, { createdAt: 'desc' }]
+            : [{ isCSIOnly: 'asc' as const }, { maxDiscountPct: { sort: 'desc' as const, nulls: 'last' as const } }, { id: 'asc' as const }]),
           // Hard cap defensivo (guardrail OOM, Opción C): ningún findMany sin
           // paginar ni `take` explícito debe salir sin límite — red de
           // seguridad genérica además del corte temprano de `profileIncomplete`.
