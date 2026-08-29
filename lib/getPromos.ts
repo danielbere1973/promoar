@@ -277,9 +277,16 @@ export async function getCandidatePromosForProfile(params: {
   userBankIds: string[]
   userWalletIds: string[]
   savedPromoIds: string[]
+  // Perf fix (29/8/2026, ver comentario en home-decision/route.ts): cuando el
+  // caller ya sabe que solo le importa un subconjunto de categorías (ej. Home
+  // v2, que solo usa los rubros DECLARADOS por el usuario), acotar acá evita
+  // traer y después hidratar miles de filas de categorías que nunca se van a
+  // usar. Vacío/undefined = sin filtro, comportamiento idéntico al anterior.
+  categorySlugs?: string[]
 }): Promise<{ ids: string[]; queryMs: number; hitLimit: boolean }> {
   const t0 = Date.now()
-  const { dayBit, province, userBankIds, userWalletIds, savedPromoIds } = params
+  const { dayBit, province, userBankIds, userWalletIds, savedPromoIds, categorySlugs } = params
+  const categoryFilter = categorySlugs && categorySlugs.length > 0 ? categorySlugs : null
 
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT p.id FROM "promos" p
@@ -292,6 +299,10 @@ export async function getCandidatePromosForProfile(params: {
         OR p."geographicScope" != 'PROVINCES'
         OR cardinality(p.provinces) = 0
         OR p.provinces && ARRAY[${province}::text, 'Todas', 'TODAS']
+      )
+      AND (
+        ${categoryFilter}::text[] IS NULL
+        OR p."categoryId" IN (SELECT id FROM "categories" WHERE slug = ANY(${categoryFilter}::text[]))
       )
       AND (
         p.id = ANY(${savedPromoIds}::text[])
@@ -742,12 +753,19 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
           userBankIds: candidateUserBankIds,
           userWalletIds: candidateUserWalletIds,
           savedPromoIds: candidateSavedPromoIds,
+          categorySlugs,
         })
         candidatePerfBox.value = { queryMs: candidates.queryMs, rows: candidates.ids.length, hitLimit: candidates.hitLimit }
         if (!candidates.ids.length) return [[], 0] as const
         const hydrationT0 = Date.now()
         const rows = await prisma.promo.findMany({
-          where: { id: { in: candidates.ids } },
+          where: {
+            id: { in: candidates.ids },
+            // Defensa en profundidad: aunque el SQL de candidatas ya filtra por
+            // categorySlugs, repetir acá evita hidratar de más si esa query
+            // cambia en el futuro y alguien olvida propagar el filtro.
+            ...(categorySlugs.length > 0 ? { category: { slug: { in: categorySlugs, not: 'sin-categoria' } } } : {}),
+          },
           include: {
             category: { select: { name: true, slug: true, icon: true, color: true } },
             commerce: {

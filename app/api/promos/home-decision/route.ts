@@ -298,9 +298,18 @@ export async function GET(req: NextRequest) {
     // CPO Ratificación "Opción A" (25/8/2026, ratificada 26/8/2026): un guest
     // nunca tiene UserRubroPreference — su declaredUniverse es el universo
     // completo de rubros activos, no un subconjunto vacío. resolveDeclaredUniverse
-    // sigue siendo el camino correcto para usuarios logueados (intersección con
-    // lo que declararon).
-    const declaredUniverse = user
+    // sigue siendo el camino correcto para usuarios logueados que sí declararon
+    // preferencias (intersección con lo que declararon).
+    //
+    // Fix 29/8/2026: un usuario LOGUEADO con 0 preferencias declaradas caía en
+    // resolveDeclaredUniverse([]) = [] (universo vacío), lo que producía dos
+    // síntomas del mismo bug — status 'all_empty' en prod ("Todavía no
+    // encontramos oportunidades para vos", pantalla que Daniel calificó de
+    // "desastre") y, en local, la degradación del filtro SQL por categorySlugs
+    // vacío (candidateQuery sin narrowing, 47s+). Decisión de producto de
+    // Daniel (CEO/CPO): mientras el usuario no elija rubros propios, ve el
+    // universo default (mismo criterio que un guest) — nunca la pantalla vacía.
+    const declaredUniverse = user && declaredRows.length > 0
       ? resolveDeclaredUniverse(declaredRows, activeRubroIds)
       : resolveGuestUniverse(activeRubroIds)
     const declaredUniverseHash = computeDeclaredUniverseHash(declaredRows)
@@ -457,6 +466,17 @@ async function buildPayloadForUser(
   location: { hasLocation: boolean; nearbyByCommerceId: NearbyMap },
   guestProfileParam?: string | null
 ): Promise<HomeDecisionPayload> {
+  // Perf fix (29/8/2026): buildHomeDecisionPayload solo usa, por cada rubro
+  // DECLARADO, 1 principal + hasta 2 alternativas (lib/decisionEngineV2.ts
+  // buildRubroSlot/MAX_ALTERNATIVAS) — nunca necesita promos fuera de
+  // declaredUniverse. Antes de este fix, useCandidateQuery traía y luego
+  // HIDRATABA (con todos los joins de requirements/bank/wallet/commerce) el
+  // universo candidato COMPLETO (~10.000 filas, 31-42s medidos en logs reales),
+  // para terminar usando ~15-24 de esas filas. Acotar categorySlugs acá hace
+  // que tanto el candidate SQL como la hidratación posterior trabajen sobre
+  // el subconjunto real (categorías de los rubros declarados), no el catálogo entero.
+  const declaredCategorySlugs = Array.from(new Set(declaredUniverse.flatMap(r => r.categorySlugs)))
+
   const result = await getPromosData(
     {
       forMe: true,
@@ -464,6 +484,7 @@ async function buildPayloadForUser(
       province: province ?? undefined,
       guestProfileParam: guestProfileParam ?? undefined,
       paginate: false,
+      categorySlugs: declaredCategorySlugs,
       // Home v2 evalúa siempre como experiencia de usuario final: el rol
       // ADMIN/MODERATOR sigue existiendo (permisos, backoffice), pero acá
       // no debe apagar el matching financiero personal — ver comentario en
