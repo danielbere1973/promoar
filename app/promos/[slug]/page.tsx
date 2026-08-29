@@ -36,6 +36,18 @@ const getCachedCommerceBranchesCount = unstable_cache(
   { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
 )
 
+// Slugs de promos borradas (expiradas y purgadas) son re-pedidos por bots una y
+// otra vez sin que cambien nunca — cachear el intento de redirect evita repetir
+// la query a Prisma en cada re-crawl del mismo slug muerto.
+const getCachedGuessedCommerceSlug = unstable_cache(
+  async (guessedSlug: string) => prisma.commerce.findFirst({
+    where: { slug: guessedSlug },
+    select: { slug: true },
+  }),
+  ['promo-detail-guessed-commerce'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+)
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function discountLabel(req: any): string {
@@ -175,7 +187,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   if (!promo) {
     const guessedSlug = params.slug.split('-')[0]
     const guessedCommerce = guessedSlug
-      ? await prisma.commerce.findFirst({ where: { slug: guessedSlug }, select: { slug: true } })
+      ? await getCachedGuessedCommerceSlug(guessedSlug)
       : null
 
     if (guessedCommerce) {
