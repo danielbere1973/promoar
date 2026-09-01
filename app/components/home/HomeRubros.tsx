@@ -11,6 +11,7 @@ type Props = {
   loading: boolean
   onOpenPromo: (promo: unknown) => void
   onOpenNearby: (commerceId: string, commerceName: string) => void
+  selectedEntityName?: string | null
 }
 
 // Home organizada por rubros prioritarios (CPO Direction "Integración Home +
@@ -20,7 +21,7 @@ type Props = {
 // copy (lib/homeCopy.ts). Desktop usa V7 (principal) + V8 (alternativas);
 // mobile usa V1 (narrativa), con ambos layouts montados y alternados por
 // breakpoint Tailwind (md:) para no duplicar el fetch ni el estado.
-export default function HomeRubros({ data, loading, onOpenPromo, onOpenNearby }: Props) {
+export default function HomeRubros({ data, loading, onOpenPromo, onOpenNearby, selectedEntityName }: Props) {
   if (loading && !data) {
     return (
       <div className="flex flex-col gap-4 px-4 md:px-0">
@@ -39,11 +40,27 @@ export default function HomeRubros({ data, loading, onOpenPromo, onOpenNearby }:
     if (data.rubros.length === 0) return null
   }
 
+  // CPO/Daniel feedback (1/9/2026): "no encontramos promos" sonaba a que la
+  // app no tiene nada para esa tarjeta, cuando en realidad es solo que hoy no
+  // hay una recomendación destacada en estos 5 rubros prioritarios — el motor
+  // (decisionEngineV2.ts) recomienda sobre un subconjunto, no es el inventario
+  // completo. El link a /promos/explorar (catálogo real, sin ese recorte)
+  // evita que el usuario lea "vacío" como "esta app no sirve para mí".
   if (data.rubros.length === 0) {
     return (
-      <p className="text-[13px] text-slate-400 dark:text-slate-500 px-4 md:px-0 py-6 text-center">
-        No encontramos promos para esa tarjeta hoy. Probá con otra o mirá "Todas".
-      </p>
+      <div className="py-6 text-center">
+        <p className="text-[13px] text-slate-400 dark:text-slate-500 px-4 md:px-0">
+          {selectedEntityName
+            ? `Hoy no tenemos una recomendación destacada con ${selectedEntityName} en estos rubros.`
+            : 'Hoy no tenemos una recomendación destacada para esa tarjeta en estos rubros.'}
+        </p>
+        <a
+          href="/promos/explorar"
+          className="inline-block mt-2 text-[13px] font-bold text-[#1D3D6E] dark:text-[#8AADD4] underline underline-offset-2"
+        >
+          Ver el catálogo completo →
+        </a>
+      </div>
     )
   }
 

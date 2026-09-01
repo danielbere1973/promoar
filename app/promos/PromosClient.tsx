@@ -139,7 +139,7 @@ export default function PromosClient() {
         </div>
       </header>
 
-      <LogoMarquee label="Tus bancos y billeteras" />
+      <LogoMarquee label="Bancos y billeteras con promos" />
       <LogoMarquee logos={COMMERCE_MARQUEE_LOGOS} reverse tone="muted" label="Comercios con más promos" className="2xl:hidden" />
       <CommerceLights />
 
@@ -197,15 +197,9 @@ export default function PromosClient() {
           </div>
         )}
 
-        {data?.status !== 'incomplete_profile' && quickOptions.length >= 2 && (
-          <div className="pt-3 pb-2">
-            <QuickCardSelector options={quickOptions} selected={selectedCardKey} onSelect={setSelectedCardKey} />
-          </div>
-        )}
-
         {data?.status !== 'incomplete_profile' && (
-          <div className="px-4 md:px-6 pt-3 pb-2">
-            <div className="flex items-center justify-between mb-3">
+          <div className="pt-3 pb-2">
+            <div className="flex items-center justify-between mb-3 px-4 md:px-6">
               <h1 className="text-[15px] font-black text-[#0D1B2E] dark:text-white">
                 {data?.status === 'guest_showcase' ? '⭐ Destacadas de hoy' : 'Recomendado para vos'}
               </h1>
@@ -213,7 +207,19 @@ export default function PromosClient() {
                 {data?.status === 'guest_showcase' ? 'vista general' : 'según tu perfil, no todo el catálogo'}
               </span>
             </div>
-            <HomeRubros data={filteredData} loading={loading} onOpenPromo={handleOpenPromo} onOpenNearby={handleOpenNearby} />
+
+            {quickOptions.length >= 2 && (
+              <div className="mb-3">
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 px-4 md:px-6 mb-2">
+                  Filtrá por tarjeta o billetera
+                </p>
+                <QuickCardSelector options={quickOptions} selected={selectedCardKey} onSelect={setSelectedCardKey} />
+              </div>
+            )}
+
+            <div className="px-4 md:px-6">
+              <HomeRubros data={filteredData} loading={loading} onOpenPromo={handleOpenPromo} onOpenNearby={handleOpenNearby} selectedEntityName={selectedOption?.name ?? null} />
+            </div>
           </div>
         )}
 
