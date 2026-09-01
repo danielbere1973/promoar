@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
     include: {
       financialProfile: {
         include: {
-          banks: { include: { bank: { select: { id: true, name: true, slug: true } } } },
-          wallets: { include: { wallet: { select: { id: true, name: true, slug: true } } } },
+          banks: { include: { bank: { select: { id: true, name: true, slug: true, logoUrl: true } } } },
+          wallets: { include: { wallet: { select: { id: true, name: true, slug: true, logoUrl: true } } } },
           cards: {
             include: {
               bank: { select: { id: true, name: true } },
