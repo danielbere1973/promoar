@@ -8,13 +8,14 @@ type Props = {
   alternativa: DecisionCandidate
   onOpenPromo: (promo: unknown) => void
   onOpenNearby: (commerceId: string, commerceName: string) => void
+  isGuest?: boolean
 }
 
 // Alternativas del mismo rubro — lógica compacta variante 8 (Design Lab,
 // CPO Direction 12/8/2026): fila horizontal logo | comercio+beneficio |
 // medio+vigencia | reason dominante. Compacta a propósito: no repite todo lo
 // que ya muestra la principal.
-export default function RubroAlternativaCard({ alternativa, onOpenPromo, onOpenNearby }: Props) {
+export default function RubroAlternativaCard({ alternativa, onOpenPromo, onOpenNearby, isGuest }: Props) {
   const copy = buildCandidateCopy(alternativa)
   const identity = visualIdentity(alternativa)
   const commerceId = (alternativa.promo as any)?.commerceId ?? null
@@ -35,13 +36,21 @@ export default function RubroAlternativaCard({ alternativa, onOpenPromo, onOpenN
 
         <div className="min-w-0 flex-1 flex flex-col gap-0.5">
           <p className="text-[11px] font-bold text-[#0D1B2E] dark:text-white truncate">{alternativa.facts.commerceName}</p>
-          <p className="flex items-baseline gap-1">
-            <span className="text-[15px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-none tabular-nums">
-              {copy.benefit.headline}{copy.benefit.unit}
-            </span>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{copy.benefit.qualifier}</span>
-          </p>
-          <p className="text-[10px] font-semibold text-[#5A6B85] dark:text-slate-400 truncate">{copy.paymentMethod}</p>
+          {isGuest ? (
+            <p className="text-[13px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-snug truncate">
+              {copy.guestHeadline}
+            </p>
+          ) : (
+            <>
+              <p className="flex items-baseline gap-1">
+                <span className="text-[15px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-none tabular-nums">
+                  {copy.benefit.headline}{copy.benefit.unit}
+                </span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{copy.benefit.qualifier}</span>
+              </p>
+              <p className="text-[10px] font-semibold text-[#5A6B85] dark:text-slate-400 truncate">{copy.paymentMethod}</p>
+            </>
+          )}
         </div>
       </button>
 

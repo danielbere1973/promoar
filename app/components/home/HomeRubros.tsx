@@ -47,6 +47,12 @@ export default function HomeRubros({ data, loading, onOpenPromo, onOpenNearby }:
     )
   }
 
+  // CPO Directiva "Vidriera guest permisiva, no restrictiva" (31/8/2026): solo
+  // en guest_showcase el headline fusiona beneficio + entidad ("Hasta 25% con
+  // Galicia") — con perfil real, el % ya está garantizado para ese usuario y
+  // el copy split (número + medio de pago aparte) sigue siendo correcto.
+  const isGuest = data.status === 'guest_showcase'
+
   return (
     <div className="flex flex-col gap-5 md:gap-6">
       {data.rubros.map(slot => {
@@ -58,11 +64,11 @@ export default function HomeRubros({ data, loading, onOpenPromo, onOpenNearby }:
           <div key={slot.rubro.id} className="flex flex-col gap-2.5">
             {/* Desktop: V7 principal + V8 alternativas en fila */}
             <div className="hidden md:flex md:flex-col md:gap-2.5 px-0">
-              <RubroPrincipalCard rubro={slot.rubro} principal={slot.principal} onOpenPromo={onOpenPromo} onOpenNearby={onOpenNearby} />
+              <RubroPrincipalCard rubro={slot.rubro} principal={slot.principal} onOpenPromo={onOpenPromo} onOpenNearby={onOpenNearby} isGuest={isGuest} />
               {slot.alternativas.length > 0 && (
                 <div className="grid grid-cols-2 gap-2.5">
                   {slot.alternativas.map(alt => (
-                    <RubroAlternativaCard key={alt.facts.commerceName} alternativa={alt} onOpenPromo={onOpenPromo} onOpenNearby={onOpenNearby} />
+                    <RubroAlternativaCard key={alt.facts.commerceName} alternativa={alt} onOpenPromo={onOpenPromo} onOpenNearby={onOpenNearby} isGuest={isGuest} />
                   ))}
                 </div>
               )}
@@ -76,6 +82,7 @@ export default function HomeRubros({ data, loading, onOpenPromo, onOpenNearby }:
                 alternativas={slot.alternativas}
                 onOpenPromo={onOpenPromo}
                 onOpenNearby={onOpenNearby}
+                isGuest={isGuest}
               />
             </div>
           </div>

@@ -121,7 +121,7 @@ export const RUBRO_CATALOG: RubroConfig[] = [
     label: 'Mascotas',
     icon: '🐾',
     categoryIds: [],
-    categorySlugs: ['mascotas'],
+    categorySlugs: ['petshops'],
   },
   {
     id: 'heladerias',
@@ -178,6 +178,19 @@ export const RUBRO_CATALOG: RubroConfig[] = [
 // Producto (definicion-producto-home.md v3), no una constante permanente.
 // Independiente de RUBRO_CATALOG.length (universo=10) desde CPO Approval v2.
 export const HOME_RUBRO_COUNT = 5
+
+// CPO Directiva "Vidriera guest permisiva, no restrictiva" (31/8/2026): los 5
+// rubros de mayor volumen real de promos, que un guest ve siempre que tengan
+// datos, en este orden — el 6to slot (GUEST_SHOWCASE_RUBRO_COUNT en
+// home-decision/route.ts) queda abierto a mejor score entre el resto del
+// catálogo. No confundir con HOME_RUBRO_COUNT (default para usuario logueado).
+export const GUEST_PRIORITY_RUBRO_IDS = [
+  'supermercados',
+  'farmacias',
+  'mascotas',
+  'combustible',
+  'transporte',
+]
 
 export const RUBRO_IDS: RubroId[] = RUBRO_CATALOG.map(r => r.id)
 

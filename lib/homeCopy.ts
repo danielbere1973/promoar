@@ -109,6 +109,38 @@ export function emptySlotText(reason: string): string {
   return EMPTY_REASON_LABEL[reason] ?? 'No hay oportunidades para mostrar en este rubro hoy.'
 }
 
+// ─── Headline fusionado para vidriera guest — CPO Directiva "Vidriera guest
+// permisiva, no restrictiva" (31/8/2026): "Hasta 25% con Galicia" en vez de
+// mostrar el % y la entidad en líneas separadas. Se usa "Hasta" porque, sin
+// perfil cargado, no se sabe si el visitante realmente tiene esa tarjeta/
+// billetera — el descuento es un techo posible, no una garantía. Función
+// separada de benefitDisplay/paymentMethodLabel (que siguen existiendo para
+// el caso con perfil real) para no alterar el copy ya validado de usuarios
+// logueados. ─────────────────────────────────────────────────────────────
+export function guestBenefitHeadline(facts: Facts): string {
+  const { headline, unit } = benefitDisplay(facts.benefit)
+  const entity = facts.paymentMethod.bankOrWalletName
+  return entity ? `Hasta ${headline}${unit} con ${entity}` : `Hasta ${headline}${unit}`
+}
+
+// ─── Proximidad, formateada para el badge "cerca tuyo" ────────────────────
+// Deriva del Reason 'cercania' que ya calcula el motor (lib/decisionEngineV2.ts)
+// en vez de duplicar la lógica de distancia acá — mismo principio que
+// dominantReasonText: la capa de presentación solo mapea código→texto.
+export function nearbyLabel(reasons: Reason[]): string | null {
+  const nearbyReason = reasons.find(r => r.code === 'cercania')
+  return nearbyReason ? reasonToText(nearbyReason) : null
+}
+
+// ─── Upsell de ahorro futuro ("mañana tenés X% con Y acá") ─────────────────
+// Pendiente: el motor (DecisionCandidate/Reason) todavía no calcula ninguna
+// noción de "próxima mejor oportunidad" para este comercio — no hay campo
+// fuente del que derivarlo. Placeholder explícito en null (no fabricar dato)
+// hasta que exista esa señal en lib/decisionEngineV2.ts.
+export function futureUpsellLabel(_candidate: DecisionCandidate): string | null {
+  return null
+}
+
 // ─── Bundle completo por candidata — lo que consumen los componentes ──────
 export interface CandidateCopy {
   narrativeTitle: string
@@ -118,6 +150,9 @@ export interface CandidateCopy {
   validity: string | null
   dominantReasonText: string | null
   reasonsText: string[]
+  guestHeadline: string
+  nearby: string | null
+  futureUpsell: string | null
 }
 
 export function buildCandidateCopy(candidate: DecisionCandidate): CandidateCopy {
@@ -130,6 +165,9 @@ export function buildCandidateCopy(candidate: DecisionCandidate): CandidateCopy 
     validity: validityLabel(facts),
     dominantReasonText: dominantReasonText(reasons),
     reasonsText: reasons.map(reasonToText),
+    guestHeadline: guestBenefitHeadline(facts),
+    nearby: nearbyLabel(reasons),
+    futureUpsell: futureUpsellLabel(candidate),
   }
 }
 

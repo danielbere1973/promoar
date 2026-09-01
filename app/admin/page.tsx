@@ -215,7 +215,7 @@ interface ScraperConfig {
 const SCRAPERS_CONFIG: ScraperConfig[] = [
   // Supermercados
   { id: 'coto',            name: 'Coto',            group: 'supermercado', categoria: 'Supermercados', description: 'Supermercado — legales' },
-  { id: 'diarco',          name: 'Diarco',          group: 'supermercado', categoria: 'Supermercados', description: 'Mayorista — HTML plano' },
+  { id: 'diarco',          name: 'Diarco',          group: 'supermercado', categoria: 'Supermercados', description: '⚠️ PAUSADO — Diarco borró /promociones/ (1/9/2026)' },
   { id: 'jumbo',           name: 'Jumbo',           group: 'supermercado', categoria: 'Supermercados', description: 'Cencosud — Playwright' },
   { id: 'disco',           name: 'Disco',           group: 'supermercado', categoria: 'Supermercados', description: 'Cencosud — Playwright' },
   { id: 'vea',             name: 'Vea',             group: 'supermercado', categoria: 'Supermercados', description: 'Cencosud — Playwright' },

@@ -2,7 +2,7 @@ import { Scraper } from './types';
 
 // ─── Supermercados y comercios ─────────────────────────────────────────────────
 import { CotoScraper } from './coto';
-import { DiarcoScraper } from './diarco';
+import { DiarcoScraper } from './diarco'; // PAUSADO 1/9/2026: Diarco borró /promociones/ (redirect 307 a home vía Yoast), contenido movido a posts de blog sin página consolidada. Ver lib/scrapers/diarco.ts.
 import { JumboScraper } from './jumbo';
 import { DiscoScraper } from './disco';
 import { VeaScraper } from './vea';
@@ -51,7 +51,7 @@ import { SolScraper } from './banco-del-sol'; // Banco del Sol (Webflow/Finsweet
 
 export const SUPERMERCADO_SCRAPERS: Scraper[] = [
   CotoScraper,
-  DiarcoScraper,
+  // DiarcoScraper, // PAUSADO 1/9/2026: fuente rota, ver import arriba
   JumboScraper,
   DiscoScraper,
   VeaScraper,

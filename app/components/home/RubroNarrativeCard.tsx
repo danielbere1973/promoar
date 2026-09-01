@@ -10,13 +10,14 @@ type Props = {
   alternativas: DecisionCandidate[]
   onOpenPromo: (promo: unknown) => void
   onOpenNearby: (commerceId: string, commerceName: string) => void
+  isGuest?: boolean
 }
 
 // Mobile — jerarquía narrativa derivada de variante 1 (Design Lab, CPO
 // Direction 12/8/2026): título narrativo primero, después el número grande,
 // después el resto de los Facts. Alternativas del rubro debajo, en filas
 // simples (no chips comprimidos — mobile tiene más alto que ancho).
-export default function RubroNarrativeCard({ rubro, principal, alternativas, onOpenPromo, onOpenNearby }: Props) {
+export default function RubroNarrativeCard({ rubro, principal, alternativas, onOpenPromo, onOpenNearby, isGuest }: Props) {
   const copy = buildCandidateCopy(principal)
   const identity = visualIdentity(principal)
   const commerceId = (principal.promo as any)?.commerceId ?? null
@@ -42,12 +43,18 @@ export default function RubroNarrativeCard({ rubro, principal, alternativas, onO
               alt={principal.facts.commerceName}
               size={48}
             />
-            <p className="flex items-baseline gap-1.5">
-              <span className="text-[26px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-none tabular-nums">
-                {copy.benefit.headline}{copy.benefit.unit}
+            {isGuest ? (
+              <span className="text-[17px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-snug">
+                {copy.guestHeadline}
               </span>
-              <span className="text-[12px] text-slate-400 dark:text-slate-500">{copy.benefit.qualifier}</span>
-            </p>
+            ) : (
+              <p className="flex items-baseline gap-1.5">
+                <span className="text-[26px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-none tabular-nums">
+                  {copy.benefit.headline}{copy.benefit.unit}
+                </span>
+                <span className="text-[12px] text-slate-400 dark:text-slate-500">{copy.benefit.qualifier}</span>
+              </p>
+            )}
           </div>
 
           {copy.cap && (
@@ -57,9 +64,11 @@ export default function RubroNarrativeCard({ rubro, principal, alternativas, onO
           )}
 
           <div className="flex items-center gap-1.5 flex-wrap mb-2">
-            <span className="inline-flex items-center text-[11px] font-extrabold text-[#1D3D6E] dark:text-[#8AADD4] bg-[#EEF2F8] dark:bg-[#16294B] border border-[#D0DBF0] dark:border-[#26406F] rounded-full px-3 py-1">
-              {copy.paymentMethod}
-            </span>
+            {!isGuest && (
+              <span className="inline-flex items-center text-[11px] font-extrabold text-[#1D3D6E] dark:text-[#8AADD4] bg-[#EEF2F8] dark:bg-[#16294B] border border-[#D0DBF0] dark:border-[#26406F] rounded-full px-3 py-1">
+                {copy.paymentMethod}
+              </span>
+            )}
             {copy.nearby && commerceId && (
               <span
                 role="button"
@@ -130,10 +139,10 @@ export default function RubroNarrativeCard({ rubro, principal, alternativas, onO
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-bold text-[#0D1B2E] dark:text-white truncate">{alt.facts.commerceName}</p>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{altCopy.paymentMethod}</p>
+                    {!isGuest && <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{altCopy.paymentMethod}</p>}
                   </div>
                   <span className="shrink-0 text-[15px] font-black text-[#1D3D6E] dark:text-[#8AADD4] tabular-nums">
-                    {altCopy.benefit.headline}{altCopy.benefit.unit}
+                    {isGuest ? altCopy.guestHeadline : `${altCopy.benefit.headline}${altCopy.benefit.unit}`}
                   </span>
                 </button>
                 {altCopy.nearby && altCommerceId && (

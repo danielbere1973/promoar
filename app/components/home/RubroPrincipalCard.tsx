@@ -9,6 +9,7 @@ type Props = {
   principal: DecisionCandidate
   onOpenPromo: (promo: unknown) => void
   onOpenNearby: (commerceId: string, commerceName: string) => void
+  isGuest?: boolean
 }
 
 // Desktop — lógica de Recommendation Card variante 7 (Design Lab, CPO
@@ -16,7 +17,7 @@ type Props = {
 // Ya no usa la fixture `data.ts` — todo sale de DecisionCandidate real vía
 // la capa de copy (lib/homeCopy.ts). No lee `promo` para renderizar: solo lo
 // reenvía como handle opaco al click.
-export default function RubroPrincipalCard({ rubro, principal, onOpenPromo, onOpenNearby }: Props) {
+export default function RubroPrincipalCard({ rubro, principal, onOpenPromo, onOpenNearby, isGuest }: Props) {
   const copy = buildCandidateCopy(principal)
   const identity = visualIdentity(principal)
   const commerceId = (principal.promo as any)?.commerceId ?? null
@@ -44,19 +45,25 @@ export default function RubroPrincipalCard({ rubro, principal, onOpenPromo, onOp
 
         <div className="p-4 flex flex-col justify-center gap-1.5 lg:border-r border-[#F0F2F5] dark:border-slate-700 min-w-0">
           <p className="text-[13px] font-bold text-[#0D1B2E] dark:text-white truncate">{principal.facts.commerceName}</p>
-          <p className="flex items-baseline gap-1.5">
-            <span className="text-[28px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-none tabular-nums">
-              {copy.benefit.headline}{copy.benefit.unit}
-            </span>
-            <span className="text-[12px] text-slate-400 dark:text-slate-500">{copy.benefit.qualifier}</span>
-          </p>
+          {isGuest ? (
+            <p className="text-[19px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-snug">
+              {copy.guestHeadline}
+            </p>
+          ) : (
+            <p className="flex items-baseline gap-1.5">
+              <span className="text-[28px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-none tabular-nums">
+                {copy.benefit.headline}{copy.benefit.unit}
+              </span>
+              <span className="text-[12px] text-slate-400 dark:text-slate-500">{copy.benefit.qualifier}</span>
+            </p>
+          )}
           {copy.cap && (
             <span className="inline-flex w-fit items-center text-[11px] font-extrabold text-[#0F6B3C] dark:text-[#4ADE80] bg-[#E7F6EC] dark:bg-[#123322] rounded-full px-2.5 py-0.5">
               {copy.cap}
             </span>
           )}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="text-[11px] font-semibold text-[#5A6B85] dark:text-slate-400 truncate">{copy.paymentMethod}</p>
+            {!isGuest && <p className="text-[11px] font-semibold text-[#5A6B85] dark:text-slate-400 truncate">{copy.paymentMethod}</p>}
             {copy.nearby && commerceId && (
               <span
                 role="button"

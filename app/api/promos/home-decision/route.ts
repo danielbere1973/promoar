@@ -6,7 +6,7 @@ import { getPromosData } from '@/lib/getPromos'
 import { buildHomeDecisionPayload, type DecisionContext, type NearbyMap } from '@/lib/decisionEngineV2'
 import { getNearbyBranchesByCommerce } from '@/lib/nearbyBranches'
 import { getDeclaredActivePreferences, getActiveHomeRubroIds, resolveDeclaredUniverse, resolveGuestUniverse } from '@/lib/rubroPreferences'
-import { RUBRO_CATALOG } from '@/lib/rubroCatalog'
+import { RUBRO_CATALOG, GUEST_PRIORITY_RUBRO_IDS } from '@/lib/rubroCatalog'
 import type { HomeDecisionPayload } from '@/lib/homeDecisionContract'
 
 export const dynamic = 'force-dynamic'
@@ -25,6 +25,8 @@ export const dynamic = 'force-dynamic'
 // promoPoolVersion. Solo aplica a usuarios autenticados (requiere userId) —
 // guests siempre recalculan, sin pasar por este cache.
 const NEARBY_RADIUS_KM = 5
+// CPO Dictamen "Cierre de pendientes Guest/Home v2" (31/8/2026, Punto 3).
+const GUEST_SHOWCASE_RUBRO_COUNT = 6
 
 function sha256(input: string): string {
   return createHash('sha256').update(input).digest('hex')
@@ -277,11 +279,6 @@ export async function GET(req: NextRequest) {
     const role = token?.role as string | undefined
     const isAdmin = role === 'ADMIN' || role === 'MODERATOR'
 
-    const hasRealProfile = !!email || !!guestProfileParam
-    if (!hasRealProfile) {
-      return NextResponse.json(incompleteProfilePayload(['cards']))
-    }
-
     // Resolución de identidad + universo declarado — antes de fetchear
     // promos, porque un userId habilita el path de cache (HomeDecisionSnapshot).
     const user = email ? await prisma.user.findUnique({ where: { email }, select: { id: true } }) : null
@@ -499,16 +496,35 @@ async function buildPayloadForUser(
     isAdmin,
   )
   const promos = (result as any).promos ?? []
+  const profileIncomplete = !!(result as any).profileIncomplete
 
   if (!promos.length) {
     return incompleteProfilePayload(['cards'])
   }
 
-  const ctx: DecisionContext = { ...location, todayBit: todayDayBit() }
-  const payload = buildHomeDecisionPayload(promos, ctx, undefined, { hasProfile: true }, declaredUniverse)
+  // CPO Directiva "Vidriera guest permisiva, no restrictiva" (31/8/2026):
+  // scoreAhorro necesita esto para no scorear como 0 toda promo con
+  // requirement de banco/wallet específico cuando el guest no tiene tarjetas
+  // cargadas — ver comentario en scoreAhorro (lib/decisionEngineV2.ts).
+  const ctx: DecisionContext = { ...location, todayBit: todayDayBit(), allowGlobalDiscountFallback: profileIncomplete }
+  // CPO Dictamen "Cierre de pendientes Guest/Home v2" (31/8/2026, Punto 3): 6
+  // rubros en la vidriera guest en vez de los 5 por defecto — ver
+  // BuildHomeDecisionOptions.rubroCount.
+  const rubroCount = profileIncomplete ? GUEST_SHOWCASE_RUBRO_COUNT : undefined
+  // CPO Directiva "Vidriera guest permisiva, no restrictiva" (31/8/2026): solo
+  // se activa la prioridad fija para el caso guest — un usuario logueado con
+  // perfil real sigue viendo sus rubros ordenados 100% por score.
+  const guestPriorityIds = profileIncomplete ? GUEST_PRIORITY_RUBRO_IDS : undefined
+  const payload = buildHomeDecisionPayload(promos, ctx, undefined, { hasProfile: true, rubroCount, guestPriorityIds }, declaredUniverse)
 
-  return {
-    ...payload,
-    status: !location.hasLocation && payload.status === 'all_empty' ? 'no_location' : payload.status,
-  }
+  // CPO Dictamen "Estado guest/sin perfil en Home v2" (31/8/2026): getPromosData
+  // ya resolvió profileIncomplete (guardrail OOM en lib/getPromos.ts) devolviendo
+  // destacadas/populares en vez de un array vacío — acá solo se remapea el status
+  // resultante para que el cliente sepa que es una vidriera genérica, no una
+  // recomendación personalizada, y muestre el CTA de registro en vez de ocultarlo.
+  let status = payload.status
+  if (!location.hasLocation && status === 'all_empty') status = 'no_location'
+  if (profileIncomplete && status === 'ok') status = 'guest_showcase'
+
+  return { ...payload, status }
 }

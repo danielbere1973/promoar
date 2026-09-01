@@ -37,6 +37,10 @@ export interface DecisionContext {
   nearbyByCommerceId: NearbyMap
   todayBit: number
   now?: Date
+  // Guest permisivo (RFC guest 31/8/2026): habilita el fallback a
+  // globalMaxDiscount en scoreAhorro cuando userBestDiscount es null. Ver
+  // comentario en scoreAhorro. undefined/false = comportamiento de siempre.
+  allowGlobalDiscountFallback?: boolean
 }
 
 export interface PersonaPreferences {
@@ -57,8 +61,18 @@ function passesVigencia(promo: any, todayBit: number): boolean {
 }
 
 // ─── Factores heredados de v1 (RFC-007 §0-§4, sin cambios de lógica) ───────
-function scoreAhorro(promo: any): number {
-  const best = promo.userBestDiscount
+// allowGlobalFallback (guest permisivo, RFC guest 31/8/2026): solo un guest
+// sin tarjetas cargadas puede caer a globalMaxDiscount — mismo fallback que
+// buildFacts ya usa para Facts. Para un usuario logueado con perfil real,
+// userBestDiscount=null significa "no matchea ninguno de sus requirements", y
+// scorear con globalMaxDiscount (el mejor descuento de CUALQUIER requirement,
+// aunque sea de un banco que el usuario no tiene) inflaría el score de una
+// promo que en realidad no puede usar. Sin este fallback en modo guest,
+// scoreAhorro devolvía 0 para toda promo con requirement de banco/wallet
+// específico — tumbaba rubros enteros (Combustible, Mascotas) por debajo de
+// CONFIDENCE_THRESHOLD_OK pese a tener candidatas reales con buen descuento.
+function scoreAhorro(promo: any, allowGlobalFallback: boolean): number {
+  const best = promo.userBestDiscount ?? (allowGlobalFallback ? promo.globalMaxDiscount : null)
   if (!best) return 0
   if (best.discountType === 'CUOTAS_SIN_INTERES' || best.discountType === 'NXM') return 0.3
   const pct = best.discountValue ?? 0
@@ -121,7 +135,7 @@ interface ScoredFactors {
 }
 
 function scorePromo(promo: any, ctx: DecisionContext, prefs: PersonaPreferences | undefined) {
-  const ahorro = scoreAhorro(promo)
+  const ahorro = scoreAhorro(promo, !!ctx.allowGlobalDiscountFallback)
   const { value: afinidad, source: afinidadSource } = scoreAfinidad(promo, prefs)
   const cercania = scoreCercania(promo, ctx)
   const online = scoreOnline(promo)
@@ -347,7 +361,13 @@ function selectTopRubroSlots(
   ctx: DecisionContext,
   prefs: PersonaPreferences | undefined,
   now: Date,
-  n: number = HOME_RUBRO_COUNT
+  n: number = HOME_RUBRO_COUNT,
+  // CPO Directiva "Vidriera guest permisiva, no restrictiva" (31/8/2026): para
+  // guest, Supermercados/Farmacias/Mascotas/Combustible/Transporte se muestran
+  // siempre que tengan datos (con prioridad fija, en ese orden) — el resto del
+  // catálogo compite por score solo por el/los slots que sobren. undefined =
+  // comportamiento de siempre (todo compite por score, caso usuario logueado).
+  guestPriorityIds?: string[]
 ): RubroSlot[] {
   const built = declaredUniverse.map(rubro => {
     const promosInRubro = rubro.categorySlugs.flatMap(slug => promosByCategorySlug.get(slug) ?? [])
@@ -359,11 +379,22 @@ function selectTopRubroSlots(
   )
 
   const catalogIndex = new Map(RUBRO_CATALOG.map((r, i) => [r.id, i]))
-  ok.sort((a, b) => {
+  const byScore = (a: typeof ok[number], b: typeof ok[number]) => {
     if (b.slot.principal.score !== a.slot.principal.score) return b.slot.principal.score - a.slot.principal.score
     return (catalogIndex.get(a.rubro.id) ?? 0) - (catalogIndex.get(b.rubro.id) ?? 0)
-  })
+  }
 
+  if (guestPriorityIds && guestPriorityIds.length > 0) {
+    const priorityIndex = new Map(guestPriorityIds.map((id, i) => [id, i]))
+    const priority = ok
+      .filter(b => priorityIndex.has(b.rubro.id))
+      .sort((a, b) => (priorityIndex.get(a.rubro.id) ?? 0) - (priorityIndex.get(b.rubro.id) ?? 0))
+    const rest = ok.filter(b => !priorityIndex.has(b.rubro.id)).sort(byScore)
+    const remainingSlots = Math.max(0, n - priority.length)
+    return [...priority, ...rest.slice(0, remainingSlots)].map(c => c.slot)
+  }
+
+  ok.sort(byScore)
   return ok.slice(0, n).map(c => c.slot)
 }
 
@@ -371,6 +402,18 @@ function selectTopRubroSlots(
 export interface BuildHomeDecisionOptions {
   hasProfile: boolean
   missingProfile?: string[]
+  // CPO Dictamen "Cierre de pendientes Guest/Home v2" (31/8/2026, Punto 3):
+  // la vidriera guest_showcase muestra 6 rubros en vez de los HOME_RUBRO_COUNT
+  // (5) por defecto, para transmitir abundancia a un visitante desconocido.
+  // Solo se resuelve después de armar el payload (status se remapea recién en
+  // buildPayloadForUser), así que quien arma el request para un visitante sin
+  // perfil pasa el override acá en vez de depender del status resultante.
+  rubroCount?: number
+  // CPO Directiva "Vidriera guest permisiva, no restrictiva" (31/8/2026): ids
+  // de RUBRO_CATALOG con prioridad fija para guest (Supermercados, Farmacias,
+  // Mascotas, Combustible, Transporte, en ese orden) — el resto de los slots
+  // (hasta rubroCount) compite por score. Ver GUEST_PRIORITY_RUBRO_IDS.
+  guestPriorityIds?: string[]
 }
 
 export function buildHomeDecisionPayload(
@@ -403,7 +446,15 @@ export function buildHomeDecisionPayload(
     promosByCategorySlug.get(slug)!.push(promo)
   }
 
-  const rubros: RubroSlot[] = selectTopRubroSlots(declaredUniverse, promosByCategorySlug, ctx, prefs, now)
+  const rubros: RubroSlot[] = selectTopRubroSlots(
+    declaredUniverse,
+    promosByCategorySlug,
+    ctx,
+    prefs,
+    now,
+    opts.rubroCount ?? HOME_RUBRO_COUNT,
+    opts.guestPriorityIds
+  )
 
   const allEmpty = rubros.length === 0 || rubros.every(r => r.status === 'empty')
   // no_location es informativo, no bloqueante (RFC-008 §3: "afecta factor

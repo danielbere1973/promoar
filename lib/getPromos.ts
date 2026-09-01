@@ -271,6 +271,29 @@ const getPublicPromosPage = unstable_cache(
 // avisa — no es un número mágico dado por cerrado, es un techo con telemetría.
 const CANDIDATE_LIMIT = 15000
 
+// CPO Directiva "Vidriera guest permisiva, no restrictiva" (31/8/2026): un
+// guest sin perfil no debe ver solo promos "sin banco/wallet" (REGLA 1 de
+// matchesProfile.ts) — ese universo es demasiado angosto (en dev, 2 de 18
+// rubros). En su lugar, para guests se amplía el candidate pool para incluir
+// también los emisores con mayor volumen de promos reales del catálogo
+// (bancos: Galicia, BBVA, Santander, BNA, Ciudad; billeteras: MODO, Mercado
+// Pago, Cuenta DNI) — mostrados igual con "Hasta X% con [Entidad]" (ver
+// lib/homeCopy.ts guestBenefitHeadline) para dejar explícito que depende de
+// tener esa tarjeta/billetera. Registrarse sigue siendo lo que resuelve el
+// match real contra el perfil del usuario.
+export const GUEST_FEATURED_BANK_IDS = [
+  'cmnulzag70001qlkkult0vte1', // Galicia
+  'cmnulzc4t0003qlkkkezpcuho', // BBVA
+  'cmnulzbhs0002qlkkruq7oxyc', // Santander
+  'cmnulzcrs0004qlkk8qo969qg', // Banco Nación
+  'cmnulze1k0006qlkkzmwrflpx', // Ciudad
+]
+export const GUEST_FEATURED_WALLET_IDS = [
+  'cmnulzh04000aqlkk8mnpzo46', // MODO
+  'cmnulzfz80009qlkkuyavwcvh', // Mercado Pago
+  '5a90bf8a-6f95-449f-b4f6-8647a6d3c9b4', // Cuenta DNI
+]
+
 export async function getCandidatePromosForProfile(params: {
   dayBit: number | null // null = view 'week', no filtra por día
   province: string | null
@@ -283,10 +306,16 @@ export async function getCandidatePromosForProfile(params: {
   // traer y después hidratar miles de filas de categorías que nunca se van a
   // usar. Vacío/undefined = sin filtro, comportamiento idéntico al anterior.
   categorySlugs?: string[]
+  // Ver GUEST_FEATURED_BANK_IDS/WALLET_IDS arriba. false/undefined = criterio
+  // estricto de siempre (solo promos sin banco/wallet, o que matchean el
+  // perfil real si userBankIds/userWalletIds vienen poblados).
+  guestPermissive?: boolean
 }): Promise<{ ids: string[]; queryMs: number; hitLimit: boolean }> {
   const t0 = Date.now()
-  const { dayBit, province, userBankIds, userWalletIds, savedPromoIds, categorySlugs } = params
+  const { dayBit, province, userBankIds, userWalletIds, savedPromoIds, categorySlugs, guestPermissive } = params
   const categoryFilter = categorySlugs && categorySlugs.length > 0 ? categorySlugs : null
+  const effectiveBankIds = guestPermissive ? [...userBankIds, ...GUEST_FEATURED_BANK_IDS] : userBankIds
+  const effectiveWalletIds = guestPermissive ? [...userWalletIds, ...GUEST_FEATURED_WALLET_IDS] : userWalletIds
 
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT p.id FROM "promos" p
@@ -311,8 +340,8 @@ export async function getCandidatePromosForProfile(params: {
           WHERE r."promoId" = p.id
             AND (
               (r."bankId" IS NULL AND r."walletId" IS NULL)
-              OR r."bankId" = ANY(${userBankIds}::text[])
-              OR r."walletId" = ANY(${userWalletIds}::text[])
+              OR r."bankId" = ANY(${effectiveBankIds}::text[])
+              OR r."walletId" = ANY(${effectiveWalletIds}::text[])
             )
         )
       )
@@ -754,6 +783,12 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
           userWalletIds: candidateUserWalletIds,
           savedPromoIds: candidateSavedPromoIds,
           categorySlugs,
+          // CPO Directiva "Vidriera guest permisiva, no restrictiva" (31/8/2026):
+          // sin esto, un guest (profileIncomplete=true, candidateUserBankIds/
+          // WalletIds vacíos) solo pasaba promos sin NINGUNA restricción de
+          // banco/wallet — universo demasiado angosto para la vidriera de
+          // variedad que pide Home v2 guest. Ver GUEST_FEATURED_BANK_IDS arriba.
+          guestPermissive: profileIncomplete,
         })
         candidatePerfBox.value = { queryMs: candidates.queryMs, rows: candidates.ids.length, hitLimit: candidates.hitLimit }
         if (!candidates.ids.length) return [[], 0] as const

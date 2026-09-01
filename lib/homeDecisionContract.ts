@@ -103,6 +103,13 @@ export type HomeDecisionStatus =
   | 'all_empty'
   | 'incomplete_profile'
   | 'no_location'
+  // CPO Dictamen "Estado guest/sin perfil en Home v2" (31/8/2026): un
+  // visitante sin perfil financiero (guest puro o logueado sin tarjetas) ya
+  // no ve 'incomplete_profile' con rubros:[] — ve una vidriera de destacadas
+  // (mismo criterio que 'ok', pero sin personalizar). El cliente usa este
+  // status para mostrar el badge "Vista general" en vez de "Recomendado para
+  // vos", sin ocultar HomeRubros.
+  | 'guest_showcase'
 
 export interface HomeDecisionPayload {
   status: HomeDecisionStatus
