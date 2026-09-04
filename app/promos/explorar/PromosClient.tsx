@@ -481,6 +481,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const DIAS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
   const [promos, setPromos] = useState<Promo[]>(initialPromos ?? [])
+  const [totalCount, setTotalCount] = useState<number>(initialTotalCount ?? 0)
   // loading=true cuando no hay nada que mostrar (null o []) — el splash espera esto
   const [loading, setLoading] = useState(!initialPromos?.length)
   const [filterLoading, setFilterLoading] = useState(false)
@@ -987,6 +988,9 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             setPromos(data.promos ?? [])
             setVisibleCount(20)
           }
+          if (data.totalCount !== undefined && data.totalCount !== null) {
+            setTotalCount(data.totalCount)
+          }
           setHasMore(data.hasMore ?? false)
           setProfileIncomplete(!!data.profileIncomplete)
         }
@@ -1267,8 +1271,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       .sort((a, b) => b.count !== a.count ? b.count - a.count : b.bestDiscount - a.bestDiscount)
       .slice(0, 5)
 
-    return { totalPromos: promos.length, maxDiscount, dayCounts, catList, commList }
-  }, [promos, selectedCats, favCategories, favCommerces, activeFilters.commerces, initialTotalCount])
+    return { totalPromos: totalCount || promos.length, maxDiscount, dayCounts, catList, commList }
+  }, [promos, totalCount, selectedCats, favCategories, favCommerces, activeFilters.commerces, initialTotalCount])
 
   // Ordenar: favoritos primero (categoría o comercio en favoritos), luego el resto
   const promosFiltradas = favCategories.length === 0 && favCommerces.length === 0

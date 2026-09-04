@@ -21,6 +21,7 @@ const HARD_CAP_TAKE = 200
 // usuario con 3765 promos matcheadas veía solo ~100 en la Home). Sigue habiendo
 // un techo por las dudas, más alto, hasta que exista paginación real logueada.
 const HARD_CAP_TAKE_NARROWED = 1000
+const MODO_WALLET_ID = 'cmnulzh04000aqlkk8mnpzo46'
 
 // Prisma/Postgres `contains`+`insensitive` solo ignora mayúsculas, no acentos —
 // "cafe" no matchea "Café" sin este normalizado en ambos lados de la comparación.
@@ -618,8 +619,17 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       if (Array.isArray(decoded?.cards)) candidateGuestCards = decoded.cards
     } catch {}
   }
-  const candidateEffectiveCards: any[] | null =
-    candidateUserProfile?.cards ?? (candidateGuestCards && forMe ? candidateGuestCards : null)
+  const candidateWalletVirtualCards = (candidateUserProfile?.wallets ?? [])
+    .filter((w: any) => w.walletId !== MODO_WALLET_ID)
+    .map((w: any) => ({
+      walletId: w.walletId, bankId: null, cardNetworkId: null,
+      cardType: 'ACCOUNT', cardSegmentId: null, segmentId: null,
+      cardTier: null, isPayroll: false, isPensioner: false,
+    }))
+  const candidateEffectiveCards: any[] | null = [
+    ...(candidateUserProfile?.cards ?? (candidateGuestCards && forMe ? candidateGuestCards : [])),
+    ...candidateWalletVirtualCards,
+  ]
 
   // Guardrail OOM (cpo-a-cto-aprobacion-rfc-guardrail-oom-y-autorizacion-spike-25-8-2026.md,
   // Opción C): forMe=true sin ninguna tarjeta efectiva (perfil inexistente o
@@ -920,11 +930,17 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
           // sesión Y sin perfil de invitado (guest_profile).
           ...(paginate
             ? { take: pageSize, skip: (page - 1) * pageSize }
-            : { take: take ?? ((forMe && candidateEffectiveCards?.length) || email ? HARD_CAP_TAKE_NARROWED : HARD_CAP_TAKE) }),
+            : {
+                take: take ?? ((forMe && candidateEffectiveCards?.length) || email ? HARD_CAP_TAKE_NARROWED : HARD_CAP_TAKE),
+                skip: page > 1 ? (page - 1) * (take ?? ((forMe && candidateEffectiveCards?.length) || email ? HARD_CAP_TAKE_NARROWED : HARD_CAP_TAKE)) : 0,
+              }),
         }),
         // Usar count cacheado para invitados sin filtros (evita full scan en cada request)
         paginate ? getActiveTotalCount() : prisma.promo.count({ where }),
       ])
+  const effectiveTake = take ?? ((forMe && candidateEffectiveCards?.length) || email ? HARD_CAP_TAKE_NARROWED : HARD_CAP_TAKE)
+  const hasMoreCalculated = paginate ? totalCount > page * pageSize : totalCount > page * effectiveTake
+
   __mark(`after findMany (promos=${promos.length}, totalCount=${totalCount})`)
 
   if (candidatePerfBox.value) {
@@ -1085,7 +1101,6 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   // Tarjetas virtuales desde UserWallet — excluye MODO porque toda promo MODO
   // requiere un banco asociado; MODO sin banco no existe en la práctica.
   // MODO matchea solo via cards reales (bankId + walletId=MODO).
-  const MODO_WALLET_ID = 'cmnulzh04000aqlkk8mnpzo46'
   const walletVirtualCards = (userProfile?.wallets ?? [])
     .filter((w: any) => w.walletId !== MODO_WALLET_ID)
     .map((w: any) => ({
@@ -1415,8 +1430,8 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     perf.totalMs = Date.now() - perfStart
     perf.recommendationsCount = orderedPromos.length
     console.log(`[candidate-selection] ${JSON.stringify(perf)}`)
-    return { promos: orderedPromos, totalCount, hasMore: false, perf, profileIncomplete }
+    return { promos: orderedPromos, totalCount, hasMore: hasMoreCalculated, perf, profileIncomplete }
   }
 
-  return { promos: orderedPromos, totalCount, hasMore: false, profileIncomplete }
+  return { promos: orderedPromos, totalCount, hasMore: hasMoreCalculated, profileIncomplete }
 }
