@@ -27,13 +27,19 @@ export type NearbyByCommerce = Record<string, { count: number; minDistKm: number
 
 const MAX_BRANCHES_PER_COMMERCE = 5
 
+// Rango geográfico plausible de Argentina continental + islas — descarta filas
+// con coordenadas corruptas (ej. (0,0), lat/lng invertidas) que de otro modo
+// entrarían al bounding-box y podrían calificar como "cercanas" por error.
+const AR_LAT_RANGE = { min: -56, max: -20 }
+const AR_LNG_RANGE = { min: -76, max: -52 }
+
 export async function getNearbyBranchesByCommerce(lat: number, lng: number, radius: number): Promise<NearbyByCommerce> {
   const deg = kmToDeg(radius)
 
   const branches = await prisma.commerceBranch.findMany({
     where: {
-      lat: { gte: lat - deg, lte: lat + deg },
-      lng: { gte: lng - deg, lte: lng + deg },
+      lat: { gte: Math.max(lat - deg, AR_LAT_RANGE.min), lte: Math.min(lat + deg, AR_LAT_RANGE.max) },
+      lng: { gte: Math.max(lng - deg, AR_LNG_RANGE.min), lte: Math.min(lng + deg, AR_LNG_RANGE.max) },
     },
     select: { commerceId: true, lat: true, lng: true, address: true, city: true, province: true },
   })

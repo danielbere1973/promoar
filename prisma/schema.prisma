@@ -440,6 +440,7 @@ model Commerce {
   defaultCategoryId       String?
   activePromoCount        Int                      @default(0)
   locationModel           LocationModel            @default(UNKNOWN)
+  stacksWithBankPromos    BankPromoStacking        @default(UNKNOWN)
   defaultCategory         Category?                @relation("CommerceDefaultCategory", fields: [defaultCategoryId], references: [id])
   promos                  Promo[]
   branches                CommerceBranch[]
@@ -782,7 +783,9 @@ model ScraperRun {
   finishedAt DateTime?
   found      Int?
   processed  Int?
+  skipped    Int?
   message    String?
+  trigger    String? // http | local | gh_actions
 
   @@index([scraperId, startedAt])
   @@map("scraper_runs")
@@ -917,6 +920,13 @@ enum LocationModel {
   MOBILE_SERVICE // el servicio va al cliente (Uber, Cabify, etc.)
   NO_FIXED_LOCATION // sin punto fijo, sin ser servicio móvil
   UNKNOWN // sin clasificar — default de compatibilidad
+}
+
+// Feature "¿Dónde me conviene comprar?" (cto-a-cpo-plan-tecnico-lista-compras-ahorro-1-9-2026.md)
+enum BankPromoStacking {
+  ALWAYS // promo bancaria acumula 100% con promos de góndola del súper
+  NEVER // no acumula — el veredicto aplica la mejor de las dos, no la suma
+  UNKNOWN // sin confirmar — default, se muestra igual pero marcado "no confirmado"
 }
 
 enum SalesChannel {

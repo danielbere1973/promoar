@@ -117,11 +117,19 @@ function promoFingerprint(data: any, reqs: any[]): string {
     String(data.maxDiscountPct ?? ''),
     String(data.isCSIOnly ?? ''),
     String(data.salesChannel ?? ''),
+    String(data.categoryId ?? ''),
     sortedReqs.join(';'),
   ].join('||')
 }
 
 export async function POST(req: NextRequest) {
+  // Registro centralizado en ScraperRun — antes solo /api/admin/run-scraper lo hacía,
+  // dejando ciego el historial cuando se corría desde "Ejecutar todos (local)" o
+  // selección local del admin, que llaman directo a este endpoint (bug reportado por
+  // Pablo 4/9/2026: corrió scrapers 31/7 y 1/9 y no quedó ningún rastro en ScraperRun).
+  // Se crea acá, con scraperId real, sin importar qué UI lo disparó.
+  let runId: string | null = null;
+  let scraperFilterForLog: string | undefined;
   try {
     let scraperFilter: string | undefined;
     let categoriaFilter: string | undefined;
@@ -134,6 +142,18 @@ export async function POST(req: NextRequest) {
       preScrapedPromos = body.promos; // promos pre-scrapeadas desde GitHub Actions
       forceLocal = !!body.forceLocal; // solapa "Local" del admin — saltea guard Playwright
     } catch { /* body vacío */ }
+
+    scraperFilterForLog = scraperFilter;
+    if (scraperFilter) {
+      const run = await prisma.scraperRun.create({
+        data: {
+          scraperId: scraperFilter.toLowerCase(),
+          status: 'running',
+          trigger: preScrapedPromos?.length ? 'gh_actions' : (forceLocal ? 'local' : 'http'),
+        },
+      });
+      runId = run.id;
+    }
 
     // Scrapers que requieren Playwright — no pueden correr en Vercel (Chromium no disponible)
     const PLAYWRIGHT_SCRAPER_NAMES = new Set([
@@ -592,7 +612,12 @@ export async function POST(req: NextRequest) {
         const promoData = {
           title: p.title,
           description: p.description || '',
-          stackable: p.stackable ?? false,
+          // p.stackable=null significa "el scraper no encontró ninguna mención de
+          // acumulable/no acumulable" (no significa "no acumulable"). Se deja undefined
+          // para que en un update Prisma no toque el campo (conserva el valor existente,
+          // por si fue corregido a mano), y solo en un create aplica el default false
+          // — igual que antes, pero sin pisar datos ya buenos en cada re-scrape.
+          stackable: p.stackable ?? undefined,
           validFrom: (() => {
             const d = p.validFrom ? new Date(p.validFrom) : new Date()
             return isNaN(d.getTime()) ? new Date() : d
@@ -631,7 +656,7 @@ export async function POST(req: NextRequest) {
       select: {
         id: true, title: true, commerceId: true, sourceUrl: true, source: true, externalId: true, slug: true, status: true,
         validFrom: true, validUntil: true, validDays: true, maxDiscountPct: true, isCSIOnly: true,
-        salesChannel: true,
+        salesChannel: true, categoryId: true,
         requirements: {
           select: {
             bankId: true, walletId: true, cardNetworkId: true, cardSegmentId: true,
@@ -720,7 +745,7 @@ export async function POST(req: NextRequest) {
         if (existingSlugs.has(slug)) slug = `${baseSlug}-${Date.now().toString(36)}`;
         existingSlugs.add(slug);
         try {
-          const created = await prisma.promo.create({ data: { ...promoData, slug, status: 'DRAFT', requirements: { create: reqData } } });
+          const created = await prisma.promo.create({ data: { ...promoData, stackable: promoData.stackable ?? false, slug, status: 'DRAFT', requirements: { create: reqData } } });
           newPromoIds.push(created.id);
           changedCommerceIds.add(commerceId);
         } catch (e: any) {
@@ -790,6 +815,19 @@ export async function POST(req: NextRequest) {
       }).catch((e) => console.error('[snapshots/warm] Error:', e))
     }
 
+    if (runId) {
+      await prisma.scraperRun.update({
+        where: { id: runId },
+        data: {
+          status: 'success',
+          finishedAt: new Date(),
+          found: flatPromos.length,
+          processed: processedCount,
+          skipped: skippedUnchanged,
+        },
+      }).catch((e) => console.error('[ScraperRun] Error actualizando a success:', e));
+    }
+
     return NextResponse.json({
       message: 'Scraping completado con éxito',
       totalFound: flatPromos.length,
@@ -808,6 +846,12 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Error scrapeando:', error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    if (runId) {
+      await prisma.scraperRun.update({
+        where: { id: runId },
+        data: { status: 'error', finishedAt: new Date(), message: String(error).slice(0, 500) },
+      }).catch((e) => console.error('[ScraperRun] Error actualizando a error:', e));
+    }
+    return NextResponse.json({ error: String(error), scraperId: scraperFilterForLog }, { status: 500 });
   }
 }

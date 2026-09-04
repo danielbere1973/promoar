@@ -104,6 +104,13 @@ export const PersonalPayScraper: Scraper = {
           const storeName: string = (item.title || '').trim();
           if (!storeName) continue;
 
+          // item.name distingue variantes del mismo comercio con igual % pero distinto
+          // producto/porción (ej. Freddo: "Cuarto Kilo" vs "Kilo de Helado" vs "Cucuruchos"),
+          // que la API expone como beneficios separados. Sin esto, dos beneficios distintos
+          // generan el mismo título y colisionan en el matching por título+comercio,
+          // perdiendo uno de los dos silenciosamente.
+          const variant: string = (item.name || '').trim();
+
           const discountStr: string = (item.discounts || '').trim();
           const nxmMatch = discountStr.match(/^(\d+)\s*[xX]\s*(\d+)$/)
           const pct = nxmMatch ? 0 : parseInt(discountStr.replace('%', ''));
@@ -128,18 +135,23 @@ export const PersonalPayScraper: Scraper = {
           const validUntil = item.dueDate ? new Date(item.dueDate) : undefined;
 
           const typeLabel = typeCode === 'Cashback' ? 'reintegro' : 'descuento';
-          const title = nxmMatch ? `${discountStr} – ${storeName}` : `${pct}% de ${typeLabel} – ${storeName}`;
+          const variantSuffix = variant ? ` (${variant})` : '';
+          const title = nxmMatch
+            ? `${discountStr} – ${storeName}${variantSuffix}`
+            : `${pct}% de ${typeLabel} – ${storeName}${variantSuffix}`;
           const description = nxmMatch
-            ? `${discountStr} en ${storeName}. ${daysLabel}.`
-            : `${pct}% de ${typeLabel} en ${storeName}. ${daysLabel}.${cap ? ` Tope: $${cap.toLocaleString('es-AR')}.` : ''}`;
+            ? `${discountStr} en ${storeName}${variant ? ` – ${variant}` : ''}. ${daysLabel}.`
+            : `${pct}% de ${typeLabel} en ${storeName}${variant ? ` – ${variant}` : ''}. ${daysLabel}.${cap ? ` Tope: $${cap.toLocaleString('es-AR')}.` : ''}`;
 
           allPromos.push({
             storeName,
             storeLogoUrl: logoUrl || undefined,
             title,
             description,
-            sourceText: `${discountStr} ${typeLabel} ${storeName} ${daysLabel}`,
+            sourceText: `${discountStr} ${typeLabel} ${storeName} ${variant} ${daysLabel}`,
             sourceUrl: PAGE_URL,
+            source: 'personal-pay',
+            externalId: item.id != null ? String(item.id) : undefined,
             discount: nxmMatch ? discountStr : String(pct),
             discountType,
             cap: cap ?? null,

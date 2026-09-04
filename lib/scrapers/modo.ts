@@ -148,6 +148,8 @@ interface CapDetails {
   paymentChannels: ModoPaymentChannel[];  // puede ser [QR, NFC] simultáneamente
   legalText: string;
   extraStoreNames?: string[];
+  minPurchase: number | null;
+  stackable: boolean | null;  // desde el texto legal de la página de detalle (más confiable que conditionsText de la API de listado)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -291,7 +293,7 @@ function extractStoreName(card: ModoCard): string {
 // ─── Fetch individual promo (solo cap + bcra_code de bancos) ──────────────────
 
 async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
-  const result: CapDetails = { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [], paymentChannels: [], legalText: '' };
+  const result: CapDetails = { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [], paymentChannels: [], legalText: '', minPurchase: null, stackable: null };
   try {
     const { data: html } = await axios.get(promoUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
@@ -382,6 +384,31 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
         .map((m: string) => m.replace(/\s+/g, ' ').trim())
         .join(' | ')
         .slice(0, 3000);
+    }
+
+    // Términos y condiciones completos (editor-paragraph/editor-listitem): el HTML viene
+    // con entities escapadas (< en vez de <, \" en vez de "), así que se decodifica
+    // antes de buscar texto en prosa. Es la única fuente de minPurchase y, para varias
+    // promos, la única mención real de "acumulable" — la API de listado (card.content.row)
+    // no siempre trae ninguno de los dos datos (confirmado en la promo Jumbo MJ septiembre26,
+    // donde minimum_amount viene ausente en la API pero el HTML dice "monto mayor o igual a
+    // $100.000" y "La Bonificación podrá ser acumulable con otros descuentos bancarios").
+    const decodedTerms = html
+      .replace(/\\u003c/g, '<').replace(/\\u003e/g, '>')
+      .replace(/\\"/g, '"').replace(/\\u0026nbsp;/g, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ');
+
+    const minPurchaseMatch = decodedTerms.match(/(?:monto\s+(?:mayor\s+o\s+igual\s+a|m[íi]nimo\s+de)|compra\s+m[íi]nima\s+de|consumo\s+m[íi]nimo\s+de)\s*\$?\s*([\d.,]+)/i);
+    if (minPurchaseMatch) {
+      const num = parseFloat(minPurchaseMatch[1].replace(/\./g, '').replace(',', '.'));
+      if (num > 0) result.minPurchase = num;
+    }
+
+    if (/no\s+(?:ser[áa]|es|podr[áa]\s+ser)\s+acumulable/i.test(decodedTerms)) {
+      result.stackable = false;
+    } else if (/(?:ser[áa]|es|podr[áa]\s+ser)\s+acumulable/i.test(decodedTerms)) {
+      result.stackable = true;
     }
 
     // múltiples comercios desde og:description ("en YPF, SHELL Y AXION con Ciudad")
@@ -502,7 +529,7 @@ export const ModoScraper: Scraper = {
       const cardNetworks = extractNetworks(card);
       const cardTier = extractCardTier(card);
       const storeName = extractStoreName(card);
-      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [] as CardNetworkWithType[], paymentChannels: [] as ModoPaymentChannel[], legalText: '' };
+      const capDetails = capDetailsMap.get(card.slug) ?? { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [] as CardNetworkWithType[], paymentChannels: [] as ModoPaymentChannel[], legalText: '', minPurchase: null, stackable: null };
       const storeNames = capDetails.extraStoreNames && capDetails.extraStoreNames.length >= 2
         ? capDetails.extraStoreNames
         : [storeName];
@@ -544,6 +571,12 @@ export const ModoScraper: Scraper = {
       let stackable: boolean | null = null;
       if (/no\s+(?:es\s+)?acumulable/i.test(conditionsText)) stackable = false;
       else if (/(?:es\s+)?acumulable/i.test(conditionsText)) stackable = true;
+      // El texto de la API de listado (card.content.row) no siempre menciona acumulabilidad;
+      // cuando no dice nada, el texto legal completo de la página de detalle puede tenerlo
+      // (confirmado en Jumbo MJ septiembre26: "podrá ser acumulable con otros descuentos
+      // bancarios" solo aparece ahí). Se usa como fallback, nunca pisa un match explícito
+      // de conditionsText.
+      if (stackable === null && capDetails.stackable !== null) stackable = capDetails.stackable;
 
       // Toda promo MODO debe tener al menos un banco — sin banco no existe en la práctica
       if (allBanks.length === 0) {
@@ -565,7 +598,7 @@ export const ModoScraper: Scraper = {
               capUnlimited: capDetails.capUnlimited,
               capPeriod: capDetails.capPeriod ?? (capDetails.cap ? 'MONTHLY' : undefined),
               capTarget: capDetails.cap ? 'USER' : null,
-              minPurchase: card.minimum_amount > 0 ? card.minimum_amount : null,
+              minPurchase: (card.minimum_amount > 0 ? card.minimum_amount : null) ?? capDetails.minPurchase,
               stackable,
               singleUse: undefined,
               validFrom,

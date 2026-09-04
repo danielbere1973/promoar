@@ -59,6 +59,14 @@ type Promo = {
   category: { name: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null }
   requirements: Req[]
+  /** Requirement puntual que matchea el perfil real del usuario (calculado en
+   * lib/getPromos.ts vía matchesProfileShared). Cuando está presente, es la
+   * fuente de verdad para "qué banco/billetera es esta promo para mí" — sin
+   * esto, bestDiscountReq/entities miran TODOS los requirements de la promo
+   * y muestran el primero cargado en la DB, no el que realmente aplica al
+   * usuario (ej. una promo MODO agnóstica de banco terminaba mostrando el
+   * primer banco cargado, tipo "Banco Nación y MODO"). */
+  userBestDiscount?: Req | null
 }
 
 function bestDiscountReq(reqs: Req[]): Req | null {
@@ -108,17 +116,21 @@ type Props = {
 }
 
 export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, fullWidth, priority, onRegisterUsage, reasons }: Props) {
-  const bestReq = bestDiscountReq(promo.requirements)
+  // Cuando el perfil del usuario matchea un requirement puntual, ese es el
+  // único que importa para mostrar "para vos" — evita mezclar bancos/redes
+  // de requirements de otros usuarios dentro de la misma promo.
+  const personalizedReqs = promo.userBestDiscount ? [promo.userBestDiscount] : promo.requirements
+  const bestReq = bestDiscountReq(personalizedReqs)
   const { num, unit, label, isCsi } = discountDisplay(bestReq)
 
   const banks = Array.from(new Map(
-    promo.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])
+    personalizedReqs.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])
   ).values())
   const wallets = Array.from(new Map(
-    promo.requirements.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])
+    personalizedReqs.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])
   ).values())
   const networks = Array.from(new Map(
-    promo.requirements.filter(r => r.cardNetwork?.slug).map(r => [r.cardNetwork!.slug, r.cardNetwork!])
+    personalizedReqs.filter(r => r.cardNetwork?.slug).map(r => [r.cardNetwork!.slug, r.cardNetwork!])
   ).values())
   const entities = [...banks, ...wallets].slice(0, 2)
 
@@ -130,7 +142,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   const cappedReq = reqWithUsage ?? promo.requirements.find(r => r.cap != null && r.capPeriod) ?? null
   // Para "Registrar uso": cualquier requirement con ahorro real (no CSI puro), priorizando uno con tope.
   const usableReq = cappedReq ?? (isCsi ? null : bestReq)
-  const segments = promo.requirements.map(r => r.cardSegment?.name).filter(Boolean)
+  const segments = personalizedReqs.map(r => r.cardSegment?.name).filter(Boolean)
   const exclusiveSegment = segments.length > 0 && new Set(segments).size === 1 ? segments[0] : null
 
   const channels = [...new Set(

@@ -133,25 +133,33 @@ const HEADERS = {
   "Accept": "application/json"
 }
 
-// Filtra productos cuyo nombre no contiene al menos la palabra principal de la búsqueda.
+// Filtra productos cuyo nombre no contiene suficientes palabras de la búsqueda.
 // Evita falsos positivos cuando VTEX IS devuelve top-sellers sin relación con la query.
+// Multi-palabra (no solo 1 término): distintas tiendas abrevian/redactan el nombre
+// distinto (ej. "Queso Unt. Clásico Tonadita" vs "Queso Untable Clásico Tonadita"),
+// exigir 1 sola palabra exacta descartaba productos reales de esas tiendas.
 function isRelevantForQuery(productName: string, query: string): boolean {
   const normalize = (s: string) =>
     s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   const words = normalize(query)
     .split(/\s+/)
-    .filter(w => w.length >= 4 && !/^\d+$/.test(w))
+    .filter(w => w.length >= 3 && !/^\d+$/.test(w))
   if (!words.length) return true
   const name = normalize(productName)
-  const mainWord = words.sort((a, b) => b.length - a.length)[0]
 
-  // Stem simple: si termina en 's', también aceptar el singular (heladeras → heladera)
-  const stem = mainWord.endsWith('s') && mainWord.length > 4 ? mainWord.slice(0, -1) : mainWord
-  const match = name.includes(mainWord) ? mainWord : name.includes(stem) ? stem : null
-  if (!match) return false
+  const stem = (w: string) => (w.endsWith('s') && w.length > 4 ? w.slice(0, -1) : w)
+  const matchedWords = words.filter(w => name.includes(w) || name.includes(stem(w)))
+  if (!matchedWords.length) return false
 
-  // Descartar accesorios: si el término aparece después de "para/apto para/compatible con"
-  const idx = name.indexOf(match)
+  // Con 1-2 palabras en la query, alcanza con que matchee la más larga (evita
+  // exigir 2/2 en queries cortas). Con 3+, exigimos al menos el 50%.
+  const required = words.length <= 2 ? 1 : Math.ceil(words.length * 0.5)
+  if (matchedWords.length < required) return false
+
+  // Descartar accesorios: si la palabra matcheada más larga aparece después de
+  // "para/apto para/compatible con"
+  const mainMatch = matchedWords.sort((a, b) => b.length - a.length)[0]
+  const idx = name.indexOf(mainMatch)
   const before = name.slice(0, idx).trimEnd()
   if (/\b(para|apto para|compatible con)\s*$/.test(before)) return false
   return true
@@ -768,7 +776,10 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
       if (!available || price <= 0) return null
       
       let discountText = "-"
-      const highlights = offer.DiscountHighLight || []
+      // DiscountHighLight también serializa como backing field .NET ("<Name>k__BackingField"),
+      // no como { name }. Sin este mapeo, el objeto crudo termina en el join() de abajo como
+      // el string literal "[object Object]".
+      const highlights = (offer.DiscountHighLight || []).map((h: any) => h.name || h['<Name>k__BackingField']).filter(Boolean)
       // offer.Teasers serializa los campos como "<Name>k__BackingField" (backing fields .NET),
       // por eso t.Name siempre es undefined ahí. PromotionTeasers trae los mismos datos con Name limpio.
       const teasers = offer.PromotionTeasers?.map((t: any) => t.Name) || []
@@ -1693,16 +1704,21 @@ export async function GET(request: Request) {
       if (p.excludedFromBankPromos) return p  // ya marcado por la función del scraper (ej. Coto)
       let excluded = false
       if (p.supermarket === 'Carrefour') excluded = isCarrefourExcludedFromBankPromos(p)
-      // Regla general: si el super ya tiene su propia promo sobre el producto, no se acumula con banco
-      if (!excluded && (p.price > p.finalPrice || !!p.multiUnitPromo)) excluded = true
+      // Regla "promo propia del súper no acumula con banco": confirmada solo para Coto
+      // (Pablo, 3/9/2026 — en Jumbo/Cencosud las promos de góndola tipo "2do al X%"/"6x4"
+      // SÍ acumulan con descuentos bancarios; aplicarla a todas las tiendas generaba falsos
+      // positivos, ej. Fanta en Jumbo marcada "no acumulable" solo por tener 2do al 50%).
+      if (!excluded && p.supermarket === 'Coto' && (p.price > p.finalPrice || !!p.multiUnitPromo)) excluded = true
       return excluded ? { ...p, excludedFromBankPromos: true } : p
     })
 
     // Para búsquedas de texto libre: descartar productos irrelevantes.
     // VTEX IS a veces devuelve top-sellers sin relación con la query.
     // Para electrónica SIEMPRE filtramos (cat o no) porque electroQ es siempre texto libre.
+    // Electrónica no agrupa por EAN (cada producto es su propia tarjeta) → filtra acá mismo,
+    // producto por producto, como antes.
     const relevanceQ = isElectro ? electroQ : q
-    if (relevanceQ && (!cat || isElectro)) {
+    if (isElectro && relevanceQ && (!cat || isElectro)) {
       const before = allProducts.length
       allProducts = allProducts.filter(p => isRelevantForQuery(p.name, relevanceQ))
       const after = allProducts.length
@@ -1740,7 +1756,6 @@ export async function GET(request: Request) {
           name: p.name,
           brand: p.brand,
           imageUrl: p.imageUrl,
-          excludedFromBankPromos: false,
           excludedFromBankPromos: p.excludedFromBankPromos ?? false,
           markets: {}
         })
@@ -1754,6 +1769,74 @@ export async function GET(request: Request) {
          g.markets[p.supermarket] = p  // p ya incluye excludedFromBankPromos por market
       }
     })
+
+    // Relevancia por búsqueda de texto: se evalúa a nivel de GRUPO (por EAN), no por
+    // producto individual. Distintas tiendas redactan el nombre distinto para el
+    // mismo EAN (abreviaturas, orden de palabras) — si CUALQUIER market del grupo
+    // matchea bien la query, el grupo entero es relevante y se conservan todos sus
+    // markets, incluidos los que por su propio nombre no hubieran pasado el filtro.
+    // Antes este filtro corría producto por producto ANTES de agrupar, y eso hacía
+    // que una búsqueda por nombre trajera menos supers que la misma búsqueda por EAN.
+    if (q && !cat) {
+      for (const [key, g] of Array.from(grouped.entries())) {
+        const names = Object.values(g.markets as Record<string, NormalizedProduct>).map(m => m.name)
+        if (!names.some(n => isRelevantForQuery(n, q))) grouped.delete(key)
+      }
+    }
+
+    // Backfill por EAN: la búsqueda de texto libre de cada tienda (ft= en VTEX/Carrefour)
+    // hace su propio ranking de relevancia y devuelve como mucho ~15 resultados — si el
+    // producto buscado no entra en ese top 15 para esa frase puntual, la tienda queda
+    // afuera del grupo aunque sí tenga el producto en catálogo (confirmado: mismo EAN,
+    // búsqueda directa por EAN sí lo trae). Para cada grupo con EAN válido, completar con
+    // las tiendas habilitadas que soportan búsqueda directa por EAN y no aparecen todavía.
+    if (isSuper && q && !cat) {
+      const EAN_SEARCHABLE: { supermarket: string; baseUrl?: string }[] = [
+        { supermarket: 'Carrefour' },
+        { supermarket: 'Jumbo', baseUrl: 'https://www.jumbo.com.ar' },
+        { supermarket: 'Disco', baseUrl: 'https://www.disco.com.ar' },
+        { supermarket: 'Vea', baseUrl: 'https://www.vea.com.ar' },
+        { supermarket: 'Dia', baseUrl: 'https://diaonline.supermercadosdia.com.ar' },
+        { supermarket: 'Más Online', baseUrl: 'https://www.masonline.com.ar' },
+        { supermarket: 'Changomas', baseUrl: 'https://www.changomas.com.ar' },
+      ]
+
+      // Cap: solo se backfillean los primeros N grupos (los más relevantes, ya que
+      // `grouped` conserva el orden de inserción por score de las búsquedas de texto)
+      // para no multiplicar el fan-out de requests en queries con muchos resultados.
+      const MAX_BACKFILL_GROUPS = 12
+      const backfillJobs: { key: string; supermarket: string; ean: string; promise: Promise<NormalizedProduct[]> }[] = []
+      let groupsConsidered = 0
+      for (const [key, g] of Array.from(grouped.entries())) {
+        if (!g.ean || g.ean.length < 8) continue
+        if (groupsConsidered >= MAX_BACKFILL_GROUPS) break
+        groupsConsidered++
+        for (const store of EAN_SEARCHABLE) {
+          if (!has(store.supermarket)) continue
+          if (g.markets[store.supermarket]) continue
+          const promise = store.supermarket === 'Carrefour'
+            ? searchCarrefour(g.ean, false)
+            : searchVtexByEan(g.ean, store.supermarket, store.baseUrl!)
+          backfillJobs.push({ key, supermarket: store.supermarket, ean: g.ean, promise })
+        }
+      }
+
+      if (backfillJobs.length) {
+        const settled = await Promise.all(backfillJobs.map(j => j.promise))
+        let added = 0
+        settled.forEach((found, i) => {
+          const job = backfillJobs[i]
+          const match = found.find(p => p.ean === job.ean) || found[0]
+          if (!match) return
+          const g = grouped.get(job.key)
+          if (!g || g.markets[job.supermarket]) return
+          g.markets[job.supermarket] = match
+          if (match.excludedFromBankPromos) g.excludedFromBankPromos = true
+          added++
+        })
+        if (added) console.log(`[EAN Backfill] +${added} markets recuperados en ${backfillJobs.length} intentos para "${q}"`)
+      }
+    }
 
     // Convertir el mapa a array y calcular estadísticas
     const results = Array.from(grouped.values()).map(g => {

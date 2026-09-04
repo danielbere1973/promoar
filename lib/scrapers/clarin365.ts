@@ -64,14 +64,18 @@ function parseDias(applyDays: string[]): number {
   const all = applyDays.join(' ').toLowerCase();
   if (all.includes('todos')) return 127;
 
+  // Convención del proyecto: bit 0 = domingo ... bit 6 = sábado (ver DAY_LABELS en
+  // app/api/precios/bank-promos/route.ts). Este scraper tenía lunes=bit0, desfasando
+  // todos los días en 1 (ej. "lunes y jueves" se guardaba como domingo+miércoles) —
+  // bug reportado por Pablo 4/9/2026 en la promo Clarín 365 15% Jumbo.
   const dias = [
-    { names: ['lunes'], bit: 0 },
-    { names: ['martes'], bit: 1 },
-    { names: ['miercoles', 'miércoles'], bit: 2 },
-    { names: ['jueves'], bit: 3 },
-    { names: ['viernes'], bit: 4 },
-    { names: ['sabado', 'sábado'], bit: 5 },
-    { names: ['domingo'], bit: 6 },
+    { names: ['domingo'], bit: 0 },
+    { names: ['lunes'], bit: 1 },
+    { names: ['martes'], bit: 2 },
+    { names: ['miercoles', 'miércoles'], bit: 3 },
+    { names: ['jueves'], bit: 4 },
+    { names: ['viernes'], bit: 5 },
+    { names: ['sabado', 'sábado'], bit: 6 },
   ];
   let mask = 0;
   dias.forEach(({ names, bit }) => {

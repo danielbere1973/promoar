@@ -44,11 +44,14 @@ Definimos formalmente una estrategia de **Lanzamiento en 2 Fases**:
 
 ### 2.3 Consulta C: Clasificación de Bloqueantes para el Soft Launch (Fase 1)
 
+> [!NOTE]
+> **Aclaración clave sobre el Dominio (`promoar.com.ar`)**: El dominio se encuentra resuelto, configurado y apuntando correctamente desde hace meses. NO representa un bloqueo de DNS ni de infraestructura. Al mergear a `main`, Vercel deployará automáticamente sobre el dominio activo.
+
 | Tarea | Clasificación | Acción en Fase 1 (Soft Launch) |
 |---|---|---|
-| **Dominio `promoar.com.ar`** | 🔴 **Bloqueante Absoluto** | Configurar DNS y Vercel para que el dominio apunte al nuevo deployment de Next.js 14. |
+| **Dominio `promoar.com.ar`** | 🟢 **RESUELTO / OPERATIVO** | Ya está configurado y apuntando a producción. Se actualiza automáticamente con el push/merge a `main`. |
 | **Poda de Sitemap (`app/sitemap.ts`)** | 🔴 **Bloqueante Técnico** | Aplicar la poda ya dictaminada (sitemap único `id: 0` sólo con Hubs Evergreen) para proteger Crawl Budget y Neon. |
-| **Merge a `main` y Build Vercel** | 🔴 **Bloqueante Operativo** | Merge limpio de `feature/nueva-home` a `main` y validación de build verde. |
+| **Merge a `main` y Build Vercel** | 🔴 **Bloqueante Operativo** | Merge limpio de `feature/nueva-home` a `main` y validación de build verde en Vercel. |
 | **Detección de cambios en scrapers** | 🟡 **Post-Launch (Fase 2)** | Correr scrapers de forma controlada/manual durante el Soft Launch. Implementar hashing/diff en Fase 2. |
 | **SSR + Paginación (38MB)** | 🟡 **Post-Launch (Fase 2)** | Home v2 (`/promos`) es ultra liviana vía Decision Engine. El peso de 38MB afecta a `/promos/explorar`, que no es la landing principal. |
 | **Reactivar GitHub Actions** | 🟡 **Post-Launch (Fase 2)** | Se reactiva una vez estabilizado el consumo de Neon en producción. |
@@ -60,8 +63,8 @@ Definimos formalmente una estrategia de **Lanzamiento en 2 Fases**:
 
 1. **Paso 1**: Realizar los 2 commits de housekeeping y código en `feature/nueva-home`.
 2. **Paso 2**: Aplicar la poda en `app/sitemap.ts` (`[{ id: 0 }]` con Hubs Evergreen).
-3. **Paso 3**: Merge de `feature/nueva-home` a `main`.
-4. **Paso 4**: Configuración de dominio `promoar.com.ar` y verificación de deployment en Vercel.
+3. **Paso 3**: Merge de `feature/nueva-home` a `main` y push a `origin`.
+4. **Paso 4**: Verificación del build automático en Vercel (que impacta directo en `promoar.com.ar`).
 5. **Paso 5**: Prueba de humo en vivo con Daniel (registro, login, selector de provincia, home guest).
 
 ---

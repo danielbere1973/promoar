@@ -46,6 +46,8 @@ const PUBLIC_PATHS = [
   '/api/events',
   '/api/site-config',
   '/api/og',
+  '/ahorro_interactivo',
+  '/ahorro-interactivo',
 ]
 
 // Rutas solo para ADMIN
@@ -83,8 +85,43 @@ function likelyPrisma(pathname: string): boolean {
 // pausas — muy por encima de lo que genera un usuario navegando la grilla/detalle a mano.
 const RATE_LIMITED_PREFIXES = ['/promos/', '/comercios/', '/api/promos', '/api/search']
 const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX = 15
+// Bajado de 15 a 8/min el 3/9/2026: detectadas IPs con ráfagas de 10-17 req en <1.5seg
+// a /promos/explorar (UA de navegador real, no bot declarado) — muy por encima de
+// cualquier navegación humana normal de la grilla. Ver BAN_DURATION_MS arriba: superar
+// este límite ahora banea la IP, no solo corta la request individual.
+const RATE_LIMIT_MAX = 8
 const hitLog = new Map<string, number[]>()
+
+// Ban temporal por IP (RFC-forense 3/9/2026): el rate-limit de arriba solo corta la
+// request que excede el límite, pero el contador es en memoria por instancia Edge —
+// una IP puede seguir mandando ráfagas de 10-17 req/seg indefinidamente porque Vercel
+// balancea esas requests entre varias instancias y ninguna individualmente ve más de
+// RATE_LIMIT_MAX en su propia ventana. Al superar el límite UNA vez, la IP queda baneada
+// (429 directo, sin recalcular nada) por BAN_DURATION_MS — corta el patrón de ráfaga
+// aunque el conteo distribuido siga siendo inexacto. Ban en memoria, best-effort igual
+// que el resto de este archivo (no persiste entre instancias/deploys).
+const BAN_DURATION_MS = 5 * 60_000
+const bannedIps = new Map<string, number>()
+
+function isBanned(ip: string): boolean {
+  const bannedUntil = bannedIps.get(ip)
+  if (!bannedUntil) return false
+  if (Date.now() > bannedUntil) {
+    bannedIps.delete(ip)
+    return false
+  }
+  return true
+}
+
+function banIp(ip: string) {
+  bannedIps.set(ip, Date.now() + BAN_DURATION_MS)
+  if (bannedIps.size > 2000) {
+    const now = Date.now()
+    bannedIps.forEach((until, key) => {
+      if (now > until) bannedIps.delete(key)
+    })
+  }
+}
 
 // Googlebot rota IPs dentro de 66.249.64.0/19 (y rangos similares para otros bots
 // permitidos) — el rate-limit por IP de arriba nunca lo frena porque cada IP individual
@@ -190,8 +227,14 @@ export async function middleware(req: NextRequest) {
       if (isGooglebotRateLimited()) {
         return new NextResponse('Too Many Requests', { status: 429 })
       }
-    } else if (ip !== 'unknown' && isRateLimited(ip, isLikelyBot)) {
-      return new NextResponse('Too Many Requests', { status: 429 })
+    } else if (ip !== 'unknown') {
+      if (isBanned(ip)) {
+        return new NextResponse('Too Many Requests', { status: 429 })
+      }
+      if (isRateLimited(ip, isLikelyBot)) {
+        banIp(ip)
+        return new NextResponse('Too Many Requests', { status: 429 })
+      }
     }
   }
 

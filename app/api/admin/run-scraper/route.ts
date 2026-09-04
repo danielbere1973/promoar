@@ -34,8 +34,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Scraper "${scraperId}" requiere Playwright — usar GitHub Actions` }, { status: 400 })
   }
 
-  const run = await prisma.scraperRun.create({ data: { scraperId, status: 'running' } })
-
+  // El registro en ScraperRun ahora lo escribe /api/admin/scrape directamente
+  // (single-writer, ver comentario ahí — antes se duplicaba: este endpoint creaba
+  // su propia fila Y /api/admin/scrape también, desde el fix del 4/9/2026).
   try {
     // Llamar al endpoint de scrape existente que tiene toda la lógica de guardado
     // Usar el host del request para evitar que NEXTAUTH_URL (producción) interfiera en dev
@@ -61,11 +62,6 @@ export async function POST(req: NextRequest) {
     const found = data.totalFound ?? data.found ?? 0
     const processed = data.processed ?? 0
 
-    await prisma.scraperRun.update({
-      where: { id: run.id },
-      data: { status: 'success', finishedAt: new Date(), found, processed }
-    })
-
     // Actualizar nextRunAt si tiene schedule
     const schedule = await prisma.scraperSchedule.findUnique({ where: { scraperId } })
     if (schedule && schedule.frequency !== 'manual') {
@@ -73,12 +69,8 @@ export async function POST(req: NextRequest) {
       await prisma.scraperSchedule.update({ where: { scraperId }, data: { nextRunAt: next } })
     }
 
-    return NextResponse.json({ ok: true, found, processed, flagged: data.flagged ?? [] })
+    return NextResponse.json({ ok: true, found, processed, skipped: data.skippedUnchanged ?? 0, flagged: data.flagged ?? [] })
   } catch (e: any) {
-    await prisma.scraperRun.update({
-      where: { id: run.id },
-      data: { status: 'error', finishedAt: new Date(), message: e.message }
-    })
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

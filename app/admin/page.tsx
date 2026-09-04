@@ -9,7 +9,7 @@ import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
   Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
-  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2
+  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2, History
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -1161,7 +1161,11 @@ export default function AdminPage() {
             )
           }
           const filteredPromos = promos.filter(p => {
-            if (p.status === 'EXPIRED') return false
+            // En modo búsqueda sí se incluyen EXPIRED (backend ya las trae con `q=`) —
+            // si no, buscar algo que venció es indistinguible de que nunca existió
+            // (Pablo 4/9/2026: buscó Clarín 365/Jumbo y no la encontraba porque estaba
+            // vencida, aunque la promo sí existe en la base).
+            if (p.status === 'EXPIRED' && !isSearching) return false
             if (isSearching) {
               if (filterCategories.length > 0 && !filterCategories.includes(p.categoryId)) return false
             } else {
@@ -1319,6 +1323,9 @@ export default function AdminPage() {
                 {loading && <Loader message="Cargando promociones..." />}
                 {filteredPromos.map(p => (
                   <div key={p.id} className="relative">
+                  {p.status === 'EXPIRED' && (
+                    <span className="absolute top-2 right-2 z-10 text-[10px] font-black uppercase text-white bg-slate-500 px-2 py-0.5 rounded-full shadow">Vencida</span>
+                  )}
                   <PromoCard
                     key={p.id}
                     promo={p}
@@ -2285,6 +2292,72 @@ function ScraperSchedulerTab() {
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [flagged, setFlagged] = useState<Array<{ title: string; storeName: string; sourceUrl: string; description: string }>>([])
   const [selectedLocal, setSelectedLocal] = useState<Set<string>>(new Set())
+  // Reporte ejecutivo en vivo (panel admin + email) — pedido por Pablo 4/9/2026:
+  // "no puede ser que yo no pueda ver el resultado en forma inmediata y, en lo posible, por mail"
+  const [runReport, setRunReport] = useState<Array<{ scraperId: string; status: 'success' | 'error'; found?: number; processed?: number; skipped?: number; message?: string | null }>>([])
+  const [staleScrapers, setStaleScrapers] = useState<Array<{ scraperId: string; lastStatus: string; lastRunAt: string; lastSuccessAt: string | null; daysSinceSuccess: number | null }>>([])
+  const [staleDaysThreshold, setStaleDaysThreshold] = useState(7)
+  // Última corrida por scraper, persistida en DB (ScraperRun) — a diferencia de runReport
+  // (que se pierde al recargar la página), esto sobrevive un refresh/reinicio del server.
+  // Pedido por Pablo 4/9/2026: "agregame la fecha de la última corrida" + historial consultable.
+  type ScraperRunRow = {
+    scraperId: string; status: string; startedAt: string; finishedAt: string | null
+    found: number | null; processed: number | null; skipped: number | null; message: string | null; trigger: string | null
+  }
+  const [latestRuns, setLatestRuns] = useState<Record<string, ScraperRunRow>>({})
+  const [historyModal, setHistoryModal] = useState<string | null>(null)
+  const [historyRows, setHistoryRows] = useState<ScraperRunRow[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  async function loadStale() {
+    const res = await fetch('/api/admin/scraper-runs')
+    if (res.ok) {
+      const data = await res.json()
+      setStaleScrapers(data.stale ?? [])
+      setStaleDaysThreshold(data.staleDaysThreshold ?? 7)
+      setLatestRuns(data.latestByScraperId ?? {})
+    }
+  }
+
+  async function openHistory(scraperId: string) {
+    setHistoryModal(scraperId)
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/admin/scraper-runs?scraperId=${encodeURIComponent(scraperId)}&limit=100`)
+      if (res.ok) {
+        const data = await res.json()
+        setHistoryRows(data.recent ?? [])
+      }
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  function durationLabel(startedAt: string, finishedAt: string | null): string {
+    if (!finishedAt) return '—'
+    const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime()
+    if (ms < 0) return '—'
+    const mins = Math.floor(ms / 60000)
+    const secs = Math.round((ms % 60000) / 1000)
+    if (mins === 0) return `${secs}s`
+    return `${mins}m ${secs}s`
+  }
+
+  function fmtDateTime(iso: string): string {
+    return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  async function sendReportEmail(results: typeof runReport, batchLabel?: string) {
+    try {
+      await fetch('/api/admin/scraper-runs/report-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ results, batchLabel }),
+      })
+    } catch (e) {
+      console.error('Error enviando reporte por email:', e)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -2302,7 +2375,7 @@ function ScraperSchedulerTab() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadStale() }, [])
 
   async function save(scraperId: string) {
     const s = schedules[scraperId]
@@ -2321,6 +2394,7 @@ function ScraperSchedulerTab() {
 
   async function runNow(scraperId: string, local = false) {
     setRunning(scraperId)
+    setRunReport([])
     const isPlaywright = PLAYWRIGHT_SCRAPER_IDS.has(scraperId.toLowerCase())
     const useGh = isPlaywright && !local
     const endpoint = useGh ? '/api/admin/trigger-scraper' : '/api/admin/run-scraper'
@@ -2336,19 +2410,28 @@ function ScraperSchedulerTab() {
         const data = await res.json()
         const found = data.totalFound ?? data.found ?? 0
         const processed = data.processed ?? 0
-        const skipped = data.skippedUnchanged ?? 0
+        const skipped = data.skipped ?? data.skippedUnchanged ?? 0
         if (data.flagged?.length) setFlagged(data.flagged)
         const label = SCRAPERS_CONFIG.find(s => s.id === scraperId)?.name ?? scraperId
         const detail = `${found} leídas · ${processed} guardadas · ${skipped} sin cambios`
         setMsg({ type: 'success', text: `✅ ${label}: ${detail}` })
+        const report = [{ scraperId: scraperId.toLowerCase(), status: 'success' as const, found, processed, skipped }]
+        setRunReport(report)
+        sendReportEmail(report)
       }
     } else {
       const data = await res.json().catch(() => ({}))
       setMsg({ type: 'error', text: `❌ ${scraperId}: ${data.error ?? 'Error desconocido'}` })
+      if (!useGh) {
+        const report = [{ scraperId: scraperId.toLowerCase(), status: 'error' as const, message: data.error ?? 'Error desconocido' }]
+        setRunReport(report)
+        sendReportEmail(report)
+      }
     }
     setRunning(null)
     setTimeout(() => setMsg(null), 10000)
     load()
+    loadStale()
   }
 
   function update(scraperId: string, field: string, value: any) {
@@ -2371,7 +2454,9 @@ function ScraperSchedulerTab() {
   async function runAllHttp() {
     setMsg(null)
     setFlagged([])
+    setRunReport([])
     let ok = 0, err = 0, totalFound = 0, totalProcessed = 0
+    const report: typeof runReport = []
     for (const s of httpScrapers) {
       setRunning(s.id)
       const res = await fetch('/api/admin/run-scraper', {
@@ -2379,19 +2464,26 @@ function ScraperSchedulerTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scraperId: s.id }),
       })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
         ok++
-        const data = await res.json().catch(() => ({}))
         totalFound += data.found ?? 0
         totalProcessed += data.processed ?? 0
         if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
-      } else err++
+        report.push({ scraperId: s.id.toLowerCase(), status: 'success', found: data.found ?? 0, processed: data.processed ?? 0, skipped: data.skipped ?? 0 })
+      } else {
+        err++
+        report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: data.error ?? 'Error desconocido' })
+      }
     }
     setRunning(null)
+    setRunReport(report)
     const summary = `${ok} scrapers OK${err > 0 ? `, ${err} con error` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas`
     setMsg({ type: err > 0 ? 'error' : 'success', text: summary })
     setTimeout(() => setMsg(null), 15000)
+    sendReportEmail(report, 'Ejecutar todos (HTTP)')
     load()
+    loadStale()
   }
 
   async function runAllGh() {
@@ -2412,7 +2504,9 @@ function ScraperSchedulerTab() {
   async function runAllLocal() {
     setMsg(null)
     setFlagged([])
+    setRunReport([])
     let ok = 0, err = 0, totalFound = 0, totalProcessed = 0, totalSkipped = 0
+    const report: typeof runReport = []
     for (const s of httpScrapers) {
       setRunning(s.id)
       try {
@@ -2428,19 +2522,25 @@ function ScraperSchedulerTab() {
           totalProcessed += data.processed ?? 0
           totalSkipped += data.skippedUnchanged ?? 0
           if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
+          report.push({ scraperId: s.id.toLowerCase(), status: 'success', found: data.totalFound ?? data.found ?? 0, processed: data.processed ?? 0, skipped: data.skippedUnchanged ?? 0 })
         } else {
           err++
           console.error(`[${s.id}] ${data.error ?? res.status}`)
+          report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: data.error ?? String(res.status) })
         }
       } catch (e) {
         err++
         console.error(`[${s.id}] Error de conexión`, e)
+        report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: e instanceof Error ? e.message : 'Error de conexión' })
       }
     }
     setRunning(null)
+    setRunReport(report)
     setMsg({ type: err > 0 ? 'error' : 'success', text: `Local: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
     setTimeout(() => setMsg(null), 15000)
+    sendReportEmail(report, 'Ejecutar todos (local)')
     load()
+    loadStale()
   }
 
   function toggleLocalSelected(id: string) {
@@ -2457,7 +2557,9 @@ function ScraperSchedulerTab() {
     if (targets.length === 0) return
     setMsg(null)
     setFlagged([])
+    setRunReport([])
     let ok = 0, err = 0, totalFound = 0, totalProcessed = 0, totalSkipped = 0
+    const report: typeof runReport = []
     for (const s of targets) {
       setRunning(s.id)
       try {
@@ -2473,19 +2575,25 @@ function ScraperSchedulerTab() {
           totalProcessed += data.processed ?? 0
           totalSkipped += data.skippedUnchanged ?? 0
           if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
+          report.push({ scraperId: s.id.toLowerCase(), status: 'success', found: data.totalFound ?? data.found ?? 0, processed: data.processed ?? 0, skipped: data.skippedUnchanged ?? 0 })
         } else {
           err++
           console.error(`[${s.id}] ${data.error ?? res.status}`)
+          report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: data.error ?? String(res.status) })
         }
       } catch (e) {
         err++
         console.error(`[${s.id}] Error de conexión`, e)
+        report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: e instanceof Error ? e.message : 'Error de conexión' })
       }
     }
     setRunning(null)
+    setRunReport(report)
     setMsg({ type: err > 0 ? 'error' : 'success', text: `Seleccionados: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
     setTimeout(() => setMsg(null), 15000)
+    sendReportEmail(report, 'Selección local')
     load()
+    loadStale()
   }
 
   return (
@@ -2515,6 +2623,214 @@ function ScraperSchedulerTab() {
           </p>
         </div>
       </div>
+
+      {/* Reporte ejecutivo en vivo — se llena inmediatamente después de correr uno o varios scrapers */}
+      {runReport.length > 0 && (() => {
+        const totals = runReport.reduce((acc, r) => {
+          acc.found += r.found ?? 0
+          acc.saved += r.processed ?? 0
+          acc.skipped += r.skipped ?? 0
+          if (r.status === 'error') acc.errors += 1
+          return acc
+        }, { found: 0, saved: 0, skipped: 0, errors: 0 })
+        const sorted = [...runReport].sort((a, b) => {
+          if (a.status !== b.status) return a.status === 'error' ? -1 : 1
+          return (b.processed ?? 0) - (a.processed ?? 0)
+        })
+        return (
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Panel admin · Scrapers</p>
+              <h3 className="text-base font-black text-slate-800 dark:text-slate-100">Reporte de la última corrida</h3>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-200 dark:bg-slate-700 overflow-hidden">
+              <div className="bg-white dark:bg-[#0F2040] px-4 py-3.5 flex flex-col gap-1">
+                <span className="text-2xl font-black tracking-tight text-slate-600 dark:text-slate-300 tabular-nums">{totals.found.toLocaleString('es-AR')}</span>
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Leídas</span>
+              </div>
+              <div className="bg-white dark:bg-[#0F2040] px-4 py-3.5 flex flex-col gap-1">
+                <span className="text-2xl font-black tracking-tight text-teal-600 dark:text-teal-400 tabular-nums">{totals.saved.toLocaleString('es-AR')}</span>
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Guardadas / actualizadas</span>
+              </div>
+              <div className="bg-white dark:bg-[#0F2040] px-4 py-3.5 flex flex-col gap-1">
+                <span className="text-2xl font-black tracking-tight text-slate-400 dark:text-slate-500 tabular-nums">{totals.skipped.toLocaleString('es-AR')}</span>
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Sin cambios</span>
+              </div>
+              <div className="bg-white dark:bg-[#0F2040] px-4 py-3.5 flex flex-col gap-1">
+                <span className={`text-2xl font-black tracking-tight tabular-nums ${totals.errors > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-300 dark:text-slate-600'}`}>{totals.errors}</span>
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Con error</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F2040] overflow-hidden">
+              <div className="grid grid-cols-[1fr_70px_70px_70px_84px] gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                <span>Scraper</span>
+                <span className="text-right">Leídas</span>
+                <span className="text-right">Guardadas</span>
+                <span className="text-right">Sin cambios</span>
+                <span className="text-right">Estado</span>
+              </div>
+              <div className="flex flex-col">
+                {sorted.map((r, i) => r.status === 'error' ? (
+                  <div key={`${r.scraperId}-${i}`} className={`flex flex-col gap-2 px-4 py-2.5 bg-red-50 dark:bg-red-950/30 ${i > 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}>
+                    <div className="grid grid-cols-[1fr_70px_70px_70px_84px] gap-2 items-center">
+                      <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200">{r.scraperId}</span>
+                      <span className="text-right text-slate-300 dark:text-slate-600">—</span>
+                      <span className="text-right text-slate-300 dark:text-slate-600">—</span>
+                      <span className="text-right text-slate-300 dark:text-slate-600">—</span>
+                      <span className="flex justify-end">
+                        <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
+                          <AlertCircle size={11} /> Error
+                        </span>
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] font-mono text-red-700 dark:text-red-400 bg-white dark:bg-[#0F2040] border border-red-200 dark:border-red-800 rounded-lg px-2.5 py-1.5">
+                      {r.message ?? 'Error desconocido'}
+                    </p>
+                  </div>
+                ) : (
+                  <div key={`${r.scraperId}-${i}`} className={`grid grid-cols-[1fr_70px_70px_70px_84px] gap-2 items-center px-4 py-2.5 ${i > 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}>
+                    <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200">{r.scraperId}</span>
+                    <span className="text-right text-[13px] font-bold text-slate-500 dark:text-slate-400 tabular-nums">{(r.found ?? 0).toLocaleString('es-AR')}</span>
+                    <span className="text-right text-[13px] font-bold text-teal-600 dark:text-teal-400 tabular-nums">{(r.processed ?? 0).toLocaleString('es-AR')}</span>
+                    <span className="text-right text-[13px] font-semibold text-slate-400 dark:text-slate-500 tabular-nums">{(r.skipped ?? 0).toLocaleString('es-AR')}</span>
+                    <span className="flex justify-end">
+                      <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                        <CheckCircle size={11} /> OK
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Alerta de scrapers estancados — sin corrida exitosa hace más de N días */}
+      {staleScrapers.length > 0 && (
+        <div className="rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 flex flex-col gap-2.5">
+          <h3 className="text-[13px] font-black text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+            <AlertCircle size={14} />
+            {staleScrapers.length} scraper{staleScrapers.length === 1 ? '' : 's'} sin corrida exitosa hace más de {staleDaysThreshold} días
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {staleScrapers.map(s => (
+              <span key={s.scraperId} className="text-[11px] font-bold bg-white dark:bg-[#0F2040] border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-400 px-2.5 py-1 rounded-full">
+                {s.scraperId} {s.daysSinceSuccess !== null ? `(${s.daysSinceSuccess}d)` : '(nunca OK)'}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Última corrida por scraper — persistido en DB, sobrevive reload/reinicio del server
+          (a diferencia del reporte en vivo de arriba, que se pierde al recargar la página).
+          Click en una fila abre el historial completo de ese scraper. */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F2040] overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <History size={16} className="text-slate-500 dark:text-slate-400" />
+          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Última corrida por scraper</h3>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">— click en una fila para ver el historial completo</span>
+        </div>
+        <div className="grid grid-cols-[1fr_150px_70px_60px] sm:grid-cols-[1fr_170px_90px_90px_90px_70px] gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-700">
+          <span>Scraper</span>
+          <span>Última corrida</span>
+          <span className="hidden sm:inline text-right">Leídas</span>
+          <span className="hidden sm:inline text-right">Guardadas</span>
+          <span className="text-right">Skip.</span>
+          <span className="text-right">Estado</span>
+        </div>
+        <div className="max-h-[420px] overflow-y-auto">
+          {SCRAPERS_CONFIG.map((cfg, i) => {
+            const r = latestRuns[cfg.id.toLowerCase()]
+            return (
+              <button
+                key={cfg.id}
+                onClick={() => openHistory(cfg.id)}
+                className={`w-full grid grid-cols-[1fr_150px_70px_60px] sm:grid-cols-[1fr_170px_90px_90px_90px_70px] gap-2 items-center px-4 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${i > 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}
+              >
+                <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate">{cfg.name}</span>
+                <span className="text-[12px] text-slate-500 dark:text-slate-400">{r ? fmtDateTime(r.startedAt) : 'Nunca'}</span>
+                <span className="hidden sm:inline text-right text-[12px] font-semibold text-slate-500 dark:text-slate-400 tabular-nums">{r?.found?.toLocaleString('es-AR') ?? '—'}</span>
+                <span className="hidden sm:inline text-right text-[12px] font-semibold text-teal-600 dark:text-teal-400 tabular-nums">{r?.processed?.toLocaleString('es-AR') ?? '—'}</span>
+                <span className="text-right text-[12px] font-semibold text-slate-400 dark:text-slate-500 tabular-nums">{r?.skipped?.toLocaleString('es-AR') ?? '—'}</span>
+                <span className="flex justify-end">
+                  {!r && <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>}
+                  {r?.status === 'success' && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"><CheckCircle size={10} /> OK</span>}
+                  {r?.status === 'error' && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/40 text-red-700 dark:text-red-400"><AlertCircle size={10} /> Error</span>}
+                  {r?.status === 'running' && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400">Corriendo</span>}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Modal de historial completo de un scraper */}
+      {historyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setHistoryModal(null)}>
+          <div className="bg-white dark:bg-[#0F2040] rounded-2xl border border-slate-200 dark:border-slate-700 max-w-3xl w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-base font-black text-slate-800 dark:text-slate-100">Historial — {SCRAPERS_CONFIG.find(s => s.id === historyModal)?.name ?? historyModal}</h3>
+              <button onClick={() => setHistoryModal(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {historyLoading ? (
+                <p className="text-sm text-slate-400 px-5 py-8 text-center">Cargando...</p>
+              ) : historyRows.length === 0 ? (
+                <p className="text-sm text-slate-400 px-5 py-8 text-center">Sin corridas registradas para este scraper.</p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-white dark:bg-[#0F2040]">
+                    <tr className="text-slate-400 dark:text-slate-500 text-[10px] uppercase border-b border-slate-200 dark:border-slate-700">
+                      <th className="text-left py-2 px-3">Inicio</th>
+                      <th className="text-left py-2 px-3">Fin</th>
+                      <th className="text-right py-2 px-3">Duración</th>
+                      <th className="text-left py-2 px-3">Estado</th>
+                      <th className="text-right py-2 px-3">Leídas</th>
+                      <th className="text-right py-2 px-3">Guardadas</th>
+                      <th className="text-right py-2 px-3">Skip.</th>
+                      <th className="text-left py-2 px-3">Origen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyRows.map((r, i) => (
+                      <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="py-2 px-3 text-slate-600 dark:text-slate-300">{fmtDateTime(r.startedAt)}</td>
+                        <td className="py-2 px-3 text-slate-600 dark:text-slate-300">{r.finishedAt ? fmtDateTime(r.finishedAt) : '—'}</td>
+                        <td className="py-2 px-3 text-right text-slate-500 dark:text-slate-400 tabular-nums">{durationLabel(r.startedAt, r.finishedAt)}</td>
+                        <td className="py-2 px-3">
+                          {r.status === 'success' && <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold"><CheckCircle size={11} /> OK</span>}
+                          {r.status === 'error' && <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-bold"><AlertCircle size={11} /> Error</span>}
+                          {r.status === 'running' && <span className="text-blue-600 dark:text-blue-400 font-bold">Corriendo</span>}
+                        </td>
+                        <td className="py-2 px-3 text-right text-slate-500 dark:text-slate-400 tabular-nums">{r.found?.toLocaleString('es-AR') ?? '—'}</td>
+                        <td className="py-2 px-3 text-right text-teal-600 dark:text-teal-400 font-semibold tabular-nums">{r.processed?.toLocaleString('es-AR') ?? '—'}</td>
+                        <td className="py-2 px-3 text-right text-slate-400 dark:text-slate-500 tabular-nums">{r.skipped?.toLocaleString('es-AR') ?? '—'}</td>
+                        <td className="py-2 px-3 text-slate-400 dark:text-slate-500">{r.trigger ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {historyRows.some(r => r.status === 'error' && r.message) && (
+                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Mensajes de error</p>
+                  {historyRows.filter(r => r.status === 'error' && r.message).map((r, i) => (
+                    <p key={i} className="text-[11px] font-mono text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-2.5 py-1.5">
+                      {fmtDateTime(r.startedAt)}: {r.message}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {scraperSubTab === 'gh' && (
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

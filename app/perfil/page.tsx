@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
-import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil, Bell, History } from 'lucide-react'
+import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil, Bell, History, TrendingUp } from 'lucide-react'
 import BottomNav from '../components/BottomNav'
 import PromoWizard, { GuestProfile } from '../components/PromoWizard'
 import NotificationSettings from '../components/NotificationSettings'
@@ -1189,6 +1190,29 @@ export default function PerfilPage() {
                 )}
               </div>
             </div>
+
+            {/* Acceso a Tasas de Plazo Fijo y Billeteras */}
+            <Link
+              href="/finanzas/billeteras"
+              className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-transparent border border-blue-200/70 dark:border-blue-800/50 hover:border-blue-400 transition-all group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 shrink-0">
+                  <TrendingUp size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    Tasas de Plazo Fijo y Billeteras
+                  </h4>
+                  <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                    Compará rendimientos de Mercado Pago, Naranja X y bancos
+                  </p>
+                </div>
+              </div>
+              <span className="text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-sm transition-colors ml-2">
+                →
+              </span>
+            </Link>
 
             <div className="bg-gray-50 dark:bg-slate-700 border border-gray-100 rounded-2xl px-4 py-3.5">
               <p className="text-[11px] text-gray-400 dark:text-slate-500 text-center leading-relaxed">

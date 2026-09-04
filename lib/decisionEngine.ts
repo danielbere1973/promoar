@@ -1,6 +1,9 @@
 // Recommendation Block v1 — motor de decisión puro (sin I/O).
 // Congelado vía DR-001 (6/8/2026). No agregar factores/gates nuevos sin
 // pasar antes por una revisión de CPO — ver memoria project_recommendation_block_v1.
+// Excepción autorizada: gate `passesProximidadPresencial` agregado 2/9/2026 vía
+// dictamen CPO (ColabClaudeGemini/cpo-a-cto-dictamen-relevancia-comercio-decision-engine-2-9-2026.md
+// sección 2.2) — los pesos de WEIGHTS siguen sin tocarse.
 
 export type NearbyMap = Record<string, { count: number; minDistKm: number }>
 
@@ -26,6 +29,27 @@ const DIVERSITY_PENALTY = 0.1
 // getPromosData no filtra por defecto en view='week'/sin view.
 function passesVigencia(promo: any, todayBit: number): boolean {
   return (promo.validDays & todayBit) !== 0
+}
+
+// Hard floor de proximidad — dictamen CPO 2/9/2026 (caso Tortugas Open Mall,
+// ver ColabClaudeGemini/cpo-a-cto-dictamen-relevancia-comercio-decision-engine-2-9-2026.md
+// sección 2.2). Para rubros de consumo diario/presencial inmediato, un % de
+// descuento alto no puede "tapar" una distancia que nadie recorre en su rutina
+// — a diferencia de scoreCercania (que solo resta puntaje), esto excluye la
+// promo del universo de candidatas por completo.
+const PRESENCIAL_INMEDIATO_SLUGS = new Set(['heladerias', 'gastronomia', 'supermercados', 'farmacias'])
+const PRESENCIAL_MAX_KM = 30
+
+function passesProximidadPresencial(promo: any, ctx: DecisionContext): boolean {
+  if (promo.salesChannel === 'ONLINE' || promo.salesChannel === 'BOTH') return true
+  const slug = promo.category?.slug ?? promo.categoryId
+  if (!PRESENCIAL_INMEDIATO_SLUGS.has(slug)) return true
+  if (!ctx.hasLocation) return true // sin ubicación no se puede evaluar distancia — no penalizar por dato ausente
+  const commerceId = promo.commerceId
+  if (!commerceId) return true // sin comercio no hay sucursal que evaluar
+  const nearby = ctx.nearbyByCommerceId[commerceId]
+  if (!nearby) return true // sin dato de sucursales, scoreCercania ya lo trata neutro — no excluir por ausencia de dato
+  return nearby.minDistKm <= PRESENCIAL_MAX_KM
 }
 
 // ─── Factores (0-1 cada uno) ────────────────────────────────────────────────
@@ -157,7 +181,7 @@ export function scoreCandidates(
   promos: any[],
   context: DecisionContext
 ): { promo: any; score: number; factors: { ahorro: number; cercania: number; online: number; favoritos: number } }[] {
-  const candidates = promos.filter(p => passesVigencia(p, context.todayBit))
+  const candidates = promos.filter(p => passesVigencia(p, context.todayBit) && passesProximidadPresencial(p, context))
   return candidates.map(promo => {
     const { score, factors } = scorePromo(promo, context)
     return { promo, score, factors }

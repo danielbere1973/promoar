@@ -857,6 +857,13 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             categoryId: true,
             commerceId: true,
             isFeatured: true,
+            // stackable vuelve a traerse (revierte parcialmente el narrowing de
+            // 25/8/2026): /api/precios/bank-promos lo necesita para saber si LA PROMO
+            // GANADORA concreta acumula con descuentos de góndola — Commerce.stacksWithBankPromos
+            // es un solo valor por comercio y no alcanza cuando conviven promos que sí
+            // acumulan (ej. MODO jueves en Jumbo) y promos que no (ej. reintegro $100.000
+            // en Jumbo, texto legal "NO ACUMULABLE CON OTRAS PROMOCIONES") (bug 3/9/2026).
+            stackable: true,
             category: { select: { name: true, slug: true, icon: true, color: true } },
             commerce: {
               select: {
@@ -1288,6 +1295,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
     const globalMaxDiscount = allReqs.length > 0 ? allReqs.reduce((max, r) => (r.discountValue ?? 0) > (max?.discountValue ?? 0) ? r : max, allReqs[0]) : null
 
     let userBestDiscount = null
+    let matchingEntityNames: string[] = []
     if (!isAdmin || forceProfileMatching) {
       const uCards = [...(effectiveCards ?? []), ...walletVirtualCards]
       // Reutiliza lib/matchesProfile.ts (fuente de verdad única) para calcular
@@ -1298,10 +1306,22 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
 
       if (matching.length) {
         userBestDiscount = matching.reduce((max: any, r: any) => (r.discountValue ?? 0) > (max?.discountValue ?? 0) ? r : max, matching[0])
+        // Entidades (banco o billetera) que empatan en el descuento ganador — para que
+        // el consumidor de esta promo pueda mostrar "MODO (+13 bancos)" en vez de nombrar
+        // un banco cualquiera como si la promo fuera exclusiva de él (bug reportado
+        // 3/9/2026: promo multibanco de MODO mostraba "Banco Nación" arbitrariamente,
+        // ocultando que aplica igual con ~14 bancos distintos).
+        const bestValue = userBestDiscount.discountValue ?? 0
+        matchingEntityNames = [...new Set(
+          matching
+            .filter((r: any) => (r.discountValue ?? 0) === bestValue)
+            .map((r: any) => r.bank?.name || r.wallet?.name)
+            .filter(Boolean)
+        )] as string[]
       }
     }
 
-    return { ...p, isSaved: finalSavedSet.has(p.id), globalMaxDiscount, userBestDiscount }
+    return { ...p, isSaved: finalSavedSet.has(p.id), globalMaxDiscount, userBestDiscount, matchingEntityNames }
   })
 
   // ── Deduplicación por tier: si el usuario matchea una promo con cardTier

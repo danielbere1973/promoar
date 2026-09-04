@@ -393,36 +393,28 @@ function mapNominatimToProvince(state: string): string | null {
   return null
 }
 
-function LoadingIcon({ src, alt }: { src: string; alt: string }) {
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt} className="h-16 w-16 object-contain" style={{ borderRadius: 8 }} />
-}
-
-const FILTER_LOADING_MSGS: { icon: React.ReactNode; text: string }[] = [
-  { icon: <LoadingIcon src="/pelota.jpg" alt="Pelota" />, text: 'Buscando como Messi busca el arco...' },
-  { icon: <LoadingIcon src="/copa.jpg" alt="Copa del Mundo" />, text: 'Campeones del mundo, campeones...' },
-  { icon: <LoadingIcon src="/messi.jpg" alt="Messi" />, text: 'Aguantá que llegamos...' },
-  { icon: <LoadingIcon src="/arco.jpg" alt="Arco" />, text: 'Estamos en el área chica...' },
-]
-
 function FilterLoadingOverlay() {
-  const [idx, setIdx] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setIdx(i => (i + 1) % FILTER_LOADING_MSGS.length), 1400)
-    return () => clearInterval(t)
-  }, [])
-  const msg = FILTER_LOADING_MSGS[idx]
   return (
-    <div className="fixed inset-0 z-40 pointer-events-none flex items-center justify-center">
-      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-3xl shadow-2xl px-8 py-6 flex flex-col items-center gap-3" style={{ animation: 'promoFadeIn 0.2s ease-out' }}>
-        <div className="h-16 flex items-center justify-center animate-bounce" key={idx}>
-          {msg.icon}
+    <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center p-4">
+      <div
+        className="bg-white/95 dark:bg-[#0A1428]/95 backdrop-blur-xl border border-gray-200 dark:border-slate-800 rounded-3xl shadow-2xl px-7 py-6 flex flex-col items-center gap-3.5 max-w-xs text-center animate-in fade-in zoom-in-95 duration-200"
+      >
+        <div className="relative flex items-center justify-center w-16 h-16">
+          <div className="absolute inset-0 rounded-full border-2 border-[#D94F2B]/20 border-t-[#D94F2B] animate-spin" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/promoar_logo_transparent.png"
+            alt="PromoAR"
+            className="w-10 h-10 object-contain drop-shadow-sm"
+          />
         </div>
-        <p className="text-sm font-black text-[#1E3A5F] dark:text-white tracking-wide">{msg.text}</p>
-        <div className="flex gap-1.5">
-          {FILTER_LOADING_MSGS.map((_, i) => (
-            <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === idx ? 'w-5 bg-[#74ACDF]' : 'w-1.5 bg-gray-200 dark:bg-slate-700'}`} />
-          ))}
+        <div className="space-y-0.5">
+          <p className="text-sm font-black text-gray-900 dark:text-white tracking-tight">
+            Buscando tus promos...
+          </p>
+          <p className="text-[11px] font-medium text-gray-400 dark:text-slate-400">
+            Actualizando descuentos de tus tarjetas
+          </p>
         </div>
       </div>
     </div>
@@ -1810,48 +1802,71 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 </div>
               </div>
 
-              {/* Buscador combo: selector tipo + input en una sola barra */}
-              <div id="tour-buscador-mobile" className="flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10">
-                <button
-                  onClick={() => setSearchTab(prev => prev === 'comercios' ? 'productos' : 'comercios')}
-                  className="flex items-center gap-1 px-3 h-full text-[11px] font-black text-gray-700 dark:text-slate-200 whitespace-nowrap border-r border-gray-200 dark:border-slate-600 shrink-0"
-                >
-                  {searchTab === 'comercios' ? 'Comercios' : 'Productos'}
-                  <ChevronDown size={11} className="opacity-50" />
-                </button>
-                <div className="relative flex-1 h-full">
-                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 pointer-events-none" />
-                  <input
-                    ref={searchTab === 'comercios' ? mobileSearchRef : productSearchRef}
-                    type="text"
-                    placeholder={searchTab === 'comercios' ? 'Buscar comercio...' : 'Ej: carteras, zapatillas...'}
-                    value={searchTab === 'comercios' ? searchText : productQuery}
-                    onChange={e => {
-                      if (searchTab === 'comercios') {
-                        setSearchText(e.target.value)
-                        setSearchMode('startsWith')
-                        if (searchTimer.current) clearTimeout(searchTimer.current)
-                        searchTimer.current = setTimeout(() => {
-                          setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
-                        }, 400)
-                      } else {
-                        setProductQuery(e.target.value)
-                      }
-                    }}
-                    className="w-full h-full pl-8 pr-8 bg-transparent dark:text-white text-xs font-medium outline-none"
-                  />
-                  {(searchTab === 'comercios' ? searchText : productQuery) && (
-                    <button
-                      onClick={() => {
-                        if (searchTab === 'comercios') { setSearchText(''); setActiveFilters(prev => ({ ...prev, commerces: [] })) }
-                        else setProductQuery('')
+              {/* Buscador combo + Botón de Filtros mobile */}
+              <div className="flex items-center gap-2">
+                <div id="tour-buscador-mobile" className="flex-1 flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10">
+                  <button
+                    onClick={() => setSearchTab(prev => prev === 'comercios' ? 'productos' : 'comercios')}
+                    className="flex items-center gap-1 px-3 h-full text-[11px] font-black text-gray-700 dark:text-slate-200 whitespace-nowrap border-r border-gray-200 dark:border-slate-600 shrink-0"
+                  >
+                    {searchTab === 'comercios' ? 'Comercios' : 'Productos'}
+                    <ChevronDown size={11} className="opacity-50" />
+                  </button>
+                  <div className="relative flex-1 h-full">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 pointer-events-none" />
+                    <input
+                      ref={searchTab === 'comercios' ? mobileSearchRef : productSearchRef}
+                      type="text"
+                      placeholder={searchTab === 'comercios' ? 'Buscar comercio...' : 'Ej: carteras, zapatillas...'}
+                      value={searchTab === 'comercios' ? searchText : productQuery}
+                      onChange={e => {
+                        if (searchTab === 'comercios') {
+                          setSearchText(e.target.value)
+                          setSearchMode('startsWith')
+                          if (searchTimer.current) clearTimeout(searchTimer.current)
+                          searchTimer.current = setTimeout(() => {
+                            setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
+                          }, 400)
+                        } else {
+                          setProductQuery(e.target.value)
+                        }
                       }}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500"
-                    >
-                      <X size={13} />
-                    </button>
-                  )}
+                      className="w-full h-full pl-8 pr-8 bg-transparent dark:text-white text-xs font-medium outline-none"
+                    />
+                    {(searchTab === 'comercios' ? searchText : productQuery) && (
+                      <button
+                        onClick={() => {
+                          if (searchTab === 'comercios') { setSearchText(''); setActiveFilters(prev => ({ ...prev, commerces: [] })) }
+                          else setProductQuery('')
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Botón de Filtros mobile destacado arriba junto al buscador */}
+                <button
+                  id="tour-filtros-mobile"
+                  onClick={() => setIsFilterOpen(true)}
+                  type="button"
+                  className={`h-10 px-3 rounded-2xl border flex items-center gap-1.5 font-black text-xs shrink-0 transition-all active:scale-95 shadow-sm ${
+                    getFilterChips().filter(c => c.type !== 'category').length > 0
+                      ? 'bg-[#D94F2B] border-[#D94F2B] text-white'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700'
+                  }`}
+                  aria-label="Abrir filtros"
+                >
+                  <SlidersHorizontal size={15} />
+                  <span>Filtros</span>
+                  {getFilterChips().filter(c => c.type !== 'category').length > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-white text-[#D94F2B] text-[10px] font-black flex items-center justify-center">
+                      {getFilterChips().filter(c => c.type !== 'category').length}
+                    </span>
+                  )}
+                </button>
               </div>
 
               {/* Chips de categorías favoritas (solo si hay favoritas) */}

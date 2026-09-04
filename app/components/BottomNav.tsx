@@ -2,21 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Sun, Search, SlidersHorizontal, Users, TrendingUp, UserCircle } from 'lucide-react'
-
-function CategorySearchIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={active ? 2.5 : 2}
-      strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="8" height="8" rx="1.5" />
-      <rect x="13" y="3" width="8" height="8" rx="1.5" />
-      <rect x="3" y="13" width="8" height="8" rx="1.5" />
-      <circle cx="17.5" cy="17.5" r="3" />
-      <line x1="19.6" y1="19.6" x2="22" y2="22" />
-    </svg>
-  )
-}
+import { Flame, Compass, Users, UserCircle, TrendingUp } from 'lucide-react'
 
 type Props = {
   onSearch?: () => void
@@ -34,60 +20,85 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
     return name.slice(0, 2).toUpperCase()
   })()
 
-  const isHome = pathname === '/promos'
-
   const navItems = [
-    { label: 'Promos',      icon: Sun,               href: '/promos',    action: undefined as (() => void) | undefined },
-    { label: 'Comunidad',   icon: Users,             href: '/comunidad', action: undefined },
-    { label: 'Filtros',     icon: SlidersHorizontal, href: undefined,    action: onFilter },
-    { label: 'Categorías',  icon: undefined,         href: '/explorar',  action: undefined },
-    { label: 'Buscar',      icon: Search,            href: undefined,    action: onSearch },
-    { label: 'Inversiones', icon: TrendingUp,        href: '/finanzas',  action: undefined },
-    { label: 'Perfil',      icon: UserCircle,        href: '/perfil',    action: undefined },
+    {
+      label: 'Promos',
+      icon: Flame,
+      href: '/promos',
+      isActive: pathname === '/' || pathname === '/promos',
+    },
+    {
+      label: 'Explorar',
+      icon: Compass,
+      href: '/promos/explorar',
+      isActive: pathname?.startsWith('/promos/explorar') || pathname === '/explorar',
+    },
+    {
+      label: 'Tasas',
+      icon: TrendingUp,
+      href: '/finanzas',
+      isActive: pathname?.startsWith('/finanzas'),
+    },
+    {
+      label: 'Comunidad',
+      icon: Users,
+      href: '/comunidad',
+      isActive: pathname?.startsWith('/comunidad'),
+    },
+    {
+      label: 'Mi Perfil',
+      icon: UserCircle,
+      href: '/perfil',
+      isActive: pathname?.startsWith('/perfil'),
+    },
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 lg:left-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-slate-700 z-30 pb-safe">
-      <div className="flex w-full justify-around items-center px-1 pt-1.5 pb-1">
+    <nav className="fixed bottom-0 left-0 right-0 lg:left-72 bg-white/95 dark:bg-[#0A1428]/95 backdrop-blur-xl border-t border-gray-200 dark:border-slate-800 z-30 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+      <div className="flex w-full justify-around items-center px-3 py-2">
         {navItems.map((item) => {
-          const active = item.href ? (pathname === item.href || pathname?.startsWith(`${item.href}/`)) : false
+          const active = item.isActive
           const Icon = item.icon
           const isPerfil = item.href === '/perfil'
-          const isCategorias = item.label === 'Categorías'
-
-          const content = (
-            <>
-              <div className={`flex items-center justify-center transition-all duration-200 ${active ? 'text-green-600' : 'text-gray-400 dark:text-slate-500'}`}>
-                {isCategorias
-                  ? <CategorySearchIcon active={active} />
-                  : isPerfil && status === 'authenticated' && iniciales
-                  ? <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${active ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-slate-300'}`}>{iniciales}</div>
-                  : Icon && <Icon size={22} strokeWidth={active ? 2.5 : 2} />
-                }
-              </div>
-              <span className={`text-[9px] font-semibold mt-0.5 transition-colors ${active ? 'text-green-700' : 'text-gray-400 dark:text-slate-500'}`}>
-                {item.label}
-              </span>
-            </>
-          )
-
-          if (item.action || !item.href) {
-            return (
-              <button key={item.label}
-                id={`tour-nav-${item.label.toLowerCase()}`}
-                type="button"
-                onClick={item.action}
-                className="flex flex-col items-center gap-0 py-1 px-1 min-w-0 flex-1 cursor-pointer">
-                {content}
-              </button>
-            )
-          }
 
           return (
-            <Link key={item.label} href={item.href}
-              id={`tour-nav-${item.label.toLowerCase()}`}
-              className="flex flex-col items-center gap-0 py-1 px-1 min-w-0 flex-1">
-              {content}
+            <Link
+              key={item.label}
+              href={item.href}
+              id={`tour-nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+              className={`flex flex-col items-center justify-center py-1 px-3 min-w-0 flex-1 transition-transform active:scale-95 ${
+                active
+                  ? 'text-[#D94F2B]'
+                  : 'text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-center relative">
+                {isPerfil && status === 'authenticated' && iniciales ? (
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-colors ${
+                      active
+                        ? 'bg-[#D94F2B] text-white ring-2 ring-[#D94F2B]/30'
+                        : 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-200'
+                    }`}
+                  >
+                    {iniciales}
+                  </div>
+                ) : (
+                  <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
+                )}
+                {active && (
+                  <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-[#D94F2B]" />
+                )}
+              </div>
+              <span
+                className={`text-[11px] font-bold mt-1 tracking-tight transition-colors ${
+                  active
+                    ? 'text-[#D94F2B] font-extrabold'
+                    : 'text-gray-500 dark:text-slate-400'
+                }`}
+              >
+                {item.label}
+              </span>
             </Link>
           )
         })}
@@ -95,3 +106,4 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
     </nav>
   )
 }
+
