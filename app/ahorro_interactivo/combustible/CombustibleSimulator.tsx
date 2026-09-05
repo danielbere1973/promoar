@@ -798,6 +798,83 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
         </div>
       </div>
     </div>
+
+    {/* Footer oficial con la estructura de PromoAR */}
+    <footer className="w-full bg-[#060D1A] border-t border-slate-800/80 text-slate-400 py-12 px-4 mt-8">
+      <div className="max-w-5xl mx-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
+          {/* Columna 1: Marca y Redes */}
+          <div className="col-span-2 sm:col-span-1">
+            <Link href="/" className="inline-block mb-3">
+              <span className="text-xl font-black text-white tracking-tight">
+                Promo<span className="text-[#D94F2B]">AR</span>
+              </span>
+            </Link>
+            <p className="text-xs text-slate-400 leading-relaxed mb-4">
+              El agregador de promociones bancarias y descuentos más completo de Argentina.
+            </p>
+            <div className="flex items-center gap-3">
+              <a
+                href="https://www.instagram.com/promoar.com.ar"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+                </svg>
+              </a>
+              <a
+                href="https://wa.me/541173691613"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="WhatsApp"
+                className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+              >
+                <span className="text-sm">💬</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Columna 2: Herramientas */}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Herramientas</p>
+            <ul className="space-y-2 text-xs">
+              <li><Link href="/promos" className="hover:text-white transition-colors">Todas las Promos</Link></li>
+              <li><Link href="/ahorro-interactivo/combustible" className="text-[#E8724F] font-semibold hover:text-white transition-colors">Simulador Nafta</Link></li>
+              <li><Link href="/finanzas" className="hover:text-white transition-colors">Tasas de Billeteras</Link></li>
+              <li><Link href="/perfil" className="hover:text-white transition-colors">Mi Perfil Financiero</Link></li>
+            </ul>
+          </div>
+
+          {/* Columna 3: Empresa */}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Empresa</p>
+            <ul className="space-y-2 text-xs">
+              <li><Link href="/quienes-somos" className="hover:text-white transition-colors">Quiénes somos</Link></li>
+              <li><Link href="/como-funciona" className="hover:text-white transition-colors">Cómo funciona</Link></li>
+              <li><Link href="/contacto" className="hover:text-white transition-colors">Contacto</Link></li>
+            </ul>
+          </div>
+
+          {/* Columna 4: Legal */}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Legal</p>
+            <ul className="space-y-2 text-xs">
+              <li><Link href="/privacidad" className="hover:text-white transition-colors">Privacidad</Link></li>
+              <li><Link href="/terminos" className="hover:text-white transition-colors">Términos</Link></li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-800/80 pt-6 text-center text-xs text-slate-500">
+          <p>© {new Date().getFullYear()} PromoAR. Las promociones son provistas por cada entidad financiera. Verificá vigencia y condiciones antes de usar.</p>
+        </div>
+      </div>
+    </footer>
   </>
 )
 }
