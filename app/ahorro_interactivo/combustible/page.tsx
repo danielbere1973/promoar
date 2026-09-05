@@ -1,8 +1,11 @@
 import { Metadata } from 'next'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import CombustibleSimulator, { CombustiblePromoItem } from './CombustibleSimulator'
+import CombustibleSimulator, { CombustiblePromoItem, FuelBrand } from './CombustibleSimulator'
 
-export const revalidate = 3600 // Cache por 1 hora
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export const metadata: Metadata = {
   title: 'Simulador de Ahorro en Combustible | PromoAR',
@@ -105,6 +108,70 @@ function bitmaskToDayNames(bitmask: number): string[] {
 }
 
 export default async function CombustibleSimulatorPage() {
+  const session = await getServerSession(authOptions)
+  let initialUserMethods: string[] = []
+  let userCustomEntities: { id: string; label: string; type: 'bank' | 'wallet' }[] = []
+  let userInfo: { name: string | null; email: string | null } | null = null
+
+  if (session?.user?.email) {
+    userInfo = {
+      name: session.user.name || null,
+      email: session.user.email,
+    }
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        financialProfile: {
+          include: {
+            banks: { include: { bank: { select: { slug: true, name: true } } } },
+            wallets: { include: { wallet: { select: { slug: true, name: true } } } },
+            cards: {
+              include: {
+                bank: { select: { slug: true, name: true } },
+                wallet: { select: { slug: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (user?.financialProfile) {
+      const methodsSet = new Set<string>()
+      const entityMap = new Map<string, { id: string; label: string; type: 'bank' | 'wallet' }>()
+
+      user.financialProfile.banks.forEach(b => {
+        if (b.bank?.slug) {
+          const slug = b.bank.slug.toLowerCase()
+          methodsSet.add(slug)
+          entityMap.set(slug, { id: slug, label: b.bank.name, type: 'bank' })
+        }
+      })
+      user.financialProfile.wallets.forEach(w => {
+        if (w.wallet?.slug) {
+          const slug = w.wallet.slug.toLowerCase()
+          methodsSet.add(slug)
+          entityMap.set(slug, { id: slug, label: w.wallet.name, type: 'wallet' })
+        }
+      })
+      user.financialProfile.cards.forEach(c => {
+        if (c.bank?.slug) {
+          const slug = c.bank.slug.toLowerCase()
+          methodsSet.add(slug)
+          entityMap.set(slug, { id: slug, label: c.bank.name, type: 'bank' })
+        }
+        if (c.wallet?.slug) {
+          const slug = c.wallet.slug.toLowerCase()
+          methodsSet.add(slug)
+          entityMap.set(slug, { id: slug, label: c.wallet.name, type: 'wallet' })
+        }
+      })
+
+      initialUserMethods = Array.from(methodsSet)
+      userCustomEntities = Array.from(entityMap.values())
+    }
+  }
+
   // Obtenemos todas las promociones activas del rubro combustible (incluyendo cadenas y genéricas)
   const rawPromos = await prisma.promo.findMany({
     where: {
@@ -247,7 +314,12 @@ export default async function CombustibleSimulatorPage() {
 
   return (
     <main className="min-h-screen bg-[#0A1428] text-slate-100 selection:bg-[#D94F2B]/30">
-      <CombustibleSimulator initialPromos={promos} />
+      <CombustibleSimulator
+        initialPromos={promos}
+        initialUserMethods={initialUserMethods}
+        userCustomEntities={userCustomEntities}
+        userInfo={userInfo}
+      />
     </main>
   )
 }

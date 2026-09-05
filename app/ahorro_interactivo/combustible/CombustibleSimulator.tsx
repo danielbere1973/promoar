@@ -27,8 +27,52 @@ export interface CombustiblePromoItem {
   logoUrl: string | null
 }
 
+export interface UserCustomEntity {
+  id: string
+  label: string
+  type: 'bank' | 'wallet'
+  color?: string
+}
+
+export interface CombustibleResultItem {
+  brand: FuelBrand
+  config: {
+    name: string
+    color: string
+    glowClass: string
+    borderClass: string
+    bgGradient: string
+    badgeBg: string
+  }
+  matchedPromo: CombustiblePromoItem | null
+  alternateDayPromo: CombustiblePromoItem | null
+  savings: number
+  hasMatch: boolean
+  hasAlternateDayMatch: boolean
+  topGeneralPromo: CombustiblePromoItem | null
+  totalPromosCount: number
+  marketBestPromo: CombustiblePromoItem | null
+  opportunityZero: {
+    promo: CombustiblePromoItem
+    savings: number
+    entityLabel: string
+  } | null
+  opportunityMore: {
+    promo: CombustiblePromoItem
+    savings: number
+    diff: number
+    entityLabel: string
+  } | null
+}
+
 interface Props {
   initialPromos: CombustiblePromoItem[]
+  initialUserMethods?: string[]
+  userCustomEntities?: UserCustomEntity[]
+  userInfo?: {
+    name: string | null
+    email: string | null
+  } | null
 }
 
 // Opciones del selector de días
@@ -120,11 +164,63 @@ const BRAND_CONFIG: Record<FuelBrand, {
   },
 }
 
-export default function CombustibleSimulator({ initialPromos }: Props) {
+function getPromoEntityLabel(promo: CombustiblePromoItem): string {
+  const parts: string[] = []
+  for (const r of promo.requirements) {
+    const list: string[] = []
+    if (r.bankName) list.push(r.bankName)
+    if (r.walletName) list.push(r.walletName)
+    const combined = list.join(' / ')
+    if (combined && !parts.includes(combined)) {
+      parts.push(combined)
+    }
+  }
+  if (parts.length > 0) {
+    if (parts.length <= 2) return parts.join(' o ')
+    return `${parts[0]} u otras`
+  }
+  return 'otra tarjeta o app'
+}
+
+export default function CombustibleSimulator({
+  initialPromos,
+  initialUserMethods = [],
+  userCustomEntities = [],
+  userInfo = null,
+}: Props) {
   const router = useRouter()
-  
+
+  // Combinar métodos populares con entidades adicionales del usuario registrado
+  const allPaymentMethods = useMemo(() => {
+    const list = [...POPULAR_PAYMENT_METHODS]
+    if (userCustomEntities && userCustomEntities.length > 0) {
+      for (const ent of userCustomEntities) {
+        if (!list.some(m => m.id === ent.id)) {
+          list.push({
+            id: ent.id,
+            label: ent.label,
+            type: ent.type,
+            color: ent.type === 'bank' ? '#0072CE' : '#10B981',
+          })
+        }
+      }
+    }
+    return list
+  }, [userCustomEntities])
+
+  // Estado de si se está usando el perfil registrado en base de datos
+  const [isUsingRegisteredProfile, setIsUsingRegisteredProfile] = useState<boolean>(() => {
+    return initialUserMethods.length > 0
+  })
+
   // Estado de medios de pago seleccionados
-  const [selectedMethods, setSelectedMethods] = useState<string[]>(['galicia', 'cuenta-dni', 'modo'])
+  const [selectedMethods, setSelectedMethods] = useState<string[]>(() => {
+    if (initialUserMethods.length > 0) {
+      return initialUserMethods
+    }
+    return ['galicia', 'cuenta-dni', 'modo']
+  })
+
   // Estado de día seleccionado ('all', 'today', '2', '4', etc.)
   const [selectedDay, setSelectedDay] = useState<string>('all')
   const [monthlySpend, setMonthlySpend] = useState<number>(80000)
@@ -150,30 +246,33 @@ export default function CombustibleSimulator({ initialPromos }: Props) {
       const fromUrl = cardsParam.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
       if (fromUrl.length > 0) {
         setSelectedMethods(fromUrl)
+        setIsUsingRegisteredProfile(false)
         if (spendParam) {
           const s = parseInt(spendParam, 10)
           if (!isNaN(s) && s > 0) setMonthlySpend(s)
         }
         return
       }
-    }
-
-    // 2. Check localStorage guestProfile
-    try {
-      const raw = localStorage.getItem('guestProfile')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        const banks: string[] = parsed.banks || []
-        const wallets: string[] = parsed.wallets || []
-        const combined = [...banks, ...wallets].map(s => s.toLowerCase())
-        if (combined.length > 0) {
-          setSelectedMethods(combined)
+    } else if (initialUserMethods.length > 0) {
+      setIsUsingRegisteredProfile(true)
+    } else {
+      // 2. Check localStorage guestProfile
+      try {
+        const raw = localStorage.getItem('guestProfile')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          const banks: string[] = parsed.banks || []
+          const wallets: string[] = parsed.wallets || []
+          const combined = [...banks, ...wallets].map(s => s.toLowerCase())
+          if (combined.length > 0) {
+            setSelectedMethods(combined)
+          }
         }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
-  }, [])
+  }, [initialUserMethods])
 
   // Toggle de medio de pago
   const toggleMethod = (id: string) => {
@@ -187,7 +286,7 @@ export default function CombustibleSimulator({ initialPromos }: Props) {
   }
 
   const selectAll = () => {
-    setSelectedMethods(POPULAR_PAYMENT_METHODS.map(m => m.id))
+    setSelectedMethods(allPaymentMethods.map(m => m.id))
   }
 
   const clearAll = () => {
@@ -196,21 +295,21 @@ export default function CombustibleSimulator({ initialPromos }: Props) {
 
 function matchesMethod(methodId: string, slug: string | null, name: string | null): boolean {
   if (!slug && !name) return false
-  const s = (slug || '').toLowerCase()
-  const n = (name || '').toLowerCase()
-  const m = methodId.toLowerCase()
+  const s = (slug || '').toLowerCase().trim()
+  const n = (name || '').toLowerCase().trim()
+  const m = methodId.toLowerCase().trim()
 
-  // Clubes de beneficios o suscripción (Club La Nación, Clarín 365) son programas aparte, NUNCA bancos
-  const isBenefitsClub =
-    s.includes('club-la-nacion') ||
-    s.includes('clarin-365') ||
-    n.includes('club la nacion') ||
-    n.includes('club la nación') ||
-    n.includes('clarín 365') ||
-    n.includes('clarin 365')
+  if (s === m || n === m) return true
 
-  if (m === 'bna') {
-    if (isBenefitsClub) return false
+  // Clubes de beneficios
+  if (m === 'club-la-nacion' || m === 'club-la-nación') {
+    return s.includes('club-la-nacion') || s.includes('la-nacion') || n.includes('club la nacion') || n.includes('club la nación')
+  }
+  if (m === 'clarin-365' || m === 'clarin-365-plus') {
+    return s.includes('clarin-365') || s.includes('365') || n.includes('clarin') || n.includes('clarín') || n.includes('365')
+  }
+
+  if (m === 'bna' || m === 'banco-nacion') {
     return (
       s === 'bna' ||
       s === 'banco-nacion' ||
@@ -219,20 +318,18 @@ function matchesMethod(methodId: string, slug: string | null, name: string | nul
       n.includes('banco de la naci')
     )
   }
-  if (m === 'galicia') return !isBenefitsClub && (s.includes('galicia') || n.includes('galicia'))
-  if (m === 'santander') return !isBenefitsClub && (s.includes('santander') || n.includes('santander'))
-  if (m === 'bbva') return !isBenefitsClub && (s.includes('bbva') || n.includes('bbva'))
-  if (m === 'macro') return !isBenefitsClub && (s.includes('macro') || n.includes('macro'))
-  if (m === 'ciudad') return !isBenefitsClub && (s.includes('ciudad') || n.includes('ciudad'))
-  if (m === 'credicoop') return !isBenefitsClub && (s.includes('credicoop') || n.includes('credicoop'))
+  if (m === 'galicia' || m === 'banco-galicia') return s.includes('galicia') || n.includes('galicia')
+  if (m === 'santander' || m === 'banco-santander') return s.includes('santander') || n.includes('santander')
+  if (m === 'bbva' || m === 'banco-bbva') return s.includes('bbva') || n.includes('bbva')
+  if (m === 'macro' || m === 'banco-macro') return s.includes('macro') || n.includes('macro')
+  if (m === 'ciudad' || m === 'banco-ciudad') return s.includes('ciudad') || n.includes('ciudad')
+  if (m === 'credicoop' || m === 'banco-credicoop') return s.includes('credicoop') || n.includes('credicoop')
   if (m === 'cuenta-dni') return s.includes('cuenta-dni') || s.includes('cuentadni') || n.includes('cuenta dni')
   if (m === 'modo') return s.includes('modo') || n.includes('modo')
   if (m === 'personal-pay') return s.includes('personal-pay') || s.includes('personalpay') || n.includes('personal pay')
   if (m === 'app-ypf') return s.includes('app-ypf') || n.includes('app ypf') || (s === 'ypf' && n.includes('app'))
   if (m === 'shell-box') return s.includes('shell-box') || n.includes('shell box')
   if (m === 'uala') return s.includes('uala') || n.includes('ualá')
-
-  if (isBenefitsClub) return false
 
   return s.includes(m) || m.includes(s) || n.includes(m)
 }
@@ -284,7 +381,7 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
   }
 
   // Cálculo de resultados por marca (YPF, Axion, Shell, Puma)
-  const resultsByBrand = useMemo(() => {
+  const resultsByBrand = useMemo<CombustibleResultItem[]>(() => {
     const brands: FuelBrand[] = ['YPF', 'Axion', 'Shell', 'Puma']
 
     return brands.map(brand => {
@@ -316,7 +413,45 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
         ? [...cardMatchedPromos].sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0))[0]
         : null
 
-      // Mejor promo general de la marca (por si no tiene match con ninguna tarjeta)
+      // 4. Mejor promoción del mercado en general para esta marca (para cálculo de ahorro potencial)
+      const dayAllPromos = brandPromos.filter(promoMatchesDay)
+      const candidatePromos = dayAllPromos.length > 0 ? dayAllPromos : brandPromos
+
+      let marketBestPromo: CombustiblePromoItem | null = null
+      let marketMaxSavings = 0
+
+      for (const p of candidatePromos) {
+        const rawSavings = monthlySpend * (p.discountPct / 100)
+        const actualSavings = p.capAmount ? Math.min(rawSavings, p.capAmount) : rawSavings
+        if (actualSavings > marketMaxSavings) {
+          marketMaxSavings = actualSavings
+          marketBestPromo = p
+        }
+      }
+
+      const roundedMaxSavings = Math.round(maxSavings)
+      const roundedMarketSavings = Math.round(marketMaxSavings)
+      const marketEntityLabel = marketBestPromo ? getPromoEntityLabel(marketBestPromo) : 'otra tarjeta'
+
+      // Oportunidad 1: Usuario no tiene tarjeta para esta estación ($0 ahorro) pero en el mercado sí hay promo
+      const opportunityZero = !bestPromo && marketBestPromo && roundedMarketSavings > 0
+        ? {
+            promo: marketBestPromo,
+            savings: roundedMarketSavings,
+            entityLabel: marketEntityLabel,
+          }
+        : null
+
+      // Oportunidad 2: Usuario tiene tarjeta pero otra entidad rinde sustancialmente más (>= $1.500 de diferencia)
+      const opportunityMore = bestPromo && marketBestPromo && (roundedMarketSavings - roundedMaxSavings >= 1500)
+        ? {
+            promo: marketBestPromo,
+            savings: roundedMarketSavings,
+            diff: roundedMarketSavings - roundedMaxSavings,
+            entityLabel: marketEntityLabel,
+          }
+        : null
+
       const topGeneralPromo = [...brandPromos].sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0))[0] || null
 
       return {
@@ -324,11 +459,14 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
         config: BRAND_CONFIG[brand],
         matchedPromo: bestPromo,
         alternateDayPromo,
-        savings: Math.round(maxSavings),
+        savings: roundedMaxSavings,
         hasMatch: matchedPromos.length > 0,
         hasAlternateDayMatch: !!alternateDayPromo,
         topGeneralPromo,
         totalPromosCount: brandPromos.length,
+        marketBestPromo,
+        opportunityZero,
+        opportunityMore,
       }
     }).sort((a, b) => {
       if (a.hasMatch && b.hasMatch) return b.savings - a.savings
@@ -456,8 +594,27 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
           </div>
         </div>
 
+        {/* Badge de usuario logueado */}
+        {isUsingRegisteredProfile && (
+          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 mb-4 text-xs">
+            <div className="flex items-center gap-2 text-emerald-300 font-medium">
+              <span className="text-sm">✨</span>
+              <span>
+                Cargamos tus tarjetas registradas de PromoAR{' '}
+                <strong className="text-white font-semibold">({userInfo?.name || userInfo?.email || 'tu cuenta'})</strong>
+              </span>
+            </div>
+            <Link
+              href="/perfil"
+              className="text-[11px] text-emerald-400 hover:text-white underline font-semibold transition-colors shrink-0 ml-2"
+            >
+              Editar tarjetas →
+            </Link>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 pt-1">
-          {POPULAR_PAYMENT_METHODS.map(method => {
+          {allPaymentMethods.map(method => {
             const isSelected = selectedMethods.includes(method.id)
             return (
               <button
@@ -725,11 +882,48 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
                         </div>
                       </div>
                     )}
+
+                    {/* Tip de ahorro si otra tarjeta rinde más */}
+                    {item.opportunityMore && (
+                      <div className="mt-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
+                        <span className="text-sm shrink-0 leading-none pt-0.5">💡</span>
+                        <div className="text-[11px] text-slate-200 leading-snug">
+                          <span className="font-bold text-amber-300">Tip de ahorro: </span>
+                          Con <strong className="text-white font-bold">{item.opportunityMore.entityLabel}</strong>{' '}
+                          ahorrarías <strong className="text-amber-300 font-mono font-black">+${item.opportunityMore.diff.toLocaleString('es-AR')} más</strong>{' '}
+                          (hasta ${item.opportunityMore.savings.toLocaleString('es-AR')}).
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   // Sugerencia si no tiene promo hoy o con sus tarjetas
-                  <div className="pt-3 border-t border-slate-800/60 text-xs space-y-2">
-                    {hasAlternateDayMatch && alternateDayPromo ? (
+                  <div className="pt-3 border-t border-slate-800/60 text-xs space-y-2.5">
+                    {/* Oportunidad cuando no tiene tarjeta para esta petrolera */}
+                    {item.opportunityZero && (
+                      <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-950 border border-emerald-500/30 space-y-1.5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                            <span>✨ Ahorro potencial</span>
+                          </span>
+                          <span className="text-[11px] font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            {item.opportunityZero.promo.discountPct}% OFF
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-200 leading-snug">
+                          Si tuvieras <strong className="text-white font-black">{item.opportunityZero.entityLabel}</strong>, ahorrarías{' '}
+                          <strong className="text-emerald-400 font-mono font-black">${item.opportunityZero.savings.toLocaleString('es-AR')}</strong> en vez de $0.
+                        </p>
+                        <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400">
+                          <span>Días: {item.opportunityZero.promo.validDays.join(', ')}</span>
+                          {item.opportunityZero.promo.capAmount && (
+                            <span className="text-amber-300/90 font-medium">Tope: ${item.opportunityZero.promo.capAmount.toLocaleString('es-AR')}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {hasAlternateDayMatch && alternateDayPromo && (
                       <div className="bg-[#142840]/70 p-3 rounded-xl border border-[#26406F] space-y-1">
                         <div className="text-amber-300 font-bold text-xs flex items-center gap-1.5">
                           <span>🗓️ Día recomendado en {brand}:</span>
@@ -741,15 +935,9 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
                           {alternateDayPromo.title}
                         </div>
                       </div>
-                    ) : topGeneralPromo ? (
-                      <p className="text-slate-400">
-                        💡 <strong className="text-slate-300">¿Sabías qué?</strong> Si tuvieras{' '}
-                        <span className="text-amber-300 font-semibold">
-                          {getUniqueBadges(topGeneralPromo.requirements).map(b => b.name).join(' + ') || 'otra tarjeta'}
-                        </span>
-                        , tendrías hasta <strong className="text-white">{topGeneralPromo.discountPct}% de reintegro</strong> en {brand}.
-                      </p>
-                    ) : (
+                    )}
+
+                    {!item.opportunityZero && !hasAlternateDayMatch && (
                       <p className="text-slate-400">No hay promociones bancarias masivas vigentes cargadas en este momento para {brand}.</p>
                     )}
                   </div>
@@ -795,6 +983,23 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
           >
             <span>⭐ Guardar mis tarjetas en PromoAR →</span>
           </button>
+        </div>
+
+        {/* Aviso Legal y Descargo de Responsabilidad */}
+        <div className="p-6 md:p-7 rounded-2xl bg-slate-900/60 border border-slate-800/90 text-xs text-slate-400 leading-relaxed space-y-3 mt-10">
+          <div className="flex items-center gap-2 text-slate-200 font-bold uppercase tracking-wider text-[11px]">
+            <span className="text-amber-400 text-sm">⚖️</span>
+            <span>Términos, condiciones y descargo de responsabilidad</span>
+          </div>
+          <p>
+            Los cálculos, porcentajes de descuento, reintegros estimados y topes exhibidos en este simulador son de carácter <strong className="text-slate-300">estrictamente informativo y referencial</strong>. La información final, oficial y vinculante respecto de vigencias, días habilitados, topes de reintegro por cuenta/mes, tipos de combustible habilitados (ej. nafta premium, súper o diésel) y estaciones de servicio adheridas se encuentra exclusivamente en las <strong className="text-slate-300">bases y condiciones publicadas por cada entidad bancaria, billetera virtual o petrolera (YPF, Axion, Shell, Puma)</strong>.
+          </p>
+          <p>
+            Cada entidad y petrolera se reserva el derecho de modificar, suspender o dar de baja sus promociones sin previo aviso. Recomendamos a los usuarios <strong className="text-slate-300">leer atentamente las exclusiones específicas de cada promoción</strong> antes de efectuar la carga (tales como medios de cobro no habilitados, estaciones de bandera blanca o compras mediante tarjetas corporativas).
+          </p>
+          <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-800/70">
+            PromoAR es una plataforma independiente de agregación y difusión de beneficios. PromoAR no emite instrumentos de pago, no procesa transacciones monetarias ni forma parte de la relación contractual entre el consumidor, la entidad financiera y la estación de servicio, quedando expresamente desligada de cualquier responsabilidad civil, comercial o de cualquier otra índole por divergencias en los montos acreditados, rechazos de pago, demoras en las devoluciones o modificaciones comerciales unilaterales dispuestas por los emisores.
+          </p>
         </div>
       </div>
     </div>
