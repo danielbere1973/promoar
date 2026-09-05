@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import SimulatorHeader from '@/app/components/SimulatorHeader'
 
 export type FuelBrand = 'YPF' | 'Axion' | 'Shell' | 'Puma'
 
@@ -528,46 +529,7 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
 
   return (
     <>
-      {/* Barra de navegación superior clarita para destacar el logo oficial de PromoAR */}
-      <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group transition-transform hover:scale-[1.01]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/promoar_logo_transparent.png"
-              alt="PromoAR"
-              className="h-10 md:h-12 w-auto object-contain shrink-0"
-            />
-          </Link>
-          <div className="flex items-center gap-1.5 text-[11px] font-bold">
-            <Link
-              href="/ahorro-interactivo/supermercados"
-              className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              🛒 Súper
-            </Link>
-            <Link
-              href="/ahorro-interactivo/combustible"
-              className="px-2.5 py-1 rounded-lg bg-[#D94F2B]/15 text-[#D94F2B] border border-[#D94F2B]/30"
-            >
-              ⛽ Nafta
-            </Link>
-            <Link
-              href="/ahorro-interactivo/farmacias"
-              className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              💊 Farmacias
-            </Link>
-          </div>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[#D94F2B] hover:bg-[#c44325] text-white text-xs md:text-sm font-bold shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <span>Entrá a PromoAR</span>
-            <span className="text-white/80 font-normal">→</span>
-          </Link>
-        </div>
-      </header>
+      <SimulatorHeader active="combustible" />
 
       <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
 

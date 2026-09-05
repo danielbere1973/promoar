@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import SimulatorHeader from '@/app/components/SimulatorHeader'
 
 export type PharmacyBrand =
   | 'Farmacity'
@@ -586,25 +587,7 @@ export default function FarmaciasSimulator({
 
   return (
     <div className="min-h-screen bg-[#0A1428] text-slate-100 selection:bg-[#D94F2B]/30 pb-20">
-      {/* Barra de navegación superior con vuelta al inicio */}
-      <header className="border-b border-slate-800/80 bg-[#0A1428]/95 sticky top-0 z-30 backdrop-blur-md">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link
-            href="/"
-            className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
-          >
-            <span>←</span> Volver a promociones
-          </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
-              Simulador Interactivo
-            </span>
-            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/10 text-rose-400 border border-rose-500/20">
-              Farmacias
-            </span>
-          </div>
-        </div>
-      </header>
+      <SimulatorHeader active="farmacias" />
 
       <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
         {/* Hero Header */}
