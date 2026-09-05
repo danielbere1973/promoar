@@ -844,6 +844,7 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
             <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Herramientas</p>
             <ul className="space-y-2 text-xs">
               <li><Link href="/promos" className="hover:text-white transition-colors">Todas las Promos</Link></li>
+              <li><Link href="/ahorro-interactivo/supermercados" className="text-emerald-400 font-semibold hover:text-white transition-colors">Simulador Supermercados</Link></li>
               <li><Link href="/ahorro-interactivo/combustible" className="text-[#E8724F] font-semibold hover:text-white transition-colors">Simulador Nafta</Link></li>
               <li><Link href="/finanzas" className="hover:text-white transition-colors">Tasas de Billeteras</Link></li>
               <li><Link href="/perfil" className="hover:text-white transition-colors">Mi Perfil Financiero</Link></li>

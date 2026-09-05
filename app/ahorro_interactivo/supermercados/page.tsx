@@ -1,0 +1,222 @@
+import { Metadata } from 'next'
+import { prisma } from '@/lib/prisma'
+import SupermercadosSimulator, { SupermarketPromoItem, SupermarketBrand } from './SupermercadosSimulator'
+
+export const revalidate = 3600 // Cache por 1 hora
+
+export const metadata: Metadata = {
+  title: 'Simulador de Ahorro en Supermercados | PromoAR',
+  description: '¿En qué supermercado te conviene comprar hoy? Seleccioná tus bancos y tarjetas y calculá tu ahorro real en Coto, Carrefour, Jumbo, Día, ChangoMás, Disco y Vea con reintegros y topes actualizados.',
+  openGraph: {
+    title: 'Simulador de Ahorro en Supermercados | PromoAR',
+    description: 'Calculá en qué supermercado pagás menos hoy según tus tarjetas y billeteras. Coto vs Carrefour vs Jumbo vs ChangoMás vs Día.',
+    url: 'https://promoar.com.ar/ahorro-interactivo/supermercados',
+    siteName: 'PromoAR',
+    locale: 'es_AR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Simulador de Ahorro en Supermercados | PromoAR',
+    description: '¿Con qué tarjeta te conviene hacer la compra del súper esta semana? Elegí tus tarjetas y mirá el podio en vivo.',
+  },
+}
+
+// Extracción de tope de reintegro en pesos a partir del texto o descripción
+function extractCap(title: string, desc: string | null): number | null {
+  const full = `${title} ${desc || ''}`
+  const match = full.match(/tope(?:\s+de(?:\s+reintegro)?)?[:\s]*\$?\s*([0-9]+(?:\.[0-9]{3})*)/i)
+  if (match && match[1]) {
+    const num = parseInt(match[1].replace(/\./g, ''), 10)
+    if (!isNaN(num) && num > 500 && num < 150000) return num
+  }
+  return null
+}
+
+// Mapeo canónico a las cadenas líderes de supermercados
+function resolveSupermarketBrands(commerceName: string, title: string, desc: string | null, commerceSlug: string): SupermarketBrand[] {
+  const full = `${commerceName || ''} ${title || ''} ${desc || ''} ${commerceSlug || ''}`.toLowerCase()
+  const brands: SupermarketBrand[] = []
+
+  if (/\bcoto\b/i.test(full)) brands.push('Coto')
+  if (/\bcarrefour\b/i.test(full)) brands.push('Carrefour')
+  if (/\bjumbo\b/i.test(full)) brands.push('Jumbo')
+  if (/\bchangomas\b|\bchango\s*m[aá]s\b/i.test(full)) brands.push('Changomas')
+  if (/\b(?:supermercados\s+)?dia\b|\bd[ií]a%\b/i.test(full)) brands.push('Dia')
+  if (/\bdisco\b/i.test(full)) brands.push('Disco')
+  if (/\bvea\b/i.test(full)) brands.push('Vea')
+
+  // Promociones especiales Cencosud (aplicables a Jumbo, Disco y Vea)
+  if (brands.length === 0 && /\bcencosud\b/i.test(full)) {
+    brands.push('Jumbo', 'Disco', 'Vea')
+  }
+
+  return brands
+}
+
+// Días de la semana desde bitmask (1 = Dom, 2 = Lun, 4 = Mar, 8 = Mié, 16 = Jue, 32 = Vie, 64 = Sáb)
+function bitmaskToDayNames(bitmask: number): string[] {
+  if (bitmask >= 127) return ['Todos los días']
+  const map: [number, string][] = [
+    [2, 'Lunes'],
+    [4, 'Martes'],
+    [8, 'Miércoles'],
+    [16, 'Jueves'],
+    [32, 'Viernes'],
+    [64, 'Sábados'],
+    [1, 'Domingos'],
+  ]
+  const res: string[] = []
+  for (const [bit, name] of map) {
+    if ((bitmask & bit) !== 0) res.push(name)
+  }
+  return res.length ? res : ['Todos los días']
+}
+
+export default async function SupermercadosSimulatorPage() {
+  // Obtenemos todas las promociones activas de supermercados
+  const rawPromos = await prisma.promo.findMany({
+    where: {
+      status: 'ACTIVE',
+      OR: [
+        { category: { slug: 'supermercados' } },
+        {
+          commerce: {
+            slug: {
+              in: [
+                'coto',
+                'carrefour',
+                'jumbo',
+                'changomas',
+                'dia',
+                'supermercados-dia',
+                'disco',
+                'vea',
+              ],
+            },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      sourceUrl: true,
+      maxDiscountPct: true,
+      validDays: true,
+      isFeatured: true,
+      category: {
+        select: {
+          slug: true,
+          name: true,
+        },
+      },
+      commerce: {
+        select: {
+          name: true,
+          slug: true,
+          logoUrl: true,
+        },
+      },
+      requirements: {
+        select: {
+          cap: true,
+          bank: {
+            select: {
+              name: true,
+              slug: true,
+            },
+          },
+          wallet: {
+            select: {
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [
+      { isFeatured: 'desc' },
+      { maxDiscountPct: 'desc' },
+    ],
+  })
+
+  // Normalizamos las promociones a los supermercados compatibles
+  const promos: SupermarketPromoItem[] = []
+
+  for (const p of rawPromos) {
+    const brands = resolveSupermarketBrands(p.commerce.name, p.title, p.description, p.commerce.slug)
+    if (brands.length === 0) continue
+
+    const discountPct = p.maxDiscountPct || 10
+
+    // Prioridad 1: tope estructurado en requirements
+    let cap: number | null = null
+    for (const r of p.requirements) {
+      if (typeof r.cap === 'number' && r.cap > 0 && r.cap < 200000) {
+        if (cap === null || r.cap > cap) {
+          cap = r.cap
+        }
+      }
+    }
+    // Prioridad 2: inferir del texto si no está estructurado
+    if (cap === null) {
+      cap = extractCap(p.title, p.description)
+    }
+
+    const days = bitmaskToDayNames(p.validDays)
+
+    // Requerimientos estructurados
+    const fullText = `${p.title} ${p.description || ''} ${p.commerce.name} ${p.sourceUrl || ''}`.toLowerCase()
+    const requiresModo = fullText.includes('modo') || fullText.includes('semana nacion') || fullText.includes('semananacion')
+
+    const requirements = p.requirements.map(r => {
+      let walletSlug = r.wallet?.slug || null
+      let walletName = r.wallet?.name || null
+      if (!walletSlug && requiresModo) {
+        walletSlug = 'modo'
+        walletName = 'MODO'
+      }
+      return {
+        bankName: r.bank?.name || null,
+        bankSlug: r.bank?.slug || null,
+        walletName,
+        walletSlug,
+      }
+    })
+
+    if (requirements.length === 0 && requiresModo) {
+      requirements.push({
+        bankName: null,
+        bankSlug: null,
+        walletName: 'MODO',
+        walletSlug: 'modo',
+      })
+    }
+
+    // Inyectamos la promo para cada cadena a la que aplica
+    for (const brand of brands) {
+      promos.push({
+        id: `${p.id}-${brand}`,
+        brand,
+        title: p.title,
+        description: p.description,
+        discountPct,
+        capAmount: cap,
+        validDays: days,
+        validDaysBitmask: p.validDays,
+        requirements,
+        isFeatured: p.isFeatured,
+        logoUrl: p.commerce.logoUrl,
+      })
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#0A1428] text-slate-100 selection:bg-[#D94F2B]/30">
+      <SupermercadosSimulator initialPromos={promos} />
+    </main>
+  )
+}
