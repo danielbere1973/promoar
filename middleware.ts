@@ -85,21 +85,17 @@ function likelyPrisma(pathname: string): boolean {
 // pausas — muy por encima de lo que genera un usuario navegando la grilla/detalle a mano.
 const RATE_LIMITED_PREFIXES = ['/promos/', '/comercios/', '/api/promos', '/api/search']
 const RATE_LIMIT_WINDOW_MS = 60_000
-// Bajado de 15 a 8/min el 3/9/2026: detectadas IPs con ráfagas de 10-17 req en <1.5seg
-// a /promos/explorar (UA de navegador real, no bot declarado) — muy por encima de
-// cualquier navegación humana normal de la grilla. Ver BAN_DURATION_MS arriba: superar
-// este límite ahora banea la IP, no solo corta la request individual.
-const RATE_LIMIT_MAX = 8
+// Límites diferenciados por tipo de cliente:
+// - Navegadores reales: 60 req/min (permite búsquedas debounced, filtros rápidos y
+//   múltiples usuarios detrás de una misma IP móvil CGNAT en 4G/5G).
+// - Bots/scripts no identificados: 6 req/min.
+const RATE_LIMIT_BROWSER_MAX = 60
+const RATE_LIMIT_BOT_MAX = 6
 const hitLog = new Map<string, number[]>()
 
-// Ban temporal por IP (RFC-forense 3/9/2026): el rate-limit de arriba solo corta la
-// request que excede el límite, pero el contador es en memoria por instancia Edge —
-// una IP puede seguir mandando ráfagas de 10-17 req/seg indefinidamente porque Vercel
-// balancea esas requests entre varias instancias y ninguna individualmente ve más de
-// RATE_LIMIT_MAX en su propia ventana. Al superar el límite UNA vez, la IP queda baneada
-// (429 directo, sin recalcular nada) por BAN_DURATION_MS — corta el patrón de ráfaga
-// aunque el conteo distribuido siga siendo inexacto. Ban en memoria, best-effort igual
-// que el resto de este archivo (no persiste entre instancias/deploys).
+// Ban temporal por IP: solo para bots/scrapers que superen su cuota.
+// Los navegadores reales NO se banean por tiempo prolongado para no perjudicar
+// a usuarios legítimos ni a IPs compartidas (CGNAT).
 const BAN_DURATION_MS = 5 * 60_000
 const bannedIps = new Map<string, number>()
 
@@ -150,7 +146,7 @@ const BROWSER_UA = /mozilla|chrome|safari|firefox|edg\//i
 
 function isRateLimited(ip: string, isLikelyBot: boolean): boolean {
   const now = Date.now()
-  const max = isLikelyBot ? 5 : RATE_LIMIT_MAX
+  const max = isLikelyBot ? RATE_LIMIT_BOT_MAX : RATE_LIMIT_BROWSER_MAX
   const hits = (hitLog.get(ip) ?? []).filter(t => now - t < RATE_LIMIT_WINDOW_MS)
   hits.push(now)
   hitLog.set(ip, hits)
@@ -228,11 +224,15 @@ export async function middleware(req: NextRequest) {
         return new NextResponse('Too Many Requests', { status: 429 })
       }
     } else if (ip !== 'unknown') {
-      if (isBanned(ip)) {
+      // El baneo de 5 minutos aplica únicamente a bots/scrapers confirmados.
+      // Los navegadores reales nunca se banean para no afectar a usuarios legítimos ni IPs compartidas (CGNAT).
+      if (isLikelyBot && isBanned(ip)) {
         return new NextResponse('Too Many Requests', { status: 429 })
       }
       if (isRateLimited(ip, isLikelyBot)) {
-        banIp(ip)
+        if (isLikelyBot) {
+          banIp(ip)
+        }
         return new NextResponse('Too Many Requests', { status: 429 })
       }
     }
