@@ -5,9 +5,15 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 
-export type SupermarketBrand = 'Coto' | 'Carrefour' | 'Jumbo' | 'Dia' | 'Changomas' | 'Disco' | 'Vea'
+export type PharmacyBrand =
+  | 'Farmacity'
+  | 'Farmaplus'
+  | 'Openfarma'
+  | 'Selma'
+  | 'Farmaonline'
+  | 'Farmacias de Barrio'
 
-export interface SupermarketRequirement {
+export interface PharmacyRequirement {
   bankName: string | null
   bankSlug: string | null
   walletName: string | null
@@ -16,16 +22,16 @@ export interface SupermarketRequirement {
   cardNetworkSlug: string | null
 }
 
-export interface SupermarketPromoItem {
+export interface PharmacyPromoItem {
   id: string
-  brand: SupermarketBrand
+  brand: PharmacyBrand
   title: string
   description: string | null
   discountPct: number
   capAmount: number | null
   validDays: string[]
   validDaysBitmask: number
-  requirements: SupermarketRequirement[]
+  requirements: PharmacyRequirement[]
   isFeatured: boolean
   logoUrl: string | null
 }
@@ -47,8 +53,8 @@ export interface FourLevelsCatalog {
   benefits: CatalogEntity[]
 }
 
-export interface SupermarketResultItem {
-  brand: SupermarketBrand
+export interface PharmacyResultItem {
+  brand: PharmacyBrand
   config: {
     name: string
     color: string
@@ -58,21 +64,21 @@ export interface SupermarketResultItem {
     badgeBg: string
     tagline: string
   }
-  matchedPromo: SupermarketPromoItem | null
-  alternateDayPromo: SupermarketPromoItem | null
+  matchedPromo: PharmacyPromoItem | null
+  alternateDayPromo: PharmacyPromoItem | null
   savings: number
   hasMatch: boolean
   hasAlternateDayMatch: boolean
-  topGeneralPromo: SupermarketPromoItem | null
+  topGeneralPromo: PharmacyPromoItem | null
   totalPromosCount: number
-  marketBestPromo: SupermarketPromoItem | null
+  marketBestPromo: PharmacyPromoItem | null
   opportunityZero: {
-    promo: SupermarketPromoItem
+    promo: PharmacyPromoItem
     savings: number
     entityLabel: string
   } | null
   opportunityMore: {
-    promo: SupermarketPromoItem
+    promo: PharmacyPromoItem
     savings: number
     diff: number
     entityLabel: string
@@ -80,7 +86,7 @@ export interface SupermarketResultItem {
 }
 
 interface Props {
-  initialPromos: SupermarketPromoItem[]
+  initialPromos: PharmacyPromoItem[]
   fullCatalog: FourLevelsCatalog
   userProfileCatalog: FourLevelsCatalog | null
   initialUserMethods?: string[]
@@ -90,7 +96,6 @@ interface Props {
   } | null
 }
 
-// Opciones del selector de días
 const DAYS_OF_WEEK = [
   { id: 'all', label: 'Toda la semana', shortLabel: 'Toda la semana' },
   { id: 'today', label: 'Hoy', shortLabel: 'Hoy' },
@@ -117,10 +122,9 @@ function getTodayInfo(): { bit: number; name: string } {
   return map[dayIndex] || { bit: 16, name: 'Jueves' }
 }
 
-const SPEND_PRESETS = [50000, 100000, 180000, 250000, 350000]
+const SPEND_PRESETS = [15000, 30000, 50000, 80000, 120000]
 
-// Estilos de marca oficiales para las cadenas de supermercados
-const BRAND_CONFIG: Record<SupermarketBrand, {
+const BRAND_CONFIG: Record<PharmacyBrand, {
   name: string
   color: string
   glowClass: string
@@ -129,72 +133,62 @@ const BRAND_CONFIG: Record<SupermarketBrand, {
   badgeBg: string
   tagline: string
 }> = {
-  Coto: {
-    name: 'Coto',
-    color: '#E30613',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(227,6,19,0.35)]',
-    borderClass: 'border-red-500/40 hover:border-red-400',
-    bgGradient: 'from-red-950/40 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-red-600 text-white',
-    tagline: 'Yo te conozco',
-  },
-  Carrefour: {
-    name: 'Carrefour',
-    color: '#0055A5',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(0,85,165,0.35)]',
-    borderClass: 'border-blue-500/40 hover:border-blue-400',
-    bgGradient: 'from-blue-950/40 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-blue-600 text-white',
-    tagline: 'El precio más bajo garantizado',
-  },
-  Jumbo: {
-    name: 'Jumbo',
-    color: '#00843D',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(0,132,61,0.35)]',
+  Farmacity: {
+    name: 'Farmacity',
+    color: '#00875A',
+    glowClass: 'shadow-[0_0_25px_-5px_rgba(0,135,90,0.35)]',
     borderClass: 'border-emerald-500/40 hover:border-emerald-400',
     bgGradient: 'from-emerald-950/40 via-slate-900/60 to-slate-950/80',
     badgeBg: 'bg-emerald-600 text-white',
-    tagline: 'Les va a encantar',
+    tagline: 'Tu farmacia y bienestar de confianza',
   },
-  Changomas: {
-    name: 'ChangoMás',
-    color: '#0071CE',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(0,113,206,0.35)]',
-    borderClass: 'border-sky-500/40 hover:border-sky-400',
-    bgGradient: 'from-sky-950/40 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-sky-600 text-white',
-    tagline: 'Más ahorro para tu familia',
+  Farmaplus: {
+    name: 'Farmaplus',
+    color: '#0052CC',
+    glowClass: 'shadow-[0_0_25px_-5px_rgba(0,82,204,0.35)]',
+    borderClass: 'border-blue-500/40 hover:border-blue-400',
+    bgGradient: 'from-blue-950/40 via-slate-900/60 to-slate-950/80',
+    badgeBg: 'bg-blue-600 text-white',
+    tagline: 'Cuidamos tu salud y tu bolsillo',
   },
-  Dia: {
-    name: 'Supermercados Día',
-    color: '#D6001C',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(214,0,28,0.35)]',
-    borderClass: 'border-rose-500/40 hover:border-rose-400',
-    bgGradient: 'from-rose-950/40 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-rose-600 text-white',
-    tagline: 'Expertos en ahorro',
-  },
-  Disco: {
-    name: 'Disco',
-    color: '#F58220',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(245,130,32,0.3)]',
+  Openfarma: {
+    name: 'OpenFarma',
+    color: '#FF5630',
+    glowClass: 'shadow-[0_0_25px_-5px_rgba(255,86,48,0.35)]',
     borderClass: 'border-orange-500/40 hover:border-orange-400',
     bgGradient: 'from-orange-950/40 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-orange-500 text-white',
-    tagline: 'Frescura y variedad',
+    badgeBg: 'bg-orange-600 text-white',
+    tagline: 'Abiertos siempre para vos',
   },
-  Vea: {
-    name: 'Vea',
-    color: '#E31B23',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(227,27,35,0.3)]',
-    borderClass: 'border-amber-500/40 hover:border-amber-400',
-    bgGradient: 'from-amber-950/40 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-amber-600 text-white',
-    tagline: 'Cerca tuyo, siempre',
+  Selma: {
+    name: 'Farmacia Selma',
+    color: '#6554C0',
+    glowClass: 'shadow-[0_0_25px_-5px_rgba(101,84,192,0.35)]',
+    borderClass: 'border-purple-500/40 hover:border-purple-400',
+    bgGradient: 'from-purple-950/40 via-slate-900/60 to-slate-950/80',
+    badgeBg: 'bg-purple-600 text-white',
+    tagline: 'Tradición y cuidado profesional',
+  },
+  Farmaonline: {
+    name: 'Farmaonline',
+    color: '#00B8D9',
+    glowClass: 'shadow-[0_0_25px_-5px_rgba(0,184,217,0.35)]',
+    borderClass: 'border-cyan-500/40 hover:border-cyan-400',
+    bgGradient: 'from-cyan-950/40 via-slate-900/60 to-slate-950/80',
+    badgeBg: 'bg-cyan-600 text-white',
+    tagline: 'Farmacia online con envío a domicilio',
+  },
+  'Farmacias de Barrio': {
+    name: 'Farmacias de Barrio',
+    color: '#36B37E',
+    glowClass: 'shadow-[0_0_25px_-5px_rgba(54,179,126,0.35)]',
+    borderClass: 'border-teal-500/40 hover:border-teal-400',
+    bgGradient: 'from-teal-950/40 via-slate-900/60 to-slate-950/80',
+    badgeBg: 'bg-teal-600 text-white',
+    tagline: 'Farmacias locales con MODO, Cuenta DNI y BNA',
   },
 }
 
-// Coincidencia flexible de medios de pago sin descartar tarjetas de beneficios
 function matchesMethod(methodId: string, slug: string | null, name: string | null): boolean {
   if (!slug && !name) return false
   const s = (slug || '').toLowerCase().trim()
@@ -214,7 +208,7 @@ function matchesMethod(methodId: string, slug: string | null, name: string | nul
     return s.includes('comunidad-coto') || s.includes('coto') || n.includes('comunidad coto')
   }
 
-  // Bancos principales
+  // Bancos
   if (m === 'bna' || m === 'banco-nacion') {
     return (
       s === 'bna' ||
@@ -236,18 +230,17 @@ function matchesMethod(methodId: string, slug: string | null, name: string | nul
   if (m === 'supervielle' || m === 'banco-supervielle') return s.includes('supervielle') || n.includes('supervielle')
   if (m === 'icbc') return s.includes('icbc') || n.includes('icbc')
 
-  // Billeteras virtuales
+  // Billeteras
   if (m === 'cuenta-dni' || m === 'cuentadni') return s.includes('cuenta-dni') || s.includes('cuentadni') || n.includes('cuenta dni')
   if (m === 'modo') return s.includes('modo') || n.includes('modo')
   if (m === 'personal-pay' || m === 'personalpay') return s.includes('personal-pay') || s.includes('personalpay') || n.includes('personal pay')
   if (m === 'naranja-x' || m === 'naranjax') return s.includes('naranja') || n.includes('naranja')
-  if (m === 'carrefour-banco') return s.includes('carrefour') || n.includes('carrefour')
   if (m === 'uala') return s.includes('uala') || n.includes('ualá') || n.includes('uala')
   if (m === 'mercadopago' || m === 'mercado-pago') return s.includes('mercadopago') || s.includes('mercado-pago') || n.includes('mercado pago')
   if (m === 'buepp') return s.includes('buepp') || n.includes('buepp')
   if (m === 'cencopay') return s.includes('cencopay') || n.includes('cencopay')
 
-  // Redes de tarjetas
+  // Redes
   if (m === 'visa') return s.includes('visa') || n.includes('visa')
   if (m === 'mastercard') return s.includes('mastercard') || n.includes('mastercard')
   if (m === 'amex' || m === 'american-express' || m === 'american-express-banco') {
@@ -259,11 +252,10 @@ function matchesMethod(methodId: string, slug: string | null, name: string | nul
   return s.includes(m) || m.includes(s) || n.includes(m)
 }
 
-function promoMatchesRequirements(promo: SupermarketPromoItem, userMethods: string[]): boolean {
+function promoMatchesRequirements(promo: PharmacyPromoItem, userMethods: string[]): boolean {
   if (userMethods.length === 0) return false
   if (promo.requirements.length === 0) return true
 
-  // Verificamos si el usuario seleccionó explícitamente redes de tarjetas
   const userNetworks = userMethods.filter(m => ['visa', 'mastercard', 'amex', 'american-express', 'cabal', 'maestro'].includes(m))
   const hasUserFilteredNetworks = userNetworks.length > 0
 
@@ -272,15 +264,9 @@ function promoMatchesRequirements(promo: SupermarketPromoItem, userMethods: stri
     const hasWalletReq = !!r.walletSlug || !!r.walletName
     const hasNetworkReq = !!r.cardNetworkSlug || !!r.cardNetworkName
 
-    // Coincidencia con banco
     const userHasBank = hasBankReq && userMethods.some(m => matchesMethod(m, r.bankSlug, r.bankName))
-
-    // Coincidencia con billetera o club de beneficios
     const userHasWallet = hasWalletReq && userMethods.some(m => matchesMethod(m, r.walletSlug, r.walletName))
 
-    // Coincidencia con red de tarjeta:
-    // Si el usuario seleccionó tarjetas específicas, chequeamos que coincida.
-    // Si no seleccionó ninguna red de tarjeta (solo bancos/billeteras), no penalizamos la red para que sus bancos coincidan.
     let userHasNetwork = true
     if (hasNetworkReq) {
       if (hasUserFilteredNetworks) {
@@ -307,7 +293,7 @@ function promoMatchesRequirements(promo: SupermarketPromoItem, userMethods: stri
   })
 }
 
-function getPromoEntityLabel(promo: SupermarketPromoItem): string {
+function getPromoEntityLabel(promo: PharmacyPromoItem): string {
   const parts: string[] = []
   for (const r of promo.requirements) {
     const list: string[] = []
@@ -326,7 +312,7 @@ function getPromoEntityLabel(promo: SupermarketPromoItem): string {
   return 'otra entidad'
 }
 
-export default function SupermercadosSimulator({
+export default function FarmaciasSimulator({
   initialPromos,
   fullCatalog,
   userProfileCatalog,
@@ -336,37 +322,28 @@ export default function SupermercadosSimulator({
   const router = useRouter()
   const { data: clientSession } = useSession()
 
-  // Determinar si el usuario tiene perfil registrado
   const hasRegisteredProfile = !!(userProfileCatalog && initialUserMethods.length > 0)
 
-  // Modo de selección arriba del cuadro:
-  // 'profile' = Mis productos financieros (Perfil PromoAR)
-  // 'all' = Todas las opciones disponibles en PromoAR (4 niveles)
   const [selectionMode, setSelectionMode] = useState<'profile' | 'all'>(() => {
     return hasRegisteredProfile ? 'profile' : 'all'
   })
 
-  // Estado de medios de pago seleccionados
   const [selectedMethods, setSelectedMethods] = useState<string[]>(() => {
     if (initialUserMethods.length > 0) {
       return initialUserMethods
     }
-    // Default recomendado si no hay perfil: principales métodos del súper
-    return ['banco-nacion', 'modo', 'cuenta-dni', 'galicia', 'visa', 'clarin-365', 'comunidad-coto']
+    return ['banco-nacion', 'modo', 'cuenta-dni', 'galicia', 'visa', 'clarin-365', 'club-la-nacion']
   })
 
-  // Búsqueda y visualización de bancos en "Todas las opciones"
   const [bankSearchQuery, setBankSearchQuery] = useState('')
   const [showAllBanks, setShowAllBanks] = useState(false)
 
-  // Estado de día seleccionado ('all', 'today', '2', '4', etc.)
   const [selectedDay, setSelectedDay] = useState<string>('all')
-  const [monthlySpend, setMonthlySpend] = useState<number>(100000)
+  const [monthlySpend, setMonthlySpend] = useState<number>(30000)
   const [copiedShare, setCopiedShare] = useState(false)
 
   const todayInfo = useMemo(() => getTodayInfo(), [])
 
-  // Sincronización con URL o con perfil registrado
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -438,10 +415,9 @@ export default function SupermercadosSimulator({
   }
 
   const resetRecommended = () => {
-    setSelectedMethods(['banco-nacion', 'modo', 'cuenta-dni', 'galicia', 'visa', 'clarin-365', 'comunidad-coto'])
+    setSelectedMethods(['banco-nacion', 'modo', 'cuenta-dni', 'galicia', 'visa', 'clarin-365', 'club-la-nacion'])
   }
 
-  // Bancos filtrados según búsqueda en "Todas las opciones"
   const filteredBanks = useMemo(() => {
     if (!bankSearchQuery.trim()) {
       return showAllBanks ? fullCatalog.banks : fullCatalog.banks.slice(0, 12)
@@ -450,7 +426,6 @@ export default function SupermercadosSimulator({
     return fullCatalog.banks.filter(b => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q))
   }, [fullCatalog.banks, bankSearchQuery, showAllBanks])
 
-  // Total de items en el perfil del usuario
   const userProfileItemCount = useMemo(() => {
     if (!userProfileCatalog) return 0
     return (
@@ -461,17 +436,21 @@ export default function SupermercadosSimulator({
     )
   }, [userProfileCatalog])
 
-  // Motor de cálculo de ahorro por cadena de supermercados con Ahorro Potencial
-  const resultsByBrand = useMemo<SupermarketResultItem[]>(() => {
-    const brands: SupermarketBrand[] = ['Coto', 'Carrefour', 'Jumbo', 'Changomas', 'Dia', 'Disco', 'Vea']
+  const resultsByBrand = useMemo<PharmacyResultItem[]>(() => {
+    const brands: PharmacyBrand[] = [
+      'Farmacity',
+      'Farmaplus',
+      'Openfarma',
+      'Selma',
+      'Farmaonline',
+      'Farmacias de Barrio',
+    ]
 
     return brands.map(brand => {
       const brandPromos = initialPromos.filter(p => p.brand === brand)
 
-      // 1. Filtrar promos que coinciden con los medios de pago seleccionados
       const matchedPromos = brandPromos.filter(p => promoMatchesRequirements(p, selectedMethods))
 
-      // 2. Filtrar por día seleccionado
       const dayFilteredPromos = matchedPromos.filter(p => {
         if (selectedDay === 'all') return true
         if (selectedDay === 'today') {
@@ -481,8 +460,7 @@ export default function SupermercadosSimulator({
         return (p.validDaysBitmask & bit) !== 0 || p.validDaysBitmask >= 127
       })
 
-      // 3. Encontrar la mejor promoción del usuario y calcular el ahorro efectivo
-      let bestPromo: SupermarketPromoItem | null = null
+      let bestPromo: PharmacyPromoItem | null = null
       let maxSavings = 0
 
       for (const promo of dayFilteredPromos) {
@@ -495,8 +473,7 @@ export default function SupermercadosSimulator({
         }
       }
 
-      // Si no hay promo en el día específico, buscar la mejor en otro día para sugerir
-      let alternateDayPromo: SupermarketPromoItem | null = null
+      let alternateDayPromo: PharmacyPromoItem | null = null
       if (!bestPromo && matchedPromos.length > 0 && selectedDay !== 'all') {
         let altMax = 0
         for (const promo of matchedPromos) {
@@ -509,7 +486,6 @@ export default function SupermercadosSimulator({
         }
       }
 
-      // 4. Mejor promoción del mercado en general para esta cadena (para cálculo de ahorro potencial)
       const dayAllPromos = brandPromos.filter(p => {
         if (selectedDay === 'all') return true
         if (selectedDay === 'today') {
@@ -519,7 +495,7 @@ export default function SupermercadosSimulator({
         return (p.validDaysBitmask & bit) !== 0 || p.validDaysBitmask >= 127
       })
 
-      let marketBestPromo: SupermarketPromoItem | null = null
+      let marketBestPromo: PharmacyPromoItem | null = null
       let marketMaxSavings = 0
 
       for (const promo of dayAllPromos) {
@@ -531,8 +507,7 @@ export default function SupermercadosSimulator({
         }
       }
 
-      // 5. Casos de oportunidad de ahorro
-      let opportunityZero: SupermarketResultItem['opportunityZero'] = null
+      let opportunityZero: PharmacyResultItem['opportunityZero'] = null
       if (maxSavings === 0 && marketBestPromo && marketMaxSavings > 0) {
         opportunityZero = {
           promo: marketBestPromo,
@@ -541,8 +516,8 @@ export default function SupermercadosSimulator({
         }
       }
 
-      let opportunityMore: SupermarketResultItem['opportunityMore'] = null
-      if (maxSavings > 0 && marketBestPromo && marketMaxSavings > maxSavings + 1500) {
+      let opportunityMore: PharmacyResultItem['opportunityMore'] = null
+      if (maxSavings > 0 && marketBestPromo && marketMaxSavings > maxSavings + 1000) {
         opportunityMore = {
           promo: marketBestPromo,
           savings: marketMaxSavings,
@@ -551,7 +526,6 @@ export default function SupermercadosSimulator({
         }
       }
 
-      // Promoción general top de la cadena (para mostrar en caso de no match)
       const topGeneralPromo = brandPromos.length > 0 ? brandPromos[0] : null
 
       return {
@@ -569,25 +543,18 @@ export default function SupermercadosSimulator({
         opportunityMore,
       }
     }).sort((a, b) => {
-      // 1. Mayor ahorro primero
       if (b.savings !== a.savings) return b.savings - a.savings
-      // 2. Con match primero
       if (a.hasMatch && !b.hasMatch) return -1
       if (!a.hasMatch && b.hasMatch) return 1
-      // 3. Con match en otro día
       if (a.hasAlternateDayMatch && !b.hasAlternateDayMatch) return -1
       if (!a.hasAlternateDayMatch && b.hasAlternateDayMatch) return 1
-      // 4. Cantidad de promos
       return b.totalPromosCount - a.totalPromosCount
     })
   }, [initialPromos, selectedMethods, selectedDay, monthlySpend, todayInfo])
 
-  // Métricas del podio
   const topWinner = resultsByBrand[0]
   const secondPlace = resultsByBrand[1]
   const thirdPlace = resultsByBrand[2]
-  const totalPotentialSavings = resultsByBrand.reduce((sum, item) => sum + item.savings, 0)
-  const averageSavings = Math.round(totalPotentialSavings / (resultsByBrand.filter(r => r.savings > 0).length || 1))
 
   const shareUrl = () => {
     if (typeof window === 'undefined') return ''
@@ -603,12 +570,12 @@ export default function SupermercadosSimulator({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Simulador de Supermercados PromoAR: Dónde te conviene comprar`,
+          title: `Simulador de Farmacias PromoAR: Dónde te conviene comprar`,
           text: `Con mis tarjetas puedo ahorrar hasta $${topWinner.savings.toLocaleString('es-AR')} en ${topWinner.brand} este mes. ¡Calculá tu compra en PromoAR!`,
           url,
         })
       } catch {
-        // Fallback a clipboard
+        // fallback
       }
     } else {
       navigator.clipboard.writeText(url)
@@ -628,25 +595,13 @@ export default function SupermercadosSimulator({
           >
             <span>←</span> Volver a promociones
           </Link>
-          <div className="flex items-center gap-1.5 text-[11px] font-bold">
-            <Link
-              href="/ahorro-interactivo/supermercados"
-              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-            >
-              🛒 Súper
-            </Link>
-            <Link
-              href="/ahorro-interactivo/combustible"
-              className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-            >
-              ⛽ Nafta
-            </Link>
-            <Link
-              href="/ahorro-interactivo/farmacias"
-              className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-            >
-              💊 Farmacias
-            </Link>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
+              Simulador Interactivo
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/10 text-rose-400 border border-rose-500/20">
+              Farmacias
+            </span>
           </div>
         </div>
       </header>
@@ -654,39 +609,36 @@ export default function SupermercadosSimulator({
       <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
         {/* Hero Header */}
         <div className="text-center max-w-3xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold mb-4 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            SIMULADOR INTELIGENTE DE SUPERMERCADOS
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-bold mb-4 shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+            SIMULADOR INTELIGENTE DE FARMACIAS
           </div>
           <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white mb-4 leading-tight">
-            ¿En qué supermercado te conviene <br className="hidden md:inline" />
-            <span className="bg-gradient-to-r from-emerald-300 via-white to-[#E8724F] bg-clip-text text-transparent">
-              hacer la compra este mes?
+            ¿En qué farmacia te conviene <br className="hidden md:inline" />
+            <span className="bg-gradient-to-r from-rose-300 via-white to-[#E8724F] bg-clip-text text-transparent">
+              comprar este mes?
             </span>
           </h1>
           <p className="text-slate-400 text-sm md:text-base leading-relaxed">
             Seleccioná tus bancos, tarjetas y beneficios. Calculamos en tiempo real tu mayor ahorro en{' '}
-            <span className="text-slate-200 font-semibold">Coto, Carrefour, Jumbo, ChangoMás, Día, Disco y Vea</span> con reintegros y topes actualizados.
+            <span className="text-slate-200 font-semibold">Farmacity, Farmaplus, OpenFarma, Selma, Farmaonline y farmacias de barrio</span> con reintegros actualizados.
           </p>
         </div>
 
-        {/* ========================================================================= */}
         {/* PASO 1: SELECTOR CON LAS 2 OPCIONES ARRIBA Y LOS 4 NIVELES ORGANIZADOS */}
-        {/* ========================================================================= */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 md:p-7 mb-8 backdrop-blur-md shadow-2xl shadow-black/40">
           {/* Header de Paso 1 */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-5 border-b border-slate-800/80">
             <div>
               <h2 className="text-base md:text-lg font-black tracking-tight text-white flex items-center gap-2">
-                <span className="text-emerald-400 text-xl">💳</span>
+                <span className="text-rose-400 text-xl">💳</span>
                 <span>Paso 1:</span> Elegí tus medios de pago
               </h2>
               <p className="text-xs md:text-sm text-slate-400 mt-0.5">
-                Calcularemos en vivo los reintegros aplicables a cada supermercado
+                Calcularemos en vivo los reintegros aplicables a cada farmacia
               </p>
             </div>
 
-            {/* Acciones de selección rápida */}
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs font-semibold text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60">
                 {selectedMethods.length} activos
@@ -705,18 +657,15 @@ export default function SupermercadosSimulator({
               </button>
               <button
                 onClick={resetRecommended}
-                className="text-xs font-medium text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors"
+                className="text-xs font-medium text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-colors"
               >
                 Recomendados
               </button>
             </div>
           </div>
 
-          {/* ===================================================================== */}
           {/* LAS 2 OPCIONES ARRIBA DEL CUADRO */}
-          {/* ===================================================================== */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            {/* Opción 1: Mis productos financieros según mi perfil PromoAR registrado */}
             <button
               onClick={() => {
                 setSelectionMode('profile')
@@ -761,7 +710,6 @@ export default function SupermercadosSimulator({
               )}
             </button>
 
-            {/* Opción 2: Ver todas las opciones disponibles en PromoAR (4 niveles) */}
             <button
               onClick={() => setSelectionMode('all')}
               className={`p-4 rounded-2xl text-left transition-all border flex items-start gap-3.5 relative overflow-hidden ${
@@ -798,9 +746,7 @@ export default function SupermercadosSimulator({
             </button>
           </div>
 
-          {/* ===================================================================== */}
-          {/* CONTENIDO DE LA OPCIÓN 1: MIS PRODUCTOS FINANCIEROS */}
-          {/* ===================================================================== */}
+          {/* CONTENIDO OPCIÓN 1: MIS PRODUCTOS */}
           {selectionMode === 'profile' && (
             <div className="space-y-5 animate-fadeIn">
               {hasRegisteredProfile && userProfileCatalog ? (
@@ -829,7 +775,7 @@ export default function SupermercadosSimulator({
                     </div>
                   </div>
 
-                  {/* 1. Bancos del usuario */}
+                  {/* Bancos */}
                   {userProfileCatalog.banks.length > 0 && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between mb-2">
@@ -859,7 +805,7 @@ export default function SupermercadosSimulator({
                     </div>
                   )}
 
-                  {/* 2. Billeteras del usuario */}
+                  {/* Billeteras */}
                   {userProfileCatalog.wallets.length > 0 && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between mb-2">
@@ -889,7 +835,7 @@ export default function SupermercadosSimulator({
                     </div>
                   )}
 
-                  {/* 3. Tarjetas (redes) del usuario */}
+                  {/* Tarjetas */}
                   {userProfileCatalog.cards.length > 0 && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between mb-2">
@@ -919,7 +865,7 @@ export default function SupermercadosSimulator({
                     </div>
                   )}
 
-                  {/* 4. Tarjetas de Beneficios del usuario */}
+                  {/* Beneficios */}
                   {userProfileCatalog.benefits.length > 0 && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between mb-2">
@@ -950,21 +896,20 @@ export default function SupermercadosSimulator({
                   )}
                 </div>
               ) : (
-                /* Card cuando el usuario aún no tiene perfil cargado o es invitado */
                 <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-850 to-[#142840]/60 border border-slate-800 text-center max-w-xl mx-auto">
-                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center text-2xl mx-auto mb-3">
+                  <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center text-2xl mx-auto mb-3">
                     🛡️
                   </div>
                   <h3 className="text-base font-black text-white mb-2">
                     Aún no tenés productos registrados en PromoAR
                   </h3>
                   <p className="text-xs md:text-sm text-slate-400 mb-5 leading-relaxed">
-                    Iniciá sesión con tu cuenta o configurá tus bancos, tarjetas y beneficios en tu perfil para que el simulador reconozca automáticamente tus medios de pago reales.
+                    Iniciá sesión o configurá tus bancos, tarjetas y beneficios en tu perfil para que el simulador reconozca automáticamente tus medios de pago reales.
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <Link
-                      href="/login?callbackUrl=/ahorro_interactivo/supermercados"
-                      className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors shadow-md shadow-emerald-500/20"
+                      href="/login?callbackUrl=/ahorro_interactivo/farmacias"
+                      className="px-4 py-2 rounded-xl text-xs font-black bg-rose-500 hover:bg-rose-400 text-slate-950 transition-colors shadow-md shadow-rose-500/20"
                     >
                       Iniciar sesión
                     </Link>
@@ -986,14 +931,10 @@ export default function SupermercadosSimulator({
             </div>
           )}
 
-          {/* ===================================================================== */}
-          {/* CONTENIDO DE LA OPCIÓN 2: TODAS LAS OPCIONES EN PROMOAR (4 NIVELES) */}
-          {/* ===================================================================== */}
+          {/* CONTENIDO OPCIÓN 2: TODAS LAS OPCIONES (4 NIVELES) */}
           {selectionMode === 'all' && (
             <div className="space-y-6 animate-fadeIn">
-              {/* ------------------------------------------------------------- */}
-              {/* NIVEL 1: 🏛️ BANCOS (41 bancos con buscador y chips rápidos) */}
-              {/* ------------------------------------------------------------- */}
+              {/* Nivel 1: Bancos */}
               <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
@@ -1019,7 +960,6 @@ export default function SupermercadosSimulator({
                   </div>
                 </div>
 
-                {/* Buscador de bancos */}
                 <div className="mb-3">
                   <input
                     type="text"
@@ -1030,7 +970,6 @@ export default function SupermercadosSimulator({
                   />
                 </div>
 
-                {/* Chips de bancos */}
                 <div className="flex flex-wrap gap-2">
                   {filteredBanks.map(bank => {
                     const isSelected = selectedMethods.includes(bank.id)
@@ -1065,9 +1004,7 @@ export default function SupermercadosSimulator({
                 )}
               </div>
 
-              {/* ------------------------------------------------------------- */}
-              {/* NIVEL 2: 📱 BILLETERAS VIRTUALES */}
-              {/* ------------------------------------------------------------- */}
+              {/* Nivel 2: Billeteras */}
               <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
@@ -1114,9 +1051,7 @@ export default function SupermercadosSimulator({
                 </div>
               </div>
 
-              {/* ------------------------------------------------------------- */}
-              {/* NIVEL 3: 💳 TARJETAS DE CRÉDITO / DÉBITO (REDES) */}
-              {/* ------------------------------------------------------------- */}
+              {/* Nivel 3: Tarjetas */}
               <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
@@ -1163,9 +1098,7 @@ export default function SupermercadosSimulator({
                 </div>
               </div>
 
-              {/* ------------------------------------------------------------- */}
-              {/* NIVEL 4: ⭐ TARJETAS DE BENEFICIOS (CLUB LA NACION, 365, COTO) */}
-              {/* ------------------------------------------------------------- */}
+              {/* Nivel 4: Beneficios */}
               <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/30">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
@@ -1191,7 +1124,7 @@ export default function SupermercadosSimulator({
                   </div>
                 </div>
                 <p className="text-xs text-amber-200/70 mb-3">
-                  Incluye descuentos directos en Carrefour (Club La Nación 15%), Jumbo, Disco y Vea (Clarín 365 hasta 25%) y Coto (Comunidad Coto 15%).
+                  Incluye descuentos directos en Openfarma (Club La Nación y Clarín 365 hasta 15%), Farmaonline (10%) y Selma (10%).
                 </p>
 
                 <div className="flex flex-wrap gap-2">
@@ -1220,22 +1153,20 @@ export default function SupermercadosSimulator({
 
         {/* PASO 2: Gasto estimado y día de compra */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Presupuesto de compra */}
           <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 md:p-6 backdrop-blur-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                  🛒 Paso 2: Tu compra mensual
+                  💊 Paso 2: Tu compra mensual en farmacia
                 </h2>
-                <span className="text-xl font-black text-emerald-400">
+                <span className="text-xl font-black text-rose-400">
                   ${monthlySpend.toLocaleString('es-AR')}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mb-4">
-                Elegí o deslizá cuánto gastás en el súper por mes
+                Medicamentos, cuidado personal, dermocosmética y perfumería
               </p>
 
-              {/* Presets rápidos */}
               <div className="grid grid-cols-5 gap-1.5 mb-4">
                 {SPEND_PRESETS.map(amount => (
                   <button
@@ -1243,7 +1174,7 @@ export default function SupermercadosSimulator({
                     onClick={() => setMonthlySpend(amount)}
                     className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all text-center ${
                       monthlySpend === amount
-                        ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                        ? 'bg-rose-500 text-white font-black shadow-sm'
                         : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
                     }`}
                   >
@@ -1252,37 +1183,35 @@ export default function SupermercadosSimulator({
                 ))}
               </div>
 
-              {/* Slider */}
               <input
                 type="range"
-                min={20000}
-                max={400000}
-                step={10000}
+                min={10000}
+                max={150000}
+                step={5000}
                 value={monthlySpend}
                 onChange={e => setMonthlySpend(Number(e.target.value))}
-                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
               />
               <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
-                <span>$20k</span>
-                <span>$200k</span>
-                <span>$400k</span>
+                <span>$10k</span>
+                <span>$75k</span>
+                <span>$150k</span>
               </div>
             </div>
           </div>
 
-          {/* Selector de día */}
           <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 md:p-6 backdrop-blur-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                  📅 ¿Qué día vas al súper?
+                  📅 ¿Qué día vas a la farmacia?
                 </h2>
                 <span className="text-xs font-bold text-slate-400">
                   {selectedDay === 'today' ? `Hoy (${todayInfo.name})` : DAYS_OF_WEEK.find(d => d.id === selectedDay)?.label}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mb-4">
-                Las cadenas cambian sus mejores descuentos según el día
+                Los bancos concentran sus mejores reintegros en días específicos
               </p>
 
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
@@ -1292,7 +1221,7 @@ export default function SupermercadosSimulator({
                     onClick={() => setSelectedDay(day.id)}
                     className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
                       selectedDay === day.id
-                        ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                        ? 'bg-rose-500 text-white font-black shadow-sm'
                         : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
                     }`}
                   >
@@ -1307,7 +1236,7 @@ export default function SupermercadosSimulator({
                     onClick={() => setSelectedDay(day.id)}
                     className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
                       selectedDay === day.id
-                        ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                        ? 'bg-rose-500 text-white font-black shadow-sm'
                         : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
                     }`}
                   >
@@ -1319,22 +1248,19 @@ export default function SupermercadosSimulator({
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* PODIO DE RESULTADOS / RESUMEN GENERAL */}
-        {/* ========================================================================= */}
+        {/* PODIO DE RESULTADOS */}
         <div className="mb-10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
                 Veredicto en vivo
               </span>
               <h2 className="text-2xl md:text-3xl font-black text-white mt-1">
-                El podio del súper para vos
+                El podio de farmacias para vos
               </h2>
             </div>
 
-            {/* Botón de compartir resultado */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleShare}
@@ -1346,7 +1272,6 @@ export default function SupermercadosSimulator({
             </div>
           </div>
 
-          {/* Tarjeta destacada del ganador (Puesto 1) */}
           {topWinner && (
             <div
               className={`relative overflow-hidden rounded-3xl border ${topWinner.config.borderClass} ${topWinner.config.glowClass} bg-gradient-to-br ${topWinner.config.bgGradient} p-6 md:p-8 mb-6 transition-all`}
@@ -1355,7 +1280,7 @@ export default function SupermercadosSimulator({
                 <div>
                   <div className="flex items-center gap-2.5 mb-2">
                     <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 flex items-center gap-1">
-                      <span>🏆</span> Puesto 1: Opción más conveniente
+                      <span>🏆</span> Puesto 1: Mayor ahorro en farmacia
                     </span>
                     <span className="text-xs text-slate-400 italic">
                       "{topWinner.config.tagline}"
@@ -1369,7 +1294,7 @@ export default function SupermercadosSimulator({
                   {topWinner.hasMatch && topWinner.matchedPromo ? (
                     <p className="text-sm md:text-base text-slate-300 mt-2 max-w-xl">
                       Ahorrás con{' '}
-                      <span className="text-white font-bold underline decoration-emerald-400 underline-offset-4">
+                      <span className="text-white font-bold underline decoration-rose-400 underline-offset-4">
                         {topWinner.matchedPromo.title}
                       </span>{' '}
                       ({topWinner.matchedPromo.discountPct}% OFF
@@ -1393,7 +1318,7 @@ export default function SupermercadosSimulator({
                   <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
                     Ahorro estimado
                   </span>
-                  <div className="text-3xl md:text-5xl font-black text-emerald-400 drop-shadow-sm">
+                  <div className="text-3xl md:text-5xl font-black text-rose-400 drop-shadow-sm">
                     ${topWinner.savings.toLocaleString('es-AR')}
                   </div>
                   {topWinner.savings > 0 && (
@@ -1404,7 +1329,6 @@ export default function SupermercadosSimulator({
                 </div>
               </div>
 
-              {/* Tips de ahorro potencial en el ganador si aplica */}
               {topWinner.opportunityMore && (
                 <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 px-3.5 py-2 rounded-xl border border-amber-500/20">
                   <span className="text-base shrink-0">💡</span>
@@ -1418,7 +1342,6 @@ export default function SupermercadosSimulator({
             </div>
           )}
 
-          {/* Comparativa Puesto 2 y 3 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
             {secondPlace && (
               <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between">
@@ -1432,7 +1355,7 @@ export default function SupermercadosSimulator({
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="text-xl font-black text-emerald-400">
+                  <span className="text-xl font-black text-rose-400">
                     ${secondPlace.savings.toLocaleString('es-AR')}
                   </span>
                   <div className="text-[10px] text-slate-500 font-mono">ahorro</div>
@@ -1452,7 +1375,7 @@ export default function SupermercadosSimulator({
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="text-xl font-black text-emerald-400">
+                  <span className="text-xl font-black text-rose-400">
                     ${thirdPlace.savings.toLocaleString('es-AR')}
                   </span>
                   <div className="text-[10px] text-slate-500 font-mono">ahorro</div>
@@ -1462,13 +1385,11 @@ export default function SupermercadosSimulator({
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* LISTADO COMPLETO POR CADENA DE SUPERMERCADOS */}
-        {/* ========================================================================= */}
+        {/* DETALLE POR CADENA DE FARMACIAS */}
         <div className="mb-12">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
-              <span>🏷️</span> Detalle por cadena de supermercados
+              <span>🏷️</span> Detalle por cadena de farmacias
             </h2>
             <span className="text-xs text-slate-500 font-semibold">
               Ordenado por mayor ahorro
@@ -1490,7 +1411,6 @@ export default function SupermercadosSimulator({
                   }`}
                 >
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    {/* Info de la cadena */}
                     <div className="flex items-start gap-4">
                       <div
                         className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm text-white"
@@ -1506,7 +1426,7 @@ export default function SupermercadosSimulator({
                             • {item.config.tagline}
                           </span>
                           {item.hasMatch && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
                               Promo activa
                             </span>
                           )}
@@ -1518,7 +1438,7 @@ export default function SupermercadosSimulator({
                               {item.matchedPromo.title}
                             </p>
                             <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1 flex-wrap">
-                              <span className="text-emerald-400 font-bold">
+                              <span className="text-rose-400 font-bold">
                                 {item.matchedPromo.discountPct}% OFF
                               </span>
                               {item.matchedPromo.capAmount && (
@@ -1552,7 +1472,6 @@ export default function SupermercadosSimulator({
                       </div>
                     </div>
 
-                    {/* Precios y Ahorro */}
                     <div className="flex md:flex-col items-baseline md:items-end justify-between border-t md:border-t-0 border-slate-800 pt-3 md:pt-0 shrink-0">
                       <div>
                         <span className="text-[10px] uppercase font-bold text-slate-400 block md:text-right">
@@ -1560,7 +1479,7 @@ export default function SupermercadosSimulator({
                         </span>
                         <div
                           className={`text-2xl font-black ${
-                            hasPositiveSavings ? 'text-emerald-400' : 'text-slate-600'
+                            hasPositiveSavings ? 'text-rose-400' : 'text-slate-600'
                           }`}
                         >
                           ${item.savings.toLocaleString('es-AR')}
@@ -1575,7 +1494,6 @@ export default function SupermercadosSimulator({
                     </div>
                   </div>
 
-                  {/* Smart Tips de Oportunidad de Ahorro */}
                   {item.opportunityZero && (
                     <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center gap-2 text-xs text-amber-300/90 bg-amber-500/5 px-3 py-2 rounded-xl border border-amber-500/15">
                       <span className="text-base shrink-0">💡</span>
@@ -1583,7 +1501,7 @@ export default function SupermercadosSimulator({
                         <strong>Ahorro potencial:</strong> Con{' '}
                         <strong className="text-white">{item.opportunityZero.entityLabel}</strong> podrías
                         ahorrar hasta{' '}
-                        <strong className="text-emerald-400">
+                        <strong className="text-rose-400">
                           ${item.opportunityZero.savings.toLocaleString('es-AR')}
                         </strong>{' '}
                         en {item.brand}.
@@ -1598,7 +1516,7 @@ export default function SupermercadosSimulator({
                         <strong>Tip para ahorrar más:</strong> Si pagaras con{' '}
                         <strong className="text-white">{item.opportunityMore.entityLabel}</strong> tu ahorro
                         subiría a{' '}
-                        <strong className="text-emerald-400">
+                        <strong className="text-rose-400">
                           ${item.opportunityMore.savings.toLocaleString('es-AR')}
                         </strong>{' '}
                         (+${item.opportunityMore.diff.toLocaleString('es-AR')} extra).
@@ -1618,13 +1536,13 @@ export default function SupermercadosSimulator({
             <span>Términos, condiciones y descargo de responsabilidad</span>
           </div>
           <p>
-            Los cálculos, porcentajes de descuento, reintegros estimados y topes exhibidos en este simulador son de carácter <strong className="text-slate-300">estrictamente informativo y referencial</strong>. La información final, oficial y vinculante respecto de vigencias, días habilitados, topes de reintegro por cuenta/transacción, medios de pago participantes y comercios adheridos se encuentra exclusivamente en las <strong className="text-slate-300">bases y condiciones publicadas por cada entidad bancaria, billetera virtual, tarjeta de beneficios o supermercado</strong>.
+            Los cálculos, porcentajes de descuento, reintegros estimados y topes exhibidos en este simulador son de carácter <strong className="text-slate-300">estrictamente informativo y referencial</strong>. La información final, oficial y vinculante respecto de vigencias, días habilitados, topes de reintegro por cuenta/transacción, medios de pago participantes y sucursales adheridas se encuentra exclusivamente en las <strong className="text-slate-300">bases y condiciones publicadas por cada entidad bancaria, billetera virtual, tarjeta de beneficios o cadena farmacéutica (Farmacity, Farmaplus, Openfarma, Selma, etc.)</strong>.
           </p>
           <p>
-            Cada entidad y comercio se reserva el derecho de modificar, suspender o dar de baja sus promociones sin previo aviso. Recomendamos a los usuarios <strong className="text-slate-300">leer atentamente las exclusiones específicas de cada promoción</strong> antes de efectuar la compra (tales como productos bajo programas de precios regulados, carnes, electrodomésticos, bebidas alcohólicas, compras por canales digitales no participantes o mayoristas).
+            Cada entidad y farmacia se reserva el derecho de modificar, suspender o dar de baja sus promociones sin previo aviso. Recomendamos a los usuarios <strong className="text-slate-300">leer atentamente las exclusiones específicas de cada promoción</strong> antes de efectuar la compra (tales como medicamentos con receta médica, productos oncológicos o de alto costo, leches maternizadas, perfumería importada o compras mediante obras sociales/prepagas donde el descuento bancario no sea acumulable).
           </p>
           <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-800/70">
-            PromoAR es una plataforma independiente de agregación y difusión de beneficios. PromoAR no emite instrumentos de pago, no procesa transacciones monetarias ni forma parte de la relación contractual entre el consumidor, la entidad financiera y el comercio, quedando expresamente desligada de cualquier responsabilidad civil, comercial o de cualquier otra índole por divergencias en los montos acreditados, rechazos de pago, demoras en las devoluciones o modificaciones comerciales unilaterales dispuestas por los emisores.
+            PromoAR es una plataforma independiente de agregación y difusión de beneficios. PromoAR no emite instrumentos de pago, no procesa transacciones monetarias ni forma parte de la relación contractual entre el consumidor, la entidad financiera y la farmacia, quedando expresamente desligada de cualquier responsabilidad civil, comercial o de cualquier otra índole por divergencias en los montos acreditados, rechazos de pago, demoras en las devoluciones o modificaciones comerciales unilaterales dispuestas por los emisores.
           </p>
         </div>
       </div>
@@ -1703,7 +1621,7 @@ export default function SupermercadosSimulator({
           </div>
 
           <div className="border-t border-slate-800/80 pt-6 text-center text-xs text-slate-500">
-            <p>© {new Date().getFullYear()} PromoAR. Las promociones son provistas por cada entidad financiera y comercio. Verificá términos, vigencia y exclusiones antes de comprar.</p>
+            <p>© {new Date().getFullYear()} PromoAR. Las promociones son provistas por cada entidad financiera y farmacia. Verificá términos, vigencia y exclusiones antes de comprar.</p>
           </div>
         </div>
       </footer>

@@ -539,6 +539,26 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
               className="h-10 md:h-12 w-auto object-contain shrink-0"
             />
           </Link>
+          <div className="flex items-center gap-1.5 text-[11px] font-bold">
+            <Link
+              href="/ahorro-interactivo/supermercados"
+              className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              🛒 Súper
+            </Link>
+            <Link
+              href="/ahorro-interactivo/combustible"
+              className="px-2.5 py-1 rounded-lg bg-[#D94F2B]/15 text-[#D94F2B] border border-[#D94F2B]/30"
+            >
+              ⛽ Nafta
+            </Link>
+            <Link
+              href="/ahorro-interactivo/farmacias"
+              className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              💊 Farmacias
+            </Link>
+          </div>
           <Link
             href="/"
             className="inline-flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[#D94F2B] hover:bg-[#c44325] text-white text-xs md:text-sm font-bold shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -1051,6 +1071,7 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
               <li><Link href="/promos" className="hover:text-white transition-colors">Todas las Promos</Link></li>
               <li><Link href="/ahorro-interactivo/supermercados" className="text-emerald-400 font-semibold hover:text-white transition-colors">Simulador Supermercados</Link></li>
               <li><Link href="/ahorro-interactivo/combustible" className="text-[#E8724F] font-semibold hover:text-white transition-colors">Simulador Nafta</Link></li>
+              <li><Link href="/ahorro-interactivo/farmacias" className="text-rose-400 font-semibold hover:text-white transition-colors">Simulador Farmacias</Link></li>
               <li><Link href="/finanzas" className="hover:text-white transition-colors">Tasas de Billeteras</Link></li>
               <li><Link href="/perfil" className="hover:text-white transition-colors">Mi Perfil Financiero</Link></li>
             </ul>
