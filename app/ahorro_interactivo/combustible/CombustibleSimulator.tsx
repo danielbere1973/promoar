@@ -389,20 +389,29 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
-      {/* Barra de navegación superior con Logo Oficial PromoAR */}
-      <div className="flex items-center justify-between pb-6 border-b border-slate-800/80 mb-8">
-        <Link href="/" className="flex items-center gap-3 group">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/promoar_logo_transparent.png" alt="PromoAR" className="h-12 md:h-14 w-auto object-contain shrink-0" />
-        </Link>
-        <Link
-          href="/promos"
-          className="text-xs font-bold text-[#8AADD4] hover:text-white transition-colors flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#142840] border border-[#26406F]"
-        >
-          <span>← Volver a Promos</span>
-        </Link>
-      </div>
+    <>
+      {/* Barra de navegación superior clarita para destacar el logo oficial de PromoAR */}
+      <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3 group transition-transform hover:scale-[1.01]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/promoar_logo_transparent.png"
+              alt="PromoAR"
+              className="h-10 md:h-12 w-auto object-contain shrink-0"
+            />
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[#D94F2B] hover:bg-[#c44325] text-white text-xs md:text-sm font-bold shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <span>Entrá a PromoAR</span>
+            <span className="text-white/80 font-normal">→</span>
+          </Link>
+        </div>
+      </header>
+
+      <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
 
       {/* Hero Header con paleta oficial PromoAR */}
       <div className="text-center max-w-3xl mx-auto mb-10">
@@ -789,5 +798,6 @@ function getUniqueBadges(reqs: CombustibleRequirement[]) {
         </div>
       </div>
     </div>
-  )
+  </>
+)
 }
