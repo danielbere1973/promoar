@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import SimulatorHeader from '@/app/components/SimulatorHeader'
+import TreeFilterSidebar from '@/app/components/TreeFilterSidebar'
+import { FourLevelsCatalog } from '@/app/components/SimulatorPaymentSelector'
 
 export type FuelBrand = 'YPF' | 'Axion' | 'Shell' | 'Puma'
 
@@ -12,6 +13,8 @@ export interface CombustibleRequirement {
   bankSlug: string | null
   walletName: string | null
   walletSlug: string | null
+  cardNetworkName: string | null
+  cardNetworkSlug: string | null
 }
 
 export interface CombustiblePromoItem {
@@ -26,13 +29,6 @@ export interface CombustiblePromoItem {
   requirements: CombustibleRequirement[]
   isFeatured: boolean
   logoUrl: string | null
-}
-
-export interface UserCustomEntity {
-  id: string
-  label: string
-  type: 'bank' | 'wallet'
-  color?: string
 }
 
 export interface CombustibleResultItem {
@@ -66,28 +62,58 @@ export interface CombustibleResultItem {
   } | null
 }
 
-interface Props {
+export interface CombustibleSimulatorProps {
   initialPromos: CombustiblePromoItem[]
+  fullCatalog: FourLevelsCatalog
+  userProfileCatalog: FourLevelsCatalog | null
   initialUserMethods?: string[]
-  userCustomEntities?: UserCustomEntity[]
   userInfo?: {
     name: string | null
     email: string | null
   } | null
 }
 
-// Opciones del selector de días
-const DAYS_OF_WEEK = [
-  { id: 'all', label: 'Toda la semana', shortLabel: 'Toda la semana' },
-  { id: 'today', label: 'Hoy', shortLabel: 'Hoy' },
-  { id: '2', label: 'Lunes', shortLabel: 'Lun', bit: 2 },
-  { id: '4', label: 'Martes', shortLabel: 'Mar', bit: 4 },
-  { id: '8', label: 'Miércoles', shortLabel: 'Mié', bit: 8 },
-  { id: '16', label: 'Jueves', shortLabel: 'Jue', bit: 16 },
-  { id: '32', label: 'Viernes', shortLabel: 'Vie', bit: 32 },
-  { id: '64', label: 'Sábado', shortLabel: 'Sáb', bit: 64 },
-  { id: '1', label: 'Domingo', shortLabel: 'Dom', bit: 1 },
-]
+const BRAND_CONFIG: Record<FuelBrand, {
+  name: string
+  color: string
+  glowClass: string
+  borderClass: string
+  bgGradient: string
+  badgeBg: string
+}> = {
+  YPF: {
+    name: 'YPF',
+    color: '#0057B8',
+    glowClass: 'shadow-[0_0_30px_-5px_rgba(0,87,184,0.3)]',
+    borderClass: 'border-[#0057B8]/40 hover:border-[#0057B8]',
+    bgGradient: 'from-[#0057B8]/15 via-[#0A1428] to-[#0A1428]',
+    badgeBg: 'bg-[#0057B8]/20 text-[#4D9CFF] border-[#0057B8]/40',
+  },
+  Axion: {
+    name: 'Axion Energy',
+    color: '#9B1B82',
+    glowClass: 'shadow-[0_0_30px_-5px_rgba(155,27,130,0.3)]',
+    borderClass: 'border-[#9B1B82]/40 hover:border-[#9B1B82]',
+    bgGradient: 'from-[#9B1B82]/15 via-[#0A1428] to-[#0A1428]',
+    badgeBg: 'bg-[#9B1B82]/20 text-[#E86BD0] border-[#9B1B82]/40',
+  },
+  Shell: {
+    name: 'Shell',
+    color: '#FBCE07',
+    glowClass: 'shadow-[0_0_30px_-5px_rgba(251,206,7,0.25)]',
+    borderClass: 'border-[#FBCE07]/40 hover:border-[#FBCE07]',
+    bgGradient: 'from-[#FBCE07]/15 via-[#0A1428] to-[#0A1428]',
+    badgeBg: 'bg-[#FBCE07]/20 text-[#FBCE07] border-[#FBCE07]/40',
+  },
+  Puma: {
+    name: 'Puma Energy',
+    color: '#006837',
+    glowClass: 'shadow-[0_0_30px_-5px_rgba(0,104,55,0.3)]',
+    borderClass: 'border-[#006837]/40 hover:border-[#006837]',
+    bgGradient: 'from-[#006837]/15 via-[#0A1428] to-[#0A1428]',
+    badgeBg: 'bg-[#006837]/20 text-[#00A859] border-[#006837]/40',
+  },
+}
 
 function getTodayInfo(): { bit: number; name: string } {
   const dayIndex = new Date().getDay()
@@ -103,967 +129,537 @@ function getTodayInfo(): { bit: number; name: string } {
   return map[dayIndex] || { bit: 16, name: 'Jueves' }
 }
 
-// Entidades populares para la botonera rápida de selección
-const POPULAR_PAYMENT_METHODS = [
-  { id: 'galicia', label: 'Galicia', type: 'bank', color: '#E35205' },
-  { id: 'santander', label: 'Santander', type: 'bank', color: '#EC0000' },
-  { id: 'bna', label: 'Banco Nación', type: 'bank', color: '#004B87' },
-  { id: 'bbva', label: 'BBVA', type: 'bank', color: '#004481' },
-  { id: 'macro', label: 'Banco Macro', type: 'bank', color: '#002D72' },
-  { id: 'ciudad', label: 'Banco Ciudad', type: 'bank', color: '#0072CE' },
-  { id: 'credicoop', label: 'Credicoop', type: 'bank', color: '#006633' },
-  { id: 'cuenta-dni', label: 'Cuenta DNI', type: 'wallet', color: '#00A650' },
-  { id: 'modo', label: 'MODO', type: 'wallet', color: '#00CC99' },
-  { id: 'personal-pay', label: 'Personal Pay', type: 'wallet', color: '#5A2D82' },
-  { id: 'app-ypf', label: 'App YPF', type: 'wallet', color: '#0057B8' },
-  { id: 'shell-box', label: 'Shell Box', type: 'wallet', color: '#FBCE07' },
-  { id: 'uala', label: 'Ualá', type: 'wallet', color: '#E53E3E' },
-]
+function matchSlugOrName(userMethod: string, entitySlug: string | null, entityName: string | null): boolean {
+  const m = userMethod.toLowerCase().trim()
+  const s = (entitySlug || '').toLowerCase().trim()
+  const n = (entityName || '').toLowerCase()
 
-const SPEND_PRESETS = [40000, 80000, 120000, 160000, 200000]
+  if (!m) return false
+  if (m === s) return true
 
-// Estilos de marca oficiales para las 4 petroleras
-const BRAND_CONFIG: Record<FuelBrand, {
-  name: string
-  color: string
-  glowClass: string
-  borderClass: string
-  bgGradient: string
-  badgeBg: string
-}> = {
-  YPF: {
-    name: 'YPF',
-    color: '#0057B8',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(0,87,184,0.35)]',
-    borderClass: 'border-blue-500/40 hover:border-blue-400',
-    bgGradient: 'from-blue-950/40 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-blue-600 text-white',
-  },
-  Axion: {
-    name: 'Axion Energy',
-    color: '#E30613',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(227,6,19,0.3)]',
-    borderClass: 'border-purple-500/40 hover:border-purple-400',
-    bgGradient: 'from-purple-950/40 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-purple-600 text-white',
-  },
-  Shell: {
-    name: 'Shell',
-    color: '#FBCE07',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(251,206,7,0.25)]',
-    borderClass: 'border-amber-500/40 hover:border-amber-400',
-    bgGradient: 'from-amber-950/30 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-amber-400 text-slate-950 font-bold',
-  },
-  Puma: {
-    name: 'Puma Energy',
-    color: '#00843D',
-    glowClass: 'shadow-[0_0_25px_-5px_rgba(0,132,61,0.3)]',
-    borderClass: 'border-emerald-500/40 hover:border-emerald-400',
-    bgGradient: 'from-emerald-950/30 via-slate-900/60 to-slate-950/80',
-    badgeBg: 'bg-emerald-600 text-white',
-  },
-}
-
-function getPromoEntityLabel(promo: CombustiblePromoItem): string {
-  const parts: string[] = []
-  for (const r of promo.requirements) {
-    const list: string[] = []
-    if (r.bankName) list.push(r.bankName)
-    if (r.walletName) list.push(r.walletName)
-    const combined = list.join(' / ')
-    if (combined && !parts.includes(combined)) {
-      parts.push(combined)
-    }
-  }
-  if (parts.length > 0) {
-    if (parts.length <= 2) return parts.join(' o ')
-    return `${parts[0]} u otras`
-  }
-  return 'otra tarjeta o app'
-}
-
-export default function CombustibleSimulator({
-  initialPromos,
-  initialUserMethods = [],
-  userCustomEntities = [],
-  userInfo = null,
-}: Props) {
-  const router = useRouter()
-
-  // Combinar métodos populares con entidades adicionales del usuario registrado
-  const allPaymentMethods = useMemo(() => {
-    const list = [...POPULAR_PAYMENT_METHODS]
-    if (userCustomEntities && userCustomEntities.length > 0) {
-      for (const ent of userCustomEntities) {
-        if (!list.some(m => m.id === ent.id)) {
-          list.push({
-            id: ent.id,
-            label: ent.label,
-            type: ent.type,
-            color: ent.type === 'bank' ? '#0072CE' : '#10B981',
-          })
-        }
-      }
-    }
-    return list
-  }, [userCustomEntities])
-
-  // Estado de si se está usando el perfil registrado en base de datos
-  const [isUsingRegisteredProfile, setIsUsingRegisteredProfile] = useState<boolean>(() => {
-    return initialUserMethods.length > 0
-  })
-
-  // Estado de medios de pago seleccionados
-  const [selectedMethods, setSelectedMethods] = useState<string[]>(() => {
-    if (initialUserMethods.length > 0) {
-      return initialUserMethods
-    }
-    return ['galicia', 'cuenta-dni', 'modo']
-  })
-
-  // Estado de día seleccionado ('all', 'today', '2', '4', etc.)
-  const [selectedDay, setSelectedDay] = useState<string>('all')
-  const [monthlySpend, setMonthlySpend] = useState<number>(80000)
-  const [copiedShare, setCopiedShare] = useState(false)
-
-  const todayInfo = useMemo(() => getTodayInfo(), [])
-
-  // Restaurar medios de pago guardados del usuario (guestProfile o query params)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    // 1. Check query params first (para links compartidos)
-    const urlParams = new URLSearchParams(window.location.search)
-    const cardsParam = urlParams.get('cards')
-    const spendParam = urlParams.get('gasto')
-    const dayParam = urlParams.get('dia')
-
-    if (dayParam) {
-      setSelectedDay(dayParam)
-    }
-
-    if (cardsParam) {
-      const fromUrl = cardsParam.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-      if (fromUrl.length > 0) {
-        setSelectedMethods(fromUrl)
-        setIsUsingRegisteredProfile(false)
-        if (spendParam) {
-          const s = parseInt(spendParam, 10)
-          if (!isNaN(s) && s > 0) setMonthlySpend(s)
-        }
-        return
-      }
-    } else if (initialUserMethods.length > 0) {
-      setIsUsingRegisteredProfile(true)
-    } else {
-      // 2. Check localStorage guestProfile
-      try {
-        const raw = localStorage.getItem('guestProfile')
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          const banks: string[] = parsed.banks || []
-          const wallets: string[] = parsed.wallets || []
-          const combined = [...banks, ...wallets].map(s => s.toLowerCase())
-          if (combined.length > 0) {
-            setSelectedMethods(combined)
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-  }, [initialUserMethods])
-
-  // Toggle de medio de pago
-  const toggleMethod = (id: string) => {
-    setSelectedMethods(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(m => m !== id)
-      } else {
-        return [...prev, id]
-      }
-    })
-  }
-
-  const selectAll = () => {
-    setSelectedMethods(allPaymentMethods.map(m => m.id))
-  }
-
-  const clearAll = () => {
-    setSelectedMethods([])
-  }
-
-function matchesMethod(methodId: string, slug: string | null, name: string | null): boolean {
-  if (!slug && !name) return false
-  const s = (slug || '').toLowerCase().trim()
-  const n = (name || '').toLowerCase().trim()
-  const m = methodId.toLowerCase().trim()
-
-  if (s === m || n === m) return true
-
-  // Clubes de beneficios
-  if (m === 'club-la-nacion' || m === 'club-la-nación') {
-    return s.includes('club-la-nacion') || s.includes('la-nacion') || n.includes('club la nacion') || n.includes('club la nación')
-  }
-  if (m === 'clarin-365' || m === 'clarin-365-plus') {
-    return s.includes('clarin-365') || s.includes('365') || n.includes('clarin') || n.includes('clarín') || n.includes('365')
-  }
-
-  if (m === 'bna' || m === 'banco-nacion') {
-    return (
-      s === 'bna' ||
-      s === 'banco-nacion' ||
-      s.includes('banco-nacion') ||
-      n.includes('banco naci') ||
-      n.includes('banco de la naci')
-    )
-  }
+  // Banco Nación
+  if (m === 'bna' || m === 'banco-nacion') return s.includes('nacion') || n.includes('naci')
   if (m === 'galicia' || m === 'banco-galicia') return s.includes('galicia') || n.includes('galicia')
   if (m === 'santander' || m === 'banco-santander') return s.includes('santander') || n.includes('santander')
   if (m === 'bbva' || m === 'banco-bbva') return s.includes('bbva') || n.includes('bbva')
   if (m === 'macro' || m === 'banco-macro') return s.includes('macro') || n.includes('macro')
   if (m === 'ciudad' || m === 'banco-ciudad') return s.includes('ciudad') || n.includes('ciudad')
+  if (m === 'provincia' || m === 'banco-provincia') return s.includes('provincia') || n.includes('provincia')
   if (m === 'credicoop' || m === 'banco-credicoop') return s.includes('credicoop') || n.includes('credicoop')
-  if (m === 'cuenta-dni') return s.includes('cuenta-dni') || s.includes('cuentadni') || n.includes('cuenta dni')
+
+  // Billeteras
+  if (m === 'cuenta-dni' || m === 'cuentadni') return s.includes('cuenta-dni') || s.includes('cuentadni') || n.includes('cuenta dni')
   if (m === 'modo') return s.includes('modo') || n.includes('modo')
-  if (m === 'personal-pay') return s.includes('personal-pay') || s.includes('personalpay') || n.includes('personal pay')
+  if (m === 'personal-pay' || m === 'personalpay') return s.includes('personal-pay') || s.includes('personalpay') || n.includes('personal pay')
   if (m === 'app-ypf') return s.includes('app-ypf') || n.includes('app ypf') || (s === 'ypf' && n.includes('app'))
   if (m === 'shell-box') return s.includes('shell-box') || n.includes('shell box')
+  if (m === 'mercadopago' || m === 'mercado-pago') return s.includes('mercadopago') || s.includes('mercado-pago') || n.includes('mercado pago')
   if (m === 'uala') return s.includes('uala') || n.includes('ualá')
+
+  // Redes
+  if (m === 'visa') return s.includes('visa') || n.includes('visa')
+  if (m === 'mastercard') return s.includes('mastercard') || n.includes('mastercard')
+  if (m === 'amex' || m === 'american-express') return s.includes('amex') || s.includes('american-express') || n.includes('american express')
+  if (m === 'cabal') return s.includes('cabal') || n.includes('cabal')
 
   return s.includes(m) || m.includes(s) || n.includes(m)
 }
 
-function getUniqueBadges(reqs: CombustibleRequirement[]) {
-  const map = new Map<string, { name: string; type: 'bank' | 'wallet' }>()
-  for (const r of reqs) {
-    if (r.bankName) {
-      map.set(`bank-${r.bankSlug || r.bankName}`, { name: r.bankName, type: 'bank' })
-    }
-    if (r.walletName) {
-      map.set(`wallet-${r.walletSlug || r.walletName}`, { name: r.walletName, type: 'wallet' })
-    }
-  }
-  return Array.from(map.values())
+function promoMatchesRequirements(promo: CombustiblePromoItem, userMethods: string[]): boolean {
+  if (userMethods.length === 0) return false
+  if (promo.requirements.length === 0) return true
+
+  return promo.requirements.some(req => {
+    const bMatch = req.bankSlug
+      ? userMethods.some(m => matchSlugOrName(m, req.bankSlug, req.bankName))
+      : true
+    const wMatch = req.walletSlug
+      ? userMethods.some(m => matchSlugOrName(m, req.walletSlug, req.walletName))
+      : true
+    const cMatch = req.cardNetworkSlug
+      ? userMethods.some(m => matchSlugOrName(m, req.cardNetworkSlug, req.cardNetworkName))
+      : true
+
+    if (req.bankSlug && req.walletSlug) return bMatch && wMatch
+    if (req.bankSlug) return bMatch
+    if (req.walletSlug) return wMatch
+    if (req.cardNetworkSlug) return cMatch
+    return true
+  })
 }
 
-  // Helper para chequear si una promo matchea con los medios seleccionados
-  const promoMatchesEntities = (p: CombustiblePromoItem): boolean => {
-    if (selectedMethods.length === 0) return false
-    if (p.requirements.length === 0) return true
+function calculateSavings(promo: CombustiblePromoItem, monthlySpend: number): number {
+  const theoretical = (monthlySpend * promo.discountPct) / 100
+  if (promo.capAmount && promo.capAmount > 0) {
+    return Math.min(theoretical, promo.capAmount)
+  }
+  return theoretical
+}
 
-    // Matchea si AL MENOS UN requerimiento es cumplido por las tarjetas del usuario
-    return p.requirements.some(r => {
-      const hasBankReq = !!r.bankSlug
-      const hasWalletReq = !!r.walletSlug
+function getRepresentativeEntity(promo: CombustiblePromoItem): string {
+  const req = promo.requirements[0]
+  if (!req) return 'Promoción abierta'
+  if (req.bankName && req.walletName) return `${req.bankName} + ${req.walletName}`
+  if (req.bankName) return req.bankName
+  if (req.walletName) return req.walletName
+  if (req.cardNetworkName) return req.cardNetworkName
+  return 'Promoción bancaria'
+}
 
-      const userHasBank = hasBankReq && selectedMethods.some(m => matchesMethod(m, r.bankSlug, r.bankName))
-      const userHasWallet = hasWalletReq && selectedMethods.some(m => matchesMethod(m, r.walletSlug, r.walletName))
+export default function CombustibleSimulator({
+  initialPromos,
+  fullCatalog,
+  userProfileCatalog,
+  initialUserMethods = [],
+  userInfo,
+}: CombustibleSimulatorProps) {
+  const allInitial = useMemo(() => {
+    const list: string[] = []
+    fullCatalog.banks.forEach(b => list.push(b.id))
+    fullCatalog.wallets.forEach(w => list.push(w.id))
+    fullCatalog.cards.forEach(c => list.push(c.id))
+    fullCatalog.benefits.forEach(be => list.push(be.id))
+    return list
+  }, [fullCatalog])
 
-      // Si el requerimiento exige banco Y billetera (ej. Banco Nación + MODO):
-      if (hasBankReq && hasWalletReq) {
-        return userHasBank && userHasWallet
-      }
-      if (hasBankReq) return userHasBank
-      if (hasWalletReq) return userHasWallet
+  const [selectedMethods, setSelectedMethods] = useState<string[]>(() => {
+    if (initialUserMethods.length > 0) return initialUserMethods
+    return allInitial
+  })
 
-      return true
-    })
+  const [selectedDay, setSelectedDay] = useState<string>('today')
+  const [monthlySpend, setMonthlySpend] = useState<number>(80000)
+  const [todayInfo, setTodayInfo] = useState({ bit: 16, name: 'Jueves' })
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState<boolean>(false)
+
+  useEffect(() => {
+    setTodayInfo(getTodayInfo())
+  }, [])
+
+  const handleToggleMethod = (id: string) => {
+    setSelectedMethods(prev =>
+      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
+    )
   }
 
-  // Helper para chequear si una promo aplica al día seleccionado
-  const promoMatchesDay = (p: CombustiblePromoItem): boolean => {
-    if (selectedDay === 'all') return true
-    const targetBit = selectedDay === 'today' ? todayInfo.bit : parseInt(selectedDay, 10)
-    if (isNaN(targetBit)) return true
-    if (p.validDaysBitmask >= 127) return true
-    return (p.validDaysBitmask & targetBit) !== 0
+  const handleSelectAll = () => setSelectedMethods(allInitial)
+  const handleClearAll = () => setSelectedMethods([])
+
+  const handleSelectProfileOnly = () => {
+    if (initialUserMethods.length > 0) {
+      setSelectedMethods(initialUserMethods)
+    }
   }
 
-  // Cálculo de resultados por marca (YPF, Axion, Shell, Puma)
-  const resultsByBrand = useMemo<CombustibleResultItem[]>(() => {
+  const results: CombustibleResultItem[] = useMemo(() => {
     const brands: FuelBrand[] = ['YPF', 'Axion', 'Shell', 'Puma']
 
     return brands.map(brand => {
-      // Filtrar promos de esta marca
       const brandPromos = initialPromos.filter(p => p.brand === brand)
-      
-      // Promos que matchean con las tarjetas del usuario (independiente del día)
-      const cardMatchedPromos = brandPromos.filter(promoMatchesEntities)
 
-      // Promos que matchean con tarjetas Y con el día seleccionado
-      const matchedPromos = cardMatchedPromos.filter(promoMatchesDay)
-
-      // Si hay promos que matchean, calculamos la mejor
-      let bestPromo: CombustiblePromoItem | null = null
-      let maxSavings = 0
-
-      for (const p of matchedPromos) {
-        const rawSavings = monthlySpend * (p.discountPct / 100)
-        const actualSavings = p.capAmount ? Math.min(rawSavings, p.capAmount) : rawSavings
-
-        if (actualSavings > maxSavings || !bestPromo) {
-          maxSavings = actualSavings
-          bestPromo = p
+      let dayFiltered = brandPromos
+      if (selectedDay === 'today') {
+        dayFiltered = brandPromos.filter(p => (p.validDaysBitmask & todayInfo.bit) !== 0)
+      } else if (selectedDay !== 'all') {
+        const bit = parseInt(selectedDay, 10)
+        if (!isNaN(bit)) {
+          dayFiltered = brandPromos.filter(p => (p.validDaysBitmask & bit) !== 0)
         }
       }
 
-      // Mejor promo de otro día de la semana con las tarjetas del usuario (para sugerirle cuándo ir)
-      const alternateDayPromo = !bestPromo && cardMatchedPromos.length > 0
-        ? [...cardMatchedPromos].sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0))[0]
-        : null
+      const matchingPromos = dayFiltered
+        .filter(p => promoMatchesRequirements(p, selectedMethods))
+        .map(p => ({ promo: p, savings: calculateSavings(p, monthlySpend) }))
+        .sort((a, b) => b.savings - a.savings)
 
-      // 4. Mejor promoción del mercado en general para esta marca (para cálculo de ahorro potencial)
-      const dayAllPromos = brandPromos.filter(promoMatchesDay)
-      const candidatePromos = dayAllPromos.length > 0 ? dayAllPromos : brandPromos
+      const bestMatch = matchingPromos[0] || null
 
-      let marketBestPromo: CombustiblePromoItem | null = null
-      let marketMaxSavings = 0
+      let alternateDayBest: { promo: CombustiblePromoItem; savings: number } | null = null
+      if (!bestMatch && selectedDay !== 'all') {
+        const altMatching = brandPromos
+          .filter(p => promoMatchesRequirements(p, selectedMethods))
+          .map(p => ({ promo: p, savings: calculateSavings(p, monthlySpend) }))
+          .sort((a, b) => b.savings - a.savings)
 
-      for (const p of candidatePromos) {
-        const rawSavings = monthlySpend * (p.discountPct / 100)
-        const actualSavings = p.capAmount ? Math.min(rawSavings, p.capAmount) : rawSavings
-        if (actualSavings > marketMaxSavings) {
-          marketMaxSavings = actualSavings
-          marketBestPromo = p
+        if (altMatching.length > 0) {
+          alternateDayBest = altMatching[0]
         }
       }
 
-      const roundedMaxSavings = Math.round(maxSavings)
-      const roundedMarketSavings = Math.round(marketMaxSavings)
-      const marketEntityLabel = marketBestPromo ? getPromoEntityLabel(marketBestPromo) : 'otra tarjeta'
+      const marketBest = dayFiltered
+        .map(p => ({ promo: p, savings: calculateSavings(p, monthlySpend) }))
+        .sort((a, b) => b.savings - a.savings)[0] || null
 
-      // Oportunidad 1: Usuario no tiene tarjeta para esta estación ($0 ahorro) pero en el mercado sí hay promo
-      const opportunityZero = !bestPromo && marketBestPromo && roundedMarketSavings > 0
-        ? {
-            promo: marketBestPromo,
-            savings: roundedMarketSavings,
-            entityLabel: marketEntityLabel,
-          }
-        : null
+      let opportunityZero: CombustibleResultItem['opportunityZero'] = null
+      let opportunityMore: CombustibleResultItem['opportunityMore'] = null
 
-      // Oportunidad 2: Usuario tiene tarjeta pero otra entidad rinde sustancialmente más (>= $1.500 de diferencia)
-      const opportunityMore = bestPromo && marketBestPromo && (roundedMarketSavings - roundedMaxSavings >= 1500)
-        ? {
-            promo: marketBestPromo,
-            savings: roundedMarketSavings,
-            diff: roundedMarketSavings - roundedMaxSavings,
-            entityLabel: marketEntityLabel,
-          }
-        : null
+      if (!bestMatch && marketBest) {
+        opportunityZero = {
+          promo: marketBest.promo,
+          savings: marketBest.savings,
+          entityLabel: getRepresentativeEntity(marketBest.promo),
+        }
+      } else if (bestMatch && marketBest && marketBest.savings > bestMatch.savings + 500) {
+        opportunityMore = {
+          promo: marketBest.promo,
+          savings: marketBest.savings,
+          diff: marketBest.savings - bestMatch.savings,
+          entityLabel: getRepresentativeEntity(marketBest.promo),
+        }
+      }
 
-      const topGeneralPromo = [...brandPromos].sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0))[0] || null
+      const topGeneral = dayFiltered
+        .map(p => ({ promo: p, savings: calculateSavings(p, monthlySpend) }))
+        .sort((a, b) => b.savings - a.savings)[0]?.promo || null
 
       return {
         brand,
         config: BRAND_CONFIG[brand],
-        matchedPromo: bestPromo,
-        alternateDayPromo,
-        savings: roundedMaxSavings,
-        hasMatch: matchedPromos.length > 0,
-        hasAlternateDayMatch: !!alternateDayPromo,
-        topGeneralPromo,
+        matchedPromo: bestMatch?.promo || null,
+        alternateDayPromo: alternateDayBest?.promo || null,
+        savings: bestMatch?.savings || 0,
+        hasMatch: !!bestMatch,
+        hasAlternateDayMatch: !!alternateDayBest,
+        topGeneralPromo: topGeneral,
         totalPromosCount: brandPromos.length,
-        marketBestPromo,
+        marketBestPromo: marketBest?.promo || null,
         opportunityZero,
         opportunityMore,
       }
-    }).sort((a, b) => {
-      if (a.hasMatch && b.hasMatch) return b.savings - a.savings
-      if (a.hasMatch && !b.hasMatch) return -1
-      if (!a.hasMatch && b.hasMatch) return 1
-      return (b.topGeneralPromo?.discountPct || 0) - (a.topGeneralPromo?.discountPct || 0)
-    })
-  }, [initialPromos, selectedMethods, selectedDay, monthlySpend, todayInfo.bit])
+    }).sort((a, b) => b.savings - a.savings)
+  }, [initialPromos, selectedMethods, selectedDay, monthlySpend, todayInfo])
 
-  // Ganador absoluto
-  const winner = resultsByBrand.find(r => r.hasMatch && r.savings > 0)
-
-  // Generar link para compartir
-  const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/ahorro_interactivo/combustible?cards=${selectedMethods.join(',')}&gasto=${monthlySpend}&dia=${selectedDay}`
-    : `https://promoar.com.ar/ahorro_interactivo/combustible`
-
-  const dayLabelForShare = selectedDay === 'today'
-    ? `para cargar hoy ${todayInfo.name}`
-    : selectedDay === 'all'
-    ? 'para toda la semana'
-    : `para los días ${DAYS_OF_WEEK.find(d => d.id === selectedDay)?.label}`
-
-  const shareText = winner
-    ? `Hice el cálculo en PromoAR (${dayLabelForShare}): con mis tarjetas me conviene cargar nafta en ${winner.brand} y ahorro hasta $${winner.savings.toLocaleString('es-AR')} este mes. Mirá con tus tarjetas acá:`
-    : `Calculá con qué tarjeta te conviene cargar nafta ${dayLabelForShare} en YPF, Axion, Shell o Puma en PromoAR:`
-
-  const handleWhatsAppShare = () => {
-    const url = `https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`
-    window.open(url, '_blank')
-  }
-
-  const handleCopyLink = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(shareUrl)
-      setCopiedShare(true)
-      setTimeout(() => setCopiedShare(false), 2500)
-    }
-  }
-
-  const handleSaveToProfile = () => {
-    try {
-      const existing = localStorage.getItem('guestProfile')
-      const parsed = existing ? JSON.parse(existing) : { banks: [], wallets: [] }
-      
-      const newBanks = selectedMethods.filter(m => POPULAR_PAYMENT_METHODS.find(p => p.id === m && p.type === 'bank'))
-      const newWallets = selectedMethods.filter(m => POPULAR_PAYMENT_METHODS.find(p => p.id === m && p.type === 'wallet'))
-
-      localStorage.setItem('guestProfile', JSON.stringify({
-        ...parsed,
-        banks: Array.from(new Set([...(parsed.banks || []), ...newBanks])),
-        wallets: Array.from(new Set([...(parsed.wallets || []), ...newWallets])),
-      }))
-    } catch {
-      // ignore
-    }
-    router.push('/promos')
-  }
+  const topBrand = results[0]
+  const secondBrand = results[1]
+  const hasAnyMatch = results.some(r => r.hasMatch)
+  const monthlySavingsPotential = topBrand?.savings || 0
 
   return (
-    <>
-      <SimulatorHeader active="combustible" />
+    <div className="min-h-screen bg-[#0A1428] text-slate-100 flex flex-col justify-between">
+      {/* Header oficial del simulador */}
+      <SimulatorHeader currentCategory="combustible" />
 
-      <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
-
-      {/* Hero Header con paleta oficial PromoAR */}
-      <div className="text-center max-w-3xl mx-auto mb-10">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#D94F2B]/15 border border-[#D94F2B]/30 text-[#E8724F] text-xs font-bold mb-4 shadow-sm">
-          <span className="w-2 h-2 rounded-full bg-[#D94F2B] animate-pulse" />
-          SIMULADOR INTELIGENTE DE COMBUSTIBLE
-        </div>
-        <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white mb-4 leading-tight">
-          ¿Con qué tarjeta te conviene <br className="hidden md:inline" />
-          <span className="bg-gradient-to-r from-[#8AADD4] via-white to-[#E8724F] bg-clip-text text-transparent">
-            cargar nafta este mes?
-          </span>
-        </h1>
-        <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-          Seleccioná tus bancos y billeteras. Calculamos en tiempo real tu mejor opción en{' '}
-          <span className="text-slate-200 font-semibold">YPF, Axion, Shell y Puma</span> con los reintegros y topes de hoy.
-        </p>
-      </div>
-
-      {/* PASO 1: Selector interactivo de tarjetas y billeteras */}
-      <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 md:p-6 mb-8 backdrop-blur-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-              <span>💳 Paso 1:</span> Marcá las tarjetas y apps que tenés
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Tocá para activar o desactivar cada medio de pago</p>
+      {/* Contenido Principal con layout 2 columnas en Desktop */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+        {/* Banner resumen en Mobile */}
+        <div className="lg:hidden mb-4 p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between sticky top-16 z-20 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Filtros:</span>
+            <span className="text-xs font-semibold text-slate-200">
+              {selectedMethods.length === allInitial.length ? 'Todos activos' : `${selectedMethods.length} seleccionados`}
+            </span>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <button
-              onClick={selectAll}
-              className="text-[#E8724F] hover:text-white font-semibold px-2.5 py-1 rounded bg-[#142840] hover:bg-[#1E3A5F] border border-[#26406F] transition-colors"
-            >
-              Marcar todos
-            </button>
-            <button
-              onClick={clearAll}
-              className="text-slate-400 hover:text-slate-200 font-medium px-2.5 py-1 rounded bg-slate-800/60 hover:bg-slate-800 transition-colors"
-            >
-              Limpiar
-            </button>
-          </div>
+          <button
+            onClick={() => setMobileDrawerOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold hover:bg-sky-500/30 transition-colors flex items-center gap-1.5"
+          >
+            <span>Filtros</span>
+            <span className="text-[10px] bg-sky-500/30 px-1 rounded-full">{selectedMethods.length}</span>
+          </button>
         </div>
 
-        {/* Badge de usuario logueado */}
-        {isUsingRegisteredProfile && (
-          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 mb-4 text-xs">
-            <div className="flex items-center gap-2 text-emerald-300 font-medium">
-              <span className="text-sm">✨</span>
-              <span>
-                Cargamos tus tarjetas registradas de PromoAR{' '}
-                <strong className="text-white font-semibold">({userInfo?.name || userInfo?.email || 'tu cuenta'})</strong>
-              </span>
+        {/* Modal Drawer en Mobile */}
+        {mobileDrawerOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden flex">
+            <div
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => setMobileDrawerOpen(false)}
+            />
+            <div className="relative ml-auto w-full max-w-xs h-full bg-slate-900 z-10 shadow-2xl flex flex-col">
+              <TreeFilterSidebar
+                fullCatalog={fullCatalog}
+                userProfileCatalog={userProfileCatalog}
+                userInfo={userInfo}
+                selectedMethods={selectedMethods}
+                onToggleMethod={handleToggleMethod}
+                onSelectAll={handleSelectAll}
+                onClearAll={handleClearAll}
+                onSelectProfileOnly={handleSelectProfileOnly}
+                selectedDay={selectedDay}
+                onSelectDay={setSelectedDay}
+                monthlySpend={monthlySpend}
+                onChangeSpend={setMonthlySpend}
+                todayInfo={todayInfo}
+                callbackUrl="/ahorro-interactivo/combustible"
+                isMobileDrawer={true}
+                onCloseMobile={() => setMobileDrawerOpen(false)}
+              />
             </div>
-            <Link
-              href="/perfil"
-              className="text-[11px] text-emerald-400 hover:text-white underline font-semibold transition-colors shrink-0 ml-2"
-            >
-              Editar tarjetas →
-            </Link>
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          {allPaymentMethods.map(method => {
-            const isSelected = selectedMethods.includes(method.id)
-            return (
-              <button
-                key={method.id}
-                onClick={() => toggleMethod(method.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all select-none ${
-                  isSelected
-                    ? 'bg-[#142840] text-white border-2 border-[#D94F2B] shadow-[0_0_15px_-3px_rgba(217,79,43,0.4)] scale-[1.02]'
-                    : 'bg-slate-950/60 text-slate-400 border border-slate-800/80 hover:border-slate-700 hover:text-slate-200'
-                }`}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: method.color }}
-                />
-                <span>{method.label}</span>
-                {isSelected && (
-                  <span className="text-[#E8724F] font-bold ml-0.5">✓</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+        {/* Layout 2 Columnas Desktop */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* COLUMNA IZQUIERDA: Árbol de Filtros */}
+          <aside className="hidden lg:block w-72 xl:w-80 shrink-0">
+            <TreeFilterSidebar
+              fullCatalog={fullCatalog}
+              userProfileCatalog={userProfileCatalog}
+              userInfo={userInfo}
+              selectedMethods={selectedMethods}
+              onToggleMethod={handleToggleMethod}
+              onSelectAll={handleSelectAll}
+              onClearAll={handleClearAll}
+              onSelectProfileOnly={handleSelectProfileOnly}
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
+              monthlySpend={monthlySpend}
+              onChangeSpend={setMonthlySpend}
+              todayInfo={todayInfo}
+              callbackUrl="/ahorro-interactivo/combustible"
+            />
+          </aside>
 
-      {/* PASO 2: Selector de día de la semana */}
-      <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 md:p-6 mb-8 backdrop-blur-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-              <span>📅 Paso 2:</span> ¿Qué día querés cargar nafta?
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Las promociones bancarias de nafta son muy distintas según el día de la semana</p>
-          </div>
-          <div className="text-xs font-semibold text-[#8AADD4] bg-[#142840] px-3.5 py-1.5 rounded-full border border-[#26406F] self-start sm:self-auto">
-            {selectedDay === 'all'
-              ? '✨ Toda la semana (ver el mejor día)'
-              : selectedDay === 'today'
-              ? `⚡ Cargando Hoy (${todayInfo.name})`
-              : `🗓️ Solo día ${DAYS_OF_WEEK.find(d => d.id === selectedDay)?.label}`}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 pt-1">
-          {DAYS_OF_WEEK.map(day => {
-            const isSelected = selectedDay === day.id
-            const isToday = day.id === 'today'
-            const isAll = day.id === 'all'
-
-            return (
-              <button
-                key={day.id}
-                onClick={() => setSelectedDay(day.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all select-none ${
-                  isSelected
-                    ? 'bg-[#142840] text-white border-2 border-[#D94F2B] shadow-[0_0_15px_-3px_rgba(217,79,43,0.4)] scale-[1.02]'
-                    : 'bg-slate-950/60 text-slate-400 border border-slate-800/80 hover:border-slate-700 hover:text-slate-200'
-                }`}
-              >
-                <span>{isAll ? '✨' : isToday ? '⚡' : '🗓️'}</span>
-                <span>{isToday ? `Hoy (${todayInfo.name})` : day.label}</span>
-                {isSelected && (
-                  <span className="text-[#E8724F] font-bold ml-0.5">✓</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* PASO 3: Gasto mensual estimado en combustible */}
-      <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 md:p-6 mb-10 backdrop-blur-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-              <span>⛽ Paso 3:</span> ¿Cuánto cargás de nafta al mes?
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Para calcular con precisión cuánto te ahorrás en pesos ($)</p>
-          </div>
-          <div className="text-right">
-            <span className="text-2xl font-black text-white font-mono">
-              ${monthlySpend.toLocaleString('es-AR')}
-            </span>
-          </div>
-        </div>
-
-        {/* Presets rápidos */}
-        <div className="grid grid-cols-5 gap-2 mb-3">
-          {SPEND_PRESETS.map(amount => (
-            <button
-              key={amount}
-              onClick={() => setMonthlySpend(amount)}
-              className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition-all ${
-                monthlySpend === amount
-                  ? 'bg-[#D94F2B] text-white shadow-md shadow-[#D94F2B]/30'
-                  : 'bg-slate-950/50 text-slate-400 border border-slate-800/60 hover:text-white hover:border-slate-700'
-              }`}
-            >
-              ${(amount / 1000).toFixed(0)}k
-            </button>
-          ))}
-        </div>
-
-        {/* Slider libre */}
-        <input
-          type="range"
-          min={20000}
-          max={300000}
-          step={5000}
-          value={monthlySpend}
-          onChange={e => setMonthlySpend(parseInt(e.target.value, 10))}
-          className="w-full accent-[#D94F2B] bg-slate-800 rounded-lg cursor-pointer h-2"
-        />
-        <div className="flex justify-between text-[11px] text-slate-500 mt-1.5 font-mono">
-          <span>$20.000 (1 tanque chico)</span>
-          <span>$150.000</span>
-          <span>$300.000 (2+ vehículos)</span>
-        </div>
-      </div>
-
-      {/* BANNER DEL GANADOR DESTACADO */}
-      {winner && (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/20 via-amber-600/10 to-transparent border border-amber-500/40 p-6 mb-8 shadow-[0_0_30px_-10px_rgba(245,158,11,0.25)]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs tracking-wider uppercase">
-                <span>🏆 Tu Mejor Opción del Mes</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span>Puesto #1</span>
-              </div>
-              <h3 className="text-xl md:text-2xl font-black text-white">
-                Cargá en <span className="text-amber-300">{winner.brand}</span>
-              </h3>
-              <p className="text-sm text-slate-300">
-                {winner.matchedPromo?.title || 'Mejor descuento aplicado'}
-              </p>
-            </div>
-            <div className="sm:text-right bg-slate-950/80 p-3.5 rounded-xl border border-amber-500/30">
-              <div className="text-xs text-amber-300/80 font-medium">Ahorro estimado en tu mes</div>
-              <div className="text-3xl font-black text-amber-400 font-mono">
-                -${winner.savings.toLocaleString('es-AR')}
-              </div>
-              {winner.matchedPromo?.capAmount && (
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  (Tope de reintegro: ${winner.matchedPromo.capAmount.toLocaleString('es-AR')})
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PODIO DE LAS 4 ESTACIONES */}
-      <div className="mb-12">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
-            <span>🏁 Comparativa por Estación de Servicio</span>
-          </h2>
-          <span className="text-xs text-slate-400">
-            {selectedMethods.length} medios seleccionados
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {resultsByBrand.map((item, idx) => {
-            const {
-              brand,
-              config,
-              matchedPromo,
-              alternateDayPromo,
-              savings,
-              hasMatch,
-              hasAlternateDayMatch,
-              topGeneralPromo,
-            } = item
-
-            return (
-              <div
-                key={brand}
-                className={`relative rounded-2xl p-5 border transition-all duration-200 bg-gradient-to-b ${config.bgGradient} ${config.borderClass} ${
-                  hasMatch ? config.glowClass : 'opacity-70 grayscale-[30%]'
-                }`}
-              >
-                {/* Header de la tarjeta con Logo/Nombre */}
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xs font-black text-slate-400 font-mono">
-                        #{idx + 1}
-                      </span>
-                      <h3 className="text-xl font-black text-white tracking-tight">
-                        {config.name}
-                      </h3>
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${config.badgeBg}`}>
-                        {hasMatch ? `${matchedPromo?.discountPct}% OFF` : 'Sin promo'}
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-400 mt-1">
-                      {hasMatch ? (
-                        <span className="text-emerald-400 font-semibold">
-                          ✓ Promo disponible con tus tarjetas
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">
-                          Ninguno de tus medios aplica beneficio
-                        </span>
-                      )}
-                    </div>
+          {/* COLUMNA DERECHA: Resultados del Simulador */}
+          <main className="flex-1 min-w-0 w-full space-y-4">
+            {/* Banner de Ganador */}
+            {hasAnyMatch && topBrand && monthlySavingsPotential > 0 ? (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-slate-900/40 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🏆</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                      Mejor opción para vos
+                    </span>
                   </div>
-
-                  {/* Caja de ahorro */}
-                  {hasMatch ? (
-                    <div className="text-right">
-                      <div className="text-2xl font-black text-white font-mono">
-                        -${savings.toLocaleString('es-AR')}
-                      </div>
-                      <div className="text-[11px] text-slate-400">ahorro mensual</div>
-                    </div>
-                  ) : (
-                    <div className="text-right">
-                      <div className="text-xs font-semibold text-slate-400">Tarifa plena</div>
-                      <div className="text-[11px] text-slate-500">$0 ahorro</div>
-                    </div>
+                  <p className="text-sm text-slate-200">
+                    Cargando en <strong className="text-white font-bold">{topBrand.config.name}</strong> ahorrás hasta{' '}
+                    <strong className="text-emerald-400 font-mono text-base">
+                      ${monthlySavingsPotential.toLocaleString('es-AR')}
+                    </strong>{' '}
+                    este mes.
+                  </p>
+                  {secondBrand && secondBrand.savings > 0 && (
+                    <p className="text-xs text-slate-400">
+                      ${(monthlySavingsPotential - secondBrand.savings).toLocaleString('es-AR')} más que en {secondBrand.config.name}.
+                    </p>
                   )}
                 </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-semibold">
+                    {topBrand.matchedPromo?.discountPct}% OFF
+                  </span>
+                </div>
+              </div>
+            ) : null}
 
-                {/* Detalle de la promo si matchea */}
-                {hasMatch && matchedPromo ? (
-                  <div className="space-y-2 pt-3 border-t border-slate-800/80 text-xs">
-                    <div className="flex items-center justify-between text-slate-300">
-                      <span className="text-slate-500 font-medium">Beneficio:</span>
-                      <span className="font-semibold text-white truncate max-w-[220px]">
-                        {matchedPromo.title}
-                      </span>
+            {/* Grid de Petroleras */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {results.map(item => {
+                const isWinner = hasAnyMatch && topBrand?.brand === item.brand && item.savings > 0
+                return (
+                  <div
+                    key={item.brand}
+                    className={`rounded-2xl p-4 transition-all flex flex-col justify-between border ${
+                      isWinner
+                        ? `${item.config.borderClass} ${item.config.glowClass} bg-gradient-to-b ${item.config.bgGradient}`
+                        : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      {/* Cabecera de marca */}
+                      <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800/80">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.config.color }}
+                          />
+                          <h3 className="font-bold text-sm text-white">
+                            {item.config.name}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {isWinner && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                              Mejor Opción
+                            </span>
+                          )}
+                          <span className="text-[11px] text-slate-400">
+                            {item.totalPromosCount} promos
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Estado: match directo vs sin match */}
+                      {item.matchedPromo ? (
+                        <div className="space-y-2.5">
+                          <div className="flex items-baseline justify-between">
+                            <div>
+                              <div className="text-2xl font-black font-mono text-emerald-400">
+                                ${item.savings.toLocaleString('es-AR')}
+                              </div>
+                              <span className="text-[11px] text-slate-400">Ahorro mensual estimado</span>
+                            </div>
+                            <span className="text-sm font-bold px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              {item.matchedPromo.discountPct}% OFF
+                            </span>
+                          </div>
+
+                          <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/80 space-y-1">
+                            <p className="text-xs font-semibold text-slate-200 line-clamp-1">
+                              {item.matchedPromo.title}
+                            </p>
+                            {item.matchedPromo.capAmount && (
+                              <p className="text-[11px] text-slate-400">
+                                Tope: ${item.matchedPromo.capAmount.toLocaleString('es-AR')} por mes
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {item.matchedPromo.requirements.map((req, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300"
+                                >
+                                  {req.bankName || req.walletName || req.cardNetworkName}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : item.alternateDayPromo ? (
+                        <div className="space-y-2">
+                          <div className="p-2.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-300">
+                            <div className="font-semibold flex items-center gap-1.5 mb-1">
+                              <span>📅</span>
+                              <span>Disponible otro día de la semana</span>
+                            </div>
+                            <p className="text-slate-300 text-[11px] leading-relaxed">
+                              Tenés promo del {item.alternateDayPromo.discountPct}% ({item.alternateDayPromo.title}) con tus tarjetas, pero no aplica {selectedDay === 'today' ? 'hoy' : 'el día seleccionado'}.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800 text-center text-xs text-slate-400">
+                            <p>No tenés promos activas con los filtros actuales para {item.config.name}.</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex items-center justify-between text-slate-300">
-                      <span className="text-slate-500 font-medium">Días válidos:</span>
-                      <span className="font-semibold text-[#8AADD4]">
-                        {matchedPromo.validDays.join(', ')}
-                      </span>
-                    </div>
-
-                    {matchedPromo.capAmount && (
-                      <div className="flex items-center justify-between text-slate-300">
-                        <span className="text-slate-500 font-medium">Tope mensual:</span>
-                        <span className="font-mono text-slate-300">
-                          ${matchedPromo.capAmount.toLocaleString('es-AR')}
+                    {/* Oportunidad de ahorro extra si existe */}
+                    {item.opportunityMore && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+                        <span className="truncate">
+                          💡 Con <strong className="text-slate-300">{item.opportunityMore.entityLabel}</strong>:{' '}
+                          <span className="text-sky-400 font-semibold">+${item.opportunityMore.diff.toLocaleString('es-AR')} más</span>
                         </span>
                       </div>
                     )}
-
-                    {matchedPromo.requirements.length > 0 && (
-                      <div className="flex items-center justify-between text-slate-300 pt-1">
-                        <span className="text-slate-500 font-medium">Medio de pago:</span>
-                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                          {getUniqueBadges(matchedPromo.requirements).map(b => (
-                            <span
-                              key={b.name}
-                              className="px-2 py-0.5 rounded bg-[#142840] text-[10px] font-bold text-slate-200 border border-[#26406F]"
-                            >
-                              {b.name}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Tip de ahorro si otra tarjeta rinde más */}
-                    {item.opportunityMore && (
-                      <div className="mt-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
-                        <span className="text-sm shrink-0 leading-none pt-0.5">💡</span>
-                        <div className="text-[11px] text-slate-200 leading-snug">
-                          <span className="font-bold text-amber-300">Tip de ahorro: </span>
-                          Con <strong className="text-white font-bold">{item.opportunityMore.entityLabel}</strong>{' '}
-                          ahorrarías <strong className="text-amber-300 font-mono font-black">+${item.opportunityMore.diff.toLocaleString('es-AR')} más</strong>{' '}
-                          (hasta ${item.opportunityMore.savings.toLocaleString('es-AR')}).
-                        </div>
-                      </div>
-                    )}
                   </div>
-                ) : (
-                  // Sugerencia si no tiene promo hoy o con sus tarjetas
-                  <div className="pt-3 border-t border-slate-800/60 text-xs space-y-2.5">
-                    {/* Oportunidad cuando no tiene tarjeta para esta petrolera */}
-                    {item.opportunityZero && (
-                      <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-950 border border-emerald-500/30 space-y-1.5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                            <span>✨ Ahorro potencial</span>
-                          </span>
-                          <span className="text-[11px] font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                            {item.opportunityZero.promo.discountPct}% OFF
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-200 leading-snug">
-                          Si tuvieras <strong className="text-white font-black">{item.opportunityZero.entityLabel}</strong>, ahorrarías{' '}
-                          <strong className="text-emerald-400 font-mono font-black">${item.opportunityZero.savings.toLocaleString('es-AR')}</strong> en vez de $0.
-                        </p>
-                        <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400">
-                          <span>Días: {item.opportunityZero.promo.validDays.join(', ')}</span>
-                          {item.opportunityZero.promo.capAmount && (
-                            <span className="text-amber-300/90 font-medium">Tope: ${item.opportunityZero.promo.capAmount.toLocaleString('es-AR')}</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                )
+              })}
+            </div>
 
-                    {hasAlternateDayMatch && alternateDayPromo && (
-                      <div className="bg-[#142840]/70 p-3 rounded-xl border border-[#26406F] space-y-1">
-                        <div className="text-amber-300 font-bold text-xs flex items-center gap-1.5">
-                          <span>🗓️ Día recomendado en {brand}:</span>
-                        </div>
-                        <p className="text-slate-200 leading-snug">
-                          Con tus tarjetas tenés <strong className="text-emerald-400 font-bold">{alternateDayPromo.discountPct}% OFF</strong> los <span className="text-white font-bold underline decoration-[#D94F2B]">{alternateDayPromo.validDays.join(', ')}</span>.
-                        </p>
-                        <div className="text-[11px] text-slate-400 truncate">
-                          {alternateDayPromo.title}
-                        </div>
-                      </div>
-                    )}
+            {/* Aviso Legal y Descargo de Responsabilidad Condensado */}
+            <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/60 text-[11px] text-slate-400 leading-snug mt-6 flex items-center gap-2">
+              <span className="text-xs shrink-0">⚖️</span>
+              <p>
+                Estimaciones y cálculos de carácter informativo, no vinculantes y sujetos a las condiciones de cada entidad. Consultá nuestros{' '}
+                <Link href="/terminos" className="text-sky-400 hover:text-sky-300 font-medium underline underline-offset-2">
+                  Términos y Condiciones
+                </Link>.
+              </p>
+            </div>
+          </main>
+        </div>
+      </div>
 
-                    {!item.opportunityZero && !hasAlternateDayMatch && (
-                      <p className="text-slate-400">No hay promociones bancarias masivas vigentes cargadas en este momento para {brand}.</p>
-                    )}
-                  </div>
-                )}
+      {/* Footer oficial con la estructura de PromoAR */}
+      <footer className="w-full bg-[#060D1A] border-t border-slate-800/80 text-slate-400 py-12 px-4 mt-16">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
+            {/* Columna 1: Marca y Redes */}
+            <div className="col-span-2 sm:col-span-1">
+              <Link href="/" className="inline-block mb-3.5 group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/promoar_logo_clean.png"
+                  alt="PromoAR"
+                  className="h-8 sm:h-9 w-auto object-contain block transition-transform group-hover:scale-105"
+                />
+              </Link>
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                El agregador de promociones bancarias y descuentos más completo de Argentina.
+              </p>
+              <div className="flex items-center gap-2.5">
+                <a
+                  href="https://www.instagram.com/promoar.com.ar"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Instagram @promoar.com.ar"
+                  title="Instagram @promoar.com.ar"
+                  className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-pink-400 hover:bg-slate-700 transition-colors"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4.5 h-4.5">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                  </svg>
+                </a>
+                <a
+                  href="https://x.com/promoarok"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="X @promoarok"
+                  title="X @promoarok"
+                  className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                </a>
+                <a
+                  href="https://wa.me/541173691613"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="WhatsApp PromoAR"
+                  title="WhatsApp PromoAR"
+                  className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24M8.53 7.33c-.16 0-.42.06-.64.3-.22.24-.85.83-.85 2.02s.87 2.34.99 2.5c.12.16 1.7 2.6 4.12 3.65.58.25 1.02.4 1.38.52.58.18 1.11.16 1.53.1.47-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.47-.29-.25-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.55.12-.16.24-.63.79-.77.95-.14.16-.28.18-.53.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.16.04-.31-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42-.14-.01-.31-.01-.47-.01"/>
+                  </svg>
+                </a>
               </div>
-            )
-          })}
-        </div>
-      </div>
+            </div>
 
-      {/* BLOQUE VIRAL Y DE ACCIÓN CON IDENTIDAD PROMOAR */}
-      <div className="bg-gradient-to-tr from-[#142840] via-[#0A1428] to-[#1E3A5F] border border-[#26406F] rounded-3xl p-6 md:p-8 text-center space-y-6 shadow-xl">
-        <div className="max-w-xl mx-auto space-y-2">
-          <h3 className="text-xl md:text-2xl font-black text-white">
-            Compartí tu cálculo o guardá tus tarjetas
-          </h3>
-          <p className="text-xs md:text-sm text-slate-300">
-            Mandale este comparador a tu familia o guardá tus tarjetas en PromoAR para ver promociones de supermercados, farmacias y salidas en tu día a día.
-          </p>
-        </div>
+            {/* Columna 2: Herramientas */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Herramientas</p>
+              <ul className="space-y-2 text-xs">
+                <li><Link href="/promos" className="hover:text-white transition-colors">Todas las Promos</Link></li>
+                <li><Link href="/ahorro-interactivo/supermercados" className="text-emerald-400 font-semibold hover:text-white transition-colors">Simulador Supermercados</Link></li>
+                <li><Link href="/ahorro-interactivo/combustible" className="text-[#E8724F] font-semibold hover:text-white transition-colors">Simulador Nafta</Link></li>
+                <li><Link href="/ahorro-interactivo/farmacias" className="text-rose-400 font-semibold hover:text-white transition-colors">Simulador Farmacias</Link></li>
+                <li><Link href="/finanzas" className="hover:text-white transition-colors">Tasas de Billeteras</Link></li>
+                <li><Link href="/perfil" className="hover:text-white transition-colors">Mi Perfil Financiero</Link></li>
+              </ul>
+            </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          {/* Compartir por WhatsApp */}
-          <button
-            onClick={handleWhatsAppShare}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-900/30 transition-all hover:scale-[1.02]"
-          >
-            <span>📲 Compartir en WhatsApp</span>
-          </button>
+            {/* Columna 3: Empresa */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Empresa</p>
+              <ul className="space-y-2 text-xs">
+                <li><Link href="/quienes-somos" className="hover:text-white transition-colors">Quiénes somos</Link></li>
+                <li><Link href="/como-funciona" className="hover:text-white transition-colors">Cómo funciona</Link></li>
+                <li><Link href="/contacto" className="hover:text-white transition-colors">Contacto</Link></li>
+              </ul>
+            </div>
 
-          {/* Copiar enlace */}
-          <button
-            onClick={handleCopyLink}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-[#142840] hover:bg-[#1E3A5F] text-[#8AADD4] hover:text-white text-sm font-semibold border border-[#26406F] transition-all"
-          >
-            <span>{copiedShare ? '✓ Enlace copiado' : '🔗 Copiar enlace interactivo'}</span>
-          </button>
-
-          {/* Guardar en perfil */}
-          <button
-            onClick={handleSaveToProfile}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-[#D94F2B] to-[#B8401F] hover:from-[#E8724F] hover:to-[#D94F2B] text-white font-bold text-sm shadow-lg shadow-[#D94F2B]/30 transition-all hover:scale-[1.02]"
-          >
-            <span>⭐ Guardar mis tarjetas en PromoAR →</span>
-          </button>
-        </div>
-
-        {/* Aviso Legal y Descargo de Responsabilidad */}
-        <div className="p-6 md:p-7 rounded-2xl bg-slate-900/60 border border-slate-800/90 text-xs text-slate-400 leading-relaxed space-y-3 mt-10">
-          <div className="flex items-center gap-2 text-slate-200 font-bold uppercase tracking-wider text-[11px]">
-            <span className="text-amber-400 text-sm">⚖️</span>
-            <span>Términos, condiciones y descargo de responsabilidad</span>
-          </div>
-          <p>
-            Los cálculos, porcentajes de descuento, reintegros estimados y topes exhibidos en este simulador son de carácter <strong className="text-slate-300">estrictamente informativo y referencial</strong>. La información final, oficial y vinculante respecto de vigencias, días habilitados, topes de reintegro por cuenta/mes, tipos de combustible habilitados (ej. nafta premium, súper o diésel) y estaciones de servicio adheridas se encuentra exclusivamente en las <strong className="text-slate-300">bases y condiciones publicadas por cada entidad bancaria, billetera virtual o petrolera (YPF, Axion, Shell, Puma)</strong>.
-          </p>
-          <p>
-            Cada entidad y petrolera se reserva el derecho de modificar, suspender o dar de baja sus promociones sin previo aviso. Recomendamos a los usuarios <strong className="text-slate-300">leer atentamente las exclusiones específicas de cada promoción</strong> antes de efectuar la carga (tales como medios de cobro no habilitados, estaciones de bandera blanca o compras mediante tarjetas corporativas).
-          </p>
-          <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-800/70">
-            PromoAR es una plataforma independiente de agregación y difusión de beneficios. PromoAR no emite instrumentos de pago, no procesa transacciones monetarias ni forma parte de la relación contractual entre el consumidor, la entidad financiera y la estación de servicio, quedando expresamente desligada de cualquier responsabilidad civil, comercial o de cualquier otra índole por divergencias en los montos acreditados, rechazos de pago, demoras en las devoluciones o modificaciones comerciales unilaterales dispuestas por los emisores.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    {/* Footer oficial con la estructura de PromoAR */}
-    <footer className="w-full bg-[#060D1A] border-t border-slate-800/80 text-slate-400 py-12 px-4 mt-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
-          {/* Columna 1: Marca y Redes */}
-          <div className="col-span-2 sm:col-span-1">
-            <Link href="/" className="inline-block mb-3">
-              <span className="text-xl font-black text-white tracking-tight">
-                Promo<span className="text-[#D94F2B]">AR</span>
-              </span>
-            </Link>
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              El agregador de promociones bancarias y descuentos más completo de Argentina.
-            </p>
-            <div className="flex items-center gap-3">
-              <a
-                href="https://www.instagram.com/promoar.com.ar"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Instagram"
-                className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-                </svg>
-              </a>
-              <a
-                href="https://wa.me/541173691613"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="WhatsApp"
-                className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-              >
-                <span className="text-sm">💬</span>
-              </a>
+            {/* Columna 4: Legal */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Legal</p>
+              <ul className="space-y-2 text-xs">
+                <li><Link href="/privacidad" className="hover:text-white transition-colors">Privacidad</Link></li>
+                <li><Link href="/terminos" className="hover:text-white transition-colors">Términos y Condiciones</Link></li>
+              </ul>
             </div>
           </div>
 
-          {/* Columna 2: Herramientas */}
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Herramientas</p>
-            <ul className="space-y-2 text-xs">
-              <li><Link href="/promos" className="hover:text-white transition-colors">Todas las Promos</Link></li>
-              <li><Link href="/ahorro-interactivo/supermercados" className="text-emerald-400 font-semibold hover:text-white transition-colors">Simulador Supermercados</Link></li>
-              <li><Link href="/ahorro-interactivo/combustible" className="text-[#E8724F] font-semibold hover:text-white transition-colors">Simulador Nafta</Link></li>
-              <li><Link href="/ahorro-interactivo/farmacias" className="text-rose-400 font-semibold hover:text-white transition-colors">Simulador Farmacias</Link></li>
-              <li><Link href="/finanzas" className="hover:text-white transition-colors">Tasas de Billeteras</Link></li>
-              <li><Link href="/perfil" className="hover:text-white transition-colors">Mi Perfil Financiero</Link></li>
-            </ul>
-          </div>
-
-          {/* Columna 3: Empresa */}
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Empresa</p>
-            <ul className="space-y-2 text-xs">
-              <li><Link href="/quienes-somos" className="hover:text-white transition-colors">Quiénes somos</Link></li>
-              <li><Link href="/como-funciona" className="hover:text-white transition-colors">Cómo funciona</Link></li>
-              <li><Link href="/contacto" className="hover:text-white transition-colors">Contacto</Link></li>
-            </ul>
-          </div>
-
-          {/* Columna 4: Legal */}
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-200 mb-3">Legal</p>
-            <ul className="space-y-2 text-xs">
-              <li><Link href="/privacidad" className="hover:text-white transition-colors">Privacidad</Link></li>
-              <li><Link href="/terminos" className="hover:text-white transition-colors">Términos</Link></li>
-            </ul>
+          <div className="border-t border-slate-800/80 pt-6 text-center text-xs text-slate-500">
+            <p>© {new Date().getFullYear()} PromoAR. Las promociones son provistas por cada entidad financiera y petrolera. Verificá términos, vigencia y exclusiones antes de comprar.</p>
           </div>
         </div>
-
-        <div className="border-t border-slate-800/80 pt-6 text-center text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} PromoAR. Las promociones son provistas por cada entidad financiera. Verificá vigencia y condiciones antes de usar.</p>
-        </div>
-      </div>
-    </footer>
-  </>
-)
+      </footer>
+    </div>
+  )
 }

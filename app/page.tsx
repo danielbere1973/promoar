@@ -539,7 +539,7 @@ export default async function LandingPage() {
             <p className="font-bold text-sm uppercase tracking-widest text-blue-300 mb-3">Legal</p>
             <ul className="space-y-2 text-sm text-blue-200">
               <li><Link href="/privacidad" className="hover:text-white transition-colors">Privacidad</Link></li>
-              <li><Link href="/terminos" className="hover:text-white transition-colors">Términos</Link></li>
+              <li><Link href="/terminos" className="hover:text-white transition-colors">Términos y Condiciones</Link></li>
             </ul>
           </div>
         </div>

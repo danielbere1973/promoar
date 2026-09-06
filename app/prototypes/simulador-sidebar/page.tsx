@@ -2,28 +2,16 @@ import { Metadata } from 'next'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import { prisma } from '@/lib/prisma'
-import CombustibleSimulator, { CombustiblePromoItem, FuelBrand } from './CombustibleSimulator'
+import SidebarSimulatorView from './SidebarSimulatorView'
 import { FourLevelsCatalog, CatalogEntity } from '@/app/components/SimulatorPaymentSelector'
+import { CombustiblePromoItem, FuelBrand } from '@/app/ahorro_interactivo/combustible/CombustibleSimulator'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export const metadata: Metadata = {
-  title: 'Simulador de Ahorro en Combustible | PromoAR',
-  description: '¿Con qué tarjeta te conviene cargar nafta hoy? Seleccioná tus bancos y calculá tu ahorro real en YPF, Axion, Shell y Puma con reintegros y topes actualizados.',
-  openGraph: {
-    title: 'Simulador de Ahorro en Combustible | PromoAR',
-    description: 'Calculá en qué estación de servicio pagás menos hoy según tus tarjetas y billeteras. YPF vs Axion vs Shell vs Puma.',
-    url: 'https://promoar.com.ar/ahorro-interactivo/combustible',
-    siteName: 'PromoAR',
-    locale: 'es_AR',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Simulador de Ahorro en Combustible | PromoAR',
-    description: '¿Con qué pagar nafta hoy para ahorrar hasta $25.000? Elegí tus tarjetas y mirá el podio en vivo.',
-  },
+  title: 'Simulador con Filtros en Árbol Lateral | PromoAR',
+  description: 'Prototipo interactivo con filtros multiselección en árbol lateral y comparador en vivo siempre a la vista.',
 }
 
 const BENEFIT_CLUB_SLUGS = new Set([
@@ -50,23 +38,18 @@ const POPULAR_BANK_SLUGS = [
 
 const CARD_ORDER = ['visa', 'mastercard', 'amex', 'cabal', 'maestro']
 
-// Regex para descartar promociones de rubros secundarios (lubricentro, boxes, cafetería, indumentaria, vinos, etc.)
 const NON_FUEL_REGEX = /\b(lubricant|lubricentro|aceite|boxes|vino|vinos|espumante|espumantes|vinoteca|tienda\s+full|tiendas\s+ypf\s+full|ypf\s+full|tienda\s+spot|spot!|cafeter[ií]a|lavado|indumentaria|zapatilla|zapatillas|calzado|remera|pantal[oó]n|moda|colch[oó]n|armer[ií]a|growler)\b/i
 
 function isFuelValid(title: string, desc: string | null, commerceName: string, catSlug?: string | null): boolean {
   const full = `${commerceName || ''} ${title || ''} ${desc || ''}`
   if (NON_FUEL_REGEX.test(full)) return false
-
-  // Si la categoría en DB es ropa, deportes, gastronomía o tecnología, solo permitir si explícitamente es estación/combustible
   if (catSlug && ['indumentaria', 'deportes', 'hogar', 'tecnologia', 'gastronomia', 'automotores', 'otros'].includes(catSlug)) {
     const isExplicitFuel = /\b(puma\s+energy|combustible|combustibles|nafta|estaci[oó]n\s+de\s+servicio|estaciones\s+de\s+servicio)\b/i.test(full)
     if (!isExplicitFuel) return false
   }
-
   return true
 }
 
-// Mapeo canónico a las 4 marcas principales de combustible (puede aplicar a varias o a todas si es genérica)
 function resolveFuelBrands(commerceName: string, title: string, desc: string | null): FuelBrand[] {
   const full = `${commerceName || ''} ${title || ''} ${desc || ''}`.toLowerCase()
   const brands: FuelBrand[] = []
@@ -75,7 +58,6 @@ function resolveFuelBrands(commerceName: string, title: string, desc: string | n
   if (/\baxion\b/i.test(full)) brands.push('Axion')
   if (/\bshell\b/i.test(full)) brands.push('Shell')
 
-  // Para Puma: requerir límite de palabra y contexto de estación de servicio (evita 'esPUMAntes' o tiendas deportivas)
   if (/\b(?:puma\s+energy|puma)\b/i.test(full)) {
     if (
       /\b(?:energy|combustible|combustibles|nafta|estaci|estaciones)\b/i.test(full) ||
@@ -85,7 +67,6 @@ function resolveFuelBrands(commerceName: string, title: string, desc: string | n
     }
   }
 
-  // Si no especificó marca pero es genérica de combustible o estaciones de servicio
   if (brands.length === 0) {
     const c = (commerceName || '').toLowerCase()
     const t = (title || '').toLowerCase()
@@ -102,7 +83,6 @@ function resolveFuelBrands(commerceName: string, title: string, desc: string | n
   return brands
 }
 
-// Extracción de tope de reintegro en pesos a partir del texto o descripción
 function extractCap(title: string, desc: string | null): number | null {
   const full = `${title} ${desc || ''}`
   const match = full.match(/tope(?:\s+de(?:\s+reintegro)?)?[:\s]*\$?\s*([0-9]+(?:\.[0-9]{3})*)/i)
@@ -113,7 +93,6 @@ function extractCap(title: string, desc: string | null): number | null {
   return null
 }
 
-// Días de la semana desde bitmask (1 = Dom, 2 = Lun, 4 = Mar, 8 = Mié, 16 = Jue, 32 = Vie, 64 = Sáb)
 function bitmaskToDayNames(bitmask: number): string[] {
   if (bitmask >= 127) return ['Todos los días']
   const map: [number, string][] = [
@@ -132,14 +111,14 @@ function bitmaskToDayNames(bitmask: number): string[] {
   return res.length ? res : ['Todos los días']
 }
 
-export default async function CombustibleSimulatorPage() {
+export default async function SimuladorSidebarPage() {
   const session = await getServerSession(authOptions)
 
   let userProfileCatalog: FourLevelsCatalog | null = null
   let initialUserMethods: string[] = []
   let userInfo: { name: string | null; email: string | null } | null = null
 
-  // 1. Cargar catálogo general de las 4 categorías disponibles en PromoAR
+  // 1. Cargar catálogo de bancos, billeteras y redes
   const [rawBanks, rawWallets, rawNetworks] = await Promise.all([
     prisma.bank.findMany({
       where: { active: true },
@@ -261,7 +240,6 @@ export default async function CombustibleSimulatorPage() {
       const uBenefitsMap = new Map<string, CatalogEntity>()
       const methodsSet = new Set<string>()
 
-      // Bancos del perfil
       user.financialProfile.banks.forEach(b => {
         if (b.bank?.slug) {
           const slug = b.bank.slug.toLowerCase()
@@ -277,7 +255,6 @@ export default async function CombustibleSimulatorPage() {
         }
       })
 
-      // Billeteras y tarjetas de beneficios del perfil
       user.financialProfile.wallets.forEach(w => {
         if (w.wallet?.slug) {
           const slug = w.wallet.slug.toLowerCase()
@@ -304,7 +281,6 @@ export default async function CombustibleSimulatorPage() {
         }
       })
 
-      // Tarjetas (redes) y entidades vinculadas
       user.financialProfile.cards.forEach(c => {
         if (c.cardNetwork?.slug) {
           const slug = c.cardNetwork.slug.toLowerCase()
@@ -370,7 +346,7 @@ export default async function CombustibleSimulatorPage() {
     }
   }
 
-  // Obtenemos todas las promociones activas del rubro combustible (incluyendo cadenas y genéricas)
+  // 3. Consultar promociones activas reales
   const rawPromos = await prisma.promo.findMany({
     where: {
       status: 'ACTIVE',
@@ -434,37 +410,25 @@ export default async function CombustibleSimulatorPage() {
     ],
   })
 
-  // Normalizamos a las 4 marcas oficiales
   const promos: CombustiblePromoItem[] = []
 
   for (const p of rawPromos) {
-    // Descartamos promos no relacionadas directamente a combustible (boxes, lubricantes, cafetería, tiendas de ropa, etc.)
-    if (!isFuelValid(p.title, p.description, p.commerce.name, p.category?.slug)) {
-      continue
-    }
+    if (!isFuelValid(p.title, p.description, p.commerce.name, p.category?.slug)) continue
 
     const brands = resolveFuelBrands(p.commerce.name, p.title, p.description)
     if (brands.length === 0) continue
 
     const discountPct = p.maxDiscountPct || 10
 
-    // Prioridad 1: tope estructurado en requirements
     let cap: number | null = null
     for (const r of p.requirements) {
       if (typeof r.cap === 'number' && r.cap > 0 && r.cap < 200000) {
-        if (cap === null || r.cap > cap) {
-          cap = r.cap
-        }
+        if (cap === null || r.cap > cap) cap = r.cap
       }
     }
-    // Prioridad 2: inferir del texto si no está estructurado
-    if (cap === null) {
-      cap = extractCap(p.title, p.description)
-    }
+    if (cap === null) cap = extractCap(p.title, p.description)
 
     const days = bitmaskToDayNames(p.validDays)
-
-    // Procesamos los requerimientos estructurados
     const fullText = `${p.title} ${p.description || ''} ${p.commerce.name} ${p.sourceUrl || ''}`.toLowerCase()
     const requiresModo = fullText.includes('modo') || fullText.includes('semana nacion') || fullText.includes('semananacion')
 
@@ -485,7 +449,7 @@ export default async function CombustibleSimulatorPage() {
       }
     })
 
-    if (requirements.length === 0 && requiresModo) {
+    if (requiresModo && !requirements.some(r => r.walletSlug === 'modo')) {
       requirements.push({
         bankName: null,
         bankSlug: null,
@@ -496,7 +460,6 @@ export default async function CombustibleSimulatorPage() {
       })
     }
 
-    // Inyectamos la promo para cada marca a la que aplica
     for (const brand of brands) {
       promos.push({
         id: `${p.id}-${brand}`,
@@ -509,20 +472,18 @@ export default async function CombustibleSimulatorPage() {
         validDaysBitmask: p.validDays,
         requirements,
         isFeatured: p.isFeatured,
-        logoUrl: p.commerce.logoUrl,
+        logoUrl: p.commerce.logoUrl || null,
       })
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#0A1428] text-slate-100 selection:bg-[#D94F2B]/30">
-      <CombustibleSimulator
-        initialPromos={promos}
-        fullCatalog={fullCatalog}
-        userProfileCatalog={userProfileCatalog}
-        initialUserMethods={initialUserMethods}
-        userInfo={userInfo}
-      />
-    </main>
+    <SidebarSimulatorView
+      initialPromos={promos}
+      fullCatalog={fullCatalog}
+      userProfileCatalog={userProfileCatalog}
+      initialUserMethods={initialUserMethods}
+      userInfo={userInfo}
+    />
   )
 }

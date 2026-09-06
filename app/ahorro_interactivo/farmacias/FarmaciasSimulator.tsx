@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import SimulatorHeader from '@/app/components/SimulatorHeader'
+import SimulatorPaymentSelector from '@/app/components/SimulatorPaymentSelector'
 
 export type PharmacyBrand =
   | 'Farmacity'
@@ -592,13 +593,13 @@ export default function FarmaciasSimulator({
       <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
         {/* Hero Header */}
         <div className="text-center max-w-3xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-bold mb-4 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#D94F2B]/15 border border-[#D94F2B]/30 text-[#E8724F] text-xs font-bold mb-4 shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-[#E8724F] animate-pulse" />
             SIMULADOR INTELIGENTE DE FARMACIAS
           </div>
           <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white mb-4 leading-tight">
             ¿En qué farmacia te conviene <br className="hidden md:inline" />
-            <span className="bg-gradient-to-r from-rose-300 via-white to-[#E8724F] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[#8AADD4] via-white to-[#E8724F] bg-clip-text text-transparent">
               comprar este mes?
             </span>
           </h1>
@@ -608,541 +609,29 @@ export default function FarmaciasSimulator({
           </p>
         </div>
 
-        {/* PASO 1: SELECTOR CON LAS 2 OPCIONES ARRIBA Y LOS 4 NIVELES ORGANIZADOS */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 md:p-7 mb-8 backdrop-blur-md shadow-2xl shadow-black/40">
-          {/* Header de Paso 1 */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-5 border-b border-slate-800/80">
-            <div>
-              <h2 className="text-base md:text-lg font-black tracking-tight text-white flex items-center gap-2">
-                <span className="text-rose-400 text-xl">💳</span>
-                <span>Paso 1:</span> Elegí tus medios de pago
-              </h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-0.5">
-                Calcularemos en vivo los reintegros aplicables a cada farmacia
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-semibold text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60">
-                {selectedMethods.length} activos
-              </span>
-              <button
-                onClick={selectAll}
-                className="text-xs font-bold text-[#E8724F] hover:text-white px-2.5 py-1 rounded-lg bg-[#142840] hover:bg-[#1E3A5F] border border-[#26406F] transition-colors"
-              >
-                Todos
-              </button>
-              <button
-                onClick={clearAll}
-                className="text-xs font-medium text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg bg-slate-800/60 hover:bg-slate-800 transition-colors"
-              >
-                Limpiar
-              </button>
-              <button
-                onClick={resetRecommended}
-                className="text-xs font-medium text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-colors"
-              >
-                Recomendados
-              </button>
-            </div>
-          </div>
-
-          {/* LAS 2 OPCIONES ARRIBA DEL CUADRO */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            <button
-              onClick={() => {
-                setSelectionMode('profile')
-                if (hasRegisteredProfile && initialUserMethods.length > 0) {
-                  setSelectedMethods(initialUserMethods)
-                }
-              }}
-              className={`p-4 rounded-2xl text-left transition-all border flex items-start gap-3.5 relative overflow-hidden ${
-                selectionMode === 'profile'
-                  ? 'bg-gradient-to-br from-emerald-950/50 via-slate-900 to-slate-900 border-emerald-500/60 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/30'
-                  : 'bg-slate-900/50 border-slate-800/90 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
-              }`}
-            >
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 ${
-                  selectionMode === 'profile'
-                    ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/20'
-                    : 'bg-slate-800 text-slate-400'
-                }`}
-              >
-                👤
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-black ${selectionMode === 'profile' ? 'text-white' : 'text-slate-300'}`}>
-                    1. Mis productos financieros
-                  </span>
-                  {hasRegisteredProfile && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      {userProfileItemCount} registrados
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  {hasRegisteredProfile
-                    ? `Según tu perfil registrado en PromoAR (${userInfo?.name || userInfo?.email})`
-                    : 'Usá tus tarjetas y bancos guardados en PromoAR'}
-                </p>
-              </div>
-              {selectionMode === 'profile' && (
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping absolute top-3 right-3" />
-              )}
-            </button>
-
-            <button
-              onClick={() => setSelectionMode('all')}
-              className={`p-4 rounded-2xl text-left transition-all border flex items-start gap-3.5 relative overflow-hidden ${
-                selectionMode === 'all'
-                  ? 'bg-gradient-to-br from-blue-950/50 via-slate-900 to-slate-900 border-blue-500/60 shadow-lg shadow-blue-500/10 ring-1 ring-blue-500/30'
-                  : 'bg-slate-900/50 border-slate-800/90 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
-              }`}
-            >
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 ${
-                  selectionMode === 'all'
-                    ? 'bg-blue-500 text-white font-black shadow-md shadow-blue-500/20'
-                    : 'bg-slate-800 text-slate-400'
-                }`}
-              >
-                🌐
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-black ${selectionMode === 'all' ? 'text-white' : 'text-slate-300'}`}>
-                    2. Ver todas las opciones
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                    4 niveles
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Bancos, billeteras, tarjetas de crédito/débito y beneficios
-                </p>
-              </div>
-              {selectionMode === 'all' && (
-                <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping absolute top-3 right-3" />
-              )}
-            </button>
-          </div>
-
-          {/* CONTENIDO OPCIÓN 1: MIS PRODUCTOS */}
-          {selectionMode === 'profile' && (
-            <div className="space-y-5 animate-fadeIn">
-              {hasRegisteredProfile && userProfileCatalog ? (
-                <div>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/20 mb-4 text-xs text-emerald-300">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">✨</span>
-                      <span>
-                        Simulando exclusivamente con tus{' '}
-                        <strong className="text-white font-bold">{userProfileItemCount} medios de pago</strong> guardados.
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={selectOnlyProfile}
-                        className="text-emerald-400 hover:text-white font-semibold underline"
-                      >
-                        Marcar todos mis productos
-                      </button>
-                      <Link
-                        href="/perfil"
-                        className="font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1 rounded-lg transition-colors shrink-0"
-                      >
-                        Editar mi perfil →
-                      </Link>
-                    </div>
-                  </div>
-
-                  {/* Bancos */}
-                  {userProfileCatalog.banks.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                          <span>🏛️</span> Tus Bancos ({userProfileCatalog.banks.length})
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {userProfileCatalog.banks.map(bank => {
-                          const isSelected = selectedMethods.includes(bank.id)
-                          return (
-                            <button
-                              key={bank.id}
-                              onClick={() => toggleMethod(bank.id)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
-                                isSelected
-                                  ? 'bg-white text-slate-950 border-white shadow-md shadow-white/10 scale-[1.02]'
-                                  : 'bg-slate-800/60 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
-                              }`}
-                            >
-                              <span>{bank.name}</span>
-                              {isSelected && <span className="text-emerald-600 font-black">✓</span>}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Billeteras */}
-                  {userProfileCatalog.wallets.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                          <span>📱</span> Tus Billeteras Virtuales ({userProfileCatalog.wallets.length})
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {userProfileCatalog.wallets.map(wallet => {
-                          const isSelected = selectedMethods.includes(wallet.id)
-                          return (
-                            <button
-                              key={wallet.id}
-                              onClick={() => toggleMethod(wallet.id)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
-                                isSelected
-                                  ? 'bg-emerald-400 text-slate-950 border-emerald-400 shadow-md shadow-emerald-400/10 scale-[1.02]'
-                                  : 'bg-slate-800/60 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
-                              }`}
-                            >
-                              <span>{wallet.name}</span>
-                              {isSelected && <span className="text-slate-950 font-black">✓</span>}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tarjetas */}
-                  {userProfileCatalog.cards.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                          <span>💳</span> Tus Tarjetas (Redes) ({userProfileCatalog.cards.length})
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {userProfileCatalog.cards.map(card => {
-                          const isSelected = selectedMethods.includes(card.id)
-                          return (
-                            <button
-                              key={card.id}
-                              onClick={() => toggleMethod(card.id)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
-                                isSelected
-                                  ? 'bg-blue-400 text-slate-950 border-blue-400 shadow-md shadow-blue-400/10 scale-[1.02]'
-                                  : 'bg-slate-800/60 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
-                              }`}
-                            >
-                              <span>{card.name}</span>
-                              {isSelected && <span className="text-slate-950 font-black">✓</span>}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Beneficios */}
-                  {userProfileCatalog.benefits.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
-                          <span>⭐</span> Tus Tarjetas de Beneficios ({userProfileCatalog.benefits.length})
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {userProfileCatalog.benefits.map(benefit => {
-                          const isSelected = selectedMethods.includes(benefit.id)
-                          return (
-                            <button
-                              key={benefit.id}
-                              onClick={() => toggleMethod(benefit.id)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
-                                isSelected
-                                  ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-md shadow-amber-400/20 scale-[1.02]'
-                                  : 'bg-amber-950/30 text-amber-300 border-amber-500/30 hover:bg-amber-950/60'
-                              }`}
-                            >
-                              <span>⭐ {benefit.name}</span>
-                              {isSelected && <span className="text-slate-950 font-black">✓</span>}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-850 to-[#142840]/60 border border-slate-800 text-center max-w-xl mx-auto">
-                  <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center text-2xl mx-auto mb-3">
-                    🛡️
-                  </div>
-                  <h3 className="text-base font-black text-white mb-2">
-                    Aún no tenés productos registrados en PromoAR
-                  </h3>
-                  <p className="text-xs md:text-sm text-slate-400 mb-5 leading-relaxed">
-                    Iniciá sesión o configurá tus bancos, tarjetas y beneficios en tu perfil para que el simulador reconozca automáticamente tus medios de pago reales.
-                  </p>
-                  <div className="flex flex-wrap items-center justify-center gap-3">
-                    <Link
-                      href="/login?callbackUrl=/ahorro_interactivo/farmacias"
-                      className="px-4 py-2 rounded-xl text-xs font-black bg-rose-500 hover:bg-rose-400 text-slate-950 transition-colors shadow-md shadow-rose-500/20"
-                    >
-                      Iniciar sesión
-                    </Link>
-                    <Link
-                      href="/perfil"
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
-                    >
-                      Configurar tarjetas
-                    </Link>
-                    <button
-                      onClick={() => setSelectionMode('all')}
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
-                    >
-                      Explorar todas las opciones →
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* CONTENIDO OPCIÓN 2: TODAS LAS OPCIONES (4 NIVELES) */}
-          {selectionMode === 'all' && (
-            <div className="space-y-6 animate-fadeIn">
-              {/* Nivel 1: Bancos */}
-              <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🏛️</span>
-                    <h3 className="text-sm font-black text-slate-200 uppercase tracking-wide">
-                      Nivel 1: Bancos ({fullCatalog.banks.length})
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <button
-                      onClick={() => selectAllInLevel(fullCatalog.banks)}
-                      className="text-slate-400 hover:text-white font-medium underline"
-                    >
-                      Marcar bancos
-                    </button>
-                    <span className="text-slate-600">|</span>
-                    <button
-                      onClick={() => deselectAllInLevel(fullCatalog.banks)}
-                      className="text-slate-400 hover:text-white font-medium underline"
-                    >
-                      Desmarcar
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <input
-                    type="text"
-                    placeholder="Buscar banco... (ej. Galicia, BNA, Santander, Córdoba, Macro)"
-                    value={bankSearchQuery}
-                    onChange={e => setBankSearchQuery(e.target.value)}
-                    className="w-full px-3.5 py-2 text-xs bg-slate-900 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {filteredBanks.map(bank => {
-                    const isSelected = selectedMethods.includes(bank.id)
-                    return (
-                      <button
-                        key={bank.id}
-                        onClick={() => toggleMethod(bank.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
-                          isSelected
-                            ? 'bg-white text-slate-950 border-white shadow-md shadow-white/10 scale-[1.02]'
-                            : 'bg-slate-800/50 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
-                        }`}
-                      >
-                        <span>{bank.name}</span>
-                        {isSelected && <span className="text-emerald-600 font-black">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {!bankSearchQuery && (
-                  <div className="mt-3 text-center">
-                    <button
-                      onClick={() => setShowAllBanks(prev => !prev)}
-                      className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
-                    >
-                      {showAllBanks
-                        ? '▲ Mostrar menos bancos'
-                        : `▼ Ver todos los bancos de Argentina (+${fullCatalog.banks.length - 12} más)`}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Nivel 2: Billeteras */}
-              <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80">
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">📱</span>
-                    <h3 className="text-sm font-black text-slate-200 uppercase tracking-wide">
-                      Nivel 2: Billeteras Virtuales ({fullCatalog.wallets.length})
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <button
-                      onClick={() => selectAllInLevel(fullCatalog.wallets)}
-                      className="text-slate-400 hover:text-white font-medium underline"
-                    >
-                      Marcar todas
-                    </button>
-                    <span className="text-slate-600">|</span>
-                    <button
-                      onClick={() => deselectAllInLevel(fullCatalog.wallets)}
-                      className="text-slate-400 hover:text-white font-medium underline"
-                    >
-                      Desmarcar
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {fullCatalog.wallets.map(wallet => {
-                    const isSelected = selectedMethods.includes(wallet.id)
-                    return (
-                      <button
-                        key={wallet.id}
-                        onClick={() => toggleMethod(wallet.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
-                          isSelected
-                            ? 'bg-emerald-400 text-slate-950 border-emerald-400 shadow-md shadow-emerald-400/20 scale-[1.02]'
-                            : 'bg-slate-800/50 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
-                        }`}
-                      >
-                        <span>{wallet.name}</span>
-                        {isSelected && <span className="text-slate-950 font-black">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Nivel 3: Tarjetas */}
-              <div className="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80">
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">💳</span>
-                    <h3 className="text-sm font-black text-slate-200 uppercase tracking-wide">
-                      Nivel 3: Tarjetas de Crédito / Débito (Redes)
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <button
-                      onClick={() => selectAllInLevel(fullCatalog.cards)}
-                      className="text-slate-400 hover:text-white font-medium underline"
-                    >
-                      Marcar todas
-                    </button>
-                    <span className="text-slate-600">|</span>
-                    <button
-                      onClick={() => deselectAllInLevel(fullCatalog.cards)}
-                      className="text-slate-400 hover:text-white font-medium underline"
-                    >
-                      Desmarcar
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {fullCatalog.cards.map(card => {
-                    const isSelected = selectedMethods.includes(card.id)
-                    return (
-                      <button
-                        key={card.id}
-                        onClick={() => toggleMethod(card.id)}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
-                          isSelected
-                            ? 'bg-blue-400 text-slate-950 border-blue-400 shadow-md shadow-blue-400/20 scale-[1.02]'
-                            : 'bg-slate-800/50 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
-                        }`}
-                      >
-                        <span>{card.name}</span>
-                        {isSelected && <span className="text-slate-950 font-black">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Nivel 4: Beneficios */}
-              <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/30">
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">⭐</span>
-                    <h3 className="text-sm font-black text-amber-300 uppercase tracking-wide">
-                      Nivel 4: Tarjetas de Beneficios y Clubes
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <button
-                      onClick={() => selectAllInLevel(fullCatalog.benefits)}
-                      className="text-amber-400 hover:text-amber-200 font-medium underline"
-                    >
-                      Marcar todos
-                    </button>
-                    <span className="text-slate-600">|</span>
-                    <button
-                      onClick={() => deselectAllInLevel(fullCatalog.benefits)}
-                      className="text-amber-400 hover:text-amber-200 font-medium underline"
-                    >
-                      Desmarcar
-                    </button>
-                  </div>
-                </div>
-                <p className="text-xs text-amber-200/70 mb-3">
-                  Incluye descuentos directos en Openfarma (Club La Nación y Clarín 365 hasta 15%), Farmaonline (10%) y Selma (10%).
-                </p>
-
-                <div className="flex flex-wrap gap-2">
-                  {fullCatalog.benefits.map(benefit => {
-                    const isSelected = selectedMethods.includes(benefit.id)
-                    return (
-                      <button
-                        key={benefit.id}
-                        onClick={() => toggleMethod(benefit.id)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 border ${
-                          isSelected
-                            ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-md shadow-amber-400/25 scale-[1.02]'
-                            : 'bg-amber-950/40 text-amber-200 border-amber-500/40 hover:bg-amber-900/50 hover:text-white'
-                        }`}
-                      >
-                        <span>⭐ {benefit.name}</span>
-                        {isSelected && <span className="text-slate-950 font-black">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* PASO 1: Selector unificado PromoAR con 4 niveles en Tabs (Opción A) */}
+        <SimulatorPaymentSelector
+          fullCatalog={fullCatalog}
+          userProfileCatalog={userProfileCatalog}
+          initialUserMethods={initialUserMethods}
+          userInfo={userInfo}
+          selectedMethods={selectedMethods}
+          onToggleMethod={toggleMethod}
+          onSelectAll={selectAll}
+          onClearAll={clearAll}
+          onSelectProfileOnly={selectOnlyProfile}
+          callbackUrl="/ahorro-interactivo/farmacias"
+        />
 
         {/* PASO 2: Gasto estimado y día de compra */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 md:p-6 backdrop-blur-sm flex flex-col justify-between">
+          <div className="bg-[#142840]/70 border border-[#26406F] rounded-2xl p-5 md:p-6 backdrop-blur-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
                   💊 Paso 2: Tu compra mensual en farmacia
                 </h2>
-                <span className="text-xl font-black text-rose-400">
+                <span className="text-xl font-black text-[#E8724F]">
                   ${monthlySpend.toLocaleString('es-AR')}
                 </span>
               </div>
@@ -1157,8 +646,8 @@ export default function FarmaciasSimulator({
                     onClick={() => setMonthlySpend(amount)}
                     className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all text-center ${
                       monthlySpend === amount
-                        ? 'bg-rose-500 text-white font-black shadow-sm'
-                        : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                        ? 'bg-[#D94F2B] text-white font-black shadow-sm'
+                        : 'bg-[#0A1428]/60 text-slate-400 hover:bg-[#1E3A5F] hover:text-slate-200 border border-[#26406F]/40'
                     }`}
                   >
                     ${amount / 1000}k
@@ -1173,7 +662,7 @@ export default function FarmaciasSimulator({
                 step={5000}
                 value={monthlySpend}
                 onChange={e => setMonthlySpend(Number(e.target.value))}
-                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                className="w-full h-2 bg-[#0A1428] rounded-lg appearance-none cursor-pointer accent-[#D94F2B]"
               />
               <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
                 <span>$10k</span>
@@ -1183,7 +672,7 @@ export default function FarmaciasSimulator({
             </div>
           </div>
 
-          <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 md:p-6 backdrop-blur-sm flex flex-col justify-between">
+          <div className="bg-[#142840]/70 border border-[#26406F] rounded-2xl p-5 md:p-6 backdrop-blur-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
@@ -1204,8 +693,8 @@ export default function FarmaciasSimulator({
                     onClick={() => setSelectedDay(day.id)}
                     className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
                       selectedDay === day.id
-                        ? 'bg-rose-500 text-white font-black shadow-sm'
-                        : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                        ? 'bg-[#D94F2B] text-white font-black shadow-sm'
+                        : 'bg-[#0A1428]/60 text-slate-400 hover:bg-[#1E3A5F] hover:text-slate-200 border border-[#26406F]/40'
                     }`}
                   >
                     {day.label}
@@ -1219,8 +708,8 @@ export default function FarmaciasSimulator({
                     onClick={() => setSelectedDay(day.id)}
                     className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
                       selectedDay === day.id
-                        ? 'bg-rose-500 text-white font-black shadow-sm'
-                        : 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                        ? 'bg-[#D94F2B] text-white font-black shadow-sm'
+                        : 'bg-[#0A1428]/60 text-slate-400 hover:bg-[#1E3A5F] hover:text-slate-200 border border-[#26406F]/40'
                     }`}
                   >
                     {day.label}

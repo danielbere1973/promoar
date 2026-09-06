@@ -54,7 +54,11 @@ export default function TerminosPage() {
           en los canales oficiales de la entidad o comercio antes de realizar una compra.
         </Section>
 
-        <Section title="4. Cuenta de usuario">
+        <Section title="4. Simuladores interactivos de ahorro y estimaciones">
+          Los cálculos de ahorro, porcentajes de descuento, reintegros estimados y topes exhibidos en los simuladores interactivos de combustible, supermercados, farmacias y cualquier otro rubro son de carácter <strong>estrictamente informativo, educativo y referencial</strong>. Constituyen proyecciones matemáticas estimadas según la información pública recopilada. PromoAR no emite pagos, no procesa transacciones ni garantiza que una entidad financiera o comercio aplique efectivamente el beneficio simulado, dado que la acreditación depende exclusivamente del cumplimiento de las bases y condiciones particulares dispuestas por cada emisor (incluyendo topes acumulados por cuenta o período, vigencia horaria, medios de cobro habilitados y sucursales adheridas).
+        </Section>
+
+        <Section title="5. Cuenta de usuario">
           Para acceder a funciones personalizadas (como el filtrado de promociones según
           tu perfil financiero o el guardado de favoritos), podés crear una cuenta con
           tu nombre, correo electrónico y contraseña. Sos responsable de mantener la
@@ -64,14 +68,14 @@ export default function TerminosPage() {
           tu homebanking.
         </Section>
 
-        <Section title="5. Perfil financiero">
+        <Section title="6. Perfil financiero">
           La información que cargues en tu perfil (por ejemplo, qué bancos, billeteras o
           tipos de tarjeta tenés) se utiliza exclusivamente para personalizar las
           promociones que se te muestran. No representa una vinculación real con esas
           entidades ni implica que PromoAR tenga acceso a tus cuentas o movimientos.
         </Section>
 
-        <Section title="6. Uso aceptable">
+        <Section title="7. Uso aceptable">
           Te comprometés a utilizar el Servicio de forma lícita y a no: (a) intentar
           acceder sin autorización a sistemas o datos de PromoAR; (b) extraer o
           reutilizar masivamente los contenidos del sitio (scraping) sin autorización;
@@ -79,14 +83,14 @@ export default function TerminosPage() {
           terceros.
         </Section>
 
-        <Section title="7. Propiedad intelectual">
+        <Section title="8. Propiedad intelectual">
           Las marcas, logos, nombre &quot;PromoAR&quot; y el diseño del sitio son propiedad de
           sus titulares y están protegidos por la legislación vigente. Los logos y marcas
           de bancos, billeteras y comercios pertenecen a sus respectivos dueños y se
           utilizan únicamente con fines informativos e identificatorios.
         </Section>
 
-        <Section title="8. Limitación de responsabilidad">
+        <Section title="9. Limitación de responsabilidad">
           El uso del Servicio es bajo tu propia responsabilidad. PromoAR no será
           responsable por pérdidas, daños o perjuicios derivados de: (a) cambios o
           cancelaciones de promociones por parte de terceros; (b) decisiones de compra
@@ -94,20 +98,20 @@ export default function TerminosPage() {
           Servicio.
         </Section>
 
-        <Section title="9. Modificaciones">
+        <Section title="10. Modificaciones">
           Podemos actualizar estos Términos y Condiciones en cualquier momento. Los
           cambios entrarán en vigencia desde su publicación en esta página. El uso
           continuado del Servicio implica la aceptación de la versión vigente.
         </Section>
 
-        <Section title="10. Ley aplicable y jurisdicción">
+        <Section title="11. Ley aplicable y jurisdicción">
           Estos Términos se rigen por las leyes de la República Argentina. Para
           cualquier controversia, las partes se someten a los tribunales ordinarios
           competentes de la Ciudad Autónoma de Buenos Aires, sin perjuicio de las normas
           de protección al consumidor (Ley 24.240) que pudieran corresponder.
         </Section>
 
-        <Section title="11. Contacto">
+        <Section title="12. Contacto">
           Ante cualquier duda sobre estos términos, podés escribirnos a{' '}
           <a href="mailto:contacto@promoar.com.ar" className="text-[#1E3A5F] font-semibold underline">
             contacto@promoar.com.ar
