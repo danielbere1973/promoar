@@ -337,7 +337,7 @@ export default function CombustibleSimulator({
   return (
     <div className="min-h-screen bg-[#0A1428] text-slate-100 flex flex-col justify-between">
       {/* Header oficial del simulador */}
-      <SimulatorHeader currentCategory="combustible" />
+      <SimulatorHeader active="combustible" />
 
       {/* Contenido Principal con layout 2 columnas en Desktop */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">

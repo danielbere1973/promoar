@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
 import SimulatorHeader from '@/app/components/SimulatorHeader'
-import SimulatorPaymentSelector from '@/app/components/SimulatorPaymentSelector'
+import TreeFilterSidebar from '@/app/components/TreeFilterSidebar'
+import { FourLevelsCatalog, CatalogEntity } from '@/app/components/SimulatorPaymentSelector'
 
 export type PharmacyBrand =
   | 'Farmacity'
@@ -38,22 +37,7 @@ export interface PharmacyPromoItem {
   logoUrl: string | null
 }
 
-export interface CatalogEntity {
-  id: string
-  slug: string
-  name: string
-  logoUrl?: string | null
-  type: 'bank' | 'wallet' | 'card' | 'benefit'
-  color?: string
-  popular?: boolean
-}
-
-export interface FourLevelsCatalog {
-  banks: CatalogEntity[]
-  wallets: CatalogEntity[]
-  cards: CatalogEntity[]
-  benefits: CatalogEntity[]
-}
+export { type CatalogEntity, type FourLevelsCatalog }
 
 export interface PharmacyResultItem {
   brand: PharmacyBrand
@@ -87,7 +71,7 @@ export interface PharmacyResultItem {
   } | null
 }
 
-interface Props {
+export interface FarmaciasSimulatorProps {
   initialPromos: PharmacyPromoItem[]
   fullCatalog: FourLevelsCatalog
   userProfileCatalog: FourLevelsCatalog | null
@@ -98,33 +82,7 @@ interface Props {
   } | null
 }
 
-const DAYS_OF_WEEK = [
-  { id: 'all', label: 'Toda la semana', shortLabel: 'Toda la semana' },
-  { id: 'today', label: 'Hoy', shortLabel: 'Hoy' },
-  { id: '2', label: 'Lunes', shortLabel: 'Lun', bit: 2 },
-  { id: '4', label: 'Martes', shortLabel: 'Mar', bit: 4 },
-  { id: '8', label: 'Miércoles', shortLabel: 'Mié', bit: 8 },
-  { id: '16', label: 'Jueves', shortLabel: 'Jue', bit: 16 },
-  { id: '32', label: 'Viernes', shortLabel: 'Vie', bit: 32 },
-  { id: '64', label: 'Sábado', shortLabel: 'Sáb', bit: 64 },
-  { id: '1', label: 'Domingo', shortLabel: 'Dom', bit: 1 },
-]
-
-function getTodayInfo(): { bit: number; name: string } {
-  const dayIndex = new Date().getDay()
-  const map = [
-    { bit: 1, name: 'Domingo' },
-    { bit: 2, name: 'Lunes' },
-    { bit: 4, name: 'Martes' },
-    { bit: 8, name: 'Miércoles' },
-    { bit: 16, name: 'Jueves' },
-    { bit: 32, name: 'Viernes' },
-    { bit: 64, name: 'Sábado' },
-  ]
-  return map[dayIndex] || { bit: 16, name: 'Jueves' }
-}
-
-const SPEND_PRESETS = [15000, 30000, 50000, 80000, 120000]
+export type Props = FarmaciasSimulatorProps
 
 const BRAND_CONFIG: Record<PharmacyBrand, {
   name: string
@@ -189,6 +147,20 @@ const BRAND_CONFIG: Record<PharmacyBrand, {
     badgeBg: 'bg-teal-600 text-white',
     tagline: 'Farmacias locales con MODO, Cuenta DNI y BNA',
   },
+}
+
+function getTodayInfo(): { bit: number; name: string } {
+  const dayIndex = new Date().getDay()
+  const map = [
+    { bit: 1, name: 'Domingo' },
+    { bit: 2, name: 'Lunes' },
+    { bit: 4, name: 'Martes' },
+    { bit: 8, name: 'Miércoles' },
+    { bit: 16, name: 'Jueves' },
+    { bit: 32, name: 'Viernes' },
+    { bit: 64, name: 'Sábado' },
+  ]
+  return map[dayIndex] || { bit: 16, name: 'Jueves' }
 }
 
 function matchesMethod(methodId: string, slug: string | null, name: string | null): boolean {
@@ -320,15 +292,15 @@ export default function FarmaciasSimulator({
   userProfileCatalog,
   initialUserMethods = [],
   userInfo = null,
-}: Props) {
-  const router = useRouter()
-  const { data: clientSession } = useSession()
-
-  const hasRegisteredProfile = !!(userProfileCatalog && initialUserMethods.length > 0)
-
-  const [selectionMode, setSelectionMode] = useState<'profile' | 'all'>(() => {
-    return hasRegisteredProfile ? 'profile' : 'all'
-  })
+}: FarmaciasSimulatorProps) {
+  const allInitial = useMemo(() => {
+    return [
+      ...fullCatalog.banks.map(b => b.id),
+      ...fullCatalog.wallets.map(w => w.id),
+      ...fullCatalog.cards.map(c => c.id),
+      ...fullCatalog.benefits.map(b => b.id),
+    ]
+  }, [fullCatalog])
 
   const [selectedMethods, setSelectedMethods] = useState<string[]>(() => {
     if (initialUserMethods.length > 0) {
@@ -337,14 +309,15 @@ export default function FarmaciasSimulator({
     return ['banco-nacion', 'modo', 'cuenta-dni', 'galicia', 'visa', 'clarin-365', 'club-la-nacion']
   })
 
-  const [bankSearchQuery, setBankSearchQuery] = useState('')
-  const [showAllBanks, setShowAllBanks] = useState(false)
-
   const [selectedDay, setSelectedDay] = useState<string>('all')
   const [monthlySpend, setMonthlySpend] = useState<number>(30000)
+  const [todayInfo, setTodayInfo] = useState({ bit: 16, name: 'Jueves' })
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState<boolean>(false)
   const [copiedShare, setCopiedShare] = useState(false)
 
-  const todayInfo = useMemo(() => getTodayInfo(), [])
+  useEffect(() => {
+    setTodayInfo(getTodayInfo())
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -358,87 +331,46 @@ export default function FarmaciasSimulator({
       const cards = cardsParam.split(',').filter(Boolean)
       if (cards.length > 0) {
         setSelectedMethods(cards)
-        setSelectionMode('all')
       }
     } else if (initialUserMethods.length > 0) {
       setSelectedMethods(initialUserMethods)
-      setSelectionMode('profile')
     }
 
     if (spendParam && !isNaN(Number(spendParam))) {
       setMonthlySpend(Number(spendParam))
     }
-    if (dayParam && DAYS_OF_WEEK.some(d => d.id === dayParam)) {
+    if (dayParam) {
       setSelectedDay(dayParam)
     }
   }, [initialUserMethods])
 
-  const toggleMethod = (id: string) => {
-    setSelectedMethods(prev => {
-      if (prev.includes(id)) {
-        return prev.length === 1 ? prev : prev.filter(m => m !== id)
-      }
-      return [...prev, id]
-    })
+  const handleToggleMethod = (id: string) => {
+    setSelectedMethods(prev =>
+      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
+    )
   }
 
-  const selectAllInLevel = (items: CatalogEntity[]) => {
-    const ids = items.map(i => i.id)
-    setSelectedMethods(prev => Array.from(new Set([...prev, ...ids])))
-  }
+  const handleSelectAll = () => setSelectedMethods(allInitial)
+  const handleClearAll = () => setSelectedMethods([])
 
-  const deselectAllInLevel = (items: CatalogEntity[]) => {
-    const ids = new Set(items.map(i => i.id))
-    setSelectedMethods(prev => {
-      const filtered = prev.filter(m => !ids.has(m))
-      return filtered.length === 0 ? prev : filtered
-    })
-  }
-
-  const selectAll = () => {
-    const allIds = [
-      ...fullCatalog.banks.map(b => b.id),
-      ...fullCatalog.wallets.map(w => w.id),
-      ...fullCatalog.cards.map(c => c.id),
-      ...fullCatalog.benefits.map(b => b.id),
-    ]
-    setSelectedMethods(Array.from(new Set(allIds)))
-  }
-
-  const selectOnlyProfile = () => {
+  const handleSelectProfileOnly = () => {
     if (initialUserMethods.length > 0) {
       setSelectedMethods(initialUserMethods)
-      setSelectionMode('profile')
     }
   }
 
-  const clearAll = () => {
-    setSelectedMethods([])
+  const handleShare = () => {
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    url.searchParams.set('cards', selectedMethods.join(','))
+    url.searchParams.set('gasto', String(monthlySpend))
+    url.searchParams.set('dia', selectedDay)
+    navigator.clipboard.writeText(url.toString())
+    setCopiedShare(true)
+    setTimeout(() => setCopiedShare(false), 2500)
   }
 
-  const resetRecommended = () => {
-    setSelectedMethods(['banco-nacion', 'modo', 'cuenta-dni', 'galicia', 'visa', 'clarin-365', 'club-la-nacion'])
-  }
-
-  const filteredBanks = useMemo(() => {
-    if (!bankSearchQuery.trim()) {
-      return showAllBanks ? fullCatalog.banks : fullCatalog.banks.slice(0, 12)
-    }
-    const q = bankSearchQuery.toLowerCase().trim()
-    return fullCatalog.banks.filter(b => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q))
-  }, [fullCatalog.banks, bankSearchQuery, showAllBanks])
-
-  const userProfileItemCount = useMemo(() => {
-    if (!userProfileCatalog) return 0
-    return (
-      userProfileCatalog.banks.length +
-      userProfileCatalog.wallets.length +
-      userProfileCatalog.cards.length +
-      userProfileCatalog.benefits.length
-    )
-  }, [userProfileCatalog])
-
-  const resultsByBrand = useMemo<PharmacyResultItem[]>(() => {
+  const results: PharmacyResultItem[] = useMemo(() => {
     const brands: PharmacyBrand[] = [
       'Farmacity',
       'Farmaplus',
@@ -450,7 +382,6 @@ export default function FarmaciasSimulator({
 
     return brands.map(brand => {
       const brandPromos = initialPromos.filter(p => p.brand === brand)
-
       const matchedPromos = brandPromos.filter(p => promoMatchesRequirements(p, selectedMethods))
 
       const dayFilteredPromos = matchedPromos.filter(p => {
@@ -536,525 +467,320 @@ export default function FarmaciasSimulator({
         matchedPromo: bestPromo,
         alternateDayPromo,
         savings: maxSavings,
-        hasMatch: bestPromo !== null,
-        hasAlternateDayMatch: alternateDayPromo !== null,
+        hasMatch: !!bestPromo,
+        hasAlternateDayMatch: !!alternateDayPromo,
         topGeneralPromo,
         totalPromosCount: brandPromos.length,
         marketBestPromo,
         opportunityZero,
         opportunityMore,
       }
-    }).sort((a, b) => {
-      if (b.savings !== a.savings) return b.savings - a.savings
-      if (a.hasMatch && !b.hasMatch) return -1
-      if (!a.hasMatch && b.hasMatch) return 1
-      if (a.hasAlternateDayMatch && !b.hasAlternateDayMatch) return -1
-      if (!a.hasAlternateDayMatch && b.hasAlternateDayMatch) return 1
-      return b.totalPromosCount - a.totalPromosCount
-    })
+    }).sort((a, b) => b.savings - a.savings)
   }, [initialPromos, selectedMethods, selectedDay, monthlySpend, todayInfo])
 
-  const topWinner = resultsByBrand[0]
-  const secondPlace = resultsByBrand[1]
-  const thirdPlace = resultsByBrand[2]
-
-  const shareUrl = () => {
-    if (typeof window === 'undefined') return ''
-    const url = new URL(window.location.origin + window.location.pathname)
-    url.searchParams.set('cards', selectedMethods.join(','))
-    url.searchParams.set('gasto', monthlySpend.toString())
-    url.searchParams.set('dia', selectedDay)
-    return url.toString()
-  }
-
-  const handleShare = async () => {
-    const url = shareUrl()
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Simulador de Farmacias PromoAR: Dónde te conviene comprar`,
-          text: `Con mis tarjetas puedo ahorrar hasta $${topWinner.savings.toLocaleString('es-AR')} en ${topWinner.brand} este mes. ¡Calculá tu compra en PromoAR!`,
-          url,
-        })
-      } catch {
-        // fallback
-      }
-    } else {
-      navigator.clipboard.writeText(url)
-      setCopiedShare(true)
-      setTimeout(() => setCopiedShare(false), 2500)
-    }
-  }
+  const topWinner = results[0]
+  const secondBrand = results[1]
+  const hasAnyMatch = results.some(r => r.hasMatch)
+  const monthlySavingsPotential = topWinner?.savings || 0
 
   return (
-    <div className="min-h-screen bg-[#0A1428] text-slate-100 selection:bg-[#D94F2B]/30 pb-20">
+    <div className="min-h-screen bg-[#0A1428] text-slate-100 flex flex-col justify-between">
+      {/* Header oficial del simulador */}
       <SimulatorHeader active="farmacias" />
 
-      <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
-        {/* Hero Header */}
-        <div className="text-center max-w-3xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#D94F2B]/15 border border-[#D94F2B]/30 text-[#E8724F] text-xs font-bold mb-4 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-[#E8724F] animate-pulse" />
-            SIMULADOR INTELIGENTE DE FARMACIAS
-          </div>
-          <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white mb-4 leading-tight">
-            ¿En qué farmacia te conviene <br className="hidden md:inline" />
-            <span className="bg-gradient-to-r from-[#8AADD4] via-white to-[#E8724F] bg-clip-text text-transparent">
-              comprar este mes?
+      {/* Contenido Principal con layout 2 columnas en Desktop */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+        {/* Banner resumen en Mobile */}
+        <div className="lg:hidden mb-4 p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between sticky top-16 z-20 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Filtros:</span>
+            <span className="text-xs font-semibold text-slate-200">
+              {selectedMethods.length === allInitial.length ? 'Todos activos' : `${selectedMethods.length} seleccionados`}
             </span>
-          </h1>
-          <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-            Seleccioná tus bancos, tarjetas y beneficios. Calculamos en tiempo real tu mayor ahorro en{' '}
-            <span className="text-slate-200 font-semibold">Farmacity, Farmaplus, OpenFarma, Selma, Farmaonline y farmacias de barrio</span> con reintegros actualizados.
-          </p>
+          </div>
+          <button
+            onClick={() => setMobileDrawerOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold hover:bg-sky-500/30 transition-colors flex items-center gap-1.5"
+          >
+            <span>Filtros</span>
+            <span className="text-[10px] bg-sky-500/30 px-1 rounded-full">{selectedMethods.length}</span>
+          </button>
         </div>
 
-        {/* PASO 1: Selector unificado PromoAR con 4 niveles en Tabs (Opción A) */}
-        <SimulatorPaymentSelector
-          fullCatalog={fullCatalog}
-          userProfileCatalog={userProfileCatalog}
-          initialUserMethods={initialUserMethods}
-          userInfo={userInfo}
-          selectedMethods={selectedMethods}
-          onToggleMethod={toggleMethod}
-          onSelectAll={selectAll}
-          onClearAll={clearAll}
-          onSelectProfileOnly={selectOnlyProfile}
-          callbackUrl="/ahorro-interactivo/farmacias"
-        />
-
-        {/* PASO 2: Gasto estimado y día de compra */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-[#142840]/70 border border-[#26406F] rounded-2xl p-5 md:p-6 backdrop-blur-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                  💊 Paso 2: Tu compra mensual en farmacia
-                </h2>
-                <span className="text-xl font-black text-[#E8724F]">
-                  ${monthlySpend.toLocaleString('es-AR')}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mb-4">
-                Medicamentos, cuidado personal, dermocosmética y perfumería
-              </p>
-
-              <div className="grid grid-cols-5 gap-1.5 mb-4">
-                {SPEND_PRESETS.map(amount => (
-                  <button
-                    key={amount}
-                    onClick={() => setMonthlySpend(amount)}
-                    className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all text-center ${
-                      monthlySpend === amount
-                        ? 'bg-[#D94F2B] text-white font-black shadow-sm'
-                        : 'bg-[#0A1428]/60 text-slate-400 hover:bg-[#1E3A5F] hover:text-slate-200 border border-[#26406F]/40'
-                    }`}
-                  >
-                    ${amount / 1000}k
-                  </button>
-                ))}
-              </div>
-
-              <input
-                type="range"
-                min={10000}
-                max={150000}
-                step={5000}
-                value={monthlySpend}
-                onChange={e => setMonthlySpend(Number(e.target.value))}
-                className="w-full h-2 bg-[#0A1428] rounded-lg appearance-none cursor-pointer accent-[#D94F2B]"
-              />
-              <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
-                <span>$10k</span>
-                <span>$75k</span>
-                <span>$150k</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-[#142840]/70 border border-[#26406F] rounded-2xl p-5 md:p-6 backdrop-blur-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                  📅 ¿Qué día vas a la farmacia?
-                </h2>
-                <span className="text-xs font-bold text-slate-400">
-                  {selectedDay === 'today' ? `Hoy (${todayInfo.name})` : DAYS_OF_WEEK.find(d => d.id === selectedDay)?.label}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mb-4">
-                Los bancos concentran sus mejores reintegros en días específicos
-              </p>
-
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-                {DAYS_OF_WEEK.slice(0, 5).map(day => (
-                  <button
-                    key={day.id}
-                    onClick={() => setSelectedDay(day.id)}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
-                      selectedDay === day.id
-                        ? 'bg-[#D94F2B] text-white font-black shadow-sm'
-                        : 'bg-[#0A1428]/60 text-slate-400 hover:bg-[#1E3A5F] hover:text-slate-200 border border-[#26406F]/40'
-                    }`}
-                  >
-                    {day.label}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-4 gap-1.5 mt-1.5">
-                {DAYS_OF_WEEK.slice(5).map(day => (
-                  <button
-                    key={day.id}
-                    onClick={() => setSelectedDay(day.id)}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
-                      selectedDay === day.id
-                        ? 'bg-[#D94F2B] text-white font-black shadow-sm'
-                        : 'bg-[#0A1428]/60 text-slate-400 hover:bg-[#1E3A5F] hover:text-slate-200 border border-[#26406F]/40'
-                    }`}
-                  >
-                    {day.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* PODIO DE RESULTADOS */}
-        <div className="mb-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
-                Veredicto en vivo
-              </span>
-              <h2 className="text-2xl md:text-3xl font-black text-white mt-1">
-                El podio de farmacias para vos
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleShare}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#142840] hover:bg-[#1E3A5F] border border-[#26406F] text-slate-200 flex items-center gap-2 transition-all shadow-sm"
-              >
-                <span>🔗</span>
-                <span>{copiedShare ? '¡Enlace copiado!' : 'Compartir cálculo'}</span>
-              </button>
-            </div>
-          </div>
-
-          {topWinner && (
+        {/* Modal Drawer en Mobile */}
+        {mobileDrawerOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden flex">
             <div
-              className={`relative overflow-hidden rounded-3xl border ${topWinner.config.borderClass} ${topWinner.config.glowClass} bg-gradient-to-br ${topWinner.config.bgGradient} p-6 md:p-8 mb-6 transition-all`}
-            >
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-                <div>
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 flex items-center gap-1">
-                      <span>🏆</span> Puesto 1: Mayor ahorro en farmacia
-                    </span>
-                    <span className="text-xs text-slate-400 italic">
-                      "{topWinner.config.tagline}"
-                    </span>
-                  </div>
-
-                  <h3 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-                    {topWinner.brand}
-                  </h3>
-
-                  {topWinner.hasMatch && topWinner.matchedPromo ? (
-                    <p className="text-sm md:text-base text-slate-300 mt-2 max-w-xl">
-                      Ahorrás con{' '}
-                      <span className="text-white font-bold underline decoration-rose-400 underline-offset-4">
-                        {topWinner.matchedPromo.title}
-                      </span>{' '}
-                      ({topWinner.matchedPromo.discountPct}% OFF
-                      {topWinner.matchedPromo.capAmount ? `, tope $${topWinner.matchedPromo.capAmount.toLocaleString('es-AR')}` : ''})
-                    </p>
-                  ) : topWinner.hasAlternateDayMatch && topWinner.alternateDayPromo ? (
-                    <p className="text-sm text-amber-300 mt-2">
-                      ⚠️ No hay promo activa hoy, pero los{' '}
-                      <strong>{topWinner.alternateDayPromo.validDays.join(', ')}</strong> ahorrás hasta{' '}
-                      <strong>${topWinner.savings.toLocaleString('es-AR')}</strong> con{' '}
-                      {topWinner.alternateDayPromo.title}.
-                    </p>
-                  ) : (
-                    <p className="text-sm text-slate-400 mt-2">
-                      Sin promociones coincidentes para las tarjetas marcadas.
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex md:flex-col items-baseline md:items-end justify-between border-t md:border-t-0 border-slate-800/80 pt-4 md:pt-0">
-                  <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-                    Ahorro estimado
-                  </span>
-                  <div className="text-3xl md:text-5xl font-black text-rose-400 drop-shadow-sm">
-                    ${topWinner.savings.toLocaleString('es-AR')}
-                  </div>
-                  {topWinner.savings > 0 && (
-                    <span className="text-[11px] text-slate-400 mt-1 font-mono">
-                      Pagás ${Math.max(0, monthlySpend - topWinner.savings).toLocaleString('es-AR')}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {topWinner.opportunityMore && (
-                <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 px-3.5 py-2 rounded-xl border border-amber-500/20">
-                  <span className="text-base shrink-0">💡</span>
-                  <span>
-                    <strong>Tip de ahorro extra:</strong> Si pagaras con{' '}
-                    <strong className="text-white">{topWinner.opportunityMore.entityLabel}</strong>{' '}
-                    ahorrarías <strong>+${topWinner.opportunityMore.diff.toLocaleString('es-AR')} más</strong> en {topWinner.brand}.
-                  </span>
-                </div>
-              )}
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => setMobileDrawerOpen(false)}
+            />
+            <div className="relative ml-auto w-full max-w-xs h-full bg-slate-900 z-10 shadow-2xl flex flex-col">
+              <TreeFilterSidebar
+                fullCatalog={fullCatalog}
+                userProfileCatalog={userProfileCatalog}
+                userInfo={userInfo}
+                selectedMethods={selectedMethods}
+                onToggleMethod={handleToggleMethod}
+                onSelectAll={handleSelectAll}
+                onClearAll={handleClearAll}
+                onSelectProfileOnly={handleSelectProfileOnly}
+                selectedDay={selectedDay}
+                onSelectDay={setSelectedDay}
+                monthlySpend={monthlySpend}
+                onChangeSpend={setMonthlySpend}
+                todayInfo={todayInfo}
+                callbackUrl="/ahorro-interactivo/farmacias"
+                isMobileDrawer={true}
+                onCloseMobile={() => setMobileDrawerOpen(false)}
+              />
             </div>
-          )}
+          </div>
+        )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-            {secondPlace && (
-              <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-1">
-                    <span>🥈</span> Puesto 2
-                  </span>
-                  <h4 className="text-lg font-black text-white">{secondPlace.brand}</h4>
-                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
-                    {secondPlace.matchedPromo?.title || 'Sin promo para tus tarjetas seleccionadas'}
+        {/* Layout 2 Columnas Desktop */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* COLUMNA IZQUIERDA: Árbol de Filtros */}
+          <aside className="hidden lg:block w-72 xl:w-80 shrink-0">
+            <TreeFilterSidebar
+              fullCatalog={fullCatalog}
+              userProfileCatalog={userProfileCatalog}
+              userInfo={userInfo}
+              selectedMethods={selectedMethods}
+              onToggleMethod={handleToggleMethod}
+              onSelectAll={handleSelectAll}
+              onClearAll={handleClearAll}
+              onSelectProfileOnly={handleSelectProfileOnly}
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
+              monthlySpend={monthlySpend}
+              onChangeSpend={setMonthlySpend}
+              todayInfo={todayInfo}
+              callbackUrl="/ahorro-interactivo/farmacias"
+            />
+          </aside>
+
+          {/* COLUMNA DERECHA: Resultados del Simulador */}
+          <main className="flex-1 min-w-0 w-full space-y-4">
+            {/* Banner de Ganador */}
+            {hasAnyMatch && topWinner && monthlySavingsPotential > 0 ? (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-slate-900/40 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🏆</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                      Mejor opción para vos
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-200">
+                    Comprando en <strong className="text-white font-bold">{topWinner.config.name}</strong> ahorrás hasta{' '}
+                    <strong className="text-emerald-400 font-mono text-base">
+                      ${monthlySavingsPotential.toLocaleString('es-AR')}
+                    </strong>{' '}
+                    este mes.
                   </p>
+                  {secondBrand && secondBrand.savings > 0 && (
+                    <p className="text-xs text-slate-400">
+                      ${(monthlySavingsPotential - secondBrand.savings).toLocaleString('es-AR')} más que en {secondBrand.config.name}.
+                    </p>
+                  )}
                 </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xl font-black text-rose-400">
-                    ${secondPlace.savings.toLocaleString('es-AR')}
-                  </span>
-                  <div className="text-[10px] text-slate-500 font-mono">ahorro</div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <button
+                    onClick={handleShare}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  >
+                    <span>🔗</span>
+                    <span>{copiedShare ? '¡Copiado!' : 'Compartir'}</span>
+                  </button>
+                  {topWinner.matchedPromo && (
+                    <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-semibold">
+                      {topWinner.matchedPromo.discountPct}% OFF
+                    </span>
+                  )}
                 </div>
               </div>
-            )}
+            ) : null}
 
-            {thirdPlace && (
-              <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-1">
-                    <span>🥉</span> Puesto 3
-                  </span>
-                  <h4 className="text-lg font-black text-white">{thirdPlace.brand}</h4>
-                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
-                    {thirdPlace.matchedPromo?.title || 'Sin promo para tus tarjetas seleccionadas'}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xl font-black text-rose-400">
-                    ${thirdPlace.savings.toLocaleString('es-AR')}
-                  </span>
-                  <div className="text-[10px] text-slate-500 font-mono">ahorro</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* DETALLE POR CADENA DE FARMACIAS */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
-              <span>🏷️</span> Detalle por cadena de farmacias
-            </h2>
-            <span className="text-xs text-slate-500 font-semibold">
-              Ordenado por mayor ahorro
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            {resultsByBrand.map((item, index) => {
-              const hasPositiveSavings = item.savings > 0
-              const finalPrice = Math.max(0, monthlySpend - item.savings)
-
-              return (
-                <div
-                  key={item.brand}
-                  className={`p-5 md:p-6 rounded-2xl border transition-all ${
-                    hasPositiveSavings
-                      ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700 shadow-sm'
-                      : 'bg-slate-950/40 border-slate-900 text-slate-500'
-                  }`}
-                >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                      <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm text-white"
-                        style={{ backgroundColor: item.config.color }}
-                      >
-                        #{index + 1}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <h3 className="text-lg font-black text-white">{item.brand}</h3>
-                          <span className="text-xs text-slate-400 italic">
-                            • {item.config.tagline}
-                          </span>
-                          {item.hasMatch && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                              Promo activa
+            {/* Grid de Farmacias */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {results.map(item => {
+                const isWinner = hasAnyMatch && topWinner?.brand === item.brand && item.savings > 0
+                return (
+                  <div
+                    key={item.brand}
+                    className={`rounded-2xl p-4 transition-all flex flex-col justify-between border ${
+                      isWinner
+                        ? `${item.config.borderClass} ${item.config.glowClass} bg-gradient-to-b ${item.config.bgGradient}`
+                        : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      {/* Cabecera de marca */}
+                      <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800/80">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.config.color }}
+                          />
+                          <div>
+                            <h3 className="font-bold text-sm text-white">
+                              {item.config.name}
+                            </h3>
+                            <span className="text-[10px] text-slate-400 italic">
+                              "{item.config.tagline}"
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {isWinner && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                              Mejor Opción
                             </span>
                           )}
+                          <span className="text-[11px] text-slate-400">
+                            {item.totalPromosCount} promos
+                          </span>
                         </div>
+                      </div>
 
-                        {item.hasMatch && item.matchedPromo ? (
-                          <div className="mt-1">
-                            <p className="text-xs md:text-sm text-slate-300 font-medium">
-                              {item.matchedPromo.title}
-                            </p>
-                            <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1 flex-wrap">
-                              <span className="text-rose-400 font-bold">
-                                {item.matchedPromo.discountPct}% OFF
-                              </span>
-                              {item.matchedPromo.capAmount && (
-                                <span>Tope: ${item.matchedPromo.capAmount.toLocaleString('es-AR')}</span>
-                              )}
-                              <span>• Días: {item.matchedPromo.validDays.join(', ')}</span>
+                      {/* Estado: match directo vs sin match */}
+                      {item.matchedPromo ? (
+                        <div className="space-y-2.5">
+                          <div className="flex items-baseline justify-between">
+                            <div>
+                              <div className="text-2xl font-black font-mono text-emerald-400">
+                                ${item.savings.toLocaleString('es-AR')}
+                              </div>
+                              <span className="text-[11px] text-slate-400">Ahorro mensual estimado</span>
                             </div>
-                          </div>
-                        ) : item.hasAlternateDayMatch && item.alternateDayPromo ? (
-                          <div className="mt-1 text-xs text-amber-300">
-                            <span>
-                              Sin promo hoy. Pero los{' '}
-                              <strong>{item.alternateDayPromo.validDays.join(', ')}</strong> ahorrás hasta{' '}
-                              <strong>${item.savings.toLocaleString('es-AR')}</strong> con{' '}
-                              {item.alternateDayPromo.title}.
+                            <span className="text-sm font-bold px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              {item.matchedPromo.discountPct}% OFF
                             </span>
                           </div>
-                        ) : (
-                          <div className="mt-1 text-xs text-slate-500">
-                            {item.topGeneralPromo ? (
-                              <span>
-                                Mejor promo de la cadena:{' '}
-                                <strong className="text-slate-400">{item.topGeneralPromo.title}</strong>{' '}
-                                (no coincide con tus tarjetas seleccionadas).
-                              </span>
-                            ) : (
-                              <span>Sin promociones bancarias registradas en este período.</span>
+
+                          <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/80 space-y-1">
+                            <p className="text-xs font-semibold text-slate-200 line-clamp-1">
+                              {item.matchedPromo.title}
+                            </p>
+                            {item.matchedPromo.capAmount && (
+                              <p className="text-[11px] text-slate-400">
+                                Tope: ${item.matchedPromo.capAmount.toLocaleString('es-AR')} por mes
+                              </p>
                             )}
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {item.matchedPromo.requirements.map((req, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300"
+                                >
+                                  {req.bankName || req.walletName || req.cardNetworkName}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex md:flex-col items-baseline md:items-end justify-between border-t md:border-t-0 border-slate-800 pt-3 md:pt-0 shrink-0">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block md:text-right">
-                          Ahorro real
-                        </span>
-                        <div
-                          className={`text-2xl font-black ${
-                            hasPositiveSavings ? 'text-rose-400' : 'text-slate-600'
-                          }`}
-                        >
-                          ${item.savings.toLocaleString('es-AR')}
                         </div>
-                      </div>
-
-                      {hasPositiveSavings && (
-                        <div className="text-xs text-slate-400 font-mono text-right mt-0.5">
-                          Final: ${finalPrice.toLocaleString('es-AR')}
+                      ) : item.alternateDayPromo ? (
+                        <div className="space-y-2">
+                          <div className="p-2.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-300">
+                            <div className="font-semibold flex items-center gap-1.5 mb-1">
+                              <span>📅</span>
+                              <span>Disponible otro día de la semana</span>
+                            </div>
+                            <p className="text-slate-300 text-[11px] leading-relaxed">
+                              Tenés promo del {item.alternateDayPromo.discountPct}% ({item.alternateDayPromo.title}) con tus tarjetas los días <strong>{item.alternateDayPromo.validDays.join(', ')}</strong>.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800 text-center text-xs text-slate-400">
+                            <p>No tenés promos activas con los filtros actuales para {item.config.name}.</p>
+                          </div>
                         </div>
                       )}
                     </div>
+
+                    {/* Oportunidad de ahorro extra si existe */}
+                    {item.opportunityMore && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+                        <span className="truncate">
+                          💡 Con <strong className="text-slate-300">{item.opportunityMore.entityLabel}</strong>:{' '}
+                          <span className="text-sky-400 font-semibold">+${item.opportunityMore.diff.toLocaleString('es-AR')} más</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
+                )
+              })}
+            </div>
 
-                  {item.opportunityZero && (
-                    <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center gap-2 text-xs text-amber-300/90 bg-amber-500/5 px-3 py-2 rounded-xl border border-amber-500/15">
-                      <span className="text-base shrink-0">💡</span>
-                      <span>
-                        <strong>Ahorro potencial:</strong> Con{' '}
-                        <strong className="text-white">{item.opportunityZero.entityLabel}</strong> podrías
-                        ahorrar hasta{' '}
-                        <strong className="text-rose-400">
-                          ${item.opportunityZero.savings.toLocaleString('es-AR')}
-                        </strong>{' '}
-                        en {item.brand}.
-                      </span>
-                    </div>
-                  )}
-
-                  {item.opportunityMore && (
-                    <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center gap-2 text-xs text-sky-300/90 bg-sky-500/5 px-3 py-2 rounded-xl border border-sky-500/15">
-                      <span className="text-base shrink-0">✨</span>
-                      <span>
-                        <strong>Tip para ahorrar más:</strong> Si pagaras con{' '}
-                        <strong className="text-white">{item.opportunityMore.entityLabel}</strong> tu ahorro
-                        subiría a{' '}
-                        <strong className="text-rose-400">
-                          ${item.opportunityMore.savings.toLocaleString('es-AR')}
-                        </strong>{' '}
-                        (+${item.opportunityMore.diff.toLocaleString('es-AR')} extra).
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Aviso Legal y Descargo de Responsabilidad */}
-        <div className="p-6 md:p-7 rounded-2xl bg-slate-900/60 border border-slate-800/90 text-xs text-slate-400 leading-relaxed space-y-3 mb-10">
-          <div className="flex items-center gap-2 text-slate-200 font-bold uppercase tracking-wider text-[11px]">
-            <span className="text-amber-400 text-sm">⚖️</span>
-            <span>Términos, condiciones y descargo de responsabilidad</span>
-          </div>
-          <p>
-            Los cálculos, porcentajes de descuento, reintegros estimados y topes exhibidos en este simulador son de carácter <strong className="text-slate-300">estrictamente informativo y referencial</strong>. La información final, oficial y vinculante respecto de vigencias, días habilitados, topes de reintegro por cuenta/transacción, medios de pago participantes y sucursales adheridas se encuentra exclusivamente en las <strong className="text-slate-300">bases y condiciones publicadas por cada entidad bancaria, billetera virtual, tarjeta de beneficios o cadena farmacéutica (Farmacity, Farmaplus, Openfarma, Selma, etc.)</strong>.
-          </p>
-          <p>
-            Cada entidad y farmacia se reserva el derecho de modificar, suspender o dar de baja sus promociones sin previo aviso. Recomendamos a los usuarios <strong className="text-slate-300">leer atentamente las exclusiones específicas de cada promoción</strong> antes de efectuar la compra (tales como medicamentos con receta médica, productos oncológicos o de alto costo, leches maternizadas, perfumería importada o compras mediante obras sociales/prepagas donde el descuento bancario no sea acumulable).
-          </p>
-          <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-800/70">
-            PromoAR es una plataforma independiente de agregación y difusión de beneficios. PromoAR no emite instrumentos de pago, no procesa transacciones monetarias ni forma parte de la relación contractual entre el consumidor, la entidad financiera y la farmacia, quedando expresamente desligada de cualquier responsabilidad civil, comercial o de cualquier otra índole por divergencias en los montos acreditados, rechazos de pago, demoras en las devoluciones o modificaciones comerciales unilaterales dispuestas por los emisores.
-          </p>
+            {/* Aviso Legal y Descargo de Responsabilidad Condensado */}
+            <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/60 text-[11px] text-slate-400 leading-snug mt-6 flex items-center gap-2">
+              <span className="text-xs shrink-0">⚖️</span>
+              <p>
+                Estimaciones y cálculos de carácter informativo, no vinculantes y sujetos a las condiciones de cada entidad. Consultá nuestros{' '}
+                <Link href="/terminos" className="text-sky-400 hover:text-sky-300 font-medium underline underline-offset-2">
+                  Términos y Condiciones
+                </Link>.
+              </p>
+            </div>
+          </main>
         </div>
       </div>
 
       {/* Footer oficial con la estructura de PromoAR */}
-      <footer className="w-full bg-[#060D1A] border-t border-slate-800/80 text-slate-400 py-12 px-4 mt-8">
-        <div className="max-w-5xl mx-auto">
+      <footer className="w-full bg-[#060D1A] border-t border-slate-800/80 text-slate-400 py-12 px-4 mt-16">
+        <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
             {/* Columna 1: Marca y Redes */}
             <div className="col-span-2 sm:col-span-1">
-              <Link href="/" className="inline-block mb-3">
-                <span className="text-xl font-black text-white tracking-tight">
-                  Promo<span className="text-[#D94F2B]">AR</span>
-                </span>
+              <Link href="/" className="inline-block mb-3.5 group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/promoar_logo_clean.png"
+                  alt="PromoAR"
+                  className="h-8 sm:h-9 w-auto object-contain block transition-transform group-hover:scale-105"
+                />
               </Link>
               <p className="text-xs text-slate-400 leading-relaxed mb-4">
                 El agregador de promociones bancarias y descuentos más completo de Argentina.
               </p>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <a
                   href="https://www.instagram.com/promoar.com.ar"
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="Instagram"
+                  aria-label="Instagram @promoar.com.ar"
+                  title="Instagram @promoar.com.ar"
+                  className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-pink-400 hover:bg-slate-700 transition-colors"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4.5 h-4.5">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                  </svg>
+                </a>
+                <a
+                  href="https://x.com/promoarok"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="X @promoarok"
+                  title="X @promoarok"
                   className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                   </svg>
                 </a>
                 <a
                   href="https://wa.me/541173691613"
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="WhatsApp"
-                  className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+                  aria-label="WhatsApp PromoAR"
+                  title="WhatsApp PromoAR"
+                  className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
                 >
-                  <span className="text-sm">💬</span>
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24M8.53 7.33c-.16 0-.42.06-.64.3-.22.24-.85.83-.85 2.02s.87 2.34.99 2.5c.12.16 1.7 2.6 4.12 3.65.58.25 1.02.4 1.38.52.58.18 1.11.16 1.53.1.47-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.47-.29-.25-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.55.12-.16.24-.63.79-.77.95-.14.16-.28.18-.53.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.16.04-.31-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42-.14-.01-.31-.01-.47-.01"/>
+                  </svg>
                 </a>
               </div>
             </div>
@@ -1093,7 +819,7 @@ export default function FarmaciasSimulator({
           </div>
 
           <div className="border-t border-slate-800/80 pt-6 text-center text-xs text-slate-500">
-            <p>© {new Date().getFullYear()} PromoAR. Las promociones son provistas por cada entidad financiera y farmacia. Verificá términos, vigencia y exclusiones antes de comprar.</p>
+            <p>© {new Date().getFullYear()} PromoAR. Las promociones son provistas por cada entidad financiera y cadena de farmacias. Verificá términos, vigencia y exclusiones antes de comprar.</p>
           </div>
         </div>
       </footer>
