@@ -26,7 +26,6 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
     const staticRoutes: MetadataRoute.Sitemap = [
       { url: BASE_URL,                  lastModified: now, changeFrequency: 'daily',   priority: 1.0 },
       { url: `${BASE_URL}/promos`,      lastModified: now, changeFrequency: 'hourly',  priority: 0.9 },
-      { url: `${BASE_URL}/perfil`,      lastModified: now, changeFrequency: 'weekly',  priority: 0.6 },
       { url: `${BASE_URL}/login`,       lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
       { url: `${BASE_URL}/registro`,    lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     ]
