@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import PromoCard from '@/app/components/PromoCard'
 import PromoMultiPreviewModal, { PreviewViewType } from './PromoMultiPreviewModal'
@@ -305,19 +305,85 @@ export default function AdminPromosV2Page() {
   // Previsualizador multi-formato (Tarjeta, Modal, Página)
   const [previewModal, setPreviewModal] = useState<{ promo: any; view: PreviewViewType } | null>(null)
 
+  // Estados de datos vivos de PostgreSQL (Neon)
+  const [dbEntities, setDbEntities] = useState<{
+    categories: any[]
+    commerces: any[]
+    banks: any[]
+    wallets: any[]
+    cardNetworks: any[]
+  } | null>(null)
+  const [isLoadingPromos, setIsLoadingPromos] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Cargar entidades reales (Categorías, Comercios, Bancos, Billeteras) de la base de datos
+  useEffect(() => {
+    async function loadEntities() {
+      try {
+        const res = await fetch('/api/admin/entities')
+        if (res.ok) {
+          const data = await res.json()
+          setDbEntities(data)
+        }
+      } catch (e) {
+        console.error('Error cargando entidades de DB:', e)
+      }
+    }
+    loadEntities()
+  }, [])
+
+  // Cargar promociones reales de PostgreSQL al montar o al cambiar filtros
+  const fetchPromosFromDb = useCallback(async () => {
+    setIsLoadingPromos(true)
+    try {
+      const params = new URLSearchParams()
+      if (listStatus !== 'ALL') {
+        params.set('status', listStatus)
+      } else {
+        params.set('status', 'ACTIVE')
+      }
+
+      if (listCategory !== 'ALL' && dbEntities?.categories) {
+        const catObj = dbEntities.categories.find((c: any) => c.name.toLowerCase() === listCategory.toLowerCase())
+        if (catObj?.id) params.set('categoryId', catObj.id)
+      }
+
+      if (listSearch.trim()) {
+        params.set('q', listSearch.trim())
+      }
+
+      const res = await fetch(`/api/admin/promos?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.promos && data.promos.length > 0) {
+          setPromosList(data.promos)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching promos from DB:', err)
+    } finally {
+      setIsLoadingPromos(false)
+    }
+  }, [listStatus, listCategory, listSearch, dbEntities])
+
+  useEffect(() => {
+    fetchPromosFromDb()
+  }, [fetchPromosFromDb])
+
   // Helper para cargar una promo al Studio para edición
   const loadPromoToStudio = (p: any) => {
     const req = p.requirements?.[0]
     setFormData({
       id: p.id,
-      commerceName: p.commerce?.name || '',
-      commerceLogo: p.commerce?.logoUrl || '',
+      commerceName: p.commerce?.name || p.commerceName || '',
+      commerceLogo: p.commerce?.logoUrl || p.commerceLogo || '',
       salesChannel: p.salesChannel || 'AMBOS',
-      categoryId: p.category?.id || 'cat-gastronomia',
-      categoryName: p.category?.name || 'Gastronomía',
-      categoryColor: p.category?.color || '#F97316',
-      categoryIcon: p.category?.icon || '🍔',
-      isExclusivePromoAR: p.isExclusivePromoAR ?? false,
+      categoryId: p.category?.id || p.categoryId || 'cat-gastronomia',
+      categoryName: p.category?.name || p.categoryName || 'Gastronomía',
+      categoryColor: p.category?.color || p.categoryColor || '#F97316',
+      categoryIcon: p.category?.icon || p.categoryIcon || '🍔',
+      isExclusivePromoAR: p.isExclusivePromoAR ?? (!req?.bankId && !req?.walletId),
       benefitKind: (req?.discountType as any) || 'PERCENTAGE_DESCUENTO',
       discountValue: Number(req?.discountValue) || 20,
       installmentsCount: req?.discountType === 'CUOTAS_SIN_INTERES' ? Number(req.discountValue) : 6,
@@ -325,35 +391,149 @@ export default function AdminPromosV2Page() {
       nxmM: req?.nxmM || 1,
       segundaUnidadPct: req?.discountType === 'SEGUNDA_UNIDAD' ? Number(req.discountValue) : 70,
       fixedAmountValue: 5000,
-      minPurchase: 0,
-      capUnlimited: !req?.cap,
+      minPurchase: req?.minPurchase || 0,
+      capUnlimited: req?.capUnlimited ?? !req?.cap,
       capAmount: req?.cap || 8000,
       capPeriod: req?.capPeriod || 'MONTHLY',
       hasPlusBenefit: p.hasPlusBenefit || false,
       plusType: p.plusType || 'HABERES',
       plusValue: p.plusValue || 5,
       plusCapAmount: p.plusCapAmount || 0,
-      selectedBanks: req?.bank ? ['b-galicia'] : [],
-      selectedWallets: req?.wallet ? ['w-modo'] : [],
-      selectedNetworks: ['net-visa'],
-      cardType: 'CREDIT',
-      selectedSegment: '',
-      selectedCardSegment: '',
+      selectedBanks: req?.bank?.id ? [req.bank.id] : req?.bankId ? [req.bankId] : [],
+      selectedWallets: req?.wallet?.id ? [req.wallet.id] : req?.walletId ? [req.walletId] : [],
+      selectedNetworks: req?.cardNetwork?.id ? [req.cardNetwork.id] : req?.cardNetworkId ? [req.cardNetworkId] : ['net-visa'],
+      cardType: (req?.cardType as any) || 'CREDIT',
+      selectedSegment: req?.segment || '',
+      selectedCardSegment: req?.cardSegmentId || '',
       accountType: (req?.accountType as any) || 'ANY',
       paymentChannel: (req?.paymentChannel as any) || 'QR',
       validDays: p.validDays || 127,
-      validFrom: p.validFrom || new Date().toISOString().split('T')[0],
-      validUntil: p.validUntil || '2026-12-31',
-      hasExpiration: true,
-      hasTimeRestriction: false,
-      validFromHour: 0,
-      validToHour: 23,
+      validFrom: p.validFrom ? new Date(p.validFrom).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      validUntil: p.validUntil ? new Date(p.validUntil).toISOString().split('T')[0] : '2026-12-31',
+      hasExpiration: !!p.validUntil,
+      hasTimeRestriction: !!p.validFromHour,
+      validFromHour: p.validFromHour || 0,
+      validToHour: p.validToHour || 23,
       stackable: p.stackable || false,
       exclusionsNote: p.exclusionsNote || '',
       conditionsNote: p.commerceNote || p.conditionsNote || '',
       status: p.status || 'ACTIVE',
     })
     setActiveTab('STUDIO')
+  }
+
+  // Guardar en la Base de Datos Viva (POST si nueva, PUT si edición)
+  const handleSavePromo = async () => {
+    setIsSaving(true)
+    setToastMessage(null)
+    try {
+      let commerceId = ''
+      if (dbEntities?.commerces && dbEntities.commerces.length > 0) {
+        const found = dbEntities.commerces.find((c: any) => c.name.toLowerCase() === formData.commerceName.toLowerCase())
+        commerceId = found?.id || dbEntities.commerces[0].id
+      }
+
+      let categoryId = formData.categoryId
+      if (dbEntities?.categories && dbEntities.categories.length > 0) {
+        const foundCat = dbEntities.categories.find((c: any) => c.name.toLowerCase() === formData.categoryName.toLowerCase() || c.id === formData.categoryId)
+        if (foundCat) categoryId = foundCat.id
+        else categoryId = dbEntities.categories[0].id
+      }
+
+      let discountType = 'PERCENTAGE_DESCUENTO'
+      let discountValue = formData.discountValue
+      let nxmN: number | null = null
+      let nxmM: number | null = null
+
+      if (formData.benefitKind === 'PERCENTAGE_REINTEGRO') {
+        discountType = 'PERCENTAGE_REINTEGRO'
+      } else if (formData.benefitKind === 'CUOTAS_SIN_INTERES') {
+        discountType = 'CUOTAS_SIN_INTERES'
+        discountValue = formData.installmentsCount
+      } else if (formData.benefitKind === 'NXM') {
+        discountType = 'NXM'
+        nxmN = formData.nxmN
+        nxmM = formData.nxmM
+      } else if (formData.benefitKind === 'SEGUNDA_UNIDAD') {
+        discountType = 'SEGUNDA_UNIDAD'
+        discountValue = formData.segundaUnidadPct
+      } else if (formData.benefitKind === 'FIXED_AMOUNT') {
+        discountType = 'FIXED_AMOUNT'
+        discountValue = formData.fixedAmountValue
+      }
+
+      const bankObj = dbEntities?.banks?.find((b: any) => formData.selectedBanks.includes(b.id) || formData.selectedBanks.includes(b.slug))
+      const walletObj = dbEntities?.wallets?.find((w: any) => formData.selectedWallets.includes(w.id) || formData.selectedWallets.includes(w.slug))
+      const networkObj = dbEntities?.cardNetworks?.find((n: any) => formData.selectedNetworks.includes(n.id) || formData.selectedNetworks.includes(n.slug))
+
+      const reqPayload: any = {
+        bankId: (!formData.isExclusivePromoAR && bankObj) ? bankObj.id : null,
+        walletId: (!formData.isExclusivePromoAR && walletObj) ? walletObj.id : null,
+        cardNetworkId: (!formData.isExclusivePromoAR && networkObj) ? networkObj.id : null,
+        cardType: formData.cardType === 'ANY' ? null : formData.cardType,
+        paymentChannel: formData.paymentChannel,
+        accountType: formData.accountType,
+        discountType,
+        discountValue,
+        nxmN,
+        nxmM,
+        minPurchase: formData.minPurchase || null,
+        cap: formData.capUnlimited ? null : formData.capAmount,
+        capUnlimited: formData.capUnlimited,
+        capPeriod: formData.capPeriod,
+        note: formData.conditionsNote || null,
+      }
+
+      const isEditingReal = formData.id && !formData.id.startsWith('promo-') && !formData.id.startsWith('preview-')
+
+      const payload: any = {
+        title: `${formData.commerceName} – ${discountType === 'CUOTAS_SIN_INTERES' ? `${formData.installmentsCount} cuotas sin interés` : `${discountValue}% de descuento`}`,
+        description: formData.conditionsNote || `${formData.commerceName} promoción`,
+        commerceId: commerceId || undefined,
+        categoryId: categoryId || undefined,
+        salesChannel: formData.salesChannel,
+        validDays: formData.validDays,
+        validFrom: formData.validFrom,
+        validUntil: formData.hasExpiration ? formData.validUntil : null,
+        validFromHour: formData.hasTimeRestriction ? formData.validFromHour : null,
+        validToHour: formData.hasTimeRestriction ? formData.validToHour : null,
+        stackable: formData.stackable,
+        commerceNote: formData.conditionsNote || null,
+        status: formData.status || 'ACTIVE',
+        requirements: [reqPayload],
+      }
+
+      let res
+      if (isEditingReal) {
+        res = await fetch(`/api/promos/${formData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        res = await fetch('/api/promos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
+
+      if (res.ok) {
+        setToastMessage({ type: 'success', text: isEditingReal ? '✅ ¡Promoción actualizada en PostgreSQL!' : '✅ ¡Nueva promoción creada en PostgreSQL!' })
+        fetchPromosFromDb()
+        setTimeout(() => {
+          setActiveTab('LIST')
+          setToastMessage(null)
+        }, 1500)
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setToastMessage({ type: 'error', text: d.error || 'Error al guardar en la base de datos' })
+      }
+    } catch (e: any) {
+      setToastMessage({ type: 'error', text: e.message || 'Error de conexión' })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Lista de fuentes disponibles para filtrar en la Bandeja
@@ -529,6 +709,15 @@ export default function AdminPromosV2Page() {
               <p className="text-[10px] text-slate-400 font-medium">Panel Integral de Promociones & Portal Comercios</p>
             </div>
           </Link>
+
+          <Link
+            href="/admin"
+            className="hidden md:flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white bg-[#0A1628] hover:bg-slate-800 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all ml-2"
+            title="Volver al panel tradicional de administración"
+          >
+            <ArrowLeft size={13} className="text-blue-400" />
+            <span>Volver al Admin Clásico</span>
+          </Link>
         </div>
 
         {/* Switcher Admin / Comercio y Vista */}
@@ -571,6 +760,28 @@ export default function AdminPromosV2Page() {
 
       {/* ── Contenido Principal ── */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8">
+
+        {/* Banner de Feedback de Guardado / Error */}
+        {toastMessage && (
+          <div className={`mb-5 p-4 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg animate-in fade-in ${
+            toastMessage.type === 'success'
+              ? 'bg-emerald-950/40 border border-emerald-500/50 text-emerald-200'
+              : 'bg-red-950/40 border border-red-500/50 text-red-200'
+          }`}>
+            <div className="flex items-center gap-2.5">
+              <span>{toastMessage.type === 'success' ? '🚀' : '⚠️'}</span>
+              <span>{toastMessage.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="text-xs opacity-70 hover:opacity-100 hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {activeTab === 'STUDIO' ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
@@ -1663,14 +1874,18 @@ export default function AdminPromosV2Page() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => {
-                      alert('¡Promoción guardada exitosamente con todos los campos!')
-                      setActiveTab('LIST')
-                    }}
-                    className="text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                    disabled={isSaving}
+                    onClick={handleSavePromo}
+                    className="text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
-                    <CheckCircle2 size={16} />
-                    {viewRole === 'MERCHANT' ? 'Enviar para Aprobación' : 'Publicar Inmediatamente'}
+                    <CheckCircle2 size={16} className={isSaving ? 'animate-spin' : ''} />
+                    {isSaving
+                      ? 'Guardando en Base de Datos...'
+                      : formData.id && !formData.id.startsWith('promo-') && !formData.id.startsWith('preview-')
+                      ? 'Actualizar en PostgreSQL'
+                      : viewRole === 'MERCHANT'
+                      ? 'Enviar para Aprobación'
+                      : 'Publicar Inmediatamente en PostgreSQL'}
                   </button>
                 )}
               </div>
@@ -1752,10 +1967,14 @@ export default function AdminPromosV2Page() {
             {/* Header de la Bandeja y Acciones Principales */}
             <div className="bg-[#0F223D] border border-slate-800/90 rounded-3xl p-5 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-black text-white">Bandeja de Promociones</h2>
-                  <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                  <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1.5">
+                    {isLoadingPromos && <RefreshCw size={11} className="animate-spin text-blue-400" />}
                     {filteredPromosList.length} {filteredPromosList.length === 1 ? 'promo' : 'promos'}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> PostgreSQL Neon
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
@@ -2035,7 +2254,7 @@ export default function AdminPromosV2Page() {
               ) : (
                 filteredPromosList.map(p => {
                   const isSelected = selectedPromoIds.has(p.id)
-                  const req = p.requirements[0]
+                  const req = (p.requirements?.[0] || {}) as any
                   return (
                     <div
                       key={p.id}

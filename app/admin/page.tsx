@@ -951,6 +951,15 @@ export default function AdminPage() {
         </div>
         <div className="flex items-center gap-3">
           <a
+            href="/admin/promos-v2"
+            className="flex items-center gap-2 text-xs px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-md shadow-blue-500/20"
+            title="Abrir el nuevo Studio y Bandeja de Promociones V2 en paralelo"
+          >
+            <Sparkles size={14} className="text-amber-300" />
+            <span>✨ Probar Nuevo Admin V2</span>
+            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-mono">Dual-Run</span>
+          </a>
+          <a
             href="/api/admin/export"
             download
             className="flex items-center gap-2 text-xs px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all"
@@ -990,7 +999,15 @@ export default function AdminPage() {
       </header>
 
       {/* ── Main Nav ── */}
-      <nav className="bg-white border-b border-slate-200 px-6 flex items-center gap-1 shadow-sm">
+      <nav className="bg-white border-b border-slate-200 px-6 flex items-center gap-1 shadow-sm overflow-x-auto">
+        <a
+          href="/admin/promos-v2"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-all mr-1 shrink-0 border border-blue-200"
+          title="Abrir el nuevo Studio y Bandeja de Promociones V2"
+        >
+          <Sparkles size={14} className="text-blue-600" />
+          <span>Studio & Bandeja V2</span>
+        </a>
         <TabButton active={tab === 'stats' || tab === 'promos'} icon={TrendingUp} onClick={() => setTab('stats')}>
           Estadísticas y Promos
         </TabButton>
