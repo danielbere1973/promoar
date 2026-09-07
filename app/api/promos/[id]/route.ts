@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       validFrom, validUntil, validDays, validDaysNote,
       validFromHour, validToHour,
       categoryId, commerceId, requirements,
-      status, sourceUrl, sourceNote, sourceText, specificDates, provinces,
+      status, sourceUrl, sourceNote, commerceNote, sourceText, specificDates, provinces,
     } = body
 
     // Borramos los requirements existentes y los recreamos
@@ -62,6 +62,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         status: status ?? 'ACTIVE',
         sourceUrl: sourceUrl || null,
         sourceNote: sourceNote || null,
+        commerceNote: commerceNote || null,
         sourceText: sourceText || null,
         specificDates: specificDates ? JSON.stringify(specificDates) : null,
         provinces: Array.isArray(provinces) ? provinces : [],
@@ -81,6 +82,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
                 nxmM: r.nxmM ? parseInt(r.nxmM) : null,
                 minPurchase: r.minPurchase ? parseFloat(r.minPurchase) : null,
                 cap: r.cap ? parseFloat(r.cap) : null,
+                capUnlimited: r.capUnlimited ?? false,
                 capPeriod: r.capPeriod || null,
                 note: r.note || null,
               })),

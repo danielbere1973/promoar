@@ -99,6 +99,7 @@ function discountDisplay(req: Req | null): { num: string; unit: string; label: s
     case 'FIXED_AMOUNT':         return { num: `$${v.toLocaleString('es-AR')}`, unit: '', label: 'descuento', isCsi: false }
     case 'CUOTAS_SIN_INTERES':   return { num: `${v}`, unit: '', label: `cuota${v !== 1 ? 's' : ''} s/int.`, isCsi: true }
     case 'NXM':                  return { num: `${req.nxmN ?? 2}x${req.nxmM ?? 1}`, unit: '', label: 'prom.', isCsi: false }
+    case 'SEGUNDA_UNIDAD':       return { num: `${v}`, unit: '%', label: '2da unidad', isCsi: false }
     default:                     return { num: `${v}`, unit: '%', label: '', isCsi: false }
   }
 }
@@ -107,6 +108,14 @@ const CHANNEL_CHIPS: Record<string, { label: string; color: string }> = {
   NFC:           { label: 'NFC', color: 'bg-blue-50 text-blue-700 border-blue-200' },
   QR:            { label: 'QR', color: 'bg-purple-50 text-purple-700 border-purple-200' },
   TRANSFERENCIA: { label: 'Transfer.', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+}
+
+const CAP_PERIOD_LABELS: Record<string, string> = {
+  PER_TRANSACTION: '/compra',
+  DAILY: '/día',
+  WEEKLY: '/sem',
+  MONTHLY: '/mes',
+  TOTAL: ' total',
 }
 
 type Props = {
@@ -143,6 +152,14 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   const entities = [...banks, ...wallets].slice(0, 2)
 
   const hasSinTope = promo.requirements.some(r => r.capUnlimited)
+  const capReq = personalizedReqs.find(r => r.cap != null) ?? promo.requirements.find(r => r.cap != null) ?? null
+  const capAmount = capReq?.cap != null ? capReq.cap : null
+  const capPeriod = capReq?.capPeriod || null
+  const capPeriodLabel = capPeriod ? (CAP_PERIOD_LABELS[capPeriod] || '') : ''
+
+  const minPurchaseReq = personalizedReqs.find(r => r.minPurchase != null) ?? promo.requirements.find(r => r.minPurchase != null) ?? null
+  const minPurchase = minPurchaseReq?.minPurchase != null ? minPurchaseReq.minPurchase : null
+
   const reqWithUsage = promo.requirements.find(r => r.usage) ?? null
   const usage = reqWithUsage?.usage ?? null
   const usagePct = usage ? Math.min(100, Math.round((usage.amountUsed / usage.cap) * 100)) : 0
@@ -160,6 +177,15 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   const days = formatDays(promo.validDays)
   const coverageBadge = resolveCoverageBadge(promo.coverageStatus, promo.coverageLabel)
   const scope = getPromoScope(promo)
+
+  const conditionNote = (() => {
+    const note = promo.commerceNote || bestReq?.note || null
+    if (!note) return null
+    if (scope && scope.badgeText && note.toLowerCase().includes(scope.badgeText.toLowerCase().slice(0, 8))) {
+      return null
+    }
+    return note
+  })()
 
   const [showShare, setShowShare] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -313,7 +339,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
 
         {/* Descuento pill */}
         {num && (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1.5">
               <span className={`inline-flex items-baseline gap-0.5 rounded-full px-3 py-1 ${
                 isCsi
@@ -325,11 +351,25 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
               </span>
               <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{label}</span>
             </div>
-            {hasSinTope && (
-              <span className="inline-flex items-center gap-0.5 self-start text-[9px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 rounded-md px-1.5 py-0.5">
-                ∞ sin tope
-              </span>
-            )}
+
+            {/* Caps & Mínimos */}
+            <div className="flex flex-wrap items-center gap-1">
+              {hasSinTope ? (
+                <span className="inline-flex items-center gap-0.5 self-start text-[9px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 rounded-md px-1.5 py-0.5">
+                  ∞ sin tope
+                </span>
+              ) : capAmount != null ? (
+                <span className="inline-flex items-center gap-1 self-start text-[9.5px] font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-1.5 py-0.5">
+                  Tope ${capAmount.toLocaleString('es-AR')}{capPeriodLabel}
+                </span>
+              ) : null}
+
+              {minPurchase != null && (
+                <span className="inline-flex items-center gap-0.5 self-start text-[9px] font-bold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/40 rounded-md px-1.5 py-0.5">
+                  Mín. ${minPurchase.toLocaleString('es-AR')}
+                </span>
+              )}
+            </div>
           </div>
         )}
 
@@ -445,10 +485,17 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </div>
         )}
 
-        {/* Días */}
-        {days !== 'Todos los días' && (
-          <p className="text-[10px] text-gray-400 dark:text-gray-500">{days}</p>
-        )}
+        {/* Días y notas de condiciones */}
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 truncate">
+            {days}
+          </p>
+          {conditionNote && (
+            <p className="text-[9.5px] text-gray-600 dark:text-gray-300 font-medium line-clamp-2 leading-tight bg-gray-50 dark:bg-slate-800/60 rounded px-1.5 py-0.5 border border-gray-200/60 dark:border-slate-700/50" title={conditionNote}>
+              {conditionNote}
+            </p>
+          )}
+        </div>
 
         {/* Registrar uso — cualquier promo con ahorro real (no CSI puro) */}
         {onRegisterUsage && usableReq && (
