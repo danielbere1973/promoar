@@ -183,6 +183,9 @@ const getPublicPromosPage = unstable_cache(
           categoryId: true,
           commerceId: true,
           isFeatured: true,
+          commerceNote: true,
+          validFromHour: true,
+          validToHour: true,
           category: { select: { name: true, slug: true, icon: true, color: true } },
           commerce: {
             select: {
@@ -867,6 +870,9 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             categoryId: true,
             commerceId: true,
             isFeatured: true,
+            commerceNote: true,
+            validFromHour: true,
+            validToHour: true,
             // stackable vuelve a traerse (revierte parcialmente el narrowing de
             // 25/8/2026): /api/precios/bank-promos lo necesita para saber si LA PROMO
             // GANADORA concreta acumula con descuentos de góndola — Commerce.stacksWithBankPromos

@@ -107,7 +107,7 @@ function promoFingerprint(data: any, reqs: any[]): string {
   const sortedReqs = [...new Set([...reqs]
     .map(r => [r.bankId ?? '', r.walletId ?? '', r.cardNetworkId ?? '',
                r.discountType, r.discountValue, r.paymentChannel ?? '', r.cardType ?? '',
-               r.cap ?? '', r.capPeriod ?? '', r.minPurchase ?? ''].join('|'))
+               r.cap ?? '', r.capPeriod ?? '', r.minPurchase ?? '', r.note ?? ''].join('|'))
   )].sort()
   const validUntilMs = data.validUntil instanceof Date ? data.validUntil.getTime() : (data.validUntil ? new Date(data.validUntil).getTime() : 0)
   const validUntilWeek = validUntilMs ? String(Math.floor(validUntilMs / (7 * 24 * 3600 * 1000))) : ''
@@ -118,6 +118,9 @@ function promoFingerprint(data: any, reqs: any[]): string {
     String(data.isCSIOnly ?? ''),
     String(data.salesChannel ?? ''),
     String(data.categoryId ?? ''),
+    String(data.commerceNote ?? ''),
+    String(data.validFromHour ?? ''),
+    String(data.validToHour ?? ''),
     sortedReqs.join(';'),
   ].join('||')
 }
@@ -636,7 +639,9 @@ export async function POST(req: NextRequest) {
           externalId: p.externalId ?? null,
           sourceText: p.sourceText ?? null,
           salesChannel: normalizeSalesChannel(salesChannel),
-          commerceNote: p.note ?? null,
+          commerceNote: p.commerceNote ?? p.note ?? null,
+          validFromHour: p.validFromHour ?? null,
+          validToHour: p.validToHour ?? null,
           maxDiscountPct,
           isCSIOnly,
         };
@@ -656,7 +661,7 @@ export async function POST(req: NextRequest) {
       select: {
         id: true, title: true, commerceId: true, sourceUrl: true, source: true, externalId: true, slug: true, status: true,
         validFrom: true, validUntil: true, validDays: true, maxDiscountPct: true, isCSIOnly: true,
-        salesChannel: true, categoryId: true,
+        salesChannel: true, categoryId: true, commerceNote: true, validFromHour: true, validToHour: true,
         requirements: {
           select: {
             bankId: true, walletId: true, cardNetworkId: true, cardSegmentId: true,

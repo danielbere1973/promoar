@@ -58,8 +58,12 @@ function parseItem(item: any, brandName?: string, brandId?: string | number): Sc
   const paymentChannel: ScrapedPromo['paymentChannel'] = isModo ? 'QR' : 'ANY';
   const walletNames = isModo ? ['MODO'] : [];
 
-  // Ignorar EPM al buscar la categoría principal (es un tag de forma de pago, no un rubro)
-  const itemCat = item.categories?.find((c: any) => CODE_MAP[c.code] && c.code !== 'EPM');
+  // Ignorar EPM al buscar la categoría principal (es un tag de forma de pago, no un rubro).
+  // Si tiene TRA (Transporte), priorizarlo siempre sobre VIA (Viajes) u otras categorías.
+  const hasTra = item.categories?.some((c: any) => c.code === 'TRA');
+  const itemCat = hasTra
+    ? { code: 'TRA' }
+    : item.categories?.find((c: any) => CODE_MAP[c.code] && c.code !== 'EPM');
   const categoria = (itemCat ? CODE_MAP[itemCat.code] : '') || detectCategoria(storeName);
 
   const isVisaOnly  = item.tag?.code === 'EXV';

@@ -137,9 +137,22 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
 
   const description = fullText.slice(0, 500);
   const legalText = basesCondiciones || [item.descripcion, item.legales, item.leyendaLegal, item.textoLegal, item.terminosCondiciones].filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').trim();
+
+  let commerceNote: string | undefined;
+  if (/cabify/i.test(storeName) || /\bezeiza\b/i.test(rawAllText)) {
+    if (/\bezeiza\b/i.test(rawAllText)) {
+      commerceNote = 'Solo viajes hacia/desde Ezeiza';
+    }
+    const codeMatch = rawAllText.match(/c[oó]digo\s+([A-Z0-9]{4,12})/i);
+    if (codeMatch) {
+      commerceNote = commerceNote ? `${commerceNote} (${codeMatch[1].toUpperCase()})` : `Código: ${codeMatch[1].toUpperCase()}`;
+    }
+  }
+
   const base: Partial<ScrapedPromo> = {
     storeName, description, sourceText: legalText || description, sourceUrl: PAGE_URL,
     validFrom, validUntil, validDays, cap,
+    commerceNote, note: commerceNote,
     bankNames: [BANK_NAME], cardNetworks, categoria,
     paymentChannel, walletNames,
     storeLogoUrl: item.imagen || undefined,

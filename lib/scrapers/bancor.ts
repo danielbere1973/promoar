@@ -160,11 +160,31 @@ function nodeToPromos(node: RawNode): ScrapedPromo[] {
     }))
     .filter(b => Number.isFinite(b.lat) && Number.isFinite(b.lng));
 
+  let commerceNote: string | undefined;
+  let validFromHour: number | null = null;
+  let validToHour: number | null = null;
+
+  const timeMatch = fullText.match(/\bde\s+(\d{1,2})\s*(?:hs?|am)?\s+a\s+(\d{1,2})\s*(?:hs?|am)?\b/i);
+  if (timeMatch) {
+    validFromHour = parseInt(timeMatch[1]);
+    validToHour = parseInt(timeMatch[2]);
+    commerceNote = `De ${validFromHour} a ${validToHour} hs`;
+  }
+  const ridesMatch = fullText.match(/(\d+)\s+viajes/i);
+  if (ridesMatch) {
+    const ridesNote = `Hasta ${ridesMatch[1]} viajes`;
+    commerceNote = commerceNote ? `${commerceNote} · ${ridesNote}` : ridesNote;
+  }
+
   const base: Partial<ScrapedPromo> = {
     description: fullText.slice(0, 500),
     sourceText: fullText.slice(0, 500),
     sourceUrl: SOURCE_URL,
     validDays,
+    validFromHour,
+    validToHour,
+    commerceNote,
+    note: commerceNote,
     cap,
     capPeriod: cap ? 'MONTHLY' : null,
     bankNames: [BANK_NAME],

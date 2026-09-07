@@ -6,6 +6,7 @@ import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
 import { schemaOffer } from '@/lib/schema'
 import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
+import { getPromoScope } from '@/lib/utils/promoScope'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
@@ -316,6 +317,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   const minReq = reqs.find(r => r.minPurchase)
 
   const bestDiscount = discounts[0]
+  const scope = getPromoScope(promo)
 
   const jsonLd = schemaOffer({
     name: `${discountLabel(bestDiscount)} en ${promo.commerce.name}`,
@@ -400,8 +402,23 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
           </div>
         </a>
 
-        {/* ── NOTA / CONDICIÓN ESPECIAL ── */}
-        {promo.commerceNote && (
+        {/* ── ALERTA DE ALCANCE / CONDICIÓN RESTRINGIDA ── */}
+        {scope && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/40 rounded-2xl px-4 py-3.5 text-amber-900 dark:text-amber-200 shadow-sm">
+            <span className="text-xl shrink-0 mt-0.5">{scope.badgeIcon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold tracking-tight uppercase text-amber-800 dark:text-amber-300">
+                {scope.badgeText}
+              </p>
+              <p className="text-xs opacity-90 leading-relaxed mt-0.5">
+                {scope.fullWarning}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── NOTA / CONDICIÓN ESPECIAL ADICIONAL ── */}
+        {promo.commerceNote && (!scope || !scope.fullWarning.toLowerCase().includes(promo.commerceNote.toLowerCase())) && (
           <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
             <span className="text-base shrink-0">⚠️</span>
             <p className="text-xs text-amber-800 leading-relaxed">{promo.commerceNote}</p>

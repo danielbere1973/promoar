@@ -249,6 +249,33 @@ export const BNAScraper: Scraper = {
 
         const legalText = [promo.legal, promo.legalText, promo.terms, customRaw]
           .filter(Boolean).join(' ').trim();
+
+        let commerceNote: string | undefined;
+        let validFromHour: number | null = null;
+        let validToHour: number | null = null;
+
+        const combinedText = `${storeName} ${description} ${legalText}`.toLowerCase();
+        if (/pedidos\s*ya/i.test(storeName) && /suscripci[oó]n|plus/i.test(combinedText)) {
+          commerceNote = 'Solo válido para la suscripción PedidosYa Plus (no aplica a comida)';
+        }
+        if (/cabify/i.test(storeName)) {
+          const hourMatch = combinedText.match(/\bde\s+(\d{1,2})\s*(?:hs?|am)?\s+a\s+(\d{1,2})\s*(?:hs?|am)?\b/i);
+          if (hourMatch) {
+            validFromHour = parseInt(hourMatch[1]);
+            validToHour = parseInt(hourMatch[2]);
+            commerceNote = `De ${validFromHour} a ${validToHour} hs`;
+          } else if (/7\s*a\s*9/i.test(combinedText)) {
+            validFromHour = 7;
+            validToHour = 9;
+            commerceNote = 'De 7 a 9 hs';
+          }
+          if (/(\d+)\s+viajes/i.test(combinedText)) {
+            const travelMatch = combinedText.match(/(\d+)\s+viajes/i);
+            const extra = `Hasta ${travelMatch![1]} viajes`;
+            commerceNote = commerceNote ? `${commerceNote} · ${extra}` : extra;
+          }
+        }
+
         const base: Partial<ScrapedPromo> = {
           storeName,
           description,
@@ -257,6 +284,10 @@ export const BNAScraper: Scraper = {
           validFrom,
           validUntil,
           validDays,
+          validFromHour,
+          validToHour,
+          commerceNote,
+          note:         commerceNote,
           cap:          cashbackLimit ?? null,
           capPeriod,
           minPurchase,

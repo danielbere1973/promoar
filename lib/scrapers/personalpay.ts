@@ -143,6 +143,9 @@ export const PersonalPayScraper: Scraper = {
             ? `${discountStr} en ${storeName}${variant ? ` – ${variant}` : ''}. ${daysLabel}.`
             : `${pct}% de ${typeLabel} en ${storeName}${variant ? ` – ${variant}` : ''}. ${daysLabel}.${cap ? ` Tope: $${cap.toLocaleString('es-AR')}.` : ''}`;
 
+          const isFullStore = !variant || /total\s+de\s+la\s+(?:compra|cuenta)/i.test(variant);
+          const commerceNote = !isFullStore ? `Solo en: ${variant}` : undefined;
+
           allPromos.push({
             storeName,
             storeLogoUrl: logoUrl || undefined,
@@ -165,6 +168,8 @@ export const PersonalPayScraper: Scraper = {
               : [],
             categoria,
             paymentChannel,
+            commerceNote,
+            note: commerceNote,
           } as ScrapedPromo);
         } catch (err) {
           console.error('[PersonalPay] Error parseando item:', err);

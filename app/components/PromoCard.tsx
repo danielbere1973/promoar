@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Share2, Copy, Check, Heart, Star } from 'lucide-react'
 import { resolveCoverageBadge } from '@/lib/coverageBadge'
+import { getPromoScope } from '@/lib/utils/promoScope'
 
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -44,6 +45,8 @@ type Req = {
   capPeriod?: string | null
   cardSegment?: { name: string } | null
   paymentChannel?: string | null
+  note?: string | null
+  segment?: string | null
   usage?: { amountUsed: number; cap: number; exhausted: boolean; periodEnd: string | Date } | null
 }
 
@@ -51,6 +54,11 @@ type Promo = {
   id: string
   title: string
   slug?: string | null
+  description?: string | null
+  sourceText?: string | null
+  commerceNote?: string | null
+  validFromHour?: number | null
+  validToHour?: number | null
   validDays: number
   salesChannel?: string | null
   coverageStatus?: 'NEARBY' | 'TERRITORIAL' | 'ONLINE' | 'UNKNOWN' | null
@@ -151,6 +159,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
 
   const days = formatDays(promo.validDays)
   const coverageBadge = resolveCoverageBadge(promo.coverageStatus, promo.coverageLabel)
+  const scope = getPromoScope(promo)
 
   const [showShare, setShowShare] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -290,6 +299,17 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
             </button>
           )}
         </div>
+
+        {/* Scope / Restricción badge — destacado para evitar información engañosa */}
+        {scope && (
+          <div
+            title={scope.fullWarning}
+            className="inline-flex items-center gap-1 self-start text-[9.5px] font-bold tracking-tight rounded-md px-1.5 py-0.5 max-w-full bg-amber-500/10 text-amber-900 dark:text-amber-300 border border-amber-500/20"
+          >
+            <span className="shrink-0 text-[10px] leading-none">{scope.badgeIcon}</span>
+            <span className="truncate leading-none">{scope.badgeText}</span>
+          </div>
+        )}
 
         {/* Descuento pill */}
         {num && (
