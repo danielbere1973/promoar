@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import PromoCard from '@/app/components/PromoCard'
+import PromoMultiPreviewModal, { PreviewViewType } from './PromoMultiPreviewModal'
 import {
   Sparkles, Plus, Search, Filter, CheckCircle2, Clock, XCircle,
   Building2, CreditCard, Calendar, Tag, ShieldCheck, ArrowRight,
@@ -300,6 +301,60 @@ export default function AdminPromosV2Page() {
   const [isClassifying, setIsClassifying] = useState(false)
   const [classifyStatus, setClassifyStatus] = useState('')
   const [bulkTargetCategory, setBulkTargetCategory] = useState('')
+
+  // Previsualizador multi-formato (Tarjeta, Modal, Página)
+  const [previewModal, setPreviewModal] = useState<{ promo: any; view: PreviewViewType } | null>(null)
+
+  // Helper para cargar una promo al Studio para edición
+  const loadPromoToStudio = (p: any) => {
+    const req = p.requirements?.[0]
+    setFormData({
+      id: p.id,
+      commerceName: p.commerce?.name || '',
+      commerceLogo: p.commerce?.logoUrl || '',
+      salesChannel: p.salesChannel || 'AMBOS',
+      categoryId: p.category?.id || 'cat-gastronomia',
+      categoryName: p.category?.name || 'Gastronomía',
+      categoryColor: p.category?.color || '#F97316',
+      categoryIcon: p.category?.icon || '🍔',
+      isExclusivePromoAR: p.isExclusivePromoAR ?? false,
+      benefitKind: (req?.discountType as any) || 'PERCENTAGE_DESCUENTO',
+      discountValue: Number(req?.discountValue) || 20,
+      installmentsCount: req?.discountType === 'CUOTAS_SIN_INTERES' ? Number(req.discountValue) : 6,
+      nxmN: req?.nxmN || 2,
+      nxmM: req?.nxmM || 1,
+      segundaUnidadPct: req?.discountType === 'SEGUNDA_UNIDAD' ? Number(req.discountValue) : 70,
+      fixedAmountValue: 5000,
+      minPurchase: 0,
+      capUnlimited: !req?.cap,
+      capAmount: req?.cap || 8000,
+      capPeriod: req?.capPeriod || 'MONTHLY',
+      hasPlusBenefit: p.hasPlusBenefit || false,
+      plusType: p.plusType || 'HABERES',
+      plusValue: p.plusValue || 5,
+      plusCapAmount: p.plusCapAmount || 0,
+      selectedBanks: req?.bank ? ['b-galicia'] : [],
+      selectedWallets: req?.wallet ? ['w-modo'] : [],
+      selectedNetworks: ['net-visa'],
+      cardType: 'CREDIT',
+      selectedSegment: '',
+      selectedCardSegment: '',
+      accountType: (req?.accountType as any) || 'ANY',
+      paymentChannel: (req?.paymentChannel as any) || 'QR',
+      validDays: p.validDays || 127,
+      validFrom: p.validFrom || new Date().toISOString().split('T')[0],
+      validUntil: p.validUntil || '2026-12-31',
+      hasExpiration: true,
+      hasTimeRestriction: false,
+      validFromHour: 0,
+      validToHour: 23,
+      stackable: p.stackable || false,
+      exclusionsNote: p.exclusionsNote || '',
+      conditionsNote: p.commerceNote || p.conditionsNote || '',
+      status: p.status || 'ACTIVE',
+    })
+    setActiveTab('STUDIO')
+  }
 
   // Lista de fuentes disponibles para filtrar en la Bandeja
   const PROMO_SOURCES = [
@@ -1634,14 +1689,41 @@ export default function AdminPromosV2Page() {
                   </span>
                 </div>
 
-                {/* Renderizado en Vivo de la PromoCard Real */}
-                <div className="bg-[#0A1628] p-6 rounded-2xl border border-slate-800 flex justify-center items-center">
+                {/* Renderizado en Vivo de la PromoCard Real con botones de Preview */}
+                <div className="bg-[#0A1628] p-5 rounded-2xl border border-slate-800 flex flex-col justify-center items-center gap-3">
                   <div style={{ width: 175 }}>
                     <PromoCard
                       promo={livePromoForCard as any}
-                      onClick={() => {}}
+                      onClick={() => setPreviewModal({ promo: livePromoForCard, view: 'SHEET' })}
                       fullWidth
                     />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewModal({ promo: livePromoForCard, view: 'CARD' })}
+                      title="Previsualizar Tarjeta Feed"
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white border border-slate-700 transition-all flex items-center gap-1"
+                    >
+                      <Smartphone size={11} /> Tarjeta
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewModal({ promo: livePromoForCard, view: 'SHEET' })}
+                      title="Previsualizar Modal Rápido"
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700 transition-all flex items-center gap-1"
+                    >
+                      <Layers size={11} /> Modal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewModal({ promo: livePromoForCard, view: 'PAGE' })}
+                      title="Previsualizar Página Completa"
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-purple-600 text-slate-300 hover:text-white border border-slate-700 transition-all flex items-center gap-1"
+                    >
+                      <ExternalLink size={11} /> Página
+                    </button>
                   </div>
                 </div>
 
@@ -2027,9 +2109,9 @@ export default function AdminPromosV2Page() {
                         </div>
                       </div>
 
-                      {/* Info de ahorro & Botón para editar en Studio */}
-                      <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
-                        <div className="text-right hidden sm:block">
+                      {/* Info de ahorro & Botones de Acción (Preview + Editar) */}
+                      <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-end md:self-center">
+                        <div className="text-right hidden lg:block mr-1">
                           <span className="text-sm font-black text-white">
                             {req?.discountType === 'CUOTAS_SIN_INTERES'
                               ? `${req.discountValue} cuotas s/int.`
@@ -2042,60 +2124,46 @@ export default function AdminPromosV2Page() {
                           </span>
                         </div>
 
+                        {/* Botones de Previsualización: 1. Tarjeta, 2. Modal, 3. Página */}
+                        <div className="flex items-center bg-[#0A1628] border border-slate-700/80 rounded-xl p-1 gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModal({ promo: p, view: 'CARD' })}
+                            title="Vista 1: Tarjeta Standard en Home / Feed"
+                            className="px-2.5 py-1.5 text-[11px] font-bold text-slate-300 hover:text-white hover:bg-blue-600/30 rounded-lg transition-all flex items-center gap-1.5"
+                          >
+                            <Smartphone size={12} className="text-blue-400" />
+                            <span>Tarjeta</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModal({ promo: p, view: 'SHEET' })}
+                            title="Vista 2: Modal Rápido al tocar la promo"
+                            className="px-2.5 py-1.5 text-[11px] font-bold text-slate-300 hover:text-white hover:bg-indigo-600/30 rounded-lg transition-all flex items-center gap-1.5 border-x border-slate-800"
+                          >
+                            <Layers size={12} className="text-indigo-400" />
+                            <span>Modal</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModal({ promo: p, view: 'PAGE' })}
+                            title="Vista 3: Página Web Completa (/promos/[slug])"
+                            className="px-2.5 py-1.5 text-[11px] font-bold text-slate-300 hover:text-white hover:bg-purple-600/30 rounded-lg transition-all flex items-center gap-1.5"
+                          >
+                            <ExternalLink size={12} className="text-purple-400" />
+                            <span>Página</span>
+                          </button>
+                        </div>
+
+                        {/* Botón Editar en Studio */}
                         <button
                           type="button"
-                          onClick={() => {
-                            // Cargar la promo en formData y abrir el Studio
-                            setFormData({
-                              id: p.id,
-                              commerceName: p.commerce.name,
-                              commerceLogo: p.commerce.logoUrl || '',
-                              salesChannel: 'AMBOS',
-                              categoryId: p.category?.id || 'cat-gastronomia',
-                              categoryName: p.category?.name || 'Gastronomía',
-                              categoryColor: p.category?.color || '#F97316',
-                              categoryIcon: p.category?.icon || '🍔',
-                              isExclusivePromoAR: p.isExclusivePromoAR,
-                              benefitKind: (req?.discountType as any) || 'PERCENTAGE_DESCUENTO',
-                              discountValue: Number(req?.discountValue) || 20,
-                              installmentsCount: req?.discountType === 'CUOTAS_SIN_INTERES' ? Number(req.discountValue) : 6,
-                              nxmN: req?.nxmN || 2,
-                              nxmM: req?.nxmM || 1,
-                              segundaUnidadPct: req?.discountType === 'SEGUNDA_UNIDAD' ? Number(req.discountValue) : 70,
-                              fixedAmountValue: 5000,
-                              minPurchase: 0,
-                              capUnlimited: !req?.cap,
-                              capAmount: req?.cap || 8000,
-                              capPeriod: req?.capPeriod || 'MONTHLY',
-                              hasPlusBenefit: false,
-                              plusType: 'HABERES',
-                              plusValue: 5,
-                              plusCapAmount: 0,
-                              selectedBanks: req?.bank ? ['b-galicia'] : [],
-                              selectedWallets: req?.wallet ? ['w-modo'] : [],
-                              selectedNetworks: ['net-visa'],
-                              cardType: 'CREDIT',
-                              selectedSegment: '',
-                              selectedCardSegment: '',
-                              accountType: (req?.accountType as any) || 'ANY',
-                              paymentChannel: (req?.paymentChannel as any) || 'QR',
-                              validDays: p.validDays || 127,
-                              validFrom: new Date().toISOString().split('T')[0],
-                              validUntil: '2026-12-31',
-                              hasExpiration: true,
-                              hasTimeRestriction: false,
-                              validFromHour: 0,
-                              validToHour: 23,
-                              stackable: false,
-                              exclusionsNote: '',
-                              conditionsNote: p.commerceNote || '',
-                              status: p.status || 'ACTIVE',
-                            })
-                            setActiveTab('STUDIO')
-                          }}
-                          className="text-xs font-black px-4 py-2 bg-slate-800 hover:bg-blue-600 text-slate-200 hover:text-white rounded-xl border border-slate-700 hover:border-blue-500 transition-all flex items-center gap-1.5"
+                          onClick={() => loadPromoToStudio(p)}
+                          className="text-xs font-black px-3.5 py-2 bg-slate-800 hover:bg-blue-600 text-slate-200 hover:text-white rounded-xl border border-slate-700 hover:border-blue-500 transition-all flex items-center gap-1.5"
                         >
-                          <Edit3 size={14} /> Editar en Studio
+                          <Edit3 size={14} /> Editar
                         </button>
                       </div>
                     </div>
@@ -2106,6 +2174,20 @@ export default function AdminPromosV2Page() {
           </div>
         )}
       </div>
+
+      {/* ── MODAL POPUP MULTI-PREVIEW (TARJETA STANDARD, MODAL RÁPIDO, PÁGINA WEB) ── */}
+      {previewModal && (
+        <PromoMultiPreviewModal
+          isOpen={!!previewModal}
+          promo={previewModal.promo}
+          initialView={previewModal.view}
+          onClose={() => setPreviewModal(null)}
+          onEditInStudio={() => {
+            loadPromoToStudio(previewModal.promo)
+            setPreviewModal(null)
+          }}
+        />
+      )}
     </div>
   )
 }
