@@ -57,6 +57,9 @@ type Promo = {
   description?: string | null
   sourceText?: string | null
   commerceNote?: string | null
+  plusDiscountNote?: string | null
+  stackable?: boolean | null
+  stackableNote?: string | null
   validFromHour?: number | null
   validToHour?: number | null
   validDays: number
@@ -367,6 +370,12 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
               {minPurchase != null && (
                 <span className="inline-flex items-center gap-0.5 self-start text-[9px] font-bold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/40 rounded-md px-1.5 py-0.5">
                   Mín. ${minPurchase.toLocaleString('es-AR')}
+                </span>
+              )}
+
+              {promo.plusDiscountNote && (
+                <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/40 rounded-md px-1.5 py-0.5">
+                  <span className="text-[10px] leading-none">🚀</span> {promo.plusDiscountNote}
                 </span>
               )}
             </div>

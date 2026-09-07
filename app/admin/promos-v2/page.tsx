@@ -147,6 +147,12 @@ export default function AdminPromosV2Page() {
     capUnlimited: false,
     minPurchase: 0,
 
+    // Beneficio Plus / Adicional (Punto de feedback del usuario)
+    hasPlusBenefit: true,
+    plusType: 'HABERES', // 'HABERES' | 'JUBILADO' | 'SEGMENT'
+    plusValue: 5, // ej. +5% adicional
+    plusCapAmount: 4000,
+
     // 3. Financiación y Requisitos (Punto 2 de feedback)
     isExclusivePromoAR: false, // true = directo de comercio; false = requiere bancos/tarjetas
     selectedBanks: ['b-galicia'],
@@ -166,6 +172,8 @@ export default function AdminPromosV2Page() {
     hasTimeRestriction: false,
     validFromHour: 20,
     validToHour: 0,
+    stackable: false, // Acumulabilidad con otras promos
+    exclusionsNote: 'No aplica a compras online ni electrodomésticos',
     conditionsNote: 'Tope de reintegro unificado pagando con QR MODO y tarjetas de crédito Galicia.',
     status: 'ACTIVE',
   })
@@ -276,6 +284,12 @@ export default function AdminPromosV2Page() {
       discountValue = formData.fixedAmountValue
     }
 
+    let plusDiscountNote: string | null = null
+    if (formData.hasPlusBenefit) {
+      const audience = formData.plusType === 'HABERES' ? 'Cuenta Sueldo' : formData.plusType === 'JUBILADO' ? 'Jubilados' : 'VIP'
+      plusDiscountNote = `+${formData.plusValue}% ${audience}`
+    }
+
     const conditionsList: string[] = []
     if (formData.accountType === 'HABERES') conditionsList.push('Cuenta Sueldo')
     if (formData.accountType === 'JUBILADO') conditionsList.push('Jubilados')
@@ -283,6 +297,8 @@ export default function AdminPromosV2Page() {
     if (formData.hasTimeRestriction) conditionsList.push(`De ${formData.validFromHour} a ${formData.validToHour} hs`)
     if (formData.salesChannel === 'PRESENCIAL') conditionsList.push('Solo presencial')
     if (formData.salesChannel === 'ONLINE') conditionsList.push('Solo online')
+    if (!formData.stackable) conditionsList.push('No acumulable')
+    if (formData.exclusionsNote) conditionsList.push(`Excluye: ${formData.exclusionsNote}`)
     if (formData.conditionsNote) conditionsList.push(formData.conditionsNote)
 
     const finalNote = conditionsList.join(' · ')
@@ -293,6 +309,8 @@ export default function AdminPromosV2Page() {
       validDays: formData.validDays,
       validFromHour: formData.hasTimeRestriction ? formData.validFromHour : null,
       validToHour: formData.hasTimeRestriction ? formData.validToHour : null,
+      plusDiscountNote,
+      stackable: formData.stackable,
       commerceNote: formData.isExclusivePromoAR
         ? `⭐ Exclusivo PromoAR · ${finalNote || 'Mostrando la app'}`
         : (finalNote || null),
@@ -748,6 +766,85 @@ export default function AdminPromosV2Page() {
                         </div>
                       )}
                     </div>
+
+                    {/* Beneficio Plus / Adicional (Cuenta Sueldo, Jubilados, Segmento VIP) */}
+                    <div className="border-t border-slate-800/80 pt-3 flex flex-col gap-2.5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <Zap size={13} className="text-amber-400" /> Beneficio Adicional / Plus (Cuenta Sueldo o VIP)
+                          </span>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                            Ej: 10% base + 5% adicional si cobrás el sueldo en el banco.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, hasPlusBenefit: !formData.hasPlusBenefit })}
+                          className={`text-xs font-black px-3 py-1 rounded-full border transition-all ${
+                            formData.hasPlusBenefit
+                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}
+                        >
+                          {formData.hasPlusBenefit ? 'Con Plus Adicional' : 'Sin Plus'}
+                        </button>
+                      </div>
+
+                      {formData.hasPlusBenefit && (
+                        <div className="bg-[#11223B] p-3 rounded-xl border border-slate-700 space-y-3 mt-1">
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-300 block mb-1">¿Para quién es el plus?</span>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {[
+                                { id: 'HABERES', label: 'Cuenta Sueldo' },
+                                { id: 'JUBILADO', label: 'Jubilados / ANSES' },
+                                { id: 'SEGMENT', label: 'Segmento VIP' },
+                              ].map(p => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => setFormData({ ...formData, plusType: p.id as any })}
+                                  className={`py-1 px-2 rounded-lg text-xs font-bold border transition-all ${
+                                    formData.plusType === p.id
+                                      ? 'bg-amber-500 text-slate-950 font-black border-amber-400'
+                                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                                  }`}
+                                >
+                                  {p.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <span className="text-[11px] font-bold text-slate-300 block mb-1">Porcentaje del Plus (%)</span>
+                              <input
+                                type="number"
+                                value={formData.plusValue}
+                                onChange={e => setFormData({ ...formData, plusValue: Number(e.target.value) })}
+                                className="w-full bg-[#0A1628] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-black focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[11px] font-bold text-slate-300 block mb-1">Tope adicional ($ opcional)</span>
+                              <input
+                                type="number"
+                                value={formData.plusCapAmount}
+                                onChange={e => setFormData({ ...formData, plusCapAmount: Number(e.target.value) })}
+                                placeholder="Ej: 4000"
+                                className="w-full bg-[#0A1628] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="text-[11px] text-amber-300/90 font-semibold bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                            💡 Resultado: <strong>{formData.discountValue}%</strong> base + <strong>{formData.plusValue}%</strong> por {formData.plusType === 'HABERES' ? 'Cuenta Sueldo' : formData.plusType === 'JUBILADO' ? 'Jubilados' : 'Segmento VIP'} = <span className="underline font-black text-amber-300">{Number(formData.discountValue) + Number(formData.plusValue)}% Total</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1139,16 +1236,144 @@ export default function AdminPromosV2Page() {
                     )}
                   </div>
 
-                  {/* Condiciones y Letra Chica */}
+                  {/* Acumulabilidad con otras promociones */}
+                  <div className="bg-[#0A1628] p-4 rounded-2xl border border-slate-800/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-black text-white flex items-center gap-1.5">
+                          <Layers size={14} className="text-blue-400" /> Acumulabilidad con otras promociones
+                        </label>
+                        <p className="text-[11px] text-slate-400">
+                          Indica si este descuento se puede sumar a otras promociones vigentes.
+                        </p>
+                      </div>
+                      <span className={`text-[11px] font-black px-2.5 py-1 rounded-full border ${
+                        !formData.stackable
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      }`}>
+                        {!formData.stackable ? 'No Acumulable' : 'Acumulable'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, stackable: false })}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          !formData.stackable
+                            ? 'bg-amber-500/10 border-amber-500/50 text-white'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-xs font-black flex items-center gap-1.5">
+                          🚫 No acumulable (Estándar bancario)
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          No acumulable con otras promociones, convenios ni descuentos del local.
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, stackable: true })}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          formData.stackable
+                            ? 'bg-emerald-500/15 border-emerald-500/50 text-white'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-xs font-black flex items-center gap-1.5">
+                          ✅ Acumulable con otras ofertas
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          Se puede sumar a rebajas del comercio, precios de oferta o cuotas vigentes.
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Exclusiones de la Promoción */}
+                  <div className="bg-[#0A1628] p-4 rounded-2xl border border-slate-800/80 space-y-3">
+                    <div>
+                      <label className="text-xs font-black text-white flex items-center gap-1.5">
+                        <AlertCircle size={14} className="text-amber-400" /> Exclusiones de Productos o Categorías
+                      </label>
+                      <p className="text-[11px] text-slate-400">
+                        Productos, líneas o rubros excluidos de la promoción.
+                      </p>
+                    </div>
+
+                    {/* Chips de exclusiones típicas en Argentina */}
+                    <div>
+                      <span className="text-[10px] text-slate-400 block mb-1.5 font-bold uppercase tracking-wider">
+                        Exclusiones frecuentes (clic para sumar / quitar):
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          'Electrodomésticos y tecnología',
+                          'Carnes y pescados frescos',
+                          'Precios Justos / Cuidados',
+                          'Compras mayoristas',
+                          'Venta Online / Web',
+                          'Bodegas y vinos alta gama',
+                          'Menús ejecutivos / combos',
+                          'Cigarrillos y telefonía',
+                        ].map(item => {
+                          const isIncluded = formData.exclusionsNote.toLowerCase().includes(item.toLowerCase())
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => {
+                                if (isIncluded) {
+                                  // Remover de la nota
+                                  const parts = formData.exclusionsNote
+                                    .split(',')
+                                    .map(s => s.trim())
+                                    .filter(s => s.toLowerCase() !== item.toLowerCase())
+                                  setFormData({ ...formData, exclusionsNote: parts.join(', ') })
+                                } else {
+                                  // Agregar a la nota
+                                  const current = formData.exclusionsNote.trim()
+                                  const updated = current ? `${current}, ${item}` : item
+                                  setFormData({ ...formData, exclusionsNote: updated })
+                                }
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                                isIncluded
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                              }`}
+                            >
+                              {isIncluded ? '✓ ' : '+ '} {item}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <textarea
+                        rows={2}
+                        value={formData.exclusionsNote}
+                        onChange={e => setFormData({ ...formData, exclusionsNote: e.target.value })}
+                        placeholder="Ej: Electrodomésticos, Precios Justos, productos de venta mayorista."
+                        className="w-full bg-[#11223B] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Condiciones generales y Letra Chica */}
                   <div>
                     <label className="text-xs font-bold text-slate-300 block mb-1.5">
                       Condiciones particulares y Letra Chica (Visible en la tarjeta)
                     </label>
                     <textarea
-                      rows={3}
+                      rows={2}
                       value={formData.conditionsNote}
                       onChange={e => setFormData({ ...formData, conditionsNote: e.target.value })}
-                      placeholder="Ej: No acumulable con otras promociones. Válido abonando con tarjeta física en el local."
+                      placeholder="Ej: Válido abonando con tarjeta física en el local. Reintegro dentro de los 30 días."
                       className="w-full bg-[#0A1628] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
