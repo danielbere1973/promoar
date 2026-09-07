@@ -291,9 +291,9 @@ export default function AdminPromosV2Page() {
     }
 
     const conditionsList: string[] = []
-    if (formData.accountType === 'HABERES') conditionsList.push('Cuenta Sueldo')
-    if (formData.accountType === 'JUBILADO') conditionsList.push('Jubilados')
-    if (formData.accountType === 'ANSES') conditionsList.push('Beneficio ANSES')
+    if (formData.accountType === 'HABERES') conditionsList.push('Exclusivo Cuenta Sueldo')
+    if (formData.accountType === 'JUBILADO') conditionsList.push('Exclusivo Jubilados y Pensionados')
+    if (formData.accountType === 'ANSES') conditionsList.push('Exclusivo Beneficio ANSES')
     if (formData.hasTimeRestriction) conditionsList.push(`De ${formData.validFromHour} a ${formData.validToHour} hs`)
     if (formData.salesChannel === 'PRESENCIAL') conditionsList.push('Solo presencial')
     if (formData.salesChannel === 'ONLINE') conditionsList.push('Solo online')
@@ -310,6 +310,7 @@ export default function AdminPromosV2Page() {
       validFromHour: formData.hasTimeRestriction ? formData.validFromHour : null,
       validToHour: formData.hasTimeRestriction ? formData.validToHour : null,
       plusDiscountNote,
+      accountType: formData.accountType,
       stackable: formData.stackable,
       commerceNote: formData.isExclusivePromoAR
         ? `⭐ Exclusivo PromoAR · ${finalNote || 'Mostrando la app'}`
@@ -324,6 +325,7 @@ export default function AdminPromosV2Page() {
         logoUrl: formData.commerceLogo || null,
       },
       requirements: [{
+        accountType: formData.accountType,
         discountType,
         discountValue,
         nxmN,
@@ -574,7 +576,7 @@ export default function AdminPromosV2Page() {
                           <span className="text-[11px] text-slate-400">Presets rápidos:</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                          {[10, 15, 20, 25, 30, 35, 40, 50, 100].map(v => (
+                          {[0, 10, 15, 20, 25, 30, 35, 40, 50, 100].map(v => (
                             <button
                               key={v}
                               type="button"
@@ -591,7 +593,7 @@ export default function AdminPromosV2Page() {
                         </div>
                         <input
                           type="range"
-                          min={5}
+                          min={0}
                           max={100}
                           step={5}
                           value={formData.discountValue}
@@ -767,84 +769,173 @@ export default function AdminPromosV2Page() {
                       )}
                     </div>
 
-                    {/* Beneficio Plus / Adicional (Cuenta Sueldo, Jubilados, Segmento VIP) */}
+                    {/* Destinatario / Público del Beneficio Principal */}
                     <div className="border-t border-slate-800/80 pt-3 flex flex-col gap-2.5">
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                            <Zap size={13} className="text-amber-400" /> Beneficio Adicional / Plus (Cuenta Sueldo o VIP)
+                            🎯 Destinatario del Beneficio Principal
                           </span>
                           <span className="text-[10px] text-slate-400 block mt-0.5">
-                            Ej: 10% base + 5% adicional si cobrás el sueldo en el banco.
+                            ¿Este {formData.discountValue}% aplica a todos o es 100% exclusivo para Jubilados o Cuenta Sueldo?
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, hasPlusBenefit: !formData.hasPlusBenefit })}
-                          className={`text-xs font-black px-3 py-1 rounded-full border transition-all ${
-                            formData.hasPlusBenefit
-                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                              : 'bg-slate-800 text-slate-300 border-slate-700'
-                          }`}
-                        >
-                          {formData.hasPlusBenefit ? 'Con Plus Adicional' : 'Sin Plus'}
-                        </button>
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                          formData.accountType === 'JUBILADO'
+                            ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                            : formData.accountType === 'HABERES'
+                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                            : formData.accountType === 'ANSES'
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                            : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        }`}>
+                          {formData.accountType === 'JUBILADO' ? '👴 Exclusivo Jubilados' : formData.accountType === 'HABERES' ? '💼 Exclusivo Cuenta Sueldo' : formData.accountType === 'ANSES' ? '🏛️ Exclusivo ANSES' : '🌐 Público General'}
+                        </span>
                       </div>
 
-                      {formData.hasPlusBenefit && (
-                        <div className="bg-[#11223B] p-3 rounded-xl border border-slate-700 space-y-3 mt-1">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          { id: 'ANY', label: 'Público General', sub: 'Aplica a todos los clientes', icon: '🌐' },
+                          { id: 'JUBILADO', label: 'Exclusivo Jubilados', sub: '10% a jubilados (ej. súper)', icon: '👴' },
+                          { id: 'HABERES', label: 'Exclusivo Sueldo', sub: 'Cobro de haberes en el banco', icon: '💼' },
+                          { id: 'ANSES', label: 'Exclusivo ANSES', sub: 'Asignaciones y planes', icon: '🏛️' },
+                        ].map(item => {
+                          const active = formData.accountType === item.id
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                const newAccountType = item.id
+                                setFormData({
+                                  ...formData,
+                                  accountType: newAccountType,
+                                  hasPlusBenefit: newAccountType === 'ANY' ? formData.hasPlusBenefit : false,
+                                })
+                              }}
+                              className={`p-2.5 rounded-xl border text-left transition-all ${
+                                active
+                                  ? item.id === 'JUBILADO'
+                                    ? 'bg-purple-600/25 border-purple-500 text-white shadow-sm ring-1 ring-purple-500/50'
+                                    : item.id === 'HABERES'
+                                    ? 'bg-blue-600/25 border-blue-500 text-white shadow-sm ring-1 ring-blue-500/50'
+                                    : item.id === 'ANSES'
+                                    ? 'bg-cyan-600/25 border-cyan-500 text-white shadow-sm ring-1 ring-cyan-500/50'
+                                    : 'bg-emerald-500/20 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-500/50'
+                                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                              }`}
+                            >
+                              <div className="text-base mb-0.5">{item.icon}</div>
+                              <div className="text-xs font-black leading-tight">{item.label}</div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">{item.sub}</div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Beneficio Plus / Adicional (Cuando es Público General) o Indicador de Exclusividad */}
+                    {formData.accountType === 'ANY' ? (
+                      <div className="border-t border-slate-800/80 pt-3 flex flex-col gap-2.5">
+                        <div className="flex items-center justify-between">
                           <div>
-                            <span className="text-[11px] font-bold text-slate-300 block mb-1">¿Para quién es el plus?</span>
-                            <div className="grid grid-cols-3 gap-1.5">
-                              {[
-                                { id: 'HABERES', label: 'Cuenta Sueldo' },
-                                { id: 'JUBILADO', label: 'Jubilados / ANSES' },
-                                { id: 'SEGMENT', label: 'Segmento VIP' },
-                              ].map(p => (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => setFormData({ ...formData, plusType: p.id as any })}
-                                  className={`py-1 px-2 rounded-lg text-xs font-bold border transition-all ${
-                                    formData.plusType === p.id
-                                      ? 'bg-amber-500 text-slate-950 font-black border-amber-400'
-                                      : 'bg-slate-900 border-slate-800 text-slate-400'
-                                  }`}
-                                >
-                                  {p.label}
-                                </button>
-                              ))}
+                            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                              <Zap size={13} className="text-amber-400" /> Beneficio Adicional / Plus (Cuenta Sueldo o VIP)
+                            </span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                              Ej: 10% base + 5% adicional si cobrás el sueldo en el banco.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, hasPlusBenefit: !formData.hasPlusBenefit })}
+                            className={`text-xs font-black px-3 py-1 rounded-full border transition-all ${
+                              formData.hasPlusBenefit
+                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                                : 'bg-slate-800 text-slate-300 border-slate-700'
+                            }`}
+                          >
+                            {formData.hasPlusBenefit ? 'Con Plus Adicional' : 'Sin Plus'}
+                          </button>
+                        </div>
+
+                        {formData.hasPlusBenefit && (
+                          <div className="bg-[#11223B] p-3 rounded-xl border border-slate-700 space-y-3 mt-1">
+                            <div>
+                              <span className="text-[11px] font-bold text-slate-300 block mb-1">¿Para quién es el plus?</span>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {[
+                                  { id: 'HABERES', label: 'Cuenta Sueldo' },
+                                  { id: 'JUBILADO', label: 'Jubilados / ANSES' },
+                                  { id: 'SEGMENT', label: 'Segmento VIP' },
+                                ].map(p => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, plusType: p.id as any })}
+                                    className={`py-1 px-2 rounded-lg text-xs font-bold border transition-all ${
+                                      formData.plusType === p.id
+                                        ? 'bg-amber-500 text-slate-950 font-black border-amber-400'
+                                        : 'bg-slate-900 border-slate-800 text-slate-400'
+                                    }`}
+                                  >
+                                    {p.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <span className="text-[11px] font-bold text-slate-300 block mb-1">Porcentaje del Plus (%)</span>
+                                <input
+                                  type="number"
+                                  value={formData.plusValue}
+                                  onChange={e => setFormData({ ...formData, plusValue: Number(e.target.value) })}
+                                  className="w-full bg-[#0A1628] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-black focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-[11px] font-bold text-slate-300 block mb-1">Tope adicional ($ opcional)</span>
+                                <input
+                                  type="number"
+                                  value={formData.plusCapAmount}
+                                  onChange={e => setFormData({ ...formData, plusCapAmount: Number(e.target.value) })}
+                                  placeholder="Ej: 4000"
+                                  className="w-full bg-[#0A1628] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="text-[11px] text-amber-300/90 font-semibold bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                              💡 Resultado: <strong>{formData.discountValue}%</strong> base + <strong>{formData.plusValue}%</strong> por {formData.plusType === 'HABERES' ? 'Cuenta Sueldo' : formData.plusType === 'JUBILADO' ? 'Jubilados' : 'Segmento VIP'} = <span className="underline font-black text-amber-300">{Number(formData.discountValue) + Number(formData.plusValue)}% Total</span>
                             </div>
                           </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <span className="text-[11px] font-bold text-slate-300 block mb-1">Porcentaje del Plus (%)</span>
-                              <input
-                                type="number"
-                                value={formData.plusValue}
-                                onChange={e => setFormData({ ...formData, plusValue: Number(e.target.value) })}
-                                className="w-full bg-[#0A1628] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-black focus:outline-none"
-                              />
-                            </div>
-                            <div>
-                              <span className="text-[11px] font-bold text-slate-300 block mb-1">Tope adicional ($ opcional)</span>
-                              <input
-                                type="number"
-                                value={formData.plusCapAmount}
-                                onChange={e => setFormData({ ...formData, plusCapAmount: Number(e.target.value) })}
-                                placeholder="Ej: 4000"
-                                className="w-full bg-[#0A1628] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="text-[11px] text-amber-300/90 font-semibold bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
-                            💡 Resultado: <strong>{formData.discountValue}%</strong> base + <strong>{formData.plusValue}%</strong> por {formData.plusType === 'HABERES' ? 'Cuenta Sueldo' : formData.plusType === 'JUBILADO' ? 'Jubilados' : 'Segmento VIP'} = <span className="underline font-black text-amber-300">{Number(formData.discountValue) + Number(formData.plusValue)}% Total</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="border-t border-slate-800/80 pt-3">
+                        <div className={`p-3.5 rounded-xl border flex items-center gap-3 text-xs ${
+                          formData.accountType === 'JUBILADO'
+                            ? 'bg-purple-950/30 border-purple-700/50 text-purple-200'
+                            : formData.accountType === 'HABERES'
+                            ? 'bg-blue-950/30 border-blue-700/50 text-blue-200'
+                            : 'bg-cyan-950/30 border-cyan-700/50 text-cyan-200'
+                        }`}>
+                          <span className="text-2xl shrink-0">
+                            {formData.accountType === 'JUBILADO' ? '👴' : formData.accountType === 'HABERES' ? '💼' : '🏛️'}
+                          </span>
+                          <div>
+                            <span className="font-black text-white block text-sm">
+                              Promo 100% Exclusiva para {formData.accountType === 'JUBILADO' ? 'Jubilados y Pensionados' : formData.accountType === 'HABERES' ? 'Cuenta Sueldo' : 'Beneficiarios ANSES'}
+                            </span>
+                            <p className="text-[11px] opacity-80 mt-0.5">
+                              El <strong>{formData.discountValue}%</strong> de ahorro configurado arriba es el beneficio total exclusivo para ellos (no requiere configurar un plus secundario).
+                            </p>
                           </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

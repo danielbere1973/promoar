@@ -47,6 +47,7 @@ type Req = {
   paymentChannel?: string | null
   note?: string | null
   segment?: string | null
+  accountType?: string | null
   usage?: { amountUsed: number; cap: number; exhausted: boolean; periodEnd: string | Date } | null
 }
 
@@ -58,6 +59,7 @@ type Promo = {
   sourceText?: string | null
   commerceNote?: string | null
   plusDiscountNote?: string | null
+  accountType?: string | null
   stackable?: boolean | null
   stackableNote?: string | null
   validFromHour?: number | null
@@ -376,6 +378,24 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
               {promo.plusDiscountNote && (
                 <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/40 rounded-md px-1.5 py-0.5">
                   <span className="text-[10px] leading-none">🚀</span> {promo.plusDiscountNote}
+                </span>
+              )}
+
+              {(bestReq?.accountType === 'JUBILADO' || promo.accountType === 'JUBILADO') && (
+                <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/40 rounded-md px-1.5 py-0.5">
+                  👵 Exclusivo Jubilados
+                </span>
+              )}
+
+              {(bestReq?.accountType === 'HABERES' || promo.accountType === 'HABERES') && (
+                <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/40 rounded-md px-1.5 py-0.5">
+                  💼 Exclusivo Cuenta Sueldo
+                </span>
+              )}
+
+              {(bestReq?.accountType === 'ANSES' || promo.accountType === 'ANSES') && (
+                <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/30 border border-cyan-200 dark:border-cyan-700/40 rounded-md px-1.5 py-0.5">
+                  🏛️ Exclusivo ANSES
                 </span>
               )}
             </div>
