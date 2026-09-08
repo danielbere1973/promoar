@@ -203,116 +203,8 @@ export default function AdminPromosV2Page() {
     status: 'ACTIVE',
   })
 
-  // Lista de promociones mock / pre-cargadas
-  const [promosList, setPromosList] = useState([
-    {
-      id: 'promo-excl-1',
-      title: '25% de descuento exclusivo en Cenas',
-      commerce: { id: 'c-1', name: 'La Panera Rosa', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=lapanerarosa.com' },
-      category: { name: 'Gastronomía', color: '#F97316', icon: '🍔' },
-      isExclusivePromoAR: true,
-      status: 'ACTIVE',
-      validDays: 112,
-      commerceNote: 'Exclusivo PromoAR · Mostrando la app en caja',
-      requirements: [{
-        discountType: 'PERCENTAGE_DESCUENTO',
-        discountValue: 25,
-        cap: 10000,
-        capPeriod: 'MONTHLY',
-        capUnlimited: false,
-        note: 'Válido de 20 a 00 hs',
-      }],
-      source: 'MERCHANT',
-      sourceLabel: 'Portal Comercio',
-      submittedByMerchant: true,
-      merchantContact: 'Martín (Dueño)',
-      stats: { views: 1240, clicks: 88, saved: 42 },
-    },
-    {
-      id: 'promo-coto-2',
-      title: '70% en la 2da unidad – Coto',
-      commerce: { id: 'c-2', name: 'Coto', logoUrl: 'https://www.coto.com.ar/favicon.ico' },
-      category: { name: 'Supermercados', color: '#10B981', icon: '🛒' },
-      isExclusivePromoAR: false,
-      status: 'ACTIVE',
-      validDays: 127,
-      commerceNote: 'En productos seleccionados de almacén y perfumería',
-      requirements: [{
-        discountType: 'SEGUNDA_UNIDAD',
-        discountValue: 70,
-        capUnlimited: true,
-      }],
-      source: 'sc-coto',
-      sourceLabel: 'Scraper Coto',
-      submittedByMerchant: false,
-      stats: { views: 4500, clicks: 310, saved: 190 },
-    },
-    {
-      id: 'promo-sueldo-3',
-      title: '30% reintegro Cuenta Sueldo',
-      commerce: { id: 'c-3', name: 'YPF', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=ypf.com' },
-      category: { name: 'Combustible', color: '#EF4444', icon: '⛽' },
-      isExclusivePromoAR: false,
-      status: 'ACTIVE',
-      validDays: 32,
-      commerceNote: 'Exclusivo para clientes que cobran haberes en Banco Galicia',
-      requirements: [{
-        bank: { name: 'Banco Galicia', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=galicia.ar' },
-        discountType: 'PERCENTAGE_REINTEGRO',
-        discountValue: 30,
-        cap: 12000,
-        capPeriod: 'MONTHLY',
-        paymentChannel: 'QR',
-        accountType: 'HABERES',
-      }],
-      source: 'sc-galicia',
-      sourceLabel: 'Scraper Banco Galicia',
-      submittedByMerchant: false,
-      stats: { views: 8950, clicks: 610, saved: 340 },
-    },
-    {
-      id: 'promo-jubilados-4',
-      title: '10% de descuento para Jubilados',
-      commerce: { id: 'c-4', name: 'Disco', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=disco.com.ar' },
-      category: { name: 'Supermercados', color: '#10B981', icon: '🛒' },
-      isExclusivePromoAR: false,
-      status: 'ACTIVE',
-      validDays: 30, // Lun a Jue
-      commerceNote: 'Exclusivo presentando DNI y carnet de jubilado en caja',
-      requirements: [{
-        discountType: 'PERCENTAGE_DESCUENTO',
-        discountValue: 10,
-        capUnlimited: true,
-        accountType: 'JUBILADO',
-      }],
-      source: 'sc-jumbo',
-      sourceLabel: 'Scraper Jumbo/Disco/Vea',
-      submittedByMerchant: false,
-      stats: { views: 6120, clicks: 420, saved: 280 },
-    },
-    {
-      id: 'promo-modo-5',
-      title: '20% reintegro en Farmacias con MODO',
-      commerce: { id: 'c-5', name: 'Farmacity', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=farmacity.com' },
-      category: { name: 'Farmacias', color: '#06B6D4', icon: '💊' },
-      isExclusivePromoAR: false,
-      status: 'ACTIVE',
-      validDays: 127,
-      commerceNote: 'Tope $8.000 por banco/semana pagando con QR MODO',
-      requirements: [{
-        wallet: { name: 'MODO', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar' },
-        discountType: 'PERCENTAGE_REINTEGRO',
-        discountValue: 20,
-        cap: 8000,
-        capPeriod: 'WEEKLY',
-        paymentChannel: 'QR',
-      }],
-      source: 'sc-modo',
-      sourceLabel: 'Scraper MODO',
-      submittedByMerchant: false,
-      stats: { views: 11400, clicks: 950, saved: 520 },
-    },
-  ])
+  // Lista de promociones cargadas bajo demanda por filtros
+  const [promosList, setPromosList] = useState<any[]>([])
 
   // Filtros de la Bandeja de Promociones
   const [listSearch, setListSearch] = useState('')
@@ -375,8 +267,26 @@ export default function AdminPromosV2Page() {
     loadEntities()
   }, [])
 
-  // Cargar promociones reales de PostgreSQL al montar o al cambiar filtros (con paginación y "Cargar más")
+  // Cargar promociones reales de PostgreSQL al aplicar filtros (con paginación y "Cargar más")
   const fetchPromosFromDb = useCallback(async (page = 0, append = false) => {
+    const isSearching = listSearch.trim().length >= 2
+    const hasCategory = listCategory !== 'ALL'
+    const hasCommerce = listCommerce !== 'ALL'
+    const hasSpecialStatus = listStatus === 'EXPIRED' || listStatus === 'PENDING'
+
+    // Si NO hay filtro activo (ni rubro específico, ni búsqueda por texto, ni comercio):
+    // no traer nada (0 promos), exactamente como la versión clásica del admin para evitar la consulta gigante de 15k promos.
+    if (!hasCategory && !isSearching && !hasCommerce && !hasSpecialStatus) {
+      if (!append) {
+        setPromosList([])
+        setPromosTotal(0)
+        setPromosHasMore(false)
+        setIsLoadingPromos(false)
+        setIsLoadingMore(false)
+      }
+      return
+    }
+
     if (append) {
       setIsLoadingMore(true)
     } else {
@@ -390,7 +300,7 @@ export default function AdminPromosV2Page() {
         params.set('status', 'ACTIVE')
       }
 
-      if (listCategory !== 'ALL') {
+      if (hasCategory) {
         const catObj = allCategories.find((c: any) => 
           c.name.toLowerCase() === listCategory.toLowerCase() || 
           c.id === listCategory || 
@@ -399,12 +309,16 @@ export default function AdminPromosV2Page() {
         if (catObj?.id) params.set('categoryId', catObj.id)
       }
 
-      if (listCommerce !== 'ALL' && dbEntities?.commerces) {
+      if (hasCommerce && dbEntities?.commerces) {
         const commObj = dbEntities.commerces.find((c: any) => c.name.toLowerCase() === listCommerce.toLowerCase())
-        if (commObj?.id) params.set('commerceId', commObj.id)
+        if (commObj?.id) {
+          params.set('commerceId', commObj.id)
+        } else {
+          params.set('q', listCommerce)
+        }
       }
 
-      if (listSearch.trim()) {
+      if (isSearching) {
         params.set('q', listSearch.trim())
       }
 
@@ -429,7 +343,7 @@ export default function AdminPromosV2Page() {
 
       // Fallback para prototipos públicos sin sesión admin: consultar /api/promos
       const publicParams = new URLSearchParams()
-      if (listCategory !== 'ALL') {
+      if (hasCategory) {
         const catObj = allCategories.find((c: any) => 
           c.name.toLowerCase() === listCategory.toLowerCase() || 
           c.id === listCategory || 
@@ -437,7 +351,11 @@ export default function AdminPromosV2Page() {
         )
         if (catObj?.slug) publicParams.set('category', catObj.slug)
       }
-      if (listSearch.trim()) publicParams.set('q', listSearch.trim())
+      if (isSearching) {
+        publicParams.set('q', listSearch.trim())
+      } else if (hasCommerce) {
+        publicParams.set('q', listCommerce)
+      }
       const pubRes = await fetch(`/api/promos?${publicParams.toString()}`)
       if (pubRes.ok) {
         const pubData = await pubRes.json()
@@ -462,8 +380,12 @@ export default function AdminPromosV2Page() {
   }, [isLoadingMore, promosHasMore, promosPage, fetchPromosFromDb])
 
   useEffect(() => {
-    fetchPromosFromDb(0, false)
-  }, [fetchPromosFromDb])
+    const isSearching = listSearch.trim().length >= 2
+    const timer = setTimeout(() => {
+      fetchPromosFromDb(0, false)
+    }, isSearching ? 300 : 0)
+    return () => clearTimeout(timer)
+  }, [listStatus, listCategory, listCommerce, listSearch, fetchPromosFromDb])
 
   // Helper para cargar una promo al Studio para edición
   const loadPromoToStudio = (p: any) => {
@@ -2222,7 +2144,9 @@ export default function AdminPromosV2Page() {
                   <h2 className="text-xl font-black text-white">Bandeja de Promociones</h2>
                   <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1.5">
                     {isLoadingPromos && <RefreshCw size={11} className="animate-spin text-blue-400" />}
-                    Mostrando {filteredPromosList.length.toLocaleString('es-AR')}{promosTotal > 0 ? ` de ${promosTotal.toLocaleString('es-AR')}` : ''} promos
+                    {filteredPromosList.length > 0 || isLoadingPromos
+                      ? `Mostrando ${filteredPromosList.length.toLocaleString('es-AR')}${promosTotal > 0 ? ` de ${promosTotal.toLocaleString('es-AR')}` : ''} promos`
+                      : '0 promos · Elegí un rubro o buscá'}
                   </span>
                   <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> PostgreSQL Neon
@@ -2354,8 +2278,11 @@ export default function AdminPromosV2Page() {
                   className="w-full bg-[#0A1628] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
                 >
                   <option value="ALL">🛒 Todos los comercios</option>
-                  {Array.from(new Set(promosList.map(p => p.commerce.name))).sort().map(name => (
-                    <option key={name} value={name}>{name}</option>
+                  {(dbEntities?.commerces && dbEntities.commerces.length > 0
+                    ? dbEntities.commerces.filter((c: any) => (c.activePromos ?? 1) > 0)
+                    : Array.from(new Set(promosList.map((p: any) => p.commerce?.name).filter(Boolean))).map(name => ({ id: name, name }))
+                  ).map((c: any) => (
+                    <option key={c.id || c.name} value={c.name}>{c.name}</option>
                   ))}
                 </select>
               </div>
@@ -2471,26 +2398,38 @@ export default function AdminPromosV2Page() {
             {/* Listado de Promociones */}
             <div className="grid gap-3">
               {filteredPromosList.length === 0 ? (
-                <div className="bg-[#0F223D] border border-slate-800 rounded-3xl p-12 text-center space-y-3">
-                  <span className="text-4xl block">🔍</span>
-                  <h3 className="text-base font-bold text-white">No se encontraron promociones</h3>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Probá ajustando el texto de búsqueda, cambiando el comercio o restableciendo los filtros de categoría y fuente de origen.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setListSearch('')
-                      setListCategory('ALL')
-                      setListCommerce('ALL')
-                      setListSource('ALL')
-                      setListStatus('ALL')
-                    }}
-                    className="text-xs font-bold text-blue-400 hover:underline pt-2 inline-block"
-                  >
-                    Restablecer todos los filtros
-                  </button>
-                </div>
+                (listCategory === 'ALL' && !listSearch.trim() && listCommerce === 'ALL' && listStatus === 'ALL') ? (
+                  <div className="bg-[#0F223D] border border-dashed border-slate-800 rounded-3xl p-16 text-center space-y-3 animate-in fade-in">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto text-2xl text-blue-400">
+                      🏷️
+                    </div>
+                    <h3 className="text-base font-bold text-white">Seleccioná un rubro o buscá un comercio</h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                      Para mantener la velocidad y no saturar el navegador con 15.000 promociones de golpe, la bandeja carga bajo demanda. Tocá cualquier rubro de la barra superior o buscá una marca (ej: Freddo, Coto, Farmacity).
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-[#0F223D] border border-slate-800 rounded-3xl p-12 text-center space-y-3 animate-in fade-in">
+                    <span className="text-4xl block">🔍</span>
+                    <h3 className="text-base font-bold text-white">No se encontraron promociones</h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      Probá ajustando el texto de búsqueda, cambiando el comercio o restableciendo los filtros de categoría y fuente de origen.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setListSearch('')
+                        setListCategory('ALL')
+                        setListCommerce('ALL')
+                        setListSource('ALL')
+                        setListStatus('ALL')
+                      }}
+                      className="text-xs font-bold text-blue-400 hover:underline pt-2 inline-block"
+                    >
+                      Restablecer todos los filtros
+                    </button>
+                  </div>
+                )
               ) : (
                 filteredPromosList.map(p => {
                   const isSelected = selectedPromoIds.has(p.id)
