@@ -876,6 +876,7 @@ enum PaymentChannel {
   TARJETA_FISICA
   TRANSFERENCIA
   DINERO_EN_CUENTA
+  LINK_DE_PAGO
 }
 
 enum AccountType {

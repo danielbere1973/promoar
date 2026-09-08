@@ -9,7 +9,7 @@ import {
   Building2, CreditCard, Calendar, Tag, ShieldCheck, ArrowRight,
   ChevronRight, ArrowLeft, Eye, Edit3, Check, Trash2, SlidersHorizontal,
   Layers, Zap, AlertCircle, RefreshCw, Smartphone, ExternalLink, HelpCircle,
-  Store, Globe, Wallet, DollarSign, Percent, ChevronDown, Bot, Wand2
+  Store, Globe, Wallet, DollarSign, Percent, ChevronDown, Bot, Wand2, Copy
 } from 'lucide-react'
 
 // Categorías oficiales de la base de datos (PostgreSQL Neon)
@@ -115,6 +115,7 @@ const PAYMENT_CHANNELS = [
   { id: 'QR', label: 'QR / MODO', desc: 'Escaneando con app bancaria o billetera' },
   { id: 'NFC', label: 'Sin contacto (NFC)', desc: 'Contactless con tarjeta o celular' },
   { id: 'TARJETA_FISICA', label: 'Tarjeta física', desc: 'Presentando el plástico en la terminal' },
+  { id: 'LINK_DE_PAGO', label: 'Link de Pago', desc: 'Cobro online, link de WhatsApp o web' },
   { id: 'TRANSFERENCIA', label: 'Transferencia directa', desc: 'Alias / CBU' },
   { id: 'DINERO_EN_CUENTA', label: 'Dinero en cuenta', desc: 'Débito directo sin tarjeta' },
 ]
@@ -137,71 +138,74 @@ const DAYS_KEYS = [
   { bit: 64, label: 'S', name: 'Sábado' },
 ]
 
+// Estado inicial limpio para una nueva promoción
+const EMPTY_FORM_DATA = {
+  id: '',
+  // 1. Comercio y Canales
+  commerceName: '',
+  commerceLogo: '',
+  categoryId: 'cmnulzpng000lqlkklp8a7q4k',
+  categoryName: 'Supermercados',
+  categoryColor: '#1B5E20',
+  categoryIcon: '🛒',
+  salesChannel: 'AMBOS',
+
+  // 2. Beneficio
+  benefitKind: 'PERCENTAGE_DESCUENTO',
+  discountValue: 20,
+  installmentsCount: 3,
+  nxmN: 2,
+  nxmM: 1,
+  segundaUnidadPct: 70,
+  fixedAmountValue: 5000,
+  hasCap: false,
+  capAmount: 0,
+  capPeriod: 'MONTHLY',
+  capUnlimited: true,
+  minPurchase: 0,
+
+  // Beneficio Plus / Adicional
+  hasPlusBenefit: false,
+  plusType: 'HABERES',
+  plusValue: 5,
+  plusCapAmount: 0,
+
+  // 3. Financiación y Requisitos
+  isExclusivePromoAR: false,
+  selectedBanks: [] as string[],
+  selectedWallets: [] as string[],
+  selectedNetworks: [] as string[],
+  selectedCardTypes: ['CREDIT'] as string[],
+  selectedSegment: '',
+  selectedCardSegment: '',
+  accountType: 'ANY',
+  paymentChannel: 'ANY',
+
+  // 4. Vigencia y Horarios
+  validDays: 127, // Todos los días por defecto
+  validFrom: new Date().toISOString().split('T')[0],
+  validUntil: '2026-12-31',
+  hasExpiration: false,
+  hasTimeRestriction: false,
+  validFromHour: 0,
+  validToHour: 23,
+  stackable: false,
+  exclusionsNote: '',
+  conditionsNote: '',
+  status: 'ACTIVE',
+}
+
 export default function AdminPromosV2Page() {
   const [viewRole, setViewRole] = useState<'ADMIN' | 'MERCHANT'>('ADMIN')
   const [activeTab, setActiveTab] = useState<'LIST' | 'STUDIO'>('STUDIO')
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'PENDING' | 'EXCLUSIVE' | 'ACTIVE' | 'EXPIRED'>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Pasos del Studio
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(2)
+  // Pasos del Studio: arranca siempre en Paso 1 (Comercio)
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
 
-  // Estado completo del Formulario
-  const [formData, setFormData] = useState({
-    id: '',
-    // 1. Comercio y Canales
-    commerceName: 'Supermercados Coto',
-    commerceLogo: 'https://www.coto.com.ar/favicon.ico',
-    categoryId: 'cat-supermercados',
-    categoryName: 'Supermercados',
-    categoryColor: '#10B981',
-    categoryIcon: '🛒',
-    salesChannel: 'AMBOS', // PRESENCIAL, ONLINE, AMBOS
-
-    // 2. Beneficio
-    benefitKind: 'PERCENTAGE_REINTEGRO', // PERCENTAGE_DESCUENTO, PERCENTAGE_REINTEGRO, CUOTAS_SIN_INTERES, NXM, SEGUNDA_UNIDAD, FIXED_AMOUNT
-    discountValue: 20,
-    installmentsCount: 6,
-    nxmN: 2,
-    nxmM: 1,
-    segundaUnidadPct: 70, // 2do al 70%
-    fixedAmountValue: 5000,
-    hasCap: true,
-    capAmount: 8000,
-    capPeriod: 'MONTHLY', // MONTHLY, WEEKLY, DAILY, PER_TRANSACTION
-    capUnlimited: false,
-    minPurchase: 0,
-
-    // Beneficio Plus / Adicional (Punto de feedback del usuario)
-    hasPlusBenefit: true,
-    plusType: 'HABERES', // 'HABERES' | 'JUBILADO' | 'SEGMENT'
-    plusValue: 5, // ej. +5% adicional
-    plusCapAmount: 4000,
-
-    // 3. Financiación y Requisitos (Punto 2 de feedback)
-    isExclusivePromoAR: false, // true = directo de comercio; false = requiere bancos/tarjetas
-    selectedBanks: ['cmnytdskm000013wtftq7mffg'],
-    selectedWallets: ['cmnulzh04000aqlkk8mnpzo46'],
-    selectedNetworks: ['cmnulzkee000fqlkkz5pegb2b', 'cmnulzllo000gqlkkod8d8w5l'],
-    cardType: 'CREDIT', // ANY, CREDIT, DEBIT, PREPAID
-    selectedSegment: '', // Segmento banco VIP (ej. Eminent)
-    selectedCardSegment: '', // Segmento tarjeta (ej. Signature)
-    accountType: 'ANY', // ANY, HABERES (Cuenta sueldo), JUBILADO, ANSES
-    paymentChannel: 'QR', // ANY, QR, NFC, TARJETA_FISICA, TRANSFERENCIA, DINERO_EN_CUENTA
-
-    // 4. Vigencia y Horarios
-    validDays: 32, // Viernes
-    validFrom: new Date().toISOString().split('T')[0],
-    validUntil: '2026-12-31',
-    hasExpiration: true,
-    hasTimeRestriction: false,
-    validFromHour: 20,
-    validToHour: 0,
-    stackable: false, // Acumulabilidad con otras promos
-    exclusionsNote: 'No aplica a compras online ni electrodomésticos',
-    conditionsNote: 'Tope de reintegro unificado pagando con QR MODO y tarjetas de crédito Galicia.',
-    status: 'ACTIVE',
-  })
+  // Estado completo del Formulario (inicializado limpio)
+  const [formData, setFormData] = useState(EMPTY_FORM_DATA)
 
   // Lista de promociones cargadas bajo demanda por filtros
   const [promosList, setPromosList] = useState<any[]>([])
@@ -387,42 +391,86 @@ export default function AdminPromosV2Page() {
     return () => clearTimeout(timer)
   }, [listStatus, listCategory, listCommerce, listSearch, fetchPromosFromDb])
 
+  // Helper para comenzar una nueva promoción desde cero
+  const handleNewPromo = () => {
+    setFormData({
+      ...EMPTY_FORM_DATA,
+      categoryId: allCategories[0]?.id || 'cmnulzpng000lqlkklp8a7q4k',
+      categoryName: allCategories[0]?.name || 'Supermercados',
+      categoryColor: allCategories[0]?.color || '#1B5E20',
+      categoryIcon: allCategories[0]?.icon || '🛒',
+    })
+    setStep(1)
+    setActiveTab('STUDIO')
+  }
+
+  // Helper para duplicar una promo existente y crear una variante
+  const duplicatePromoToStudio = (p: any) => {
+    loadPromoToStudio(p)
+    setFormData(prev => ({
+      ...prev,
+      id: '', // ID limpio para que se guarde como nueva promoción independiente
+    }))
+    setToastMessage({
+      type: 'success',
+      text: '📋 Promo duplicada en el editor. Modificá los días o beneficios y guardala como nueva promoción.',
+    })
+  }
+
   // Helper para cargar una promo al Studio para edición
   const loadPromoToStudio = (p: any) => {
-    const req = p.requirements?.[0]
+    const firstReq = p.requirements?.[0]
+
+    // Extraer todas las entidades únicas de todos los requirements
+    const extractedNetworks = Array.from(new Set(
+      (p.requirements || []).map((r: any) => r.cardNetwork?.id || r.cardNetworkId).filter(Boolean)
+    )) as string[]
+
+    const extractedCardTypes = Array.from(new Set(
+      (p.requirements || []).map((r: any) => r.cardType).filter(Boolean)
+    )) as string[]
+
+    const extractedBanks = Array.from(new Set(
+      (p.requirements || []).map((r: any) => r.bank?.id || r.bankId).filter(Boolean)
+    )) as string[]
+
+    const extractedWallets = Array.from(new Set(
+      (p.requirements || []).map((r: any) => r.wallet?.id || r.walletId).filter(Boolean)
+    )) as string[]
+
     setFormData({
       id: p.id,
       commerceName: p.commerce?.name || p.commerceName || '',
       commerceLogo: p.commerce?.logoUrl || p.commerceLogo || '',
       salesChannel: p.salesChannel || 'AMBOS',
-      categoryId: p.category?.id || p.categoryId || 'cat-gastronomia',
-      categoryName: p.category?.name || p.categoryName || 'Gastronomía',
-      categoryColor: p.category?.color || p.categoryColor || '#F97316',
-      categoryIcon: p.category?.icon || p.categoryIcon || '🍔',
-      isExclusivePromoAR: p.isExclusivePromoAR ?? (!req?.bankId && !req?.walletId),
-      benefitKind: (req?.discountType as any) || 'PERCENTAGE_DESCUENTO',
-      discountValue: Number(req?.discountValue) || 20,
-      installmentsCount: req?.discountType === 'CUOTAS_SIN_INTERES' ? Number(req.discountValue) : 6,
-      nxmN: req?.nxmN || 2,
-      nxmM: req?.nxmM || 1,
-      segundaUnidadPct: req?.discountType === 'SEGUNDA_UNIDAD' ? Number(req.discountValue) : 70,
+      categoryId: p.category?.id || p.categoryId || (allCategories[0]?.id || 'cmnulzpng000lqlkklp8a7q4k'),
+      categoryName: p.category?.name || p.categoryName || (allCategories[0]?.name || 'Supermercados'),
+      categoryColor: p.category?.color || p.categoryColor || '#1B5E20',
+      categoryIcon: p.category?.icon || p.categoryIcon || '🛒',
+      isExclusivePromoAR: p.isExclusivePromoAR ?? (!firstReq?.bankId && !firstReq?.walletId),
+      benefitKind: (firstReq?.discountType as any) || 'PERCENTAGE_DESCUENTO',
+      discountValue: Number(firstReq?.discountValue) || 20,
+      installmentsCount: firstReq?.discountType === 'CUOTAS_SIN_INTERES' ? Number(firstReq.discountValue) : 6,
+      nxmN: firstReq?.nxmN || 2,
+      nxmM: firstReq?.nxmM || 1,
+      segundaUnidadPct: firstReq?.discountType === 'SEGUNDA_UNIDAD' ? Number(firstReq.discountValue) : 70,
       fixedAmountValue: 5000,
-      minPurchase: req?.minPurchase || 0,
-      capUnlimited: req?.capUnlimited ?? !req?.cap,
-      capAmount: req?.cap || 8000,
-      capPeriod: req?.capPeriod || 'MONTHLY',
+      minPurchase: firstReq?.minPurchase || 0,
+      capUnlimited: firstReq?.capUnlimited ?? !firstReq?.cap,
+      capAmount: firstReq?.cap || 8000,
+      capPeriod: firstReq?.capPeriod || 'MONTHLY',
       hasPlusBenefit: p.hasPlusBenefit || false,
       plusType: p.plusType || 'HABERES',
       plusValue: p.plusValue || 5,
       plusCapAmount: p.plusCapAmount || 0,
-      selectedBanks: req?.bank?.id ? [req.bank.id] : req?.bankId ? [req.bankId] : [],
-      selectedWallets: req?.wallet?.id ? [req.wallet.id] : req?.walletId ? [req.walletId] : [],
-      selectedNetworks: req?.cardNetwork?.id ? [req.cardNetwork.id] : req?.cardNetworkId ? [req.cardNetworkId] : [],
-      cardType: (req?.cardType as any) || 'CREDIT',
-      selectedSegment: req?.segment || '',
-      selectedCardSegment: req?.cardSegmentId || '',
-      accountType: (req?.accountType as any) || 'ANY',
-      paymentChannel: (req?.paymentChannel as any) || 'QR',
+      selectedBanks: extractedBanks.length > 0 ? extractedBanks : (firstReq?.bankId ? [firstReq.bankId] : []),
+      selectedWallets: extractedWallets.length > 0 ? extractedWallets : (firstReq?.walletId ? [firstReq.walletId] : []),
+      selectedNetworks: extractedNetworks.length > 0 ? extractedNetworks : (firstReq?.cardNetworkId ? [firstReq.cardNetworkId] : []),
+      selectedCardTypes: extractedCardTypes.length > 0 ? extractedCardTypes : (firstReq?.cardType ? [firstReq.cardType] : ['ANY']),
+      selectedSegment: firstReq?.segment || '',
+      selectedCardSegment: firstReq?.cardSegmentId || '',
+      accountType: (firstReq?.accountType as any) || 'ANY',
+      paymentChannel: (firstReq?.paymentChannel as any) || 'ANY',
       validDays: p.validDays || 127,
       validFrom: p.validFrom ? new Date(p.validFrom).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       validUntil: p.validUntil ? new Date(p.validUntil).toISOString().split('T')[0] : '2026-12-31',
@@ -435,6 +483,7 @@ export default function AdminPromosV2Page() {
       conditionsNote: p.commerceNote || p.conditionsNote || '',
       status: p.status || 'ACTIVE',
     })
+    setStep(1)
     setActiveTab('STUDIO')
   }
 
@@ -443,10 +492,39 @@ export default function AdminPromosV2Page() {
     setIsSaving(true)
     setToastMessage(null)
     try {
+      const cleanCommName = formData.commerceName.trim()
       let commerceId = ''
-      if (dbEntities?.commerces && dbEntities.commerces.length > 0) {
-        const found = dbEntities.commerces.find((c: any) => c.name.toLowerCase() === formData.commerceName.toLowerCase())
-        commerceId = found?.id || dbEntities.commerces[0].id
+
+      if (cleanCommName && dbEntities?.commerces && dbEntities.commerces.length > 0) {
+        const found = dbEntities.commerces.find(
+          (c: any) => c.name.trim().toLowerCase() === cleanCommName.toLowerCase()
+        )
+        if (found) commerceId = found.id
+      }
+
+      // Si el comercio ingresado no existe aún en la base de datos, crearlo dinámicamente
+      if (!commerceId && cleanCommName) {
+        try {
+          const createRes = await fetch('/api/admin/entities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'commerce',
+              name: cleanCommName,
+              logoUrl: formData.commerceLogo.trim() || null,
+            }),
+          })
+          if (createRes.ok) {
+            const newComm = await createRes.json()
+            commerceId = newComm.id
+            setDbEntities(prev => prev ? {
+              ...prev,
+              commerces: [...prev.commerces, newComm].sort((a: any, b: any) => a.name.localeCompare(b.name)),
+            } : null)
+          }
+        } catch (commErr) {
+          console.error('Error al crear nuevo comercio:', commErr)
+        }
       }
 
       let categoryId = formData.categoryId
@@ -480,31 +558,48 @@ export default function AdminPromosV2Page() {
 
       const bankObj = dbEntities?.banks?.find((b: any) => formData.selectedBanks.includes(b.id) || formData.selectedBanks.includes(b.slug))
       const walletObj = dbEntities?.wallets?.find((w: any) => formData.selectedWallets.includes(w.id) || formData.selectedWallets.includes(w.slug))
-      const networkObj = dbEntities?.cardNetworks?.find((n: any) => formData.selectedNetworks.includes(n.id) || formData.selectedNetworks.includes(n.slug))
 
-      const reqPayload: any = {
-        bankId: (!formData.isExclusivePromoAR && bankObj) ? bankObj.id : null,
-        walletId: (!formData.isExclusivePromoAR && walletObj) ? walletObj.id : null,
-        cardNetworkId: (!formData.isExclusivePromoAR && networkObj) ? networkObj.id : null,
-        cardType: formData.cardType === 'ANY' ? null : formData.cardType,
-        paymentChannel: formData.paymentChannel,
-        accountType: formData.accountType,
-        discountType,
-        discountValue,
-        nxmN,
-        nxmM,
-        minPurchase: formData.minPurchase || null,
-        cap: formData.capUnlimited ? null : formData.capAmount,
-        capUnlimited: formData.capUnlimited,
-        capPeriod: formData.capPeriod,
-        note: formData.conditionsNote || null,
+      // Mapear todas las redes seleccionadas (o null si ninguna o si es promo directa del comercio)
+      const matchedNetworks = formData.isExclusivePromoAR
+        ? [null]
+        : (formData.selectedNetworks.length > 0
+            ? formData.selectedNetworks
+            : [null])
+
+      // Mapear todos los tipos de tarjeta seleccionados (ANY -> null)
+      const matchedCardTypes = formData.selectedCardTypes.includes('ANY') || formData.selectedCardTypes.length === 0
+        ? [null]
+        : formData.selectedCardTypes
+
+      const requirementsList: any[] = []
+
+      for (const netId of matchedNetworks) {
+        for (const cType of matchedCardTypes) {
+          requirementsList.push({
+            bankId: (!formData.isExclusivePromoAR && bankObj) ? bankObj.id : null,
+            walletId: (!formData.isExclusivePromoAR && walletObj) ? walletObj.id : null,
+            cardNetworkId: (!formData.isExclusivePromoAR && netId) ? netId : null,
+            cardType: cType,
+            paymentChannel: formData.paymentChannel,
+            accountType: formData.accountType,
+            discountType,
+            discountValue,
+            nxmN,
+            nxmM,
+            minPurchase: formData.minPurchase || null,
+            cap: formData.capUnlimited ? null : formData.capAmount,
+            capUnlimited: formData.capUnlimited,
+            capPeriod: formData.capPeriod,
+            note: formData.conditionsNote || null,
+          })
+        }
       }
 
       const isEditingReal = formData.id && !formData.id.startsWith('promo-') && !formData.id.startsWith('preview-')
 
       const payload: any = {
-        title: `${formData.commerceName} – ${discountType === 'CUOTAS_SIN_INTERES' ? `${formData.installmentsCount} cuotas sin interés` : `${discountValue}% de descuento`}`,
-        description: formData.conditionsNote || `${formData.commerceName} promoción`,
+        title: `${cleanCommName || 'Promoción'} – ${discountType === 'CUOTAS_SIN_INTERES' ? `${formData.installmentsCount} cuotas sin interés` : `${discountValue}% de descuento`}`,
+        description: formData.conditionsNote || `${cleanCommName || 'Promoción'}`,
         commerceId: commerceId || undefined,
         categoryId: categoryId || undefined,
         salesChannel: formData.salesChannel,
@@ -516,7 +611,19 @@ export default function AdminPromosV2Page() {
         stackable: formData.stackable,
         commerceNote: formData.conditionsNote || null,
         status: formData.status || 'ACTIVE',
-        requirements: [reqPayload],
+        requirements: requirementsList.length > 0 ? requirementsList : [{
+          bankId: null,
+          walletId: null,
+          cardNetworkId: null,
+          cardType: null,
+          paymentChannel: formData.paymentChannel,
+          accountType: formData.accountType,
+          discountType,
+          discountValue,
+          cap: formData.capUnlimited ? null : formData.capAmount,
+          capPeriod: formData.capPeriod,
+          note: formData.conditionsNote || null,
+        }],
       }
 
       let res
@@ -870,7 +977,13 @@ export default function AdminPromosV2Page() {
           </div>
 
           <button
-            onClick={() => setActiveTab(activeTab === 'LIST' ? 'STUDIO' : 'LIST')}
+            onClick={() => {
+              if (activeTab === 'STUDIO') {
+                setActiveTab('LIST')
+              } else {
+                handleNewPromo()
+              }
+            }}
             className={`text-xs font-black px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm transition-all ${
               activeTab === 'STUDIO'
                 ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
@@ -915,28 +1028,62 @@ export default function AdminPromosV2Page() {
             
             {/* ── COLUMNA IZQUIERDA (7 COLS): EL FORMULARIO COMPLETO ── */}
             <div className="lg:col-span-7 bg-[#0F223D] border border-slate-800/90 rounded-3xl p-6 shadow-2xl space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-4 gap-3">
                 <div>
-                  <h2 className="text-lg font-black text-white flex items-center gap-2">
-                    <Sparkles className="text-amber-400" size={18} />
-                    {viewRole === 'MERCHANT' ? 'Cargar Promoción de mi Comercio' : 'Editor Avanzado de Promoción'}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-black text-white flex items-center gap-2">
+                      <Sparkles className="text-amber-400" size={18} />
+                      {viewRole === 'MERCHANT' ? 'Cargar Promoción de mi Comercio' : 'Editor Avanzado de Promoción'}
+                    </h2>
+                    {formData.id && !formData.id.startsWith('promo-') && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                        Editando existente
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Todos los campos bancarios, previsionales, de tarjetas y vigencia están disponibles.
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5 bg-[#0A1628] p-1 rounded-xl border border-slate-800 text-xs font-bold">
-                  {[1, 2, 3, 4].map(s => (
+
+                <div className="flex items-center gap-2">
+                  {formData.id && (
                     <button
-                      key={s}
-                      onClick={() => setStep(s as any)}
-                      className={`w-7 h-7 rounded-lg text-xs font-black transition-all ${
-                        step === s ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                      }`}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, id: '' }))
+                        setToastMessage({
+                          type: 'success',
+                          text: '📋 Promo desvinculada. Al guardar se creará como una nueva promoción (variante).',
+                        })
+                      }}
+                      className="text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all flex items-center gap-1.5"
+                      title="Crear una nueva promo copiando los datos actuales"
                     >
-                      {s}
+                      <Copy size={13} /> Duplicar
                     </button>
-                  ))}
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleNewPromo}
+                    className="text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 border border-slate-700 hover:text-white hover:bg-slate-700 transition-all flex items-center gap-1.5"
+                    title="Limpiar todos los campos e iniciar una nueva promo"
+                  >
+                    <Plus size={13} /> Limpiar
+                  </button>
+                  <div className="flex items-center gap-1 bg-[#0A1628] p-1 rounded-xl border border-slate-800 text-xs font-bold">
+                    {[1, 2, 3, 4].map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setStep(s as any)}
+                        className={`w-7 h-7 rounded-lg text-xs font-black transition-all ${
+                          step === s ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1640,29 +1787,49 @@ export default function AdminPromosV2Page() {
                           </div>
 
                           <div>
-                            <label className="text-xs font-black text-white block mb-1.5">
-                              d) Tipo de Tarjeta
+                            <label className="text-xs font-black text-white block mb-1.5 flex items-center justify-between">
+                              <span>d) Tipo de Tarjeta</span>
+                              <span className="text-[10px] text-slate-400 font-normal">Permite varios</span>
                             </label>
                             <div className="grid grid-cols-2 gap-1.5">
                               {[
-                                { id: 'ANY', label: 'Cualquier tipo' },
+                                { id: 'ANY', label: 'Cualquiera' },
                                 { id: 'CREDIT', label: 'Crédito' },
                                 { id: 'DEBIT', label: 'Débito' },
                                 { id: 'PREPAID', label: 'Prepaga' },
-                              ].map(t => (
-                                <button
-                                  key={t.id}
-                                  type="button"
-                                  onClick={() => setFormData({ ...formData, cardType: t.id })}
-                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border text-center transition-all ${
-                                    formData.cardType === t.id
-                                      ? 'bg-blue-600 border-blue-500 text-white'
-                                      : 'bg-slate-900 border-slate-800 text-slate-400'
-                                  }`}
-                                >
-                                  {t.label}
-                                </button>
-                              ))}
+                              ].map(t => {
+                                const isAny = t.id === 'ANY'
+                                const isSelected = isAny
+                                  ? (formData.selectedCardTypes.includes('ANY') || formData.selectedCardTypes.length === 0)
+                                  : (formData.selectedCardTypes.includes(t.id) && !formData.selectedCardTypes.includes('ANY'))
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isAny) {
+                                        setFormData({ ...formData, selectedCardTypes: ['ANY'] })
+                                      } else {
+                                        const withoutAny = formData.selectedCardTypes.filter(ct => ct !== 'ANY')
+                                        if (withoutAny.includes(t.id)) {
+                                          const next = withoutAny.filter(ct => ct !== t.id)
+                                          setFormData({ ...formData, selectedCardTypes: next.length > 0 ? next : ['ANY'] })
+                                        } else {
+                                          setFormData({ ...formData, selectedCardTypes: [...withoutAny, t.id] })
+                                        }
+                                      }
+                                    }}
+                                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border text-center transition-all flex items-center justify-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-blue-600 border-blue-500 text-white shadow-sm'
+                                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                                    }`}
+                                  >
+                                    <span>{t.label}</span>
+                                    {isSelected && !isAny && <span className="text-[10px]">✓</span>}
+                                  </button>
+                                )
+                              })}
                             </div>
                           </div>
                         </div>
@@ -2185,9 +2352,7 @@ export default function AdminPromosV2Page() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveTab('STUDIO')
-                  }}
+                  onClick={handleNewPromo}
                   className="text-xs font-black px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md transition-all flex items-center gap-1.5"
                 >
                   <Plus size={15} /> Nueva Promoción
@@ -2557,6 +2722,16 @@ export default function AdminPromosV2Page() {
                             <span>Página</span>
                           </button>
                         </div>
+
+                        {/* Botón Duplicar como Variante */}
+                        <button
+                          type="button"
+                          onClick={() => duplicatePromoToStudio(p)}
+                          title="Duplicar y crear una nueva variante de esta promo"
+                          className="text-xs font-black px-3 py-2 bg-slate-800 hover:bg-amber-600/30 text-slate-300 hover:text-amber-200 rounded-xl border border-slate-700 hover:border-amber-500/50 transition-all flex items-center gap-1.5"
+                        >
+                          <Copy size={13} /> Duplicar
+                        </button>
 
                         {/* Botón Editar en Studio */}
                         <button
