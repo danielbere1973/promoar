@@ -535,7 +535,7 @@ export default function AdminPromosV2Page() {
       }
 
       if (res.ok) {
-        setToastMessage({ type: 'success', text: isEditingReal ? '✅ ¡Promoción actualizada en PostgreSQL!' : '✅ ¡Nueva promoción creada en PostgreSQL!' })
+        setToastMessage({ type: 'success', text: isEditingReal ? '✅ ¡Promoción actualizada con éxito!' : '✅ ¡Nueva promoción creada con éxito!' })
         fetchPromosFromDb()
         setTimeout(() => {
           setActiveTab('LIST')
@@ -2053,12 +2053,12 @@ export default function AdminPromosV2Page() {
                   >
                     <CheckCircle2 size={16} className={isSaving ? 'animate-spin' : ''} />
                     {isSaving
-                      ? 'Guardando en Base de Datos...'
+                      ? 'Guardando promoción...'
                       : formData.id && !formData.id.startsWith('promo-') && !formData.id.startsWith('preview-')
-                      ? 'Actualizar en PostgreSQL'
+                      ? 'Actualizar Promoción'
                       : viewRole === 'MERCHANT'
                       ? 'Enviar para Aprobación'
-                      : 'Publicar Inmediatamente en PostgreSQL'}
+                      : 'Publicar Promoción'}
                   </button>
                 )}
               </div>
@@ -2147,9 +2147,6 @@ export default function AdminPromosV2Page() {
                     {filteredPromosList.length > 0 || isLoadingPromos
                       ? `Mostrando ${filteredPromosList.length.toLocaleString('es-AR')}${promosTotal > 0 ? ` de ${promosTotal.toLocaleString('es-AR')}` : ''} promos`
                       : '0 promos · Elegí un rubro o buscá'}
-                  </span>
-                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> PostgreSQL Neon
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
