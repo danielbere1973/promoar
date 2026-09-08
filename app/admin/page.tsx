@@ -9,7 +9,7 @@ import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
   Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
-  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2, History
+  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2, History, Sparkles
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
