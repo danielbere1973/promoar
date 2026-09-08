@@ -12,16 +12,29 @@ import {
   Store, Globe, Wallet, DollarSign, Percent, ChevronDown, Bot, Wand2
 } from 'lucide-react'
 
-// Categorías del catálogo
+// Categorías oficiales de la base de datos (PostgreSQL Neon)
 const DEFAULT_CATEGORIES = [
-  { id: 'cat-gastronomia', name: 'Gastronomía', icon: '🍔', color: '#F97316' },
-  { id: 'cat-supermercados', name: 'Supermercados', icon: '🛒', color: '#10B981' },
-  { id: 'cat-indumentaria', name: 'Indumentaria', icon: '👕', color: '#8B5CF6' },
-  { id: 'cat-farmacias', name: 'Farmacias', icon: '💊', color: '#06B6D4' },
-  { id: 'cat-combustible', name: 'Combustible', icon: '⛽', color: '#EF4444' },
-  { id: 'cat-tecnologia', name: 'Tecnología', icon: '💻', color: '#3B82F6' },
-  { id: 'cat-heladerias', name: 'Heladerías', icon: '🍦', color: '#EC4899' },
-  { id: 'cat-otros', name: 'Otros', icon: '🏷️', color: '#64748B' },
+  { id: 'cmnulzpng000lqlkklp8a7q4k', slug: 'supermercados', name: 'Supermercados', icon: '🛒', color: '#1B5E20', order: 1 },
+  { id: 'cmnulzoxs000kqlkkk641j763', slug: 'combustible', name: 'Combustible', icon: '⛽', color: '#B45309', order: 2 },
+  { id: 'cmnulzrnd000oqlkkha2lvzwn', slug: 'gastronomia', name: 'Gastronomía', icon: '🍕', color: '#F57F17', order: 3 },
+  { id: 'cmnulzqd4000mqlkk2c9xedfp', slug: 'farmacias', name: 'Farmacias', icon: '💊', color: '#880E4F', order: 4 },
+  { id: 'cmnulzr0f000nqlkkmmw3g0wl', slug: 'petshops', name: 'Petshops', icon: '🐾', color: '#283593', order: 5 },
+  { id: 'cmnulzsah000pqlkkhrfshb1s', slug: 'indumentaria', name: 'Indumentaria', icon: '👕', color: '#4A148C', order: 5 },
+  { id: 'cmnulzt1r000qqlkks46jez7h', slug: 'tecnologia', name: 'Tecnología', icon: '💻', color: '#01579B', order: 6 },
+  { id: 'cmnulznre000jqlkk0y1kuo8w', slug: 'transporte', name: 'Transporte', icon: '🚌', color: '#00607A', order: 8 },
+  { id: 'cmoeltt1n000dbhs92pqmh9wa', slug: 'heladerias', name: 'Heladerías', icon: '🍦', color: '#00838F', order: 9 },
+  { id: 'cmoisouce08ozi9eb11q3zql2', slug: 'hogar', name: 'Hogar', icon: '🛋️', color: '#4E342E', order: 10 },
+  { id: 'cmoisp0pp08p0i9ebf6od3k25', slug: 'entretenimiento', name: 'Entretenimiento', icon: '🎭', color: '#1A237E', order: 11 },
+  { id: 'cmoisp94z08p1i9eb23vqc6pq', slug: 'salud-y-belleza', name: 'Salud y Belleza', icon: '🌸', color: '#880E4F', order: 12 },
+  { id: 'cmoispepz08p2i9ebt8rdq9hl', slug: 'deportes', name: 'Deportes', icon: '⚽', color: '#1B5E20', order: 13 },
+  { id: 'cmoispm3u08p3i9ebwdfzoxvn', slug: 'jugueterias', name: 'Jugueterías', icon: '🧸', color: '#E65100', order: 14 },
+  { id: 'cmoisqiol08p4i9ebksgi3ocw', slug: 'librerias', name: 'Librerías', icon: '📚', color: '#311B92', order: 15 },
+  { id: 'cmoisqraj08p5i9ebqoe4a4ju', slug: 'viajes-y-turismo', name: 'Viajes y Turismo', icon: '✈️', color: '#006064', order: 16 },
+  { id: 'cmq1sxst0000h10rx0f3s1rx5', slug: 'shoppings', name: 'Shoppings', icon: '🛍️', color: '#37474F', order: 17 },
+  { id: 'cmoisrele08p7i9ebe82v63g1', slug: 'otras-categorias', name: 'Otras categorias', icon: '🏷️', color: '#6366f1', order: 18 },
+  { id: 'cmok4ul4l0000xg1wf0mmt8lo', slug: 'automotores', name: 'Automotores', icon: '🚗', color: '#263238', order: 18 },
+  { id: 'cmq1sxt2k000j10rxzwlk8lgq', slug: 'otros', name: 'Otros', icon: '📦', color: '#546E7A', order: 19 },
+  { id: 'cmoi0k60i0000r7p8zyye0rfa', slug: 'sin-categoria', name: 'Sin Categoría', icon: '❓', color: '#9E9E9E', order: 20 },
 ]
 
 // Lista exhaustiva de Programas de Beneficios & Fidelización (Tarjetas de beneficios)
@@ -325,8 +338,19 @@ export default function AdminPromosV2Page() {
     cardNetworks: any[]
   } | null>(null)
   const [isLoadingPromos, setIsLoadingPromos] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [promosPage, setPromosPage] = useState(0)
+  const [promosTotal, setPromosTotal] = useState(0)
+  const [promosHasMore, setPromosHasMore] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Lista unificada y completa de categorías (DB real o fallback a las 21 categorías completas)
+  const allCategories = useMemo(() => {
+    return (dbEntities?.categories && dbEntities.categories.length > 0)
+      ? dbEntities.categories
+      : DEFAULT_CATEGORIES
+  }, [dbEntities])
 
   // Cargar entidades reales (Categorías, Comercios, Bancos, Billeteras) de la base de datos
   useEffect(() => {
@@ -351,9 +375,13 @@ export default function AdminPromosV2Page() {
     loadEntities()
   }, [])
 
-  // Cargar promociones reales de PostgreSQL al montar o al cambiar filtros
-  const fetchPromosFromDb = useCallback(async () => {
-    setIsLoadingPromos(true)
+  // Cargar promociones reales de PostgreSQL al montar o al cambiar filtros (con paginación y "Cargar más")
+  const fetchPromosFromDb = useCallback(async (page = 0, append = false) => {
+    if (append) {
+      setIsLoadingMore(true)
+    } else {
+      setIsLoadingPromos(true)
+    }
     try {
       const params = new URLSearchParams()
       if (listStatus !== 'ALL') {
@@ -362,31 +390,79 @@ export default function AdminPromosV2Page() {
         params.set('status', 'ACTIVE')
       }
 
-      if (listCategory !== 'ALL' && dbEntities?.categories) {
-        const catObj = dbEntities.categories.find((c: any) => c.name.toLowerCase() === listCategory.toLowerCase())
+      if (listCategory !== 'ALL') {
+        const catObj = allCategories.find((c: any) => 
+          c.name.toLowerCase() === listCategory.toLowerCase() || 
+          c.id === listCategory || 
+          c.slug?.toLowerCase() === listCategory.toLowerCase()
+        )
         if (catObj?.id) params.set('categoryId', catObj.id)
+      }
+
+      if (listCommerce !== 'ALL' && dbEntities?.commerces) {
+        const commObj = dbEntities.commerces.find((c: any) => c.name.toLowerCase() === listCommerce.toLowerCase())
+        if (commObj?.id) params.set('commerceId', commObj.id)
       }
 
       if (listSearch.trim()) {
         params.set('q', listSearch.trim())
       }
 
+      params.set('page', String(page))
+
       const res = await fetch(`/api/admin/promos?${params.toString()}`)
       if (res.ok) {
-        const data = await res.json()
-        if (data.promos && data.promos.length > 0) {
-          setPromosList(data.promos)
+        const text = await res.text()
+        try {
+          const data = JSON.parse(text)
+          if (data.promos) {
+            setPromosList(prev => (append ? [...prev, ...data.promos] : data.promos))
+            setPromosTotal(data.total ?? data.promos.length)
+            setPromosHasMore(!!data.hasMore)
+            setPromosPage(page)
+            return
+          }
+        } catch {
+          // No es JSON (ej. redirección HTML a login por falta de cookie de sesión admin)
+        }
+      }
+
+      // Fallback para prototipos públicos sin sesión admin: consultar /api/promos
+      const publicParams = new URLSearchParams()
+      if (listCategory !== 'ALL') {
+        const catObj = allCategories.find((c: any) => 
+          c.name.toLowerCase() === listCategory.toLowerCase() || 
+          c.id === listCategory || 
+          c.slug?.toLowerCase() === listCategory.toLowerCase()
+        )
+        if (catObj?.slug) publicParams.set('category', catObj.slug)
+      }
+      if (listSearch.trim()) publicParams.set('q', listSearch.trim())
+      const pubRes = await fetch(`/api/promos?${publicParams.toString()}`)
+      if (pubRes.ok) {
+        const pubData = await pubRes.json()
+        const promosArr = Array.isArray(pubData) ? pubData : pubData.promos || []
+        if (promosArr.length > 0) {
+          setPromosList(promosArr)
+          setPromosTotal(promosArr.length)
+          setPromosHasMore(false)
         }
       }
     } catch (err) {
       console.error('Error fetching promos from DB:', err)
     } finally {
       setIsLoadingPromos(false)
+      setIsLoadingMore(false)
     }
-  }, [listStatus, listCategory, listSearch, dbEntities])
+  }, [listStatus, listCategory, listCommerce, listSearch, allCategories, dbEntities])
+
+  const handleLoadMore = useCallback(async () => {
+    if (isLoadingMore || !promosHasMore) return
+    await fetchPromosFromDb(promosPage + 1, true)
+  }, [isLoadingMore, promosHasMore, promosPage, fetchPromosFromDb])
 
   useEffect(() => {
-    fetchPromosFromDb()
+    fetchPromosFromDb(0, false)
   }, [fetchPromosFromDb])
 
   // Helper para cargar una promo al Studio para edición
@@ -685,8 +761,17 @@ export default function AdminPromosV2Page() {
   // Filtrado reactivo de la bandeja
   const filteredPromosList = useMemo(() => {
     return promosList.filter(p => {
-      if (listCategory !== 'ALL' && p.category?.id !== listCategory && p.category?.name !== listCategory) return false
-      if (listCommerce !== 'ALL' && p.commerce.name !== listCommerce) return false
+      if (listCategory !== 'ALL') {
+        const catObj = allCategories.find((c: any) => 
+          c.name.toLowerCase() === listCategory.toLowerCase() || 
+          c.id === listCategory || 
+          c.slug?.toLowerCase() === listCategory.toLowerCase()
+        )
+        const matchName = p.category?.name?.toLowerCase() === listCategory.toLowerCase()
+        const matchId = p.category?.id === listCategory || (catObj && p.category?.id === catObj.id)
+        if (!matchName && !matchId) return false
+      }
+      if (listCommerce !== 'ALL' && p.commerce?.name !== listCommerce) return false
       if (listStatus !== 'ALL' && p.status !== listStatus) return false
       if (listSource !== 'ALL') {
         const sourceInfo = resolvePromoSourceBadge(p)
@@ -694,14 +779,14 @@ export default function AdminPromosV2Page() {
       }
       if (listSearch.trim().length > 0) {
         const q = listSearch.toLowerCase()
-        const matchTitle = p.title.toLowerCase().includes(q)
-        const matchComm = p.commerce.name.toLowerCase().includes(q)
+        const matchTitle = (p.title || '').toLowerCase().includes(q)
+        const matchComm = (p.commerce?.name || '').toLowerCase().includes(q)
         const matchNote = (p.commerceNote || '').toLowerCase().includes(q)
         if (!matchTitle && !matchComm && !matchNote) return false
       }
       return true
     })
-  }, [promosList, listCategory, listCommerce, listStatus, listSource, listSearch])
+  }, [promosList, listCategory, listCommerce, listStatus, listSource, listSearch, allCategories])
 
   // Helper para alternar días en bitmask
   const handleToggleDay = (bit: number) => {
@@ -1006,7 +1091,7 @@ export default function AdminPromosV2Page() {
                   <div>
                     <label className="text-xs font-bold text-slate-300 block mb-1.5">Rubro / Categoría</label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {DEFAULT_CATEGORIES.map(cat => (
+                      {allCategories.map(cat => (
                         <button
                           key={cat.id}
                           type="button"
@@ -2137,7 +2222,7 @@ export default function AdminPromosV2Page() {
                   <h2 className="text-xl font-black text-white">Bandeja de Promociones</h2>
                   <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1.5">
                     {isLoadingPromos && <RefreshCw size={11} className="animate-spin text-blue-400" />}
-                    {filteredPromosList.length} {filteredPromosList.length === 1 ? 'promo' : 'promos'}
+                    Mostrando {filteredPromosList.length.toLocaleString('es-AR')}{promosTotal > 0 ? ` de ${promosTotal.toLocaleString('es-AR')}` : ''} promos
                   </span>
                   <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> PostgreSQL Neon
@@ -2219,8 +2304,8 @@ export default function AdminPromosV2Page() {
               >
                 <span>🏷️</span> Todos los Rubros
               </button>
-              {DEFAULT_CATEGORIES.map(cat => {
-                const active = listCategory === cat.name || listCategory === cat.id
+              {allCategories.map(cat => {
+                const active = listCategory === cat.name || listCategory === cat.id || listCategory === cat.slug
                 return (
                   <button
                     key={cat.id}
@@ -2236,17 +2321,6 @@ export default function AdminPromosV2Page() {
                   </button>
                 )
               })}
-              <button
-                type="button"
-                onClick={() => setListCategory('Sin Categoría')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                  listCategory === 'Sin Categoría'
-                    ? 'bg-amber-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                }`}
-              >
-                <span>❓</span> Sin Categoría
-              </button>
             </div>
 
             {/* Barra de Filtros: Buscador, Comercios, Fuente de Origen (Scrapers) y Estado */}
@@ -2360,7 +2434,7 @@ export default function AdminPromosV2Page() {
                     className="bg-[#0A1628] border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
                   >
                     <option value="">Seleccionar nuevo rubro...</option>
-                    {DEFAULT_CATEGORIES.map(c => (
+                    {allCategories.map(c => (
                       <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
                     ))}
                   </select>
@@ -2371,7 +2445,7 @@ export default function AdminPromosV2Page() {
                     onClick={() => {
                       setPromosList(prev => prev.map(p => {
                         if (selectedPromoIds.has(p.id)) {
-                          const catObj = DEFAULT_CATEGORIES.find(c => c.name === bulkTargetCategory)
+                          const catObj = allCategories.find(c => c.name === bulkTargetCategory)
                           return {
                             ...p,
                             category: {
@@ -2562,6 +2636,31 @@ export default function AdminPromosV2Page() {
                 })
               )}
             </div>
+
+            {/* Botón Cargar Más Promociones */}
+            {promosHasMore && (
+              <div className="flex flex-col items-center justify-center py-8 gap-2 border-t border-slate-800/60 mt-4">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={isLoadingMore}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-black rounded-2xl shadow-lg transition-all flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <RefreshCw size={15} className="animate-spin" /> Cargando más promos...
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={15} /> Cargar más promos (+1.000)
+                    </>
+                  )}
+                </button>
+                <p className="text-[11px] text-slate-400">
+                  Mostrando {promosList.length.toLocaleString('es-AR')} de {promosTotal.toLocaleString('es-AR')} promociones activas en la base de datos
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const categoryId = searchParams.get('categoryId')
     const categoryIds = searchParams.get('categoryIds')?.split(',').filter(Boolean)
+    const commerceId = searchParams.get('commerceId')
     const status = searchParams.get('status') // ej. 'EXPIRED'
     const q = searchParams.get('q')?.trim()
     const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10) || 0)
@@ -93,6 +94,7 @@ export async function GET(req: NextRequest) {
     }
     if (categoryId) where.categoryId = categoryId
     if (categoryIds?.length) where.categoryId = { in: categoryIds }
+    if (commerceId) where.commerceId = commerceId
     if (q) {
       where.OR = [
         { title: { contains: q, mode: 'insensitive' } },
@@ -102,7 +104,7 @@ export async function GET(req: NextRequest) {
 
     // Sin ningún filtro (carga inicial sin categoría/búsqueda todavía elegida): no traer nada,
     // el payload completo (95MB+) cuelga las funciones serverless de Vercel.
-    if (!categoryId && !categoryIds?.length && !status && !q) {
+    if (!categoryId && !categoryIds?.length && !status && !q && !commerceId) {
       return NextResponse.json({ promos: [] })
     }
 
