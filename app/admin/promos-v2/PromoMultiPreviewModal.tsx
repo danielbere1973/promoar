@@ -75,10 +75,89 @@ export default function PromoMultiPreviewModal({
   const capPeriod = req.capPeriod ?? promo.capPeriod ?? 'MONTHLY'
   const salesChannel = promo.salesChannel ?? 'AMBOS'
   const accountType = req.accountType ?? promo.accountType ?? 'ANY'
-  const paymentChannel = req.paymentChannel ?? promo.paymentChannel ?? 'QR'
+  const paymentChannel = req.paymentChannel ?? promo.paymentChannel ?? 'ANY'
   const conditionsNote = promo.conditionsNote || promo.commerceNote || ''
   const exclusionsNote = promo.exclusionsNote || ''
   const title = promo.title || `${commerceName} – Descuento`
+
+  const WALLET_FALLBACKS: Record<string, { name: string; logoUrl: string }> = {
+    'club-la-nacion': { name: 'Club La Nación', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=lanacion.com.ar' },
+    'clarin-365': { name: 'Clarín 365', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=365.clarin.com' },
+    'clarin-365-plus': { name: 'Clarín 365 Plus', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=365.clarin.com' },
+    'comunidad-coto': { name: 'Comunidad Coto', logoUrl: 'https://www.coto.com.ar/favicon.ico' },
+    'favacard': { name: 'Favacard', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=favacard.com.ar' },
+    'modo': { name: 'MODO', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar' },
+    'cuentadni': { name: 'Cuenta DNI', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bancoprovincia.com.ar' },
+    'mercadopago': { name: 'Mercado Pago', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=mercadopago.com.ar' },
+    'personalpay': { name: 'Personal Pay', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=personalpay.com.ar' },
+    'naranjax': { name: 'Naranja X', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=naranjax.com' },
+    'uala': { name: 'Ualá', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=uala.com.ar' },
+    'buepp': { name: 'BUEPP', logoUrl: 'https://www.bancociudad.com.ar/beneficios/assets/img/logo-banco-ciudad.svg' },
+  }
+
+  // Bancos involucrados
+  const banks: Array<{ name: string; logoUrl?: string | null; slug?: string }> = []
+  if (promo.requirements && Array.isArray(promo.requirements)) {
+    promo.requirements.forEach((r: any) => {
+      if (r.bank?.name && !banks.some(b => b.name === r.bank.name)) {
+        banks.push(r.bank)
+      }
+    })
+  }
+  if (banks.length === 0 && promo.selectedBanks?.length && promo.availableBanks) {
+    promo.selectedBanks.forEach((bId: string) => {
+      const found = promo.availableBanks.find((x: any) => x.id === bId || x.slug === bId)
+      if (found && !banks.some(b => b.name === found.name)) banks.push(found)
+    })
+  }
+
+  // Billeteras y Tarjetas de Beneficios (Club La Nación, 365, MODO, etc.)
+  const wallets: Array<{ name: string; logoUrl?: string | null; slug?: string }> = []
+  if (promo.requirements && Array.isArray(promo.requirements)) {
+    promo.requirements.forEach((r: any) => {
+      if (r.wallet?.name && !wallets.some(w => w.name === r.wallet.name)) {
+        const slug = r.wallet.slug || r.wallet.name.toLowerCase().replace(/\s+/g, '-')
+        const fallback = WALLET_FALLBACKS[slug]
+        wallets.push({
+          ...r.wallet,
+          name: fallback?.name || r.wallet.name,
+          slug,
+          logoUrl: r.wallet.logoUrl || fallback?.logoUrl || null,
+        })
+      }
+    })
+  }
+  if (wallets.length === 0 && promo.selectedWallets?.length && promo.availableWallets) {
+    promo.selectedWallets.forEach((wId: string) => {
+      const found = promo.availableWallets.find((x: any) => x.id === wId || x.slug === wId)
+      if (found && !wallets.some(w => w.name === found.name)) {
+        const slug = found.slug || found.name.toLowerCase().replace(/\s+/g, '-')
+        const fallback = WALLET_FALLBACKS[slug]
+        wallets.push({
+          ...found,
+          name: fallback?.name || found.name,
+          slug,
+          logoUrl: found.logoUrl || fallback?.logoUrl || null,
+        })
+      }
+    })
+  }
+
+  // Redes de tarjetas (Visa, Mastercard, etc.)
+  const networks: Array<{ name: string; slug: string }> = []
+  if (promo.requirements && Array.isArray(promo.requirements)) {
+    promo.requirements.forEach((r: any) => {
+      if (r.cardNetwork?.name && !networks.some(n => n.name === r.cardNetwork.name)) {
+        networks.push(r.cardNetwork)
+      }
+    })
+  }
+  if (networks.length === 0 && promo.selectedNetworks?.length && promo.availableNetworks) {
+    promo.selectedNetworks.forEach((nId: string) => {
+      const found = promo.availableNetworks.find((x: any) => x.id === nId || x.slug === nId)
+      if (found && !networks.some(n => n.name === found.name)) networks.push(found)
+    })
+  }
 
   const discountBadgeLabel = (() => {
     if (discountKind === 'CUOTAS_SIN_INTERES') return `${discountVal} cuotas sin interés`
@@ -87,6 +166,17 @@ export default function PromoMultiPreviewModal({
     if (discountKind === 'FIXED_AMOUNT') return `$${Number(discountVal).toLocaleString('es-AR')} OFF`
     if (discountKind === 'PERCENTAGE_REINTEGRO') return `${discountVal}% reintegro`
     return `${discountVal}% descuento`
+  })()
+
+  const entityDescriptionText = (() => {
+    const allNames = [...banks.map(b => b.name), ...wallets.map(w => w.name)]
+    if (allNames.length > 0) {
+      return ` con ${allNames.join(' y ')}`
+    }
+    if (networks.length > 0) {
+      return ` con tarjetas ${networks.map(n => n.name).join(' y ')}`
+    }
+    return ''
   })()
 
   // Tarjeta compatible con PromoCard
@@ -112,9 +202,9 @@ export default function PromoMultiPreviewModal({
         capPeriod,
         paymentChannel,
         accountType,
-        bank: req.bank || (promo.selectedBanks?.length ? { name: 'Banco Galicia', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=galicia.ar' } : null),
-        wallet: req.wallet || (promo.selectedWallets?.length ? { name: 'MODO', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar' } : null),
-        cardNetwork: req.cardNetwork || { name: 'Visa', slug: 'visa' },
+        bank: banks[0] || null,
+        wallet: wallets[0] || null,
+        cardNetwork: networks[0] || null,
       }
     ],
     coverageStatus: 'TERRITORIAL',
@@ -403,32 +493,70 @@ export default function PromoMultiPreviewModal({
                     </p>
                     
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2.5 bg-white dark:bg-[#11223B] p-2.5 rounded-xl border border-gray-100 dark:border-slate-800">
-                        <div className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
-                          <img src="https://www.google.com/s2/favicons?sz=128&domain=galicia.ar" alt="" className="w-5 h-5 object-contain" />
+                      {/* Bancos */}
+                      {banks.map((b, idx) => (
+                        <div key={`b-${idx}`} className="flex items-center gap-2.5 bg-white dark:bg-[#11223B] p-2.5 rounded-xl border border-gray-100 dark:border-slate-800">
+                          <div className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                            {b.logoUrl ? (
+                              <img src={b.logoUrl} alt="" className="w-5 h-5 object-contain" />
+                            ) : (
+                              <span className="text-xs">🏦</span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-gray-800 dark:text-white">{b.name}</p>
+                            <p className="text-[10px] text-gray-400">Banco emisor</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-800 dark:text-white">Banco Galicia</p>
-                          <p className="text-[10px] text-gray-400">Banco emisor</p>
-                        </div>
-                      </div>
+                      ))}
 
-                      <div className="flex items-center gap-2.5 bg-white dark:bg-[#11223B] p-2.5 rounded-xl border border-gray-100 dark:border-slate-800">
-                        <div className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
-                          <img src="https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar" alt="" className="w-5 h-5 object-contain" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-800 dark:text-white">MODO</p>
-                          <p className="text-[10px] text-gray-400">Billetera virtual</p>
-                        </div>
-                      </div>
+                      {/* Billeteras y Tarjetas de Beneficios */}
+                      {wallets.map((w, idx) => {
+                        const isBenefit = w.name?.toLowerCase().includes('club') || w.name?.toLowerCase().includes('365') || w.name?.toLowerCase().includes('comunidad')
+                        return (
+                          <div key={`w-${idx}`} className="flex items-center gap-2.5 bg-white dark:bg-[#11223B] p-2.5 rounded-xl border border-gray-100 dark:border-slate-800">
+                            <div className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                              {w.logoUrl ? (
+                                <img src={w.logoUrl} alt="" className="w-5 h-5 object-contain" />
+                              ) : (
+                                <span className="text-xs">{isBenefit ? '🗞️' : '📱'}</span>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-gray-800 dark:text-white">{w.name}</p>
+                              <p className="text-[10px] text-gray-400">
+                                {isBenefit ? 'Tarjeta de beneficios' : 'Billetera virtual'}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
 
-                      {/* Chip de medio de pago */}
-                      <div className="pt-1">
-                        <span className="text-xs font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700/40 px-3 py-1 rounded-xl inline-block">
-                          {paymentChannel === 'QR' ? 'QR / MODO' : paymentChannel === 'NFC' ? 'Sin contacto (NFC)' : 'Dinero en cuenta'}
-                        </span>
-                      </div>
+                      {/* Redes de tarjetas */}
+                      {networks.map((n, idx) => (
+                        <div key={`n-${idx}`} className="flex items-center gap-2 bg-white dark:bg-[#11223B] p-2.5 rounded-xl border border-gray-100 dark:border-slate-800">
+                          <span className="text-xs pl-1">💳</span>
+                          <div>
+                            <p className="text-xs font-bold text-gray-800 dark:text-white">{n.name}</p>
+                            <p className="text-[10px] text-gray-400">Tarjeta de crédito / débito</p>
+                          </div>
+                        </div>
+                      ))}
+
+                      {banks.length === 0 && wallets.length === 0 && networks.length === 0 && (
+                        <div className="p-2 text-xs text-gray-500 dark:text-slate-400 font-medium">
+                          Cualquier medio de pago habilitado en el comercio
+                        </div>
+                      )}
+
+                      {/* Chip de medio de pago / canal */}
+                      {paymentChannel && paymentChannel !== 'ANY' && (
+                        <div className="pt-1">
+                          <span className="text-xs font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700/40 px-3 py-1 rounded-xl inline-block">
+                            {paymentChannel === 'QR' ? '📱 QR / MODO' : paymentChannel === 'NFC' ? '📶 Sin contacto (NFC)' : paymentChannel === 'TARJETA_FISICA' ? '💳 Tarjeta física' : paymentChannel === 'TRANSFERENCIA' ? '💸 Transferencia' : '💰 Dinero en cuenta'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -525,7 +653,7 @@ export default function PromoMultiPreviewModal({
 
                 {/* ── PÁRRAFO DESCRIPTIVO SEO ── */}
                 <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed px-1">
-                  {commerceName} ofrece {discountBadgeLabel} con Banco Galicia y MODO. Vigente hasta el {formatDateStr(validUntil)}. Categoría: {categoryName}.
+                  {commerceName} ofrece {discountBadgeLabel}{entityDescriptionText}. Vigente hasta el {formatDateStr(validUntil)}. Categoría: {categoryName}.
                 </p>
 
                 {/* ── BOTÓN CTA "Ver más promos como esta" (DE LA FOTO 4) ── */}

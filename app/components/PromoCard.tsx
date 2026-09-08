@@ -233,6 +233,25 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
     'cabal': 'https://www.google.com/s2/favicons?sz=64&domain=cabal.com.ar',
   }
 
+  const WALLET_FALLBACK_LOGOS: Record<string, string> = {
+    'club-la-nacion': 'https://www.google.com/s2/favicons?sz=128&domain=lanacion.com.ar',
+    'clarin-365': 'https://www.google.com/s2/favicons?sz=128&domain=365.clarin.com',
+    'clarin-365-plus': 'https://www.google.com/s2/favicons?sz=128&domain=365.clarin.com',
+    'comunidad-coto': 'https://www.coto.com.ar/favicon.ico',
+    'modo': 'https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar',
+    'cuentadni': 'https://www.google.com/s2/favicons?sz=128&domain=bancoprovincia.com.ar',
+    'mercadopago': 'https://www.google.com/s2/favicons?sz=128&domain=mercadopago.com.ar',
+    'personalpay': 'https://www.google.com/s2/favicons?sz=128&domain=personalpay.com.ar',
+  }
+
+  const getEntityShortName = (name: string): string => {
+    const lower = name.toLowerCase()
+    if (lower.includes('club la nacion') || lower.includes('club la nación')) return 'Club LN'
+    if (lower.includes('clarín 365') || lower.includes('clarin 365') || lower.includes('365')) return '365'
+    if (lower.includes('comunidad coto')) return 'Comunidad Coto'
+    return name.split(' ').slice(-1)[0].substring(0, 9)
+  }
+
   return (
     <div
       onClick={onClick}
@@ -443,32 +462,33 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
         {/* Entidades + redes */}
         {(entities.length > 0 || networks.length > 0) && (
           <div className="flex flex-wrap items-center gap-1">
-            {entities.map((e, i) => (
-              e.logoUrl ? (
+            {entities.map((e, i) => {
+              const entityLogo = e.logoUrl || (e.slug ? WALLET_FALLBACK_LOGOS[e.slug] : null)
+              return entityLogo ? (
                 e.slug ? (
                   <a key={i} href={`/bancos/${e.slug}`} onClick={ev => ev.stopPropagation()}
                     className="w-6 h-6 rounded-lg bg-white dark:bg-[#1E3055] border border-[#D0DBF0] dark:border-[#2A4070] flex items-center justify-center hover:border-[#1D3D6E] hover:shadow-sm transition-all overflow-hidden"
                     title={e.name}>
-                    <img src={e.logoUrl} alt={e.name} className="w-5 h-5 object-contain" />
+                    <img src={entityLogo} alt={e.name} className="w-5 h-5 object-contain" />
                   </a>
                 ) : (
                   <span key={i} className="w-6 h-6 rounded-lg bg-white dark:bg-[#1E3055] border border-[#D0DBF0] dark:border-[#2A4070] flex items-center justify-center overflow-hidden" title={e.name}>
-                    <img src={e.logoUrl} alt={e.name} className="w-5 h-5 object-contain" />
+                    <img src={entityLogo} alt={e.name} className="w-5 h-5 object-contain" />
                   </span>
                 )
               ) : (
                 e.slug ? (
                   <a key={i} href={`/bancos/${e.slug}`} onClick={ev => ev.stopPropagation()}
                     className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-[#EEF2F8] dark:bg-[#1E3055] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#2A4070] hover:bg-[#1D3D6E] hover:text-white transition-colors">
-                    {e.name.split(' ').slice(-1)[0].substring(0, 9)}
+                    {getEntityShortName(e.name)}
                   </a>
                 ) : (
                   <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-[#EEF2F8] dark:bg-[#1E3055] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#2A4070]">
-                    {e.name.split(' ').slice(-1)[0].substring(0, 9)}
+                    {getEntityShortName(e.name)}
                   </span>
                 )
               )
-            ))}
+            })}
             {networks.slice(0, 2).map(n => (
               CARD_NETWORK_LOGOS[n.slug] ? (
                 <img key={n.slug} src={CARD_NETWORK_LOGOS[n.slug]} alt={n.name}

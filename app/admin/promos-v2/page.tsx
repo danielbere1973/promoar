@@ -24,42 +24,53 @@ const DEFAULT_CATEGORIES = [
   { id: 'cat-otros', name: 'Otros', icon: '🏷️', color: '#64748B' },
 ]
 
+// Lista exhaustiva de Programas de Beneficios & Fidelización (Tarjetas de beneficios)
+const BENEFIT_PROGRAMS = [
+  { id: 'c99780b9-1586-4f9a-9eea-4f1ad710f481', slug: 'club-la-nacion', name: 'Club La Nación', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=lanacion.com.ar' },
+  { id: 'fa88c7b5-271d-43c9-be09-9103cd8ef48f', slug: 'clarin-365', name: 'Clarín 365', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=365.clarin.com' },
+  { id: '7dfdd2e0-b805-4ae9-b013-3cadcbd69c8c', slug: 'clarin-365-plus', name: 'Clarín 365 Plus', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=365.clarin.com' },
+  { id: 'cmqab6xcz0000uz3k98dovqid', slug: 'comunidad-coto', name: 'Comunidad Coto', logoUrl: 'https://www.coto.com.ar/favicon.ico' },
+  { id: 'cmqucyde4000010nzfvok0s9h', slug: 'favacard', name: 'Favacard', logoUrl: 'https://www.google.com/s2/favicons?sz=64&domain=favacard.com.ar' },
+]
+
 // Lista exhaustiva de Bancos
 const ALL_BANKS = [
-  { id: 'b-galicia', name: 'Banco Galicia', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=galicia.ar' },
-  { id: 'b-santander', name: 'Santander', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=santander.com.ar' },
-  { id: 'b-bbva', name: 'BBVA', logoUrl: 'https://www.bbva.com.ar/favicon.ico' },
-  { id: 'b-macro', name: 'Banco Macro', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=macro.com.ar' },
-  { id: 'b-nacion', name: 'Banco Nación', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bna.com.ar' },
-  { id: 'b-icbc', name: 'ICBC', logoUrl: 'https://logo-teka.com/wp-content/uploads/2026/01/icbc-vertical-logo.svg' },
-  { id: 'b-ciudad', name: 'Banco Ciudad', logoUrl: 'https://www.bancociudad.com.ar/beneficios/assets/img/logo-banco-ciudad.svg' },
-  { id: 'b-supervielle', name: 'Supervielle', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=supervielle.com.ar' },
-  { id: 'b-patagonia', name: 'Banco Patagonia', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bancopatagonia.com.ar' },
-  { id: 'b-bancor', name: 'Bancor (Córdoba)', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bancor.com.ar' },
-  { id: 'b-provincia', name: 'Banco Provincia', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bancoprovincia.com.ar' },
-  { id: 'b-credicoop', name: 'Credicoop', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bancocredicoop.coop' },
-  { id: 'b-brubank', name: 'Brubank', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=brubank.com' },
+  { id: 'cmnytdskm000013wtftq7mffg', slug: 'galicia', name: 'Banco Galicia', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=galicia.ar' },
+  { id: 'cmnytdtcg000113wtg0ebh76q', slug: 'santander', name: 'Santander', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=santander.com.ar' },
+  { id: 'cmnytdtzf000213wt6s7hrc8c', slug: 'bbva', name: 'BBVA', logoUrl: 'https://www.bbva.com.ar/favicon.ico' },
+  { id: 'cmnytdunm000413wt7p6l3l5e', slug: 'macro', name: 'Banco Macro', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=macro.com.ar' },
+  { id: 'cmnyte6z7000c13wtk82d61z4', slug: 'banco-nacion', name: 'Banco Nación', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bna.com.ar' },
+  { id: 'cmnyte72v000d13wtwh4e97ea', slug: 'icbc', name: 'ICBC', logoUrl: 'https://logo-teka.com/wp-content/uploads/2026/01/icbc-vertical-logo.svg' },
+  { id: 'cmnytdulp000313wt7q5vvh7m', slug: 'ciudad', name: 'Banco Ciudad', logoUrl: 'https://www.bancociudad.com.ar/beneficios/assets/img/logo-banco-ciudad.svg' },
+  { id: 'cmnyte773000e13wtq85j4i42', slug: 'supervielle', name: 'Supervielle', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=supervielle.com.ar' },
+  { id: 'cmnytdunm000513wty1qtdpeu', slug: 'patagonia', name: 'Banco Patagonia', logoUrl: 'https://th.bing.com/th/id/OIP.KcoajddMvGoRjhPQVB4Y7QHaHa?w=176&h=180&c=7&r=0&o=7&pid=1.7&rm=3' },
+  { id: 'cmo1lbjg200050zgku5d9eqi8', slug: 'banco-provincia-de-cordoba', name: 'Bancor (Córdoba)', logoUrl: 'https://www.bancor.com.ar/favicon.ico' },
+  { id: 'cmnyte7bf000f13wti6t545t5', slug: 'provincia', name: 'Banco Provincia', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bancoprovincia.com.ar' },
+  { id: 'cmnyte7fs000g13wth9m4f1i2', slug: 'credicoop', name: 'Credicoop', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bancocredicoop.coop' },
+  { id: 'cmnytdv5r000713wtgme63msl', slug: 'brubank', name: 'Brubank', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=brubank.com' },
 ]
 
 // Lista exhaustiva de Billeteras
 const ALL_WALLETS = [
-  { id: 'w-modo', name: 'MODO', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar' },
-  { id: 'w-cuentadni', name: 'Cuenta DNI', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=bancoprovincia.com.ar' },
-  { id: 'w-mercadopago', name: 'Mercado Pago', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=mercadopago.com.ar' },
-  { id: 'w-personalpay', name: 'Personal Pay', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=personalpay.com.ar' },
-  { id: 'w-naranjax', name: 'Naranja X', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=naranjax.com' },
-  { id: 'w-uala', name: 'Ualá', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=uala.com.ar' },
-  { id: 'w-buepp', name: 'BUEPP (Ciudad)', logoUrl: 'https://www.bancociudad.com.ar/beneficios/assets/img/logo-banco-ciudad.svg' },
+  { id: 'cmnulzh04000aqlkk8mnpzo46', slug: 'modo', name: 'MODO', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar' },
+  { id: '5a90bf8a-6f95-449f-b4f6-8647a6d3c9b4', slug: 'cuentadni', name: 'Cuenta DNI', logoUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTOmJbnhP1-Zxuto-pLyBH-DjA5mQA8_w2SDfEbgZDWgQ&s' },
+  { id: 'cmnulzfz80009qlkkuyavwcvh', slug: 'mercadopago', name: 'Mercado Pago', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=mercadopago.com.ar' },
+  { id: 'cmnulziao000cqlkkamv57ia0', slug: 'personalpay', name: 'Personal Pay', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=personalpay.com.ar' },
+  { id: 'cmnulzixj000dqlkkf9b4o82h', slug: 'naranjax', name: 'Naranja X', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=naranjax.com' },
+  { id: 'cmnulzhno000bqlkkv7ed16fj', slug: 'uala', name: 'Ualá', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=uala.com.ar' },
+  { id: 'cmogquvtl00fq7b3c2lu7249m', slug: 'buepp', name: 'BUEPP (Ciudad)', logoUrl: 'https://th.bing.com/th/id/OIP.ywKgdEuGPW8H7wwSKYvADgHaDY?w=324&h=159&c=7&r=0&o=7&pid=1.7&rm=3' },
+  { id: 'cmpcws2az0000d8ffsfhk9iqa', slug: 'cencopay', name: 'CencoPay', logoUrl: 'https://tse2.mm.bing.net/th/id/OIP.q6wycCCA9j2PagBT7gDuXwHaHV?r=0&rs=1&pid=ImgDetMain&o=7&rm=3' },
+  { id: 'cmoxdt3fr0000bezn7m9v17w7', slug: 'carrefour-banco', name: 'Carrefour Banco', logoUrl: 'https://th.bing.com/th/id/OIP.5uH3QMcr13jwpv_99FzL4wHaD4?w=304&h=180&c=7&r=0&o=7&pid=1.7&rm=3' },
 ]
 
 // Redes de Tarjeta
 const ALL_NETWORKS = [
-  { id: 'net-visa', name: 'Visa', slug: 'visa' },
-  { id: 'net-mastercard', name: 'Mastercard', slug: 'mastercard' },
-  { id: 'net-amex', name: 'American Express', slug: 'amex' },
-  { id: 'net-cabal', name: 'Cabal', slug: 'cabal' },
-  { id: 'net-naranjax', name: 'Naranja X', slug: 'naranja-x' },
-  { id: 'net-diners', name: 'Diners Club', slug: 'diners' },
+  { id: 'cmnulzkee000fqlkkz5pegb2b', name: 'Visa', slug: 'visa' },
+  { id: 'cmnulzllo000gqlkkod8d8w5l', name: 'Mastercard', slug: 'mastercard' },
+  { id: 'cmnulzmaa000hqlkkhaykwpzb', name: 'American Express', slug: 'amex' },
+  { id: 'cmnulzn0i000iqlkk69ezbpfc', name: 'Cabal', slug: 'cabal' },
+  { id: 'cmomazkxy000m2jcz78bi26g7', name: 'Naranja X', slug: 'naranja-x' },
+  { id: 'cmnyz06dg001j14huiicd0wbv', name: 'Diners Club', slug: 'diners' },
 ]
 
 // Segmentos bancarios VIP / Premium
@@ -156,9 +167,9 @@ export default function AdminPromosV2Page() {
 
     // 3. Financiación y Requisitos (Punto 2 de feedback)
     isExclusivePromoAR: false, // true = directo de comercio; false = requiere bancos/tarjetas
-    selectedBanks: ['b-galicia'],
-    selectedWallets: ['w-modo'],
-    selectedNetworks: ['net-visa', 'net-mastercard'],
+    selectedBanks: ['cmnytdskm000013wtftq7mffg'],
+    selectedWallets: ['cmnulzh04000aqlkk8mnpzo46'],
+    selectedNetworks: ['cmnulzkee000fqlkkz5pegb2b', 'cmnulzllo000gqlkkod8d8w5l'],
     cardType: 'CREDIT', // ANY, CREDIT, DEBIT, PREPAID
     selectedSegment: '', // Segmento banco VIP (ej. Eminent)
     selectedCardSegment: '', // Segmento tarjeta (ej. Signature)
@@ -321,7 +332,14 @@ export default function AdminPromosV2Page() {
   useEffect(() => {
     async function loadEntities() {
       try {
-        const res = await fetch('/api/admin/entities')
+        let res = await fetch('/api/admin/entities')
+        if (res.ok) {
+          const data = await res.json()
+          setDbEntities(data)
+          return
+        }
+        // Fallback para entornos públicos/prototipos sin sesión de admin
+        res = await fetch('/api/public/entities')
         if (res.ok) {
           const data = await res.json()
           setDbEntities(data)
@@ -401,7 +419,7 @@ export default function AdminPromosV2Page() {
       plusCapAmount: p.plusCapAmount || 0,
       selectedBanks: req?.bank?.id ? [req.bank.id] : req?.bankId ? [req.bankId] : [],
       selectedWallets: req?.wallet?.id ? [req.wallet.id] : req?.walletId ? [req.walletId] : [],
-      selectedNetworks: req?.cardNetwork?.id ? [req.cardNetwork.id] : req?.cardNetworkId ? [req.cardNetworkId] : ['net-visa'],
+      selectedNetworks: req?.cardNetwork?.id ? [req.cardNetwork.id] : req?.cardNetworkId ? [req.cardNetworkId] : [],
       cardType: (req?.cardType as any) || 'CREDIT',
       selectedSegment: req?.segment || '',
       selectedCardSegment: req?.cardSegmentId || '',
@@ -536,21 +554,113 @@ export default function AdminPromosV2Page() {
     }
   }
 
+  // Helper para resolver la fuente real de la promoción con emoji y nombre legible
+  const resolvePromoSourceBadge = (p: any): { label: string; icon: string; key: string } => {
+    if ((p as any).submittedByMerchant) {
+      return { label: 'Portal Comercios', icon: '🏪', key: 'MERCHANT' }
+    }
+    const req = p.requirements?.[0]
+    const url = (p.sourceUrl || '').toLowerCase()
+    const sourceStr = (p.source || '').toLowerCase()
+
+    // 1. Club La Nación
+    if (sourceStr.includes('lanacion') || url.includes('club.lanacion') || req?.wallet?.name?.toLowerCase().includes('la nacion')) {
+      return { label: 'Club La Nación', icon: '🗞️', key: 'sc-club-lanacion' }
+    }
+    // 2. Clarín 365
+    if (sourceStr.includes('365') || url.includes('365.clarin') || req?.wallet?.name?.toLowerCase().includes('365')) {
+      return { label: 'Clarín 365', icon: '🗞️', key: 'sc-clarin-365' }
+    }
+    // 3. MODO
+    if (sourceStr.includes('modo') || url.includes('modo.com.ar') || req?.wallet?.name?.toLowerCase().includes('modo')) {
+      return { label: 'MODO', icon: '📱', key: 'sc-modo' }
+    }
+    // 4. Cuenta DNI
+    if (sourceStr.includes('cuentadni') || url.includes('cuentadni') || req?.wallet?.name?.toLowerCase().includes('cuenta dni')) {
+      return { label: 'Cuenta DNI', icon: '📱', key: 'sc-cuentadni' }
+    }
+    // 5. Mercado Pago
+    if (sourceStr.includes('mercadopago') || url.includes('mercadopago') || req?.wallet?.name?.toLowerCase().includes('mercado pago')) {
+      return { label: 'Mercado Pago', icon: '📱', key: 'sc-mercadopago' }
+    }
+    // 6. Personal Pay
+    if (sourceStr.includes('personalpay') || url.includes('personal.com.ar') || req?.wallet?.name?.toLowerCase().includes('personal pay')) {
+      return { label: 'Personal Pay', icon: '📱', key: 'sc-personalpay' }
+    }
+    // 7. Coto / Comunidad Coto
+    if (sourceStr.includes('coto') || url.includes('coto.com.ar') || req?.wallet?.name?.toLowerCase().includes('coto')) {
+      return { label: 'Coto', icon: '🛒', key: 'sc-coto' }
+    }
+    // 8. Jumbo / Disco / Vea
+    if (sourceStr.includes('jumbo') || sourceStr.includes('disco') || sourceStr.includes('vea') || url.includes('jumbo') || url.includes('disco') || url.includes('vea')) {
+      return { label: 'Jumbo / Disco / Vea', icon: '🛒', key: 'sc-jumbo' }
+    }
+    // 9. Bancos
+    if (sourceStr.includes('galicia') || url.includes('galicia.ar') || req?.bank?.name?.toLowerCase().includes('galicia')) {
+      return { label: 'Banco Galicia', icon: '🏦', key: 'sc-galicia' }
+    }
+    if (sourceStr.includes('santander') || url.includes('santander.com.ar') || req?.bank?.name?.toLowerCase().includes('santander')) {
+      return { label: 'Santander', icon: '🏦', key: 'sc-santander' }
+    }
+    if (sourceStr.includes('bbva') || url.includes('bbva.com.ar') || req?.bank?.name?.toLowerCase().includes('bbva')) {
+      return { label: 'BBVA', icon: '🏦', key: 'sc-bbva' }
+    }
+    if (sourceStr.includes('macro') || url.includes('macro.com.ar') || req?.bank?.name?.toLowerCase().includes('macro')) {
+      return { label: 'Banco Macro', icon: '🏦', key: 'sc-macro' }
+    }
+    if (sourceStr.includes('nacion') || sourceStr.includes('bna') || url.includes('bna.com.ar') || url.includes('semananacion') || req?.bank?.name?.toLowerCase().includes('nación') || req?.bank?.name?.toLowerCase().includes('nacion')) {
+      return { label: 'Banco Nación', icon: '🏦', key: 'sc-nacion' }
+    }
+    if (sourceStr.includes('ciudad') || url.includes('bancociudad') || req?.bank?.name?.toLowerCase().includes('ciudad')) {
+      return { label: 'Banco Ciudad', icon: '🏦', key: 'sc-ciudad' }
+    }
+    if (sourceStr.includes('provincia') || url.includes('bancoprovincia') || req?.bank?.name?.toLowerCase().includes('provincia')) {
+      return { label: 'Banco Provincia', icon: '🏦', key: 'sc-provincia' }
+    }
+    if (sourceStr.includes('patagonia') || url.includes('patagonia') || req?.bank?.name?.toLowerCase().includes('patagonia')) {
+      return { label: 'Banco Patagonia', icon: '🏦', key: 'sc-patagonia' }
+    }
+    if (sourceStr.includes('icbc') || url.includes('icbc') || req?.bank?.name?.toLowerCase().includes('icbc')) {
+      return { label: 'ICBC', icon: '🏦', key: 'sc-icbc' }
+    }
+    if (sourceStr.includes('supervielle') || url.includes('supervielle') || req?.bank?.name?.toLowerCase().includes('supervielle')) {
+      return { label: 'Supervielle', icon: '🏦', key: 'sc-supervielle' }
+    }
+
+    if ((p as any).sourceLabel) {
+      return { label: (p as any).sourceLabel, icon: '🤖', key: 'OTHER' }
+    }
+    if (req?.bank?.name) {
+      return { label: req.bank.name, icon: '🏦', key: 'BANK' }
+    }
+    if (req?.wallet?.name) {
+      return { label: req.wallet.name, icon: '📱', key: 'WALLET' }
+    }
+    return { label: 'Scraper', icon: '🤖', key: 'SCRAPER' }
+  }
+
   // Lista de fuentes disponibles para filtrar en la Bandeja
   const PROMO_SOURCES = [
     { id: 'ALL', label: 'Todas las fuentes de origen' },
-    { id: 'sc-modo', label: '🤖 Scraper MODO' },
-    { id: 'sc-galicia', label: '🤖 Scraper Banco Galicia' },
-    { id: 'sc-santander', label: '🤖 Scraper Santander' },
-    { id: 'sc-bbva', label: '🤖 Scraper BBVA' },
-    { id: 'sc-macro', label: '🤖 Scraper Banco Macro' },
-    { id: 'sc-nacion', label: '🤖 Scraper Banco Nación' },
-    { id: 'sc-ciudad', label: '🤖 Scraper Banco Ciudad' },
-    { id: 'sc-cuentadni', label: '🤖 Scraper Cuenta DNI' },
-    { id: 'sc-coto', label: '🤖 Scraper Coto' },
-    { id: 'sc-jumbo', label: '🤖 Scraper Jumbo / Disco / Vea' },
+    { id: 'sc-club-lanacion', label: '🗞️ Club La Nación' },
+    { id: 'sc-clarin-365', label: '🗞️ Clarín 365' },
+    { id: 'sc-modo', label: '📱 MODO' },
+    { id: 'sc-cuentadni', label: '📱 Cuenta DNI' },
+    { id: 'sc-mercadopago', label: '📱 Mercado Pago' },
+    { id: 'sc-personalpay', label: '📱 Personal Pay' },
+    { id: 'sc-coto', label: '🛒 Coto' },
+    { id: 'sc-jumbo', label: '🛒 Jumbo / Disco / Vea' },
+    { id: 'sc-galicia', label: '🏦 Banco Galicia' },
+    { id: 'sc-santander', label: '🏦 Santander' },
+    { id: 'sc-bbva', label: '🏦 BBVA' },
+    { id: 'sc-macro', label: '🏦 Banco Macro' },
+    { id: 'sc-nacion', label: '🏦 Banco Nación' },
+    { id: 'sc-ciudad', label: '🏦 Banco Ciudad' },
+    { id: 'sc-provincia', label: '🏦 Banco Provincia' },
+    { id: 'sc-patagonia', label: '🏦 Banco Patagonia' },
+    { id: 'sc-icbc', label: '🏦 ICBC' },
+    { id: 'sc-supervielle', label: '🏦 Supervielle' },
     { id: 'MERCHANT', label: '🏪 Portal Comercios (Self-Serve)' },
-    { id: 'MANUAL', label: '✍️ Carga Manual Admin' },
   ]
 
   // Ejecución de Autoasignación con IA (Groq / LLaMA 3.3)
@@ -578,7 +688,10 @@ export default function AdminPromosV2Page() {
       if (listCategory !== 'ALL' && p.category?.id !== listCategory && p.category?.name !== listCategory) return false
       if (listCommerce !== 'ALL' && p.commerce.name !== listCommerce) return false
       if (listStatus !== 'ALL' && p.status !== listStatus) return false
-      if (listSource !== 'ALL' && (p as any).source !== listSource) return false
+      if (listSource !== 'ALL') {
+        const sourceInfo = resolvePromoSourceBadge(p)
+        if (sourceInfo.key !== listSource && (p as any).source !== listSource) return false
+      }
       if (listSearch.trim().length > 0) {
         const q = listSearch.toLowerCase()
         const matchTitle = p.title.toLowerCase().includes(q)
@@ -600,9 +713,17 @@ export default function AdminPromosV2Page() {
 
   // Generación reactiva del objeto Promo exacto para el Live PromoCard Studio
   const livePromoForCard = useMemo(() => {
-    const primaryBank = ALL_BANKS.find(b => formData.selectedBanks.includes(b.id))
-    const primaryWallet = ALL_WALLETS.find(w => formData.selectedWallets.includes(w.id))
-    const primaryNetwork = ALL_NETWORKS.find(n => formData.selectedNetworks.includes(n.id))
+    const allAvailableBanks = dbEntities?.banks?.length ? dbEntities.banks : ALL_BANKS
+    const allAvailableWallets = [
+      ...BENEFIT_PROGRAMS,
+      ...ALL_WALLETS,
+      ...(dbEntities?.wallets || []),
+    ]
+    const allAvailableNetworks = dbEntities?.cardNetworks?.length ? dbEntities.cardNetworks : ALL_NETWORKS
+
+    const primaryBank = allAvailableBanks.find((b: any) => formData.selectedBanks.includes(b.id))
+    const primaryWallet = allAvailableWallets.find((w: any) => formData.selectedWallets.includes(w.id))
+    const primaryNetwork = allAvailableNetworks.find((n: any) => formData.selectedNetworks.includes(n.id))
     const segmentObj = BANK_SEGMENTS.find(s => s.id === formData.selectedSegment)
     const cardSegmentObj = CARD_SEGMENTS.find(cs => cs.id === formData.selectedCardSegment)
 
@@ -1363,15 +1484,55 @@ export default function AdminPromosV2Page() {
                   {/* Si es bancaria, desplegar TODOS los requisitos solicitados */}
                   {!formData.isExclusivePromoAR && (
                     <div className="space-y-4">
-                      {/* a) Bancos y Billeteras */}
-                      <div className="bg-[#0A1628] p-4 rounded-2xl border border-slate-800/80 space-y-3">
+                      {/* a) Programas de Beneficios, Bancos y Billeteras */}
+                      <div className="bg-[#0A1628] p-4 rounded-2xl border border-slate-800/80 space-y-4">
                         <label className="text-xs font-black text-white block">
-                          a) Bancos y Billeteras Virtuales Adheridas
+                          a) Entidades Financieras & Tarjetas de Fidelización
                         </label>
+
+                        {/* Programas de Beneficios & Fidelización */}
                         <div>
-                          <span className="text-[11px] text-slate-400 font-bold block mb-1.5">Bancos:</span>
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <span className="text-sm">🗞️</span>
+                            <span className="text-[11px] text-amber-300 font-black tracking-wide uppercase">
+                              Tarjetas de Beneficios & Fidelización (Club La Nación, 365, Coto):
+                            </span>
+                          </div>
                           <div className="flex flex-wrap gap-1.5">
-                            {ALL_BANKS.map(b => {
+                            {BENEFIT_PROGRAMS.map(bp => {
+                              const active = formData.selectedWallets.includes(bp.id)
+                              return (
+                                <button
+                                  key={bp.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(f => ({
+                                      ...f,
+                                      selectedWallets: active
+                                        ? f.selectedWallets.filter(id => id !== bp.id)
+                                        : [...f.selectedWallets, bp.id],
+                                    }))
+                                  }}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-2 transition-all shadow-sm ${
+                                    active
+                                      ? 'bg-amber-500/20 border-amber-400 text-amber-200 ring-1 ring-amber-400/40'
+                                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                                  }`}
+                                >
+                                  <img src={bp.logoUrl} alt={bp.name} className="w-4 h-4 object-contain rounded" />
+                                  <span>{bp.name}</span>
+                                  {active && <span className="text-[10px] text-amber-400 font-black">✓</span>}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Bancos Emisores */}
+                        <div className="border-t border-slate-800/80 pt-3">
+                          <span className="text-[11px] text-slate-400 font-bold block mb-1.5">Bancos Emisores:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(dbEntities?.banks?.length ? dbEntities.banks : ALL_BANKS).map((b: any) => {
                               const active = formData.selectedBanks.includes(b.id)
                               return (
                                 <button
@@ -1391,7 +1552,11 @@ export default function AdminPromosV2Page() {
                                       : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
                                   }`}
                                 >
-                                  <img src={b.logoUrl} alt={b.name} className="w-3.5 h-3.5 object-contain rounded" />
+                                  {b.logoUrl ? (
+                                    <img src={b.logoUrl} alt={b.name} className="w-3.5 h-3.5 object-contain rounded" />
+                                  ) : (
+                                    <span>🏦</span>
+                                  )}
                                   <span>{b.name}</span>
                                 </button>
                               )
@@ -1399,8 +1564,9 @@ export default function AdminPromosV2Page() {
                           </div>
                         </div>
 
-                        <div>
-                          <span className="text-[11px] text-slate-400 font-bold block mb-1.5">Billeteras:</span>
+                        {/* Billeteras Virtuales */}
+                        <div className="border-t border-slate-800/80 pt-3">
+                          <span className="text-[11px] text-slate-400 font-bold block mb-1.5">Billeteras Virtuales:</span>
                           <div className="flex flex-wrap gap-1.5">
                             {ALL_WALLETS.map(w => {
                               const active = formData.selectedWallets.includes(w.id)
@@ -2303,9 +2469,15 @@ export default function AdminPromosV2Page() {
                             </span>
                             
                             {/* Chip de Fuente de Origen */}
-                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                              {(p as any).sourceLabel || ((p as any).submittedByMerchant ? '🏪 Portal Comercio' : '🤖 Scraper')}
-                            </span>
+                            {(() => {
+                              const src = resolvePromoSourceBadge(p)
+                              return (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 border border-slate-700/80 flex items-center gap-1">
+                                  <span>{src.icon}</span>
+                                  <span>{src.label}</span>
+                                </span>
+                              )
+                            })()}
 
                             {/* Chip de Destinatario */}
                             {req?.accountType === 'JUBILADO' && (
