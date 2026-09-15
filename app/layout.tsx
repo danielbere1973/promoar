@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { getServerSession } from 'next-auth/next'
 import { Analytics } from '@vercel/analytics/next'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import Providers from './providers'
 import PostHogProvider from './components/PostHogProvider'
@@ -87,7 +86,6 @@ export default async function RootLayout({
           </PostHogProvider>
         </Providers>
         <Analytics />
-        <SpeedInsights />
         {process.env.NEXT_PUBLIC_GA_ID && <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />}
       </body>
     </html>
