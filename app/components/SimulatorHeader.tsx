@@ -2,10 +2,10 @@
 
 import Link from 'next/link'
 
-export type SimulatorType = 'supermercados' | 'combustible' | 'farmacias'
+export type SimulatorType = 'supermercados' | 'combustible' | 'farmacias' | 'hub'
 
 interface SimulatorHeaderProps {
-  active: SimulatorType
+  active?: SimulatorType
 }
 
 export default function SimulatorHeader({ active }: SimulatorHeaderProps) {
@@ -23,6 +23,16 @@ export default function SimulatorHeader({ active }: SimulatorHeaderProps) {
 
         {/* Pase entre simuladores */}
         <nav aria-label="Simuladores de ahorro" className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-bold">
+          <Link
+            href="/ahorro-interactivo"
+            className={`px-2 sm:px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap ${
+              active === 'hub'
+                ? 'bg-[#D94F2B]/15 text-[#D94F2B] border border-[#D94F2B]/30 font-extrabold'
+                : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            ⚡ Hub
+          </Link>
           <Link
             href="/ahorro-interactivo/supermercados"
             className={`px-2 sm:px-2.5 py-1 rounded-lg transition-colors whitespace-nowrap ${

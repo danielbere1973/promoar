@@ -880,6 +880,10 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             // acumulan (ej. MODO jueves en Jumbo) y promos que no (ej. reintegro $100.000
             // en Jumbo, texto legal "NO ACUMULABLE CON OTRAS PROMOCIONES") (bug 3/9/2026).
             stackable: true,
+            description: true,
+            sourceUrl: true,
+            sourceText: true,
+            stackableNote: true,
             category: { select: { name: true, slug: true, icon: true, color: true } },
             commerce: {
               select: {

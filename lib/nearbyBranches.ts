@@ -58,8 +58,8 @@ export async function getNearbyBranchesByCommerce(lat: number, lng: number, radi
     arr.sort((a, b) => a.distanceKm - b.distanceKm)
     result[id] = {
       count: arr.length,
-      minDistKm: Math.round(arr[0].distanceKm * 10) / 10,
-      branches: arr.slice(0, MAX_BRANCHES_PER_COMMERCE).map(b => ({ ...b, distanceKm: Math.round(b.distanceKm * 10) / 10 })),
+      minDistKm: Math.round(arr[0].distanceKm * 100) / 100,
+      branches: arr.slice(0, MAX_BRANCHES_PER_COMMERCE).map(b => ({ ...b, distanceKm: Math.round(b.distanceKm * 100) / 100 })),
     }
   }
   return result

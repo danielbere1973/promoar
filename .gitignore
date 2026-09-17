@@ -68,7 +68,12 @@ recovery-codes-vercel.txt
 .env*
 
 # logs de corridas de scrapers (locales, no versionar)
-scraper-runs/
+/scraper-runs/
 
-# videos de referencia sueltos en la raíz
+# videos y archivos de referencia sueltos en la raíz
 *.mp4
+google-search.zip
+google-search/
+scripts/_check_*
+historia_promoar.jpeg
+

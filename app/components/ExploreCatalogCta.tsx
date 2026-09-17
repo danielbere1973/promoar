@@ -27,6 +27,7 @@ export default function ExploreCatalogCta({ status, generatedAt, latencyMs }: Pr
       <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mb-5" />
       <Link
         href="/promos/explorar"
+        prefetch={false}
         onClick={handleClick}
         className="flex items-center justify-center gap-2 w-full text-[13px] font-black text-[#1D3D6E] dark:text-[#8AADD4] bg-[#EEF2F8] dark:bg-[#16294B] border border-[#D0DBF0] dark:border-[#26406F] rounded-2xl px-5 py-3.5 hover:opacity-90 transition-opacity"
       >

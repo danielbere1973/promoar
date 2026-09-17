@@ -31,7 +31,7 @@ function candidateMatches(candidate: DecisionCandidate, selectedName: string): b
 // ninguna candidata del rubro matchea, el slot se oculta (no tiene sentido
 // mostrar "vacío" — simplemente ese rubro no tiene oferta para esa tarjeta).
 export function filterPayloadBySelection(data: HomeDecisionPayload, selectedName: string | null): HomeDecisionPayload {
-  if (!selectedName) return data
+  if (!selectedName || !data || !Array.isArray(data.rubros)) return data
 
   const rubros: RubroSlot[] = []
   for (const slot of data.rubros) {

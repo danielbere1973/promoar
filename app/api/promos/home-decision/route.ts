@@ -412,8 +412,10 @@ export async function GET(req: NextRequest) {
     console.log(`[home-decision] cacheStatus=guest-miss latencyMs=${latencyMs} hasGuestProfile=${!!guestProfileParam}`)
     return NextResponse.json({ ...payload, latencyMs, cacheStatus: 'guest-miss' })
   } catch (error) {
-    console.error('[GET /api/promos/home-decision]', error)
-    return NextResponse.json({ error: 'Error al obtener recomendaciones por rubro' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    const stack = error instanceof Error ? error.stack : undefined
+    console.error('[GET /api/promos/home-decision]', msg, stack)
+    return NextResponse.json({ error: msg, stack }, { status: 500 })
   }
 }
 

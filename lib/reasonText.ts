@@ -14,8 +14,11 @@ export function reasonToText(reason: Reason): string {
     case 'afinidad_inferida': return 'Sueles usar promos de esta categoría'
     case 'cercania': {
       const p = reason.params ?? {}
-      const label = p.metros != null ? `${p.metros} metros` : `${p.km} km`
-      return `Está a ${label} tuyo`
+      if (p.metros != null) {
+        if (p.metros <= 50) return 'A pasos de vos'
+        return `Está a ${p.metros} metros tuyo`
+      }
+      return `Está a ${p.km} km tuyo`
     }
     case 'vence_pronto': return 'Vence pronto'
     case 'valido_hoy': return 'Válido hoy'

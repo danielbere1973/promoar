@@ -93,6 +93,8 @@ export default function PromoMultiPreviewModal({
     'naranjax': { name: 'Naranja X', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=naranjax.com' },
     'uala': { name: 'Ualá', logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=uala.com.ar' },
     'buepp': { name: 'BUEPP', logoUrl: 'https://www.bancociudad.com.ar/beneficios/assets/img/logo-banco-ciudad.svg' },
+    'open-pay': { name: 'Open Pay', logoUrl: 'https://www.openpayargentina.com.ar/_ipx/_/img/header/openpay-color.svg' },
+    'openpay': { name: 'Open Pay', logoUrl: 'https://www.openpayargentina.com.ar/_ipx/_/img/header/openpay-color.svg' },
   }
 
   // Bancos involucrados

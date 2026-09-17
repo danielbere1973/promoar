@@ -14,15 +14,29 @@ function normalizeAccents(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-// Word-boundary check: ensures "litera" doesn't match inside "literatura"
+// Word-boundary check con soporte de singular/plural en español
+function normalizeWord(w: string): string {
+  return normalizeAccents(w).trim()
+}
+
+function wordMatchesTerm(word: string, term: string): boolean {
+  if (word === term) return true
+  // Singular / Plural en español (corbata <-> corbatas, libro <-> libros)
+  if (word.endsWith('s') && word.slice(0, -1) === term) return true
+  if (term.endsWith('s') && term.slice(0, -1) === word) return true
+  // Plurales en -es (pantalon <-> pantalones, botin <-> botines)
+  if (word.endsWith('es') && word.slice(0, -2) === term) return true
+  if (term.endsWith('es') && term.slice(0, -2) === word) return true
+  return false
+}
+
 function hasWordMatch(text: string | null, term: string): boolean {
   if (!text) return false
   const t = normalizeAccents(text)
-  const idx = t.indexOf(term)
-  if (idx === -1) return false
-  const before = idx === 0 || !/[a-z]/.test(t[idx - 1])
-  const after = idx + term.length >= t.length || !/[a-z]/.test(t[idx + term.length])
-  return before && after
+  const normTerm = normalizeAccents(term)
+  // Tokenizar por caracteres no alfanuméricos
+  const words = t.split(/[^a-z0-9]+/).filter(Boolean)
+  return words.some(w => wordMatchesTerm(w, normTerm))
 }
 
 const STOP_WORDS = new Set(['para', 'de', 'del', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'con', 'sin', 'en', 'a'])

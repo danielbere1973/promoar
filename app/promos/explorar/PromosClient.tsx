@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Calendar, Tag, Settings, X, Search, Sparkles, Heart, Info, Smartphone, Clock, Globe, SlidersHorizontal, LogIn, MapPin, ShoppingBag, UserCircle, ChevronDown } from 'lucide-react'
+import { Calendar, Tag, Settings, X, Search, Sparkles, Heart, Info, Smartphone, Clock, Globe, SlidersHorizontal, LogIn, MapPin, ShoppingBag, UserCircle, ChevronDown, Calculator } from 'lucide-react'
 import BottomNav from '../../components/BottomNav'
 import { FilterState } from '../../components/FilterDrawer'
 import ActiveFilters from '../../components/ActiveFilters'
@@ -650,6 +650,26 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const productDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [province, setProvince] = useState<string | null>(initialProvince ?? null)
   const [showProvinceSelector, setShowProvinceSelector] = useState(false)
+
+  // Persiste la provincia elegida/detectada en cookie+localStorage (todos los usuarios)
+  // y, si está logueado, también en el perfil real (addressState) para que la newsletter
+  // y cualquier acceso server-side sin cookie disponible puedan usarla.
+  const persistProvince = (prov: string | null) => {
+    if (prov) {
+      localStorage.setItem('userProvince', prov)
+      document.cookie = `userProvince=${encodeURIComponent(prov)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
+    } else {
+      localStorage.removeItem('userProvince')
+      document.cookie = 'userProvince=;path=/;max-age=0'
+    }
+    if (status === 'authenticated') {
+      fetch('/api/perfil', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_profile', addressState: prov ?? '' }),
+      }).catch(() => {})
+    }
+  }
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [favCategories, setFavCategories] = useState<string[]>([]) // slugs, max 3
   const [favCommerces, setFavCommerces] = useState<string[]>([])   // nombres, max 5
@@ -734,8 +754,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     // Cargar provincia guardada (aplica a todos)
     const savedProvince = localStorage.getItem('userProvince')
     if (savedProvince) {
-      document.cookie = `userProvince=${encodeURIComponent(savedProvince)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
       setProvince(savedProvince)
+      persistProvince(savedProvince)
     } else if (navigator.geolocation) {
       // Intentar detectar provincia por GPS antes de mostrar el selector manual
       navigator.geolocation.getCurrentPosition(
@@ -750,8 +770,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             const mapped = mapNominatimToProvince(nominatimState)
             if (mapped) {
               setProvince(mapped)
-              localStorage.setItem('userProvince', mapped)
-              document.cookie = `userProvince=${encodeURIComponent(mapped)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
+              persistProvince(mapped)
             } else {
               setTimeout(() => setShowProvinceSelector(true), 2000)
             }
@@ -1700,6 +1719,20 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               </div>
 
               <div className="flex items-center gap-3 flex-1 justify-end">
+                <Link
+                  href="/ahorro-interactivo"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hidden md:flex items-center gap-2 px-3.5 h-10 rounded-2xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-[#D94F2B]/50 hover:bg-orange-50/40 dark:hover:bg-slate-700/80 text-gray-700 dark:text-slate-200 text-xs font-black transition-all shrink-0 group shadow-sm"
+                  title="Compara tus beneficios: Supermercados, Combustible y Farmacias"
+                >
+                  <Calculator size={15} className="text-[#D94F2B] transition-transform group-hover:scale-110" />
+                  <span>Compara tus beneficios</span>
+                  <span className="bg-[#D94F2B]/10 dark:bg-[#D94F2B]/20 text-[#D94F2B] text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                    Nuevo
+                  </span>
+                </Link>
+
                 <div id="tour-buscador" className="hidden md:flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10 w-96">
                   <button onClick={() => setSearchTab('comercios')}
                     className={`px-3 h-full text-[10px] font-black uppercase whitespace-nowrap border-r border-gray-200 dark:border-slate-600 transition-all ${
@@ -1808,6 +1841,16 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
               {/* Buscador combo + Botón de Filtros mobile */}
               <div className="flex items-center gap-2">
+                <Link
+                  href="/ahorro-interactivo"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-10 px-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-[#D94F2B]/50 rounded-2xl flex items-center justify-center text-[#D94F2B] shrink-0 gap-1 text-[11px] font-black shadow-sm"
+                  title="Compara tus beneficios"
+                >
+                  <Calculator size={15} />
+                  <span className="text-[10px] text-gray-700 dark:text-slate-200">Ahorro</span>
+                </Link>
                 <div id="tour-buscador-mobile" className="flex-1 flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10">
                   <button
                     onClick={() => setSearchTab(prev => prev === 'comercios' ? 'productos' : 'comercios')}
@@ -1997,8 +2040,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             <button
               onClick={() => {
                 setProvince(null)
-                localStorage.removeItem('userProvince')
-                document.cookie = 'userProvince=;path=/;max-age=0'
+                persistProvince(null)
               }}
               className="text-[11px] text-blue-500 dark:text-blue-400 font-bold ml-3 shrink-0 hover:underline"
             >
@@ -2831,15 +2873,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         <ProvinceSelector
           currentProvince={province || undefined}
           onSelect={(prov) => {
-            if (prov) {
-              setProvince(prov)
-              localStorage.setItem('userProvince', prov)
-              document.cookie = `userProvince=${encodeURIComponent(prov)};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`
-            } else {
-              setProvince(null)
-              localStorage.removeItem('userProvince')
-              document.cookie = 'userProvince=;path=/;max-age=0'
-            }
+            setProvince(prov || null)
+            persistProvince(prov || null)
             setShowProvinceSelector(false)
           }}
           onDismiss={() => setShowProvinceSelector(false)}

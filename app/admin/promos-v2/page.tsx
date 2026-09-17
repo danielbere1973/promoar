@@ -74,6 +74,7 @@ const ALL_WALLETS = [
   { id: 'cmogquvtl00fq7b3c2lu7249m', slug: 'buepp', name: 'BUEPP (Ciudad)', logoUrl: 'https://th.bing.com/th/id/OIP.ywKgdEuGPW8H7wwSKYvADgHaDY?w=324&h=159&c=7&r=0&o=7&pid=1.7&rm=3' },
   { id: 'cmpcws2az0000d8ffsfhk9iqa', slug: 'cencopay', name: 'CencoPay', logoUrl: 'https://tse2.mm.bing.net/th/id/OIP.q6wycCCA9j2PagBT7gDuXwHaHV?r=0&rs=1&pid=ImgDetMain&o=7&rm=3' },
   { id: 'cmoxdt3fr0000bezn7m9v17w7', slug: 'carrefour-banco', name: 'Carrefour Banco', logoUrl: 'https://th.bing.com/th/id/OIP.5uH3QMcr13jwpv_99FzL4wHaD4?w=304&h=180&c=7&r=0&o=7&pid=1.7&rm=3' },
+  { id: 'cmtsyihof0000vdfuo3ruhpxh', slug: 'open-pay', name: 'Open Pay', logoUrl: 'https://www.openpayargentina.com.ar/_ipx/_/img/header/openpay-color.svg' },
 ]
 
 // Redes de Tarjeta
@@ -246,6 +247,15 @@ export default function AdminPromosV2Page() {
     return (dbEntities?.categories && dbEntities.categories.length > 0)
       ? dbEntities.categories
       : DEFAULT_CATEGORIES
+  }, [dbEntities])
+
+  // Lista unificada de Billeteras Virtuales (excluye programas de fidelización que tienen su propia sección)
+  const displayedWallets = useMemo(() => {
+    if (dbEntities?.wallets && dbEntities.wallets.length > 0) {
+      const benefitIds = new Set(BENEFIT_PROGRAMS.map(bp => bp.id))
+      return dbEntities.wallets.filter((w: any) => !benefitIds.has(w.id))
+    }
+    return ALL_WALLETS
   }, [dbEntities])
 
   // Cargar entidades reales (Categorías, Comercios, Bancos, Billeteras) de la base de datos
@@ -691,6 +701,10 @@ export default function AdminPromosV2Page() {
     // 6. Personal Pay
     if (sourceStr.includes('personalpay') || url.includes('personal.com.ar') || req?.wallet?.name?.toLowerCase().includes('personal pay')) {
       return { label: 'Personal Pay', icon: '📱', key: 'sc-personalpay' }
+    }
+    // 6b. Open Pay
+    if (sourceStr.includes('openpay') || sourceStr.includes('open pay') || url.includes('openpay') || req?.wallet?.name?.toLowerCase().includes('open pay')) {
+      return { label: 'Open Pay', icon: '📱', key: 'sc-openpay' }
     }
     // 7. Coto / Comunidad Coto
     if (sourceStr.includes('coto') || url.includes('coto.com.ar') || req?.wallet?.name?.toLowerCase().includes('coto')) {
@@ -1722,7 +1736,7 @@ export default function AdminPromosV2Page() {
                         <div className="border-t border-slate-800/80 pt-3">
                           <span className="text-[11px] text-slate-400 font-bold block mb-1.5">Billeteras Virtuales:</span>
                           <div className="flex flex-wrap gap-1.5">
-                            {ALL_WALLETS.map(w => {
+                            {displayedWallets.map((w: any) => {
                               const active = formData.selectedWallets.includes(w.id)
                               return (
                                 <button
@@ -1742,7 +1756,11 @@ export default function AdminPromosV2Page() {
                                       : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
                                   }`}
                                 >
-                                  <img src={w.logoUrl} alt={w.name} className="w-3.5 h-3.5 object-contain rounded" />
+                                  {w.logoUrl ? (
+                                    <img src={w.logoUrl} alt={w.name} className="w-3.5 h-3.5 object-contain rounded" />
+                                  ) : (
+                                    <span>📱</span>
+                                  )}
                                   <span>{w.name}</span>
                                 </button>
                               )
@@ -1759,7 +1777,7 @@ export default function AdminPromosV2Page() {
                               b) Redes de Tarjeta
                             </label>
                             <div className="flex flex-wrap gap-1.5">
-                              {ALL_NETWORKS.map(net => {
+                              {(dbEntities?.cardNetworks?.length ? dbEntities.cardNetworks : ALL_NETWORKS).map((net: any) => {
                                 const active = formData.selectedNetworks.includes(net.id)
                                 return (
                                   <button

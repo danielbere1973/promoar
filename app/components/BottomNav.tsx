@@ -24,7 +24,7 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
     {
       label: 'Promos',
       icon: Flame,
-      href: '/promos',
+      href: '/promos/explorar',
       isActive: pathname === '/' || pathname === '/promos',
     },
     {
@@ -65,6 +65,7 @@ export default function BottomNav({ onSearch, onFilter }: Props) {
             <Link
               key={item.label}
               href={item.href}
+              prefetch={false}
               id={`tour-nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
               className={`flex flex-col items-center justify-center py-1 px-3 min-w-0 flex-1 transition-transform active:scale-95 ${
                 active

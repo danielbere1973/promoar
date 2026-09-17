@@ -122,6 +122,51 @@ function scoreAfinidad(promo: any, prefs: PersonaPreferences | undefined): { val
   return { value: defaultAfinidadPorCategoria(slug), source: 'default' }
 }
 
+// ─── Cadenas masivas y presencia territorial garantizada ───────────────────
+const MAJOR_CHAINS = [
+  'coto', 'carrefour', 'jumbo', 'disco', 'vea', 'dia', 'changomas', 'hipermercado libertad',
+  'makro', 'diarco', 'vital', 'maxiconsumo', 'ypf', 'shell', 'axion', 'puma',
+  'farmacity', 'farmaplus', 'openfarma', 'dr. ahorro'
+]
+
+function isMajorChain(commerceName?: string | null): boolean {
+  if (!commerceName) return false
+  const norm = commerceName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  return MAJOR_CHAINS.some(chain => {
+    const escaped = chain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(norm)
+  })
+}
+
+const RUBROS_PRESENCIALES = new Set(['supermercados', 'combustible', 'farmacias'])
+
+function geographicConfidenceMultiplier(promo: any, ctx: DecisionContext): number {
+  const categorySlug = promo.category?.slug
+  const isPresencial = categorySlug ? RUBROS_PRESENCIALES.has(categorySlug) : false
+  if (!isPresencial) return 1.0
+
+  const commerceId = promo.commerceId
+  const commerceName = promo.commerce?.name
+  const isMajor = isMajorChain(commerceName)
+  const nearby = commerceId ? ctx.nearbyByCommerceId[commerceId] : undefined
+
+  // Caso 1: Hay ubicación GPS del usuario
+  if (ctx.hasLocation) {
+    // Sucursal física verificada dentro del radio (<= 5 km)
+    if (nearby && nearby.minDistKm <= 5) return 1.0
+    // Gran cadena nacional masiva presente en el territorio
+    if (isMajor) return 0.95
+    // Comercio unitario / autoservicio local sin presencia confirmada en la zona: penalización
+    return 0.85
+  }
+
+  // Caso 2: Sin ubicación GPS del usuario (no-proximity-context)
+  // Gran cadena masiva: presencia territorial asegurada en las principales áreas urbanas
+  if (isMajor) return 1.0
+  // Comercio local / autoservicio sin presencia masiva: castigo por incertidumbre
+  return 0.80
+}
+
 // ─── Pesos — RFC-007 §4, hipótesis de spike (ya validada, no calibración final)
 const WEIGHTS = { ahorro: 0.35, afinidad: 0.30, cercania: 0.18, online: 0.11, favoritos: 0.06 }
 
@@ -138,14 +183,22 @@ function scorePromo(promo: any, ctx: DecisionContext, prefs: PersonaPreferences 
   const ahorro = scoreAhorro(promo, !!ctx.allowGlobalDiscountFallback)
   const { value: afinidad, source: afinidadSource } = scoreAfinidad(promo, prefs)
   const cercania = scoreCercania(promo, ctx)
-  const online = scoreOnline(promo)
+  const isPresencial = promo.category?.slug ? RUBROS_PRESENCIALES.has(promo.category.slug) : false
+  // En rubros presenciales (super, combustible, farmacias), el canal online nunca debe inflar el score
+  const online = isPresencial ? 0 : scoreOnline(promo)
   const favoritos = scoreFavoritos(promo)
-  const score =
+
+  const rawScore =
     ahorro * WEIGHTS.ahorro +
     afinidad * WEIGHTS.afinidad +
     cercania * WEIGHTS.cercania +
     online * WEIGHTS.online +
     favoritos * WEIGHTS.favoritos
+
+  // Multiplicador de incertidumbre geográfica y presencia masiva
+  const geoMultiplier = geographicConfidenceMultiplier(promo, ctx)
+  const score = rawScore * geoMultiplier
+
   const factors: ScoredFactors = { ahorro, afinidad, cercania, online, favoritos, afinidadSource }
   return { score, factors }
 }
@@ -265,9 +318,10 @@ function buildReasons(promo: any, factors: ScoredFactors, ctx: DecisionContext, 
   const nearby = commerceId ? ctx.nearbyByCommerceId[commerceId] : undefined
   if (nearby && factors.cercania > 0) {
     const km = nearby.minDistKm
+    const metros = Math.round(km * 1000)
     reasons.push({
       code: 'cercania',
-      params: km < 1 ? { metros: Math.round(km * 1000) } : { km: Number(km.toFixed(1)) },
+      params: km < 1 ? { metros: Math.max(50, metros) } : { km: Number(km.toFixed(1)) },
     })
   }
 
@@ -280,7 +334,8 @@ function buildReasons(promo: any, factors: ScoredFactors, ctx: DecisionContext, 
     reasons.push({ code: 'valido_hoy' })
   }
 
-  if (factors.online > 0 && reasons.length < 3) {
+  const isPresencial = facts.rubroId ? RUBROS_PRESENCIALES.has(facts.rubroId) : false
+  if (factors.online > 0 && !isPresencial && reasons.length < 3) {
     reasons.push({ code: 'disponible_online' })
   }
 
@@ -339,9 +394,26 @@ function buildRubroSlot(
 
   const principal = toDecisionCandidate(best.promo, best.score, best.factors, ctx, best.promo.id === topSavingId, rubro.id, now)
 
-  const alternativas = scoredList
-    .slice(1, 1 + MAX_ALTERNATIVAS)
-    .map(({ promo, score, factors }) => toDecisionCandidate(promo, score, factors, ctx, promo.id === topSavingId, rubro.id, now))
+  const seenCommerceIds = new Set<string>()
+  const bestCommId = best.promo.commerceId ?? best.promo.commerce?.name
+  if (bestCommId) {
+    seenCommerceIds.add(bestCommId)
+  }
+
+  const alternativas: DecisionCandidate[] = []
+  for (let i = 1; i < scoredList.length && alternativas.length < MAX_ALTERNATIVAS; i++) {
+    const item = scoredList[i]
+    const commId = item.promo.commerceId ?? item.promo.commerce?.name
+    if (commId && seenCommerceIds.has(commId)) {
+      continue
+    }
+    if (commId) {
+      seenCommerceIds.add(commId)
+    }
+    alternativas.push(
+      toDecisionCandidate(item.promo, item.score, item.factors, ctx, item.promo.id === topSavingId, rubro.id, now)
+    )
+  }
 
   return { status: 'ok', rubro, principal, alternativas }
 }

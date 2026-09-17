@@ -5,11 +5,13 @@ import RetentionAnalyticsView from './RetentionAnalyticsView'
 import ClassifyButton from './ClassifyButton'
 import NotifPrefsTab from './NotifPrefsTab'
 import PendingPromosTab from './PendingPromosTab'
+import { NewsletterEditor } from './NewsletterEditor'
+import CommercesManagerView from './CommercesManagerView'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
   Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
-  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2, History, Sparkles
+  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2, History, Sparkles, Store
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -357,7 +359,7 @@ function normalizeSearch(s: string): string {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter' | 'analytics'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter' | 'analytics' | 'commerces-manager'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -1017,6 +1019,9 @@ export default function AdminPage() {
         <TabButton active={tab === 'entities'} icon={Building2} onClick={() => { setTab('entities'); setSubTab('banks') }}>
           Entidades y Config
         </TabButton>
+        <TabButton active={tab === 'commerces-manager'} icon={Store} onClick={() => setTab('commerces-manager')}>
+          Comercios & Sucursales
+        </TabButton>
         <TabButton active={tab === 'expired'} icon={RefreshCw} onClick={() => setTab('expired')}>
           Expiradas
         </TabButton>
@@ -1135,6 +1140,16 @@ export default function AdminPage() {
         {tab === 'pending' && <PendingPromosTab />}
 
         {tab === 'newsletter' && <NewsletterTab />}
+
+        {/* ══════════ TAB COMERCIOS & SUCURSALES ══════════ */}
+        {tab === 'commerces-manager' && (
+          <CommercesManagerView
+            onSelectCommerceForPromo={(commerceId) => {
+              setForm({ ...emptyForm(), commerceId })
+              setTab('form')
+            }}
+          />
+        )}
 
         {/* Alerts */}
         {(success || error) && (
@@ -1851,6 +1866,26 @@ export default function AdminPage() {
                     />
                   )))}
 
+                  {entities && subTab === 'commerces' && (
+                    <div className="bg-indigo-50 border border-indigo-200/80 rounded-2xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                      <div>
+                        <p className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                          <span>📍</span> Nuevo Gestor de Comercios, Sucursales y Promociones
+                        </p>
+                        <p className="text-[11px] text-indigo-700 font-medium">
+                          Geolocalizá sucursales con OpenStreetMap y parametrizá el modelo de presencia para el Decision Engine.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTab('commerces-manager')}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm shrink-0 self-start sm:self-auto"
+                      >
+                        Abrir Gestor Completo
+                      </button>
+                    </div>
+                  )}
+
                   {entities && subTab === 'commerces' && (entities.commerces?.length === 0 ? <EmptyState msg="No hay comercios cargados" /> : entities.commerces.map((c: any) => (
                     <EntityRow key={c.id} name={c.name} img={c.logoUrl}
                       badge={c.activePromos > 0 ? `${c.activePromos} promos` : undefined}
@@ -2327,7 +2362,7 @@ function ScraperSchedulerTab() {
   const [historyLoading, setHistoryLoading] = useState(false)
 
   async function loadStale() {
-    const res = await fetch('/api/admin/scraper-runs')
+    const res = await fetch(`/api/admin/scraper-runs?t=${Date.now()}`, { cache: 'no-store' })
     if (res.ok) {
       const data = await res.json()
       setStaleScrapers(data.stale ?? [])
@@ -2340,7 +2375,7 @@ function ScraperSchedulerTab() {
     setHistoryModal(scraperId)
     setHistoryLoading(true)
     try {
-      const res = await fetch(`/api/admin/scraper-runs?scraperId=${encodeURIComponent(scraperId)}&limit=100`)
+      const res = await fetch(`/api/admin/scraper-runs?scraperId=${encodeURIComponent(scraperId)}&limit=100&t=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setHistoryRows(data.recent ?? [])
@@ -2746,10 +2781,20 @@ function ScraperSchedulerTab() {
           (a diferencia del reporte en vivo de arriba, que se pierde al recargar la página).
           Click en una fila abre el historial completo de ese scraper. */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F2040] overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-          <History size={16} className="text-slate-500 dark:text-slate-400" />
-          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Última corrida por scraper</h3>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">— click en una fila para ver el historial completo</span>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2">
+            <History size={16} className="text-slate-500 dark:text-slate-400" />
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Última corrida por scraper</h3>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 hidden sm:inline">— click en una fila para ver el historial completo</span>
+          </div>
+          <button
+            onClick={() => loadStale()}
+            className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 px-2.5 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+            title="Refrescar tabla de corridas"
+          >
+            <RefreshCw size={12} />
+            Refrescar
+          </button>
         </div>
         <div className="grid grid-cols-[1fr_150px_70px_60px] sm:grid-cols-[1fr_170px_90px_90px_90px_70px] gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-700">
           <span>Scraper</span>
@@ -4183,7 +4228,7 @@ function NewsletterTab() {
 
       {/* Compositor manual */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-        <h3 className="text-sm font-black text-slate-800">Envío manual (HTML libre)</h3>
+        <h3 className="text-sm font-black text-slate-800">Envío manual</h3>
 
         <div>
           <label className="text-xs font-bold text-slate-500 block mb-1.5">Asunto</label>
@@ -4195,16 +4240,7 @@ function NewsletterTab() {
           />
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-500 block mb-1.5">Contenido (HTML)</label>
-          <textarea
-            value={htmlContent}
-            onChange={e => setHtmlContent(e.target.value)}
-            placeholder={'<h2>¡Hola!</h2>\n<p>Esta semana las mejores promos son...</p>'}
-            rows={10}
-            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:border-[#1E3A5F] resize-y"
-          />
-        </div>
+        <NewsletterEditor value={htmlContent} onChange={setHtmlContent} />
 
         {/* Preview toggle */}
         <div className="flex items-center gap-2">

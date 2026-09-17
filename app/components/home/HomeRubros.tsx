@@ -32,7 +32,7 @@ export default function HomeRubros({ data, loading, onOpenPromo, onOpenNearby, s
     )
   }
 
-  if (!data) return null
+  if (!data || !Array.isArray(data.rubros)) return null
 
   if (data.status === 'incomplete_profile') return null // OnboardingBanner ya cubre este caso
 
