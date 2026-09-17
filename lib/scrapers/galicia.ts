@@ -4,7 +4,8 @@
 //   GET categorias?idAudiencia=1&SubCategoria=false&Visibles=true
 //   GET catalogo?page=N&pageSize=50&IdCategoria={id}
 
-import { chromium } from 'playwright';
+import { Browser } from 'playwright';
+import { launchBrowser } from './browserFactory';
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
 import { detectCategoria } from './bank-helpers';
 import { extractCap } from './cencosud-helpers';
@@ -292,9 +293,9 @@ export const GaliciaScraper: Scraper = {
 
   async run(): Promise<ScrapedPromo[]> {
     console.log('[Galicia] Iniciando scraper...');
-    const browser = await chromium.launch({
+    const browser = await launchBrowser({
       headless: true,
-      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+      args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
     });
     const allPromos: ScrapedPromo[] = [];
 

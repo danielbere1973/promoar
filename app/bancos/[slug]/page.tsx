@@ -9,6 +9,8 @@ import { BANK_DETAIL_TAG } from '@/lib/cache/detailCache'
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 const PAGE_SIZE = 200
 
+export const revalidate = false
+
 function validDaysLabel(mask: number | null): string {
   if (!mask || mask === 127) return 'Todos los días'
   if (mask === 62) return 'Lun–Vie'
@@ -34,13 +36,13 @@ const getCachedEntity = unstable_cache(
     return null
   },
   ['bank-detail-entity-by-slug'],
-  { tags: [BANK_DETAIL_TAG], revalidate: 3600 },
+  { tags: [BANK_DETAIL_TAG], revalidate: false },
 )
 
 const getCachedPromos = unstable_cache(
   async (entityId: string, entityType: 'bank' | 'wallet', page: number) => getPromos({ id: entityId, type: entityType } as EntityInfo, page),
   ['bank-detail-promos'],
-  { tags: [BANK_DETAIL_TAG], revalidate: 3600 },
+  { tags: [BANK_DETAIL_TAG], revalidate: false },
 )
 
 async function getPromos(entity: EntityInfo, page: number) {

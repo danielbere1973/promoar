@@ -10,10 +10,9 @@ export interface BankPromoInfo {
   discountValue: number
   discountType: string
   stacking: 'ALWAYS' | 'NEVER' | 'UNKNOWN'
-  // Entidades (bancos/billeteras) que empatan en el descuento ganador — cuando hay más de
-  // una, `label` no debe leerse como "esta promo es de este banco" (ver bug 3/9/2026: promo
-  // MODO multibanco mostraba un banco arbitrario como si fuera exclusivo).
   matchingEntityNames: string[]
+  capAmount?: number | null
+  capPeriod?: string | null
   betterDay?: {
     dayLabel: string
     discountValue: number
@@ -78,10 +77,6 @@ export async function POST(req: NextRequest) {
     const token = await getAuthToken(req)
     const email = (token?.email as string | undefined) || req.headers.get('x-user-email')
 
-    if (!email) {
-      return NextResponse.json({ promos: {} })
-    }
-
     const resolvedByName = await resolveCommerceNames(commerces)
     const results: Record<string, BankPromoInfo | null> = {}
 
@@ -95,14 +90,12 @@ export async function POST(req: NextRequest) {
 
     if (resolvedEntries.length > 0) {
       try {
-        // Una sola llamada a getPromosData para todos los comercios del carrito
-        // (antes se llamaba una vez por comercio en paralelo: cada llamada repetía
-        // el fetch del perfil financiero completo del usuario y un findMany de TODA
-        // la tabla Commerce para resolver el nombre — con >6-8 items en el carrito
-        // esto saturaba el pool de conexiones de Neon y tardaba 10s+, ver bug 3/9/2026).
+        // Si el usuario está logueado, forMe=true filtra por su perfil financiero real.
+        // Si es invitado (sin sesión), forMe=false trae las mejores promos públicas del día.
+        const forMe = !!email
         const { promos } = await getPromosData(
-          { commerceIds: resolvedEntries.map(([, c]) => c.name), searchMode: 'exact', forMe: true },
-          email,
+          { commerceIds: resolvedEntries.map(([, c]) => c.name), searchMode: 'exact', forMe },
+          email || undefined,
           false,
         )
 
@@ -116,7 +109,7 @@ export async function POST(req: NextRequest) {
           let best: BankPromoInfo | null = null
           let bestOtherDay: { validDays: number; bestDiscountValue: number; bestDiscountType: string; bankName: string | null; walletName: string | null } | null = null
           for (const p of byCommerceId.get(resolved.id) ?? []) {
-            const req = p.userBestDiscount
+            const req = p.userBestDiscount || (p.requirements && p.requirements.length > 0 ? p.requirements.slice().sort((a: any, b: any) => (b.discountValue ?? 0) - (a.discountValue ?? 0))[0] : null)
             if (req) {
               const entityName = req.bank?.name || req.wallet?.name
               if (entityName) {
@@ -128,19 +121,48 @@ export async function POST(req: NextRequest) {
                 const label = matchingNames.length > 1
                   ? `${req.wallet?.name || req.cardNetwork?.name || entityName} (+${matchingNames.length - 1} banco${matchingNames.length - 1 === 1 ? '' : 's'})`
                   : (req.cardNetwork?.name ? `${entityName} ${req.cardNetwork.name}` : entityName)
-                // No existe una regla general "billetera = acumula" ni "banco = no acumula", y
-                // tampoco alcanza con una regla por comercio: un mismo comercio puede tener una
-                // promo que acumula (ej. MODO jueves en Jumbo) y otra que no (ej. reintegro
-                // $100.000 en Jumbo, legal "NO ACUMULABLE CON OTRAS PROMOCIONES") (bug 3/9/2026).
-                // `Promo.stackable` es `@default(false)` — solo 5 de ~14.500 promos activas
-                // tienen `true` confirmado por scraper (lib/scrapers/modo.ts), el resto de los
-                // `false` es el default sin investigar, no un "confirmado que no acumula". Por
-                // eso acá solo se usa `stackable === true` como señal positiva fuerte; cualquier
-                // otro caso cae al criterio por comercio de siempre (Commerce.stacksWithBankPromos).
-                const stacking: 'ALWAYS' | 'NEVER' | 'UNKNOWN' =
-                  (p as any).stackable === true ? 'ALWAYS' : resolved.stacksWithBankPromos
+                const normEntity = entityName.toLowerCase()
+                const normWallet = (req.wallet?.name || '').toLowerCase()
+
+                // Política de acumulación:
+                // 1. Si el comercio por definición NO acumula (ej. Coto = NEVER), se respeta estrictamente NEVER.
+                //    Ninguna billetera (MODO, Personal Pay, etc.) puede pasar por encima de la regla de Coto
+                //    de no acumular con ofertas de góndola / productos en promo.
+                // 2. Si la promo misma está marcada como `stackable: true`, es ALWAYS.
+                // 3. Cuenta DNI en comercios adheridos que no sean Coto (ej. Carrefour) suele aplicar al total del ticket.
+                // 4. De lo contrario, se respeta la política del comercio (stacksWithBankPromos) o UNKNOWN.
+                const isCoto = resolved.name.toLowerCase().includes('coto')
+                let stacking: 'ALWAYS' | 'NEVER' | 'UNKNOWN' = isCoto ? 'NEVER' : (resolved.stacksWithBankPromos ?? 'UNKNOWN')
+
+                if (resolved.stacksWithBankPromos === 'NEVER' || isCoto) {
+                  stacking = 'NEVER'
+                } else if ((p as any).stackable === true) {
+                  stacking = 'ALWAYS'
+                } else if ((normEntity.includes('cuenta dni') || normWallet.includes('cuenta dni')) && !isCoto) {
+                  stacking = 'ALWAYS'
+                }
+
+                const capAmount = req.cap ?? (p as any).cap ?? null
+                const capPeriod = req.capPeriod ?? (p as any).capPeriod ?? null
+
                 if (!best || (req.discountValue ?? 0) > best.discountValue) {
-                  best = { label, discountValue: req.discountValue ?? 0, discountType: req.discountType, stacking, matchingEntityNames: matchingNames }
+                  best = {
+                    label,
+                    discountValue: req.discountValue ?? 0,
+                    discountType: req.discountType,
+                    stacking,
+                    matchingEntityNames: matchingNames,
+                    capAmount,
+                    capPeriod,
+                    promoId: p.id,
+                    slug: p.slug ?? null,
+                    title: p.title ?? null,
+                    description: p.description ?? null,
+                    sourceUrl: (p as any).sourceUrl ?? null,
+                    sourceText: (p as any).sourceText ?? null,
+                    stackableNote: (p as any).stackableNote ?? null,
+                    commerceNote: (p as any).commerceNote ?? null,
+                  }
                 }
               }
             }

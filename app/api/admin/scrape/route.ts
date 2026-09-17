@@ -779,7 +779,15 @@ export async function POST(req: NextRequest) {
       }))
     }
 
-    if (processedCount > 0) { await invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
+    if (processedCount > 0) { 
+      await invalidatePublicPromosCache(); 
+      invalidateCategoriesCache(); 
+      invalidatePromoDetailCache(); 
+      invalidateCommerceDetailCache();
+      
+      const { invalidateBankDetailCache } = await import('@/lib/cache/detailCache');
+      invalidateBankDetailCache();
+    }
 
     // Invalidación incremental del Financial Match Index para las promos
     // tocadas en este run (fire-and-forget, no bloquea la respuesta del scraper).

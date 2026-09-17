@@ -1,14 +1,9 @@
 name: Run Scheduled Scrapers
 
 on:
-  # schedule DESACTIVADO a propósito (8/7/2026): este workflow llegó a tener
-  # `cron: '0 * * * *'` (cada hora, todos los días) hasta el 6/7 — 14+
-  # corridas en un solo día. No volvió a fundir Vercel/Neon solo porque la
-  # tabla scraper_schedules estaba vacía (scrapers-due devolvía siempre []).
-  # Pablo pidió explícitamente que este workflow NUNCA vuelva a dispararse
-  # solo — de acá en más corre exclusivamente vía workflow_dispatch manual
-  # desde el admin. Si en el futuro se quiere reactivar un cron, cargar antes
-  # scraper_schedules a propósito y probar con un solo scraper primero.
+  schedule:
+    # Corre todos los días a las 04:00 UTC (01:00 AM Argentina)
+    - cron: '0 4 * * *'
   workflow_dispatch:
     inputs:
       scraper_id:
@@ -105,6 +100,7 @@ jobs:
         env:
           API_URL: ${{ secrets.API_URL }}
           VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
+          SCRAPING_BROWSER_WS: ${{ secrets.SCRAPING_BROWSER_WS }}
           DISPLAY: ':99'
         run: |
           Xvfb :99 -screen 0 1280x720x24 &

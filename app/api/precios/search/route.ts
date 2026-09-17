@@ -29,14 +29,15 @@ const COTO_EXCLUDED_CATEGORY_RE = /electrodom[eé]stico|rodado|neum[áa]tico|bic
 // Carrefour — marcas excluidas según legales vigentes
 const CARREFOUR_EXCLUDED_BRANDS_RE = /\b(alamos|altaland|ang[eé]lica\s+zapata|aruma|caro\b|casa\s+de\s+herrero|chandon|cuchillo\s+de\s+palo|d\.?v\.?\s*catena|el\s+enemigo|la\s+posta|luca\b|luigi\s+bosca|nicasia|ojo\s+de\s+buen\s+cubero|ribera\s+del\s+cuarzo|rutini|saint\s+felicien|san\s+felipe|valmont)\b/i
 
-// Carrefour — categorías excluidas según legales vigentes
-const CARREFOUR_EXCLUDED_CATEGORY_RE = /electrodom[eé]stico|telefon[íi]a|fotograf[íi]a|inform[áa]tica|imagen\s+y\s+sonido|sonido\b|leche\s+infantil|maternizada|carncer[íi]a|carne\s+vacuna|cerdo\b|embutido|conservadora\s+de\s+cerveza/i
+// Carrefour — categorías y productos excluidos según legales vigentes
+// (carnes, huevos, frutas y verduras, electros, bazar, ferretería, automotor, juguetería, librería, cocina, jardinería, textil, ofertón por bulto, precio súper bajo)
+const CARREFOUR_EXCLUDED_CATEGORY_RE = /electrodom[eé]stico|telefon[íi]a|fotograf[íi]a|inform[áa]tica|imagen\s+y\s+sonido|sonido\b|audio\b|televisor|tv\b|electro\b|leche\s+infantil|maternizada|carnicer[íi]a|carne\s+vacuna|carne\s+de\s+novillo|carne\s+de\s+cerdo|cerdo\b|pollo\b|carnes\b|achura|huevo|huevos|fruta|frutas|verdura|verduras|bazar\b|ferreter[íi]a|automotor|autom[oó]vil|neum[áa]tico|jugueter[íi]a|librer[íi]a|cocina\b|jardiner[íi]a|textil\b|indumentaria\b|calzado\b|ropa\b|oferton\b|ofert[oó]n\s+por\s+bulto|precio\s+s[uú]per\s+bajo|precios\s+s[uú]per\s+bajos|precios\s+corajudos|conservadora\s+de\s+cerveza/i
 
 function isCarrefourExcludedFromBankPromos(p: any): boolean {
   const brand = (p.brand || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
   if (CARREFOUR_EXCLUDED_BRANDS_RE.test(brand)) return true
-  const nameAndCat = `${p.name || ''} ${p.vtexCategory || ''}`.normalize('NFD').replace(/[̀-ͯ]/g, '')
-  if (CARREFOUR_EXCLUDED_CATEGORY_RE.test(nameAndCat)) return true
+  const combined = `${p.name || ''} ${p.vtexCategory || ''} ${p.discountText || ''}`.normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (CARREFOUR_EXCLUDED_CATEGORY_RE.test(combined)) return true
   return false
 }
 
@@ -73,6 +74,8 @@ interface NormalizedProduct {
   imageUrl: string
   url: string
   multiUnitPromo?: MultiUnitPromo
+  vtexCategoryId?: string
+  vtexCategory?: string
   excludedFromBankPromos?: boolean
 }
 
@@ -195,13 +198,17 @@ async function searchVtexCatalog(query: string, supermarket: string, baseUrl: st
       return (p.items || []).map((item: any) => {
         const offer = item.sellers?.[0]?.commertialOffer || {}
         const price = offer.Price || 0
-        const listPrice = offer.ListPrice || price
+        const rawListPrice = offer.ListPrice || price
+        const isCencosud = ['Jumbo', 'Disco', 'Vea', 'Easy'].includes(supermarket)
+        const listPrice = isCencosud
+          ? price
+          : (rawListPrice > 0 && rawListPrice <= price * 3 ? rawListPrice : price)
         if (!price || (offer.AvailableQuantity || 0) <= 0) return null
 
         let discountText = '-'
         if (listPrice > price) {
           const pct = Math.round((1 - price / listPrice) * 100)
-          if (pct > 0) discountText = `${pct}% OFF`
+          if (pct > 0 && pct < 85) discountText = `${pct}% OFF`
         }
 
         const slug = supermarket.toLowerCase().replace(/\s/g, '')
@@ -356,7 +363,9 @@ async function searchEasy(query: string): Promise<NormalizedProduct[]> {
       const item = p.items?.[0] || {}
       const offer = item.sellers?.[0]?.commertialOffer || {}
       const price = offer.Price || 0
-      const listPrice = offer.ListPrice || price
+      const rawListPrice = offer.ListPrice || price
+      // Easy es Cencosud — proteger contra ListPrice corrupto/inflado (>3x)
+      const listPrice = (rawListPrice > 0 && rawListPrice <= price * 3) ? rawListPrice : price
       if (!price || (offer.AvailableQuantity || 0) <= 0) return []
 
       let discountText = '-'
@@ -365,7 +374,7 @@ async function searchEasy(query: string): Promise<NormalizedProduct[]> {
       const promos = [...highlights.map((h: any) => h.name), ...teasers].filter(Boolean)
       if (listPrice > price) {
         const pct = Math.round((1 - price / listPrice) * 100)
-        if (pct > 0) promos.unshift(`${pct}% OFF`)
+        if (pct > 0 && pct < 85) promos.unshift(`${pct}% OFF`)
       }
       if (promos.length > 0) discountText = promos[0]
 
@@ -769,8 +778,9 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
       const item = p.items?.[0] || {}
       const offer = item.sellers?.[0]?.commertialOffer || {}
       
-      const priceList = offer.ListPrice || 0
+      const rawPriceList = offer.ListPrice || 0
       const price = offer.Price || 0
+      const priceList = (rawPriceList > 0 && rawPriceList <= price * 3) ? rawPriceList : price
       const available = (offer.AvailableQuantity || 0) > 0
 
       if (!available || price <= 0) return null
@@ -787,7 +797,7 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
 
       if (priceList > price) {
         const pct = Math.round((1 - (price / priceList)) * 100)
-        if (pct > 0) {
+        if (pct > 0 && pct < 85) {
           const t = `${pct}% OFF`
           if (!allPromos.includes(t)) allPromos.unshift(t)
         }
@@ -806,7 +816,9 @@ async function searchCarrefour(query: string, isCategory = false): Promise<Norma
         discountText: discountText,
         imageUrl: item.images?.[0]?.imageUrl || '',
         url: p.link?.startsWith('http') ? p.link : `https://www.carrefour.com.ar${p.link || ''}`,
-        multiUnitPromo: parseMultiUnitPromo(discountText, priceList)
+        multiUnitPromo: parseMultiUnitPromo(discountText, priceList),
+        vtexCategoryId: p.categoriesIds?.[0] || p.categoryId || '',
+        vtexCategory: p.categories?.[0] || '',
       }
     }).filter(Boolean) as NormalizedProduct[]
   } catch (error) {
@@ -896,25 +908,52 @@ async function fetchVtexPromotions(baseUrl: string, itemIds: string[], headers: 
 // ---------------------------------------------------------
 async function searchVtexByEan(ean: string, supermarket: string, baseUrl: string): Promise<NormalizedProduct[]> {
   try {
+    const isCencosud = ['Jumbo', 'Disco', 'Vea', 'Easy'].includes(supermarket)
     const url = `${baseUrl}/api/catalog_system/pub/products/search?fq=alternateIds_Ean:${encodeURIComponent(ean)}&_from=0&_to=14`
     const res = await fetch(url, { headers: HEADERS, cache: 'no-store', signal: AbortSignal.timeout(8000) })
     if (!res.ok) return []
     const data = await res.json()
     if (!Array.isArray(data) || !data.length) return []
 
+    // Obtener promociones Cencosud si aplica
+    const host = baseUrl.split('//')[1]
+    const itemIds = data.flatMap((p: any) => p.items || []).map((item: any) => String(item.itemId || '')).filter(Boolean)
+    const cencosudPromos = (isCencosud && itemIds.length > 0) ? await getCencosudPromos(host, itemIds) : {}
+
     return data.flatMap((p: any) => {
       return (p.items || []).map((item: any) => {
         const offer = item.sellers?.[0]?.commertialOffer || {}
-        const priceList = offer.ListPrice || offer.Price || 0
         const price = offer.Price || 0
+        const rawListPrice = offer.ListPrice || 0
+
+        // Cencosud tiene ListPrice corrupto (~82x el precio real) en todas sus APIs — ignorarlo siempre.
+        // Para otros: usar ListPrice si es razonable (no más de 3x el precio de venta).
+        const priceList = isCencosud
+          ? price
+          : (rawListPrice > 0 && rawListPrice <= price * 3)
+            ? rawListPrice
+            : (offer.PriceWithoutDiscount && offer.PriceWithoutDiscount <= price * 3 ? offer.PriceWithoutDiscount : price)
+
         if ((offer.AvailableQuantity || 0) <= 0 || price <= 0) return null
+
+        let multiUnitPromo: MultiUnitPromo | undefined
+        let primePromo: MultiUnitPromo | undefined
+
+        // Verificar si hay promo Cencosud cacheada para este SKU
+        const cPromo = cencosudPromos[item.itemId]
+        if (cPromo?.promoCode) {
+          multiUnitPromo = parseMultiUnitPromo(cPromo.promoCode.trim(), priceList)
+        }
+        if (cPromo?.primePromoCode) {
+          primePromo = parseMultiUnitPromo(cPromo.primePromoCode.trim(), priceList)
+        }
 
         const teasers: string[] = offer.PromotionTeasers?.map((t: any) => t.Name).filter(Boolean) || []
         if (priceList > price) {
           const pct = Math.round((1 - price / priceList) * 100)
-          if (pct > 0) teasers.unshift(`${pct}% OFF`)
+          if (pct > 0 && pct < 85) teasers.unshift(`${pct}% OFF`)
         }
-        const discountText = teasers[0] || '-'
+        const discountText = multiUnitPromo?.label || teasers[0] || '-'
 
         return {
           ean: String(item.ean || ean),
@@ -927,7 +966,8 @@ async function searchVtexByEan(ean: string, supermarket: string, baseUrl: string
           discountText,
           imageUrl: item.images?.[0]?.imageUrl || '',
           url: p.link?.startsWith('http') ? p.link : (p.linkText ? `${baseUrl}/${p.linkText}/p` : baseUrl),
-          multiUnitPromo: parseMultiUnitPromo(discountText, priceList),
+          multiUnitPromo: multiUnitPromo || parseMultiUnitPromo(discountText, priceList),
+          primePromo,
         } as NormalizedProduct
       }).filter(Boolean)
     }) as NormalizedProduct[]
@@ -1113,7 +1153,7 @@ async function searchVtexIS(query: string, isCategory: boolean, supermarket: str
         ? salePrice
         : (rawListPrice > 0 && rawListPrice <= salePrice * 3)
           ? rawListPrice
-          : (offer.PriceWithoutDiscount || salePrice || 0)
+          : (offer.PriceWithoutDiscount && offer.PriceWithoutDiscount <= salePrice * 3 ? offer.PriceWithoutDiscount : salePrice)
       // Cencosud también tiene spotPrice corrupto (no es precio real al público) — ignorarlo,
       // igual que ListPrice. offer.Price ya viene resuelto con el descuento aplicado.
       const spot = isCencosudSite ? 0 : (offer.spotPrice || 0)
@@ -1299,13 +1339,18 @@ async function searchVtexByCategoryPath(categoryPath: string, supermarket: strin
     const headers: any = { ...HEADERS }
     const promotionsMap = itemIds.length > 0 ? await fetchVtexPromotions(baseUrl, itemIds, headers) : {}
 
+    const isCencosudSite = ['Jumbo', 'Disco', 'Vea', 'Easy'].includes(supermarket)
     const initial = products.map((p: any) => {
       const item = p.items?.[0] || {}
       const offer = item.sellers?.[0]?.commertialOffer || {}
       const rawListPrice = offer.ListPrice || 0
       const salePrice = offer.Price || 0
-      const listPrice = (rawListPrice > 0 && rawListPrice <= salePrice * 3) ? rawListPrice : (offer.PriceWithoutDiscount || salePrice || 0)
-      const spot = offer.spotPrice || 0
+      const listPrice = isCencosudSite
+        ? salePrice
+        : (rawListPrice > 0 && rawListPrice <= salePrice * 3)
+          ? rawListPrice
+          : (offer.PriceWithoutDiscount && offer.PriceWithoutDiscount <= salePrice * 3 ? offer.PriceWithoutDiscount : salePrice)
+      const spot = isCencosudSite ? 0 : (offer.spotPrice || 0)
       const available = (offer.AvailableQuantity || 0) > 0
       if (!available || listPrice <= 0) return null
 
@@ -1327,9 +1372,11 @@ async function searchVtexByCategoryPath(categoryPath: string, supermarket: strin
       }
       let promoText = multiUnitPromo?.label || teaserTexts[0] || '-'
       if (promoText === '-' && spot > 0 && spot < salePrice) {
-        promoText = `${Math.round((1 - spot / salePrice) * 100)}% OFF`
+        const pct = Math.round((1 - spot / salePrice) * 100)
+        if (pct > 0 && pct < 85) promoText = `${pct}% OFF`
       } else if (promoText === '-' && priceList > finalPrice * 1.04) {
-        promoText = `${Math.round((1 - finalPrice / priceList) * 100)}% OFF`
+        const pct = Math.round((1 - finalPrice / priceList) * 100)
+        if (pct > 0 && pct < 85) promoText = `${pct}% OFF`
       }
 
       const productUrl = p.linkText ? `${baseUrl}/${p.linkText}/p` : ''

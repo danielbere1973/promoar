@@ -4,13 +4,14 @@ import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
+import NotifyMeButton from '@/app/components/NotifyMeButton'
 import { schemaOffer } from '@/lib/schema'
 import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
 import { getPromoScope } from '@/lib/utils/promoScope'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
-export const revalidate = 3600
+export const revalidate = false
 
 const getCachedPromoBySlug = unstable_cache(
   async (slug: string) => prisma.promo.findUnique({
@@ -25,7 +26,7 @@ const getCachedPromoBySlug = unstable_cache(
     },
   }),
   ['promo-detail-by-slug'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+  { tags: [PROMO_DETAIL_TAG], revalidate: false },
 )
 
 const getCachedCommerceBranchesCount = unstable_cache(
@@ -34,7 +35,7 @@ const getCachedCommerceBranchesCount = unstable_cache(
     take: 1,
   }),
   ['promo-detail-commerce-branches'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+  { tags: [PROMO_DETAIL_TAG], revalidate: false },
 )
 
 // Slugs de promos borradas (expiradas y purgadas) son re-pedidos por bots una y
@@ -46,7 +47,7 @@ const getCachedGuessedCommerceSlug = unstable_cache(
     select: { slug: true },
   }),
   ['promo-detail-guessed-commerce'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+  { tags: [PROMO_DETAIL_TAG], revalidate: false },
 )
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -391,16 +392,12 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
           )}
         </p>
 
-        {/* ── CTA temprano (arriba del fold, antes de vigencia/legales) ── */}
-        <a
-          href="/promos"
-          className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-2xl px-5 py-3.5 shadow-md hover:shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99]"
-        >
-          <p className="text-sm font-black">Ver más promos como esta →</p>
-          <div className="w-8 h-8 rounded-xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-sm">
-            🎯
-          </div>
-        </a>
+        {/* ── CTA de Captura de Valor (arriba del fold, antes de vigencia/legales) ── */}
+        <NotifyMeButton 
+          commerceId={promo.commerce.id} 
+          promoId={promo.id} 
+          commerceName={promo.commerce.name} 
+        />
 
         {/* ── ALERTA DE ALCANCE / CONDICIÓN RESTRINGIDA ── */}
         {scope && (

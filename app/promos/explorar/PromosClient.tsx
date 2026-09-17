@@ -17,7 +17,7 @@ import { GuestProfile } from '../../components/PromoWizard'
 import ThemeToggle from '../../components/ThemeToggle'
 import SplashScreen from '../../components/SplashScreen'
 import { useTracking } from '@/lib/useTracking'
-import { AdBannerEM } from '../../components/AdBannerEM'
+import { DynamicAdBanner } from '../../components/DynamicAdBanner'
 
 // `.includes()` de JS no ignora acentos — "cafe" no matchea "Café Martínez" sin esto.
 function normalizeAccents(s: string): string {
@@ -2239,8 +2239,8 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         </div>
       )}
 
-      {/* Banner publicitario Estación Mascotera */}
-      <AdBannerEM />
+      {/* Banners dinámicos y promocionados */}
+      <DynamicAdBanner />
 
         {/* Overlay loading entre filtros */}
         {filterLoading && <FilterLoadingOverlay />}
