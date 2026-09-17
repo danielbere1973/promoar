@@ -45,16 +45,19 @@ Coto, Diarco, Jumbo, Disco, Vea, Changomas, Carrefour, MODO, MercadoPago, Cuenta
   2. Comercio más popular (`_count` promos activas)
   3. Alfabético por nombre de comercio
   4. Más cuotas sin interés primero como desempate final
-- **Búsqueda de productos** ("¿cómo busco carteras?"): modelo `CommerceProduct`
-  (commerceId, categoria, subcategoria, productos, source) cargado desde
-  `unicenter-catalogo.csv` vía `scripts/load-commerce-products.ts` (2534 filas, 138 comercios).
-  Endpoint `/api/search/products?q=` reutiliza el matching por perfil de `/api/promos`
-  (REGLA 1-3 + caso CUENTA_DNI). UI: bottom sheet `ProductSearch.tsx` con buscador debounced,
-  invocado desde botones "Buscar producto" / "Productos" en `page.tsx`.
-  Comercios sin catálogo scrapeado pero con promos activas (Zara, Adidas, Lacoste, Samsonite,
-  Swatch, Burger King, Bimba y Lola, Despegar, Pandoras, Ave Caesar, G-Shock Casio, The Embers)
-  se cargaron a mano con `source: 'manual'` (sitios bloqueados por Akamai/SSL o de baja calidad
-  de extracción — se usó navegador headed para inspeccionar y curar categorías reales).
+- **Gestor de Comercios, Sucursales y Geocoding en Admin** (`app/admin/CommercesManagerView.tsx` y `/api/admin/commerces/`):
+  Explorador con filtros (cadenas, regionales, sin geolocalizar), command center del comercio,
+  y auto-geocoding con OpenStreetMap / Nominatim con mini mapa interactivo y guardado directo.
+- **Hub de Comparadores de Ahorro Interactivo** (`/ahorro-interactivo` y `app/page.tsx`):
+  Centralización de simuladores (Supermercados, Combustibles, Farmacias) con layout de 2 columnas,
+  árbol multiselección (`TreeFilterSidebar`), recálculo en vivo y cards destacadas en la Landing.
+- **Decision Engine V2 & Geolocalización**:
+  Multiplicadores de presencia masiva e incertidumbre geográfica en rubros presenciales,
+  cálculo de distancias en metros/km y desempate por comercio único.
+- **Editor de Newsletter enriquecido** (`app/admin/NewsletterEditor.tsx` y `/api/admin/newsletter/upload-image/`):
+  Compositor visual con subida de imágenes a Vercel Blob para envíos directos.
+- **Changuito & Comparador de Precios en vivo (`/precios`)**:
+  En desarrollo y testing local antes de despliegue a producción.
 
 ## Decisiones de arquitectura importantes
 - `selectedCats` en page.tsx usa **slugs** (no ids) — se guarda en URL y se restaura al montar leyendo `window.location.search` directamente (no `useSearchParams`)
