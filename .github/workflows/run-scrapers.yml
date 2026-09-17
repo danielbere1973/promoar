@@ -1,9 +1,9 @@
 name: Run Scheduled Scrapers
 
 on:
-  schedule:
-    # Corre todos los días a las 04:00 UTC (01:00 AM Argentina)
-    - cron: '0 4 * * *'
+  # schedule DESACTIVADO temporalmente a pedido del usuario (17/09)
+  # schedule:
+  #   - cron: '0 4 * * *'
   workflow_dispatch:
     inputs:
       scraper_id:
