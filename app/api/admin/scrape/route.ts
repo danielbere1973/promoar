@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { ALL_SCRAPERS } from '@/lib/scrapers';
 import { generatePromoSlug } from '@/lib/utils/promoSlug';
@@ -8,6 +9,24 @@ import { detectCategoria, detectSalesChannel, normalizeSalesChannel } from '@/li
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache';
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache';
 import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache';
+
+// Se agregó a PUBLIC_PATHS en middleware.ts (17/9/2026) porque el gate de sesión
+// redirigía a /login los llamados server-to-server internos (save-promos/run-scraper
+// internal → aquí, sin cookie), incluso pasando el firewall bypass. Mismo patrón que
+// app/api/admin/snapshots/warm/route.ts: Bearer VTEX_SESSION_SECRET o sesión ADMIN.
+async function isAuthorized(req: NextRequest): Promise<boolean> {
+  const auth = req.headers.get('Authorization') || ''
+  const secret = process.env.VTEX_SESSION_SECRET
+  if (secret && auth === `Bearer ${secret}`) return true
+
+  const session = await getServerSession()
+  if (!session?.user?.email) return false
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true },
+  })
+  return user?.role === 'ADMIN'
+}
 
 function normalizeStr(s: string): string {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -126,6 +145,10 @@ function promoFingerprint(data: any, reqs: any[]): string {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await isAuthorized(req))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   // Registro centralizado en ScraperRun — antes solo /api/admin/run-scraper lo hacía,
   // dejando ciego el historial cuando se corría desde "Ejecutar todos (local)" o
   // selección local del admin, que llaman directo a este endpoint (bug reportado por

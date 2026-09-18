@@ -24,6 +24,11 @@ const PUBLIC_PATHS = [
   // gate de sesión de este middleware para que el trigger fire-and-forget
   // post-scraping (solo manda el header Bearer) no sea redirigido a /login.
   '/api/admin/snapshots/warm',
+  // Auth propia (Bearer VTEX_SESSION_SECRET o sesión ADMIN) en
+  // app/api/admin/scrape/route.ts — mismo motivo que snapshots/warm arriba:
+  // llamados server-to-server internos (save-promos/run-scraper internal)
+  // no tienen cookie de sesión y quedaban redirigidos a /login (17/9/2026).
+  '/api/admin/scrape',
   '/api/r',
   '/api/track',
   '/promos',
