@@ -65,6 +65,7 @@ model User {
   notificationPreferences NotificationPreference[]
   rubroPreferences        UserRubroPreference[]
   shoppingLists           shopping_lists[] @ignore
+  userCommerces           UserCommerce[]
 
   @@map("users")
 }
@@ -447,8 +448,22 @@ model Commerce {
   products                CommerceProduct[]
   aliases                 CommerceAlias[]
   notificationPreferences NotificationPreference[]
+  userCommerces           UserCommerce[]
 
   @@map("commerces")
+}
+
+model UserCommerce {
+  id         String   @id @default(cuid())
+  userId     String
+  commerceId String
+  role       String   @default("ADMIN") // ADMIN, EDITOR, VIEWER
+  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commerce   Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commerceId])
+  @@map("user_commerces")
 }
 
 model CommerceAlias {
@@ -920,7 +935,10 @@ enum LocationModel {
   ONLINE_ONLY // sin presencia física
   MOBILE_SERVICE // el servicio va al cliente (Uber, Cabify, etc.)
   NO_FIXED_LOCATION // sin punto fijo, sin ser servicio móvil
-  UNKNOWN // sin clasificar — default de compatibilidad
+  UNKNOWN // sin clasificar - default de compatibilidad
+  CHAIN_NATIONAL // Cadena Nacional (Alta presencia en todo el país)
+  REGIONAL // Regional (Cadena del interior o provincial)
+  SINGLE_STORE // Local Unico (Comercio físico barrial o puntual)
 }
 
 // Feature "¿Dónde me conviene comprar?" (cto-a-cpo-plan-tecnico-lista-compras-ahorro-1-9-2026.md)

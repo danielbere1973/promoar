@@ -138,12 +138,14 @@ export async function POST(req: NextRequest) {
     let categoriaFilter: string | undefined;
     let preScrapedPromos: any[] | undefined;
     let forceLocal = false;
+    let skipWarmup = false;
     try {
       const body = await req.json();
       scraperFilter = body.scraper;
       categoriaFilter = body.categoria;
       preScrapedPromos = body.promos; // promos pre-scrapeadas desde GitHub Actions
       forceLocal = !!body.forceLocal; // solapa "Local" del admin — saltea guard Playwright
+      skipWarmup = !!body.skipWarmup;
     } catch { /* body vacío */ }
 
     scraperFilterForLog = scraperFilter;
@@ -820,7 +822,7 @@ export async function POST(req: NextRequest) {
     // si hubo promos nuevas/actualizadas, promoPoolVersion cambió para todos los
     // usuarios con perfil, invalidando sus snapshots. Fire-and-forget para que la
     // DB "amanezca" con los snapshots recalculados antes del próximo login.
-    if (processedCount > 0) {
+    if (processedCount > 0 && !skipWarmup) {
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
       fetch(`${baseUrl}/api/admin/snapshots/warm`, {
         method: 'POST',

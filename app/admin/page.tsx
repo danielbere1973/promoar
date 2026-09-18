@@ -7,6 +7,7 @@ import NotifPrefsTab from './NotifPrefsTab'
 import PendingPromosTab from './PendingPromosTab'
 import { NewsletterEditor } from './NewsletterEditor'
 import CommercesManagerView from './CommercesManagerView'
+import UserCommercesView from './UserCommercesView'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
@@ -385,7 +386,7 @@ function normalizeSearch(s: string): string {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter' | 'analytics' | 'commerces-manager'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter' | 'analytics' | 'commerces-manager' | 'b2b'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -1048,6 +1049,9 @@ export default function AdminPage() {
         <TabButton active={tab === 'commerces-manager'} icon={Store} onClick={() => setTab('commerces-manager')}>
           Comercios & Sucursales
         </TabButton>
+        <TabButton active={tab === 'b2b'} icon={Building2} onClick={() => setTab('b2b')}>
+          Portal B2B
+        </TabButton>
         <TabButton active={tab === 'expired'} icon={RefreshCw} onClick={() => setTab('expired')}>
           Expiradas
         </TabButton>
@@ -1175,6 +1179,11 @@ export default function AdminPage() {
               setTab('form')
             }}
           />
+        )}
+
+        {/* 🔹 TAB PORTAL B2B 🔹 */}
+        {tab === 'b2b' && (
+          <UserCommercesView />
         )}
 
         {/* Alerts */}
@@ -2591,7 +2600,7 @@ function ScraperSchedulerTab() {
         const res = await fetch('/api/admin/scrape', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scraper: s.id, categoria: s.categoria, forceLocal: true }),
+          body: JSON.stringify({ scraper: s.id, categoria: s.categoria, forceLocal: true, skipWarmup: true }),
         })
         const data = await res.json().catch(() => ({}))
         if (res.ok) {
@@ -2617,6 +2626,12 @@ function ScraperSchedulerTab() {
     setMsg({ type: err > 0 ? 'error' : 'success', text: `Local: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
     setTimeout(() => setMsg(null), 15000)
     sendReportEmail(report, 'Ejecutar todos (local)')
+    
+    if (totalProcessed > 0) {
+      console.log('Disparando warmup global tras terminar Ejecutar todos')
+      fetch('/api/admin/snapshots/warm', { method: 'POST' }).catch(console.error)
+    }
+    
     load()
     loadStale()
   }
