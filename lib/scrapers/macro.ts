@@ -8,7 +8,8 @@
 // 4. Visita el detalle de cada promo para obtener redes de tarjeta, topes, etc.
 // 5. Cierra el browser
 
-import { chromium } from 'playwright';
+import { Browser } from 'playwright';
+import { launchBrowser } from './browserFactory';
 import { Scraper, ScrapedPromo } from './types';
 import { extractCap } from './cencosud-helpers';
 
@@ -252,7 +253,7 @@ export const MacroScraper: Scraper = {
     console.log('[Macro] No toques nada — el scraper navega por su cuenta');
     console.log('[Macro] ════════════════════════════════════════════');
 
-    const browser = await chromium.launch({
+    const browser = await launchBrowser({
       headless: false,
       slowMo: 0,
       args: ['--no-sandbox', '--start-maximized'],

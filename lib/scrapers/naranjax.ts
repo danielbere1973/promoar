@@ -4,7 +4,8 @@
 // Estructura: app-card (grilla, ~40 cards) + app-promo-carousel-card-desktop (carousel)
 // Banco: Naranja X (emisor propio)
 
-import { chromium } from 'playwright';
+import { Browser } from 'playwright';
+import { launchBrowser } from './browserFactory';
 import { Scraper, ScrapedPromo } from './types';
 
 const BASE_URL = 'https://www.naranjax.com/promociones/';
@@ -281,9 +282,9 @@ export const NaranjaXScraper: Scraper = {
 
   async run(): Promise<ScrapedPromo[]> {
     console.log('[NaranjaX] Iniciando scraper...');
-    const browser = await chromium.launch({
+    const browser = await launchBrowser({
       headless: true,
-      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+      args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
     });
 
     const allPromos: ScrapedPromo[] = [];

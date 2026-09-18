@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, Loader2, Plus, Minus, Trash2, X, ArrowRight } from 'lucide-react'
+import { Search, Loader2, Plus, Minus, Trash2, X, ArrowRight, RotateCcw, ExternalLink, Info, AlertTriangle, FileText, Check, ShoppingBag, Zap } from 'lucide-react'
 
 export interface MultiUnitPromo {
   label: string
@@ -58,6 +58,7 @@ export interface CartRow {
   vtexCategory?: string
   searchQuery?: string  // búsqueda original para encontrar similares
   markets: Record<string, {
+    id?: string
     name?: string
     price: number
     finalPrice: number
@@ -81,6 +82,16 @@ export interface BankPromoInfo {
   discountType: string
   stacking: 'ALWAYS' | 'NEVER' | 'UNKNOWN'
   matchingEntityNames: string[]
+  capAmount?: number | null
+  capPeriod?: string | null
+  promoId?: string | null
+  slug?: string | null
+  title?: string | null
+  description?: string | null
+  sourceUrl?: string | null
+  sourceText?: string | null
+  stackableNote?: string | null
+  commerceNote?: string | null
   betterDay?: {
     dayLabel: string
     discountValue: number
@@ -95,11 +106,14 @@ export interface StoreVerdict {
   itemsTotal: number
   gondolaTotal: number
   listTotal: number
+  gondolaSavings?: number
   bankDiscount: {
     label: string
     amount: number
     confidence: 'confirmed' | 'unconfirmed'
     appliedStrategy: 'stacked' | 'best_of_two' | 'none'
+    capped?: boolean
+    capAmount?: number | null
   } | null
   finalTotal: number
   isCompleteBasket: boolean
@@ -194,6 +208,87 @@ export const SUPERMARKET_DOT: Record<string, string> = {
   'Toledo Digital': 'bg-violet-700',
   'Depot Express': 'bg-orange-700',
   'default': 'bg-gray-500'
+}
+
+// Configuración de tiendas que soportan carga directa del carrito por URL (VTEX / WooCommerce)
+export const DIRECT_CART_STORES: Record<string, {
+  type: 'vtex' | 'woocommerce'
+  baseUrl: string
+  supportsMultiSku: boolean
+}> = {
+  'Carrefour': { type: 'vtex', baseUrl: 'https://www.carrefour.com.ar', supportsMultiSku: true },
+  'Jumbo': { type: 'vtex', baseUrl: 'https://www.jumbo.com.ar', supportsMultiSku: true },
+  'Disco': { type: 'vtex', baseUrl: 'https://www.disco.com.ar', supportsMultiSku: true },
+  'Vea': { type: 'vtex', baseUrl: 'https://www.vea.com.ar', supportsMultiSku: true },
+  'Dia': { type: 'vtex', baseUrl: 'https://diaonline.supermercadosdia.com.ar', supportsMultiSku: true },
+  'Día': { type: 'vtex', baseUrl: 'https://diaonline.supermercadosdia.com.ar', supportsMultiSku: true },
+  'Más Online': { type: 'vtex', baseUrl: 'https://www.masonline.com.ar', supportsMultiSku: true },
+  'Changomas': { type: 'vtex', baseUrl: 'https://www.changomas.com.ar', supportsMultiSku: true },
+  'Cordiez': { type: 'vtex', baseUrl: 'https://www.cordiez.com.ar', supportsMultiSku: true },
+  'The Food Market': { type: 'vtex', baseUrl: 'https://www.thefoodmarket.com.ar', supportsMultiSku: true },
+  'Toledo Digital': { type: 'vtex', baseUrl: 'https://www.toledodigital.com.ar', supportsMultiSku: true },
+  'Farmacity': { type: 'vtex', baseUrl: 'https://www.farmacity.com', supportsMultiSku: true },
+  'Farmaplus': { type: 'vtex', baseUrl: 'https://www.farmaplus.com.ar', supportsMultiSku: true },
+  'Depot Express': { type: 'woocommerce', baseUrl: 'https://depotexpress.com.ar', supportsMultiSku: false },
+}
+
+// Extrae el SKU ID o Item ID limpio a partir del id o url del producto
+export function extractStoreSkuId(idOrUrl?: string): string | null {
+  if (!idOrUrl) return null
+  // Formato tipo "carrefour-12345" o "jumbo-98765"
+  const dashMatch = idOrUrl.match(/^[a-z0-9_-]+-(\d+)$/i)
+  if (dashMatch) return dashMatch[1]
+
+  // Formato puramente numérico
+  if (/^\d+$/.test(idOrUrl.trim())) return idOrUrl.trim()
+
+  // Formato URL VTEX: /p?skuId=12345 o /12345/p
+  const queryMatch = idOrUrl.match(/[?&]skuId=(\d+)/i)
+  if (queryMatch) return queryMatch[1]
+
+  const pathMatch = idOrUrl.match(/\/(\d+)\/p(?:[?#]|$)/i)
+  if (pathMatch) return pathMatch[1]
+
+  return null
+}
+
+// Genera la URL para inyectar los productos directo en el carrito de la tienda
+export function buildDirectCartUrl(market: string, cart: CartRow[]): string | null {
+  const storeConfig = DIRECT_CART_STORES[market]
+  if (!storeConfig) return null
+
+  const items = cart
+    .map(row => {
+      const m = row.markets[market]
+      if (!m) return null
+      const qty = getRowQuantity(row, market)
+      if (qty <= 0) return null
+      const skuId = extractStoreSkuId(m.id) || extractStoreSkuId(m.url) || extractStoreSkuId(row.ean)
+      return skuId ? { skuId, qty, url: m.url } : null
+    })
+    .filter(Boolean) as { skuId: string; qty: number; url: string }[]
+
+  if (items.length === 0) return null
+
+  if (storeConfig.type === 'vtex') {
+    // VTEX standard deep link:
+    // https://{dominio}/checkout/cart/add?sku={sku1}&qty={qty1}&seller=1&sku={sku2}&qty={qty2}&seller=1&redirect=true
+    const queryParts = items
+      .map(it => `sku=${encodeURIComponent(it.skuId)}&qty=${it.qty}&seller=1`)
+      .join('&')
+    return `${storeConfig.baseUrl}/checkout/cart/add?${queryParts}&redirect=true`
+  }
+
+  if (storeConfig.type === 'woocommerce') {
+    // WooCommerce soporta carga directa de producto al carrito
+    if (items.length === 1) {
+      return `${storeConfig.baseUrl}/?add-to-cart=${encodeURIComponent(items[0].skuId)}&quantity=${items[0].qty}`
+    }
+    // Si son múltiples, WooCommerce requiere el primer item o la tienda/carrito directo
+    return `${storeConfig.baseUrl}/carrito/`
+  }
+
+  return null
 }
 
 export function getBestPromo(markets: Record<string, MarketProduct>, minRegularPrice: number): { market: string; promo: MultiUnitPromo; effectivePrice: number } | null {
@@ -438,22 +533,210 @@ export function SimilarProductModal({ ean, market, catId, excludeEan, cartRow, o
   )
 }
 
+// Modal exhaustivo con las condiciones legales, bases, links oficiales y disclaimer de responsabilidad
+export function PromoTermsModal({
+  market,
+  bankPromo,
+  bankDiscount,
+  cart,
+  onClose,
+}: {
+  market: string
+  bankPromo: BankPromoInfo
+  bankDiscount?: StoreVerdict['bankDiscount'] | null
+  cart: CartRow[]
+  onClose: () => void
+}) {
+  const coveredRows = cart.filter(row => !!row.markets[market] && !row.markets[market]?.excludedFromBankPromos)
+  const excludedRows = cart.filter(row => !!row.markets[market] && !!row.markets[market]?.excludedFromBankPromos)
+  const pctLabel = bankPromo.discountType === 'CUOTAS_SIN_INTERES' ? `${bankPromo.discountValue} CSI` : `${bankPromo.discountValue}%`
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-[#141414] border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] z-10 animate-in zoom-in-95 duration-200 overflow-hidden">
+        {/* Header */}
+        <div className="p-5 border-b border-white/10 flex items-start justify-between gap-3 shrink-0 bg-[#181818]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xl shrink-0">
+              🏦
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className={`w-2 h-2 rounded-full ${SUPERMARKET_DOT[market] || SUPERMARKET_DOT.default}`} />
+                <span className="text-xs font-bold text-slate-400">{market}</span>
+              </div>
+              <h3 className="text-base font-black text-white leading-tight">
+                {bankPromo.label} ({pctLabel})
+              </h3>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+          {/* Tarjeta de impacto del beneficio */}
+          <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-2.5">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 font-medium">Beneficio estimado en tu compra:</span>
+              <span className="text-emerald-400 font-black text-sm">
+                {bankDiscount ? `-${formatPrice(bankDiscount.amount)}` : pctLabel}
+              </span>
+            </div>
+            {bankPromo.capAmount && (
+              <div className="flex justify-between items-center text-slate-400">
+                <span>Tope de reintegro:</span>
+                <span className="font-bold text-white">
+                  {formatPrice(bankPromo.capAmount)} {bankPromo.capPeriod ? `(${bankPromo.capPeriod.toLowerCase()})` : ''}
+                </span>
+              </div>
+            )}
+            <div className="pt-2 border-t border-white/5">
+              <p className="text-slate-300">
+                <strong className="text-white">Cálculo de acumulación: </strong>
+                {bankPromo.stacking === 'NEVER' ? (
+                  <span className="text-amber-300">
+                    No acumulable con ofertas de góndola en {market}. PromoAR calcula el ahorro tomando la mejor alternativa de precio de lista para evitar estimaciones infladas.
+                  </span>
+                ) : bankPromo.stacking === 'ALWAYS' ? (
+                  <span className="text-emerald-300">
+                    Acumulable con ofertas de góndola sobre los productos elegibles del ticket.
+                  </span>
+                ) : (
+                  <span className="text-slate-400">
+                    Sujeto a confirmación según las condiciones de caja en la sucursal.
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Bancos / Medios adheridos */}
+          {bankPromo.matchingEntityNames && bankPromo.matchingEntityNames.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wide mb-1.5">Entidades participantes</p>
+              <div className="flex flex-wrap gap-1.5">
+                {bankPromo.matchingEntityNames.map(name => (
+                  <span key={name} className="text-[11px] font-semibold text-slate-200 bg-white/5 border border-white/10 rounded-lg px-2 py-1">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Letra Chica / Condiciones Legales directas */}
+          <div>
+            <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wide mb-1.5">Condiciones y bases legales informadas</p>
+            <div className="p-3.5 rounded-2xl bg-[#1A1A1A] border border-white/10 text-slate-300 leading-relaxed max-h-48 overflow-y-auto space-y-2 text-[11px]">
+              {bankPromo.title && <p className="font-bold text-white">{bankPromo.title}</p>}
+              {bankPromo.description && <p>{bankPromo.description}</p>}
+              {bankPromo.sourceText && bankPromo.sourceText !== bankPromo.description && (
+                <p className="text-slate-400 font-mono text-[10px] whitespace-pre-wrap">{bankPromo.sourceText}</p>
+              )}
+              {bankPromo.commerceNote && (
+                <p className="text-amber-300/90 font-medium">📌 {bankPromo.commerceNote}</p>
+              )}
+              {bankPromo.stackableNote && (
+                <p className="text-slate-400 italic">ℹ️ {bankPromo.stackableNote}</p>
+              )}
+              {!bankPromo.description && !bankPromo.sourceText && (
+                <p className="text-slate-500 italic">Condiciones generales vigentes para clientes del banco/billetera en {market}.</p>
+              )}
+            </div>
+
+            {/* Enlaces directos para que no tengan que buscarlo */}
+            <div className="flex flex-wrap gap-2 mt-2.5">
+              {bankPromo.slug && (
+                <a
+                  href={`/promos/${bankPromo.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-1.5 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Ver ficha completa en PromoAR</span>
+                  <ExternalLink className="w-3 h-3 opacity-70" />
+                </a>
+              )}
+              {bankPromo.sourceUrl && (
+                <a
+                  href={bankPromo.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-1.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                >
+                  <span>Ver en sitio oficial del emisor</span>
+                  <ExternalLink className="w-3 h-3 opacity-70" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Desglose de Productos Elegibles vs Excluidos en el carrito */}
+          <div>
+            <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wide mb-1.5">
+              Productos de tu carrito en {market} ({coveredRows.length} elegibles{excludedRows.length > 0 ? `, ${excludedRows.length} excluidos` : ''})
+            </p>
+            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              {coveredRows.map(row => (
+                <div key={row.ean} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-[11px]">
+                  <span className="text-slate-300 truncate">{row.name}</span>
+                  <span className="text-slate-400 font-bold shrink-0">x{getRowQuantity(row, market)}</span>
+                </div>
+              ))}
+              {excludedRows.map(row => (
+                <div key={row.ean} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[11px]">
+                  <span className="text-slate-400 truncate line-through">{row.name}</span>
+                  <span className="text-amber-400 text-[10px] font-bold shrink-0">🚫 Excluido por categoría o legales</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* DISCLAIMER DE RESPONSABILIDAD LEGAL OBLIGATORIO */}
+          <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-amber-200/90 leading-relaxed text-[11px]">
+            <div className="flex items-center gap-1.5 font-black text-amber-300 uppercase tracking-wide mb-1 text-[10px]">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Aviso de responsabilidad y verificación</span>
+            </div>
+            <p>
+              PromoAR es una plataforma independiente de guía, cálculo y comparación. Los precios, promociones, topes de reintegro y exclusiones son de carácter <strong>estrictamente orientativo e informativo</strong>, calculados a partir de los datos públicos provistos por comercios y entidades.
+            </p>
+            <p className="mt-1.5">
+              <strong>PromoAR no es parte de la transacción comercial ni se responsabiliza por rechazos, modificaciones de términos o exclusiones de la entidad o supermercado.</strong> El cliente debe verificar siempre las condiciones legales directamente en el comercio antes de abonar.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-white/10 flex justify-end shrink-0 bg-[#181818]">
+          <button
+            onClick={onClose}
+            className="w-full sm:w-auto py-2 px-6 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Badge de ahorro bancario/billetera — reemplaza el texto de 9px por un bloque propio
-// que "grita" el monto ahorrado, con popover de desglose por producto y aviso de
-// "otro día tenés más %" (Alerta Inteligente de Oportunidad, ya calculada en el backend).
+// que "grita" el monto ahorrado, y abre el modal completo de bases legales y disclaimer.
 export function BankSavingsBadge({ market, bankPromo, bankDiscount, cart }: {
   market: string
   bankPromo: BankPromoInfo | null | undefined
   bankDiscount: StoreVerdict['bankDiscount']
   cart: CartRow[]
 }) {
-  const [open, setOpen] = useState(false)
+  const [openModal, setOpenModal] = useState(false)
   if (!bankPromo || !bankDiscount) return null
 
-  // Solo los productos que realmente acumulan con la promo bancaria — un producto
-  // marcado excludedFromBankPromos (ej. "No acumulable con otras promos bancarias"
-  // en Coto) no entra en el desglose aunque esté en el carrito para ese súper.
-  const coveredRows = cart.filter(row => !!row.markets[market] && !row.markets[market]?.excludedFromBankPromos)
   const pctLabel = bankPromo.discountType === 'CUOTAS_SIN_INTERES' ? `${bankPromo.discountValue} CSI` : `${bankPromo.discountValue}%`
   const isUnconfirmed = bankDiscount.confidence === 'unconfirmed'
 
@@ -461,12 +744,13 @@ export function BankSavingsBadge({ market, bankPromo, bankDiscount, cart }: {
     <div className="relative mt-1">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
+        onClick={() => setOpenModal(true)}
+        className={`w-full rounded-lg border px-2 py-1.5 text-left transition-all hover:scale-[1.02] active:scale-[0.99] cursor-pointer ${
           isUnconfirmed
             ? 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15'
             : 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/15'
         }`}
+        title="Clic para ver condiciones legales, bases y exclusiones"
       >
         <div className="flex items-center justify-between gap-1">
           <span className={`text-[13px] font-black leading-none ${isUnconfirmed ? 'text-amber-400' : 'text-emerald-400'}`}>
@@ -483,9 +767,9 @@ export function BankSavingsBadge({ market, bankPromo, bankDiscount, cart }: {
         {isUnconfirmed && (
           <p className="text-[8px] text-amber-400/80 leading-tight">⚠️ no confirmado si acumula</p>
         )}
-        {bankPromo.matchingEntityNames.length > 1 && (
-          <p className="text-[8px] text-slate-500 leading-tight">toco para ver con qué bancos aplica</p>
-        )}
+        <p className="text-[8px] text-blue-400/90 leading-tight mt-0.5 flex items-center gap-0.5 font-semibold">
+          <span>Ver legales y bases ↗</span>
+        </p>
       </button>
 
       {bankPromo.betterDay && (
@@ -494,40 +778,20 @@ export function BankSavingsBadge({ market, bankPromo, bankDiscount, cart }: {
         </p>
       )}
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 top-full left-0 mt-1 w-56 rounded-xl border border-white/10 bg-[#161616] shadow-2xl p-3">
-            {bankPromo.matchingEntityNames.length > 1 && (
-              <>
-                <p className="text-[10px] font-black text-white uppercase tracking-wide mb-2">Aplica con estos bancos</p>
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {bankPromo.matchingEntityNames.map(name => (
-                    <span key={name} className="text-[9px] text-slate-300 bg-white/5 border border-white/10 rounded px-1.5 py-0.5">{name}</span>
-                  ))}
-                </div>
-              </>
-            )}
-            <p className="text-[10px] font-black text-white uppercase tracking-wide mb-2">Aplica sobre estos productos</p>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {coveredRows.map(row => (
-                <div key={row.ean} className="flex items-center justify-between gap-2 text-[10px]">
-                  <span className="text-slate-300 truncate">{row.name}</span>
-                  <span className="text-slate-500 shrink-0">x{getRowQuantity(row, market)}</span>
-                </div>
-              ))}
-              {!coveredRows.length && (
-                <p className="text-[10px] text-slate-500">Sin productos de {market} en el carrito.</p>
-              )}
-            </div>
-          </div>
-        </>
+      {openModal && (
+        <PromoTermsModal
+          market={market}
+          bankPromo={bankPromo}
+          bankDiscount={bankDiscount}
+          cart={cart}
+          onClose={() => setOpenModal(false)}
+        />
       )}
     </div>
   )
 }
 
-export function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, storeVerdicts, winnerMarket, bankPromos, getEffectivePrice, updateQuantity, updateMarketQuantity, resetMarketQuantity, removeFromCart }: {
+export function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, storeVerdicts, winnerMarket, bankPromos, getEffectivePrice, updateQuantity, updateMarketQuantity, resetMarketQuantity, removeFromCart, onOpenBuyAssistant, onOpenPromoDetail }: {
   cart: CartRow[]
   allMarkets: string[]
   cartTotals: Record<string, number>
@@ -540,9 +804,14 @@ export function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, st
   updateMarketQuantity: (ean: string, market: string, delta: number) => void
   resetMarketQuantity: (ean: string, market: string) => void
   removeFromCart: (ean: string) => void
+  onOpenBuyAssistant?: (market: string) => void
+  onOpenPromoDetail?: (detail: any) => void
 }) {
-  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
-  const [expandedTotals, setExpandedTotals] = useState(false)
+  const [selectedMarket, setSelectedMarket] = useState<string>(winnerMarket || allMarkets[0] || '')
+  const [termsModalMarket, setTermsModalMarket] = useState<string | null>(null)
+
+  // Mantener el súper seleccionado actualizado si cambia el ganador
+  const activeMarket = allMarkets.includes(selectedMarket) ? selectedMarket : (winnerMarket || allMarkets[0] || '')
 
   // Totales de precio de lista (sin descuentos)
   const listTotals = allMarkets.reduce((acc, market) => {
@@ -553,171 +822,297 @@ export function MobileCart({ cart, allMarkets, cartTotals, lowestTotalMarket, st
     return acc
   }, {} as Record<string, number>)
 
-  const toggleProduct = (ean: string) => setExpandedProducts(prev => {
-    const next = new Set(prev)
-    next.has(ean) ? next.delete(ean) : next.add(ean)
-    return next
-  })
-
-  const winnerVerdict = storeVerdicts[winnerMarket]
+  const winnerData = storeVerdicts[winnerMarket]
+  const currentVerdict = storeVerdicts[activeMarket]
+  const isCurrentWinner = activeMarket === winnerMarket
+  const bp = bankPromos[activeMarket]
 
   return (
-    <div className="md:hidden p-2 space-y-1.5">
-      {/* Totales arriba */}
-      <div className="bg-[#0A0A0A] rounded-xl border border-white/10 overflow-hidden">
-        <button className="w-full flex items-center justify-between px-3 py-2" onClick={() => setExpandedTotals(prev => !prev)}>
-          <div>
-            {winnerMarket ? (
-              <>
-                <p className="text-[9px] text-slate-400 uppercase tracking-wide font-bold">🥇 Total más barato · {winnerMarket}</p>
-                <p className="text-emerald-400 font-black text-base">{formatPrice(cartTotals[winnerMarket] || 0)}</p>
-                <p className="text-[9px] text-emerald-700">
-                  Ahorrás {formatPrice((listTotals[winnerMarket] || 0) - (cartTotals[winnerMarket] || 0))} vs precio de lista
-                </p>
-                {winnerVerdict?.bankDiscount && (
-                  <p className={`text-[10px] font-black mt-0.5 ${winnerVerdict.bankDiscount.confidence === 'unconfirmed' ? 'text-amber-400' : 'text-emerald-400'}`}>
-                    🏦 -{formatPrice(winnerVerdict.bankDiscount.amount)} con {winnerVerdict.bankDiscount.label}
-                    {winnerVerdict.bankDiscount.confidence === 'unconfirmed' && ' · ⚠️ no confirmado'}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-[9px] text-amber-400 uppercase tracking-wide font-bold">⚠️ Ningún súper cubre toda la lista</p>
-            )}
-          </div>
-          <ArrowRight className={`w-4 h-4 text-slate-500 transition-transform ${expandedTotals ? 'rotate-90' : ''}`} />
-        </button>
+    <div className="md:hidden p-3 space-y-4">
+      {/* Selector de Pestañas por Supermercado */}
+      <div>
+        <div className="flex items-center justify-between mb-2 px-1">
+          <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+            Comparativa por Supermercado
+          </span>
+          <span className="text-[11px] text-slate-400 font-bold">
+            {cart.length} productos
+          </span>
+        </div>
 
-        {expandedTotals && (
-          <div className="border-t border-white/10">
-            {allMarkets.map(market => {
-              const verdict = storeVerdicts[market]
-              const lista = listTotals[market] || 0
-              const conDesc = cartTotals[market] || 0
-              const ahorrado = lista - conDesc
-              const isBest = market === winnerMarket
-              const bp = bankPromos[market]
-              return (
-                <div key={market} className={`px-3 py-2 border-b border-white/5 ${isBest ? 'bg-emerald-500/5' : ''}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${SUPERMARKET_DOT[market] || SUPERMARKET_DOT.default}`} />
-                      <p className={`text-[11px] font-bold ${isBest ? 'text-emerald-400' : 'text-slate-300'}`}>{market} {isBest && '★'}</p>
-                    </div>
-                    <p className={`text-sm font-black ${isBest ? 'text-emerald-400' : 'text-white'}`}>{formatPrice(conDesc)}</p>
-                  </div>
-                  <div className="flex justify-between text-[9px] text-slate-500 pl-3">
-                    <span>Lista: {formatPrice(lista)}</span>
-                    {ahorrado > 0 && <span className="text-emerald-700">Ahorrás {formatPrice(ahorrado)}</span>}
-                  </div>
-                  <div className="pl-3">
-                    <BankSavingsBadge market={market} bankPromo={bp} bankDiscount={verdict?.bankDiscount ?? null} cart={cart} />
-                  </div>
-                  {verdict && !verdict.isCompleteBasket && verdict.itemsTotal > 0 && (
-                    <p className="text-[9px] font-bold text-amber-400 pl-3 mt-0.5">
-                      ⚠️ Canasta incompleta (cotizados {verdict.itemsCovered}/{verdict.itemsTotal})
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
+        <div className="flex gap-1.5 bg-slate-950 p-1.5 rounded-2xl overflow-x-auto border border-white/10">
+          {allMarkets.map(market => {
+            const isActive = activeMarket === market
+            const isWin = market === winnerMarket
+            const v = storeVerdicts[market]
+            const total = v?.finalTotal ?? cartTotals[market] ?? 0
+
+            return (
+              <button
+                key={market}
+                onClick={() => setSelectedMarket(market)}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex flex-col items-center justify-center shrink-0 min-w-[85px] ${
+                  isActive
+                    ? 'bg-slate-800 text-white shadow-md border border-slate-700'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span className="flex items-center gap-1">
+                  {isWin && <span>🥇</span>}
+                  <span className="truncate">{market}</span>
+                </span>
+                <span className={`text-[11px] font-extrabold mt-0.5 ${isWin ? 'text-emerald-400' : 'text-slate-300'}`}>
+                  ${Math.round(total / 1000)}k
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Productos */}
-      {cart.map(row => {
-        const isExpanded = expandedProducts.has(row.ean)
-        const bestPrice = Math.min(...allMarkets.filter(mk => row.markets[mk]).map(mk => getEffectivePrice(row.markets[mk], getRowQuantity(row, mk))))
-        const bestMarketForRow = allMarkets.find(mk => row.markets[mk] && getEffectivePrice(row.markets[mk], getRowQuantity(row, mk)) === bestPrice) || ''
-        const hasPromo = Object.values(row.markets).some(m => m.promoLabel)
-        // Distintos súpers pueden resolver el ítem genérico con productos/marcas distintas
-        // (ej. marca propia) — mostrar la sustitución explícita, decisión queda en el usuario.
-        const hasSubstitution = Object.values(row.markets).some(m => m.name && m.name !== row.name)
-        const canExpand = hasPromo || hasSubstitution
-
-        return (
-          <div key={row.ean} className="bg-[#1A1A1A] rounded-xl border border-white/10 overflow-hidden">
-            {/* Fila compacta */}
-            <div className="flex items-center gap-2 px-2 py-2">
-              <div className="w-8 h-8 bg-white rounded-lg p-0.5 shrink-0">
-                <img src={row.imageUrl} alt={row.name} className="w-full h-full object-contain mix-blend-multiply" />
+      {/* Resumen del Súper Activo (Tarjeta Limpia) */}
+      {currentVerdict && (
+        <div className={`p-4 rounded-2xl border ${isCurrentWinner ? 'bg-gradient-to-b from-emerald-950/30 via-slate-900 to-slate-900 border-emerald-500/50 shadow-lg' : 'bg-slate-900/60 border-slate-800'}`}>
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${SUPERMARKET_DOT[activeMarket] || SUPERMARKET_DOT.default}`} />
+                <p className="text-xs text-slate-400 font-bold uppercase">{activeMarket}</p>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-slate-200 line-clamp-1 leading-tight">{row.name}</p>
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${SUPERMARKET_DOT[bestMarketForRow] || SUPERMARKET_DOT.default}`} />
-                  <p className="text-emerald-400 font-black text-[11px]">{formatPrice(bestPrice)}</p>
-                  {hasPromo && <span className="text-[9px] text-orange-400">🔥</span>}
-                </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className={`text-2xl font-black ${isCurrentWinner ? 'text-emerald-400' : 'text-white'}`}>
+                  {formatPrice(currentVerdict.finalTotal)}
+                </p>
+                {!isCurrentWinner && winnerData && currentVerdict.finalTotal > winnerData.finalTotal && (
+                  <span className="text-xs font-bold text-rose-400">
+                    (+{formatPrice(currentVerdict.finalTotal - winnerData.finalTotal)})
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-1 bg-black/40 rounded-lg px-1.5 py-1 border border-white/10 shrink-0">
-                <button onClick={() => updateQuantity(row.ean, -1)} className="text-slate-400"><Minus className="w-3 h-3" /></button>
-                <span className="text-[11px] font-medium w-3 text-center">{row.quantity}</span>
-                <button onClick={() => updateQuantity(row.ean, 1)} className="text-slate-400"><Plus className="w-3 h-3" /></button>
-              </div>
-              <button onClick={() => removeFromCart(row.ean)} className="text-slate-600 hover:text-red-400 shrink-0 p-1">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-              {canExpand && (
-                <button onClick={() => toggleProduct(row.ean)} className="text-slate-500 shrink-0">
-                  <ArrowRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                </button>
-              )}
             </div>
 
-            {/* Detalle promos y sustitución por super (expandido) */}
-            {isExpanded && (
-              <div className="border-t border-white/10">
-                {allMarkets.map(market => {
-                  const m = row.markets[market]
-                  const substituted = m?.name && m.name !== row.name
-                  const isOverridden = row.marketQuantities?.[market] !== undefined
-                  if (!m || (!m.promoLabel && !m.excludedFromBankPromos && !substituted && !isOverridden)) return null
-                  const marketQty = getRowQuantity(row, market)
-                  const promoActiva = m.promoQty ? marketQty >= m.promoQty : false
-                  const faltanParaPromo = m.promoQty && !promoActiva ? m.promoQty - marketQty : 0
-                  const precioUnit = getEffectivePrice(m, marketQty)
-                  return (
-                    <div key={market} className="flex items-center justify-between px-3 py-1.5 border-b border-white/5">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${SUPERMARKET_DOT[market] || SUPERMARKET_DOT.default}`} />
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-300">{market}</p>
-                          {substituted && (
-                            <p className="text-[9px] text-slate-400">🔁 {m.name}</p>
-                          )}
-                          {m.promoLabel && (
-                            <p className={`text-[9px] font-bold ${promoActiva ? 'text-orange-400' : 'text-amber-500/60'}`}>
-                              🔥 {m.promoLabel}{faltanParaPromo > 0 ? ` (agregá ${faltanParaPromo} más)` : ''}
-                            </p>
-                          )}
-                          {m.excludedFromBankPromos && (
-                            <p className="text-[9px] font-bold text-amber-400">⚠️ No acumulable con otras promos bancarias</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {m.price > precioUnit && <p className="text-[9px] text-slate-500 line-through">{formatPrice(m.price)}</p>}
-                        <p className="text-[11px] font-bold text-white">{formatPrice(precioUnit)}</p>
-                        <div className={`flex items-center justify-end gap-1 mt-0.5 rounded px-1 ${isOverridden ? 'bg-indigo-500/10 border border-indigo-500/30' : ''}`}>
-                          <button onClick={() => updateMarketQuantity(row.ean, market, -1)} className="p-0.5 text-slate-500"><Minus className="w-2.5 h-2.5" /></button>
-                          <span className={`text-[9px] w-3 text-center font-bold ${isOverridden ? 'text-indigo-400' : 'text-slate-500'}`}>{marketQty}</span>
-                          <button onClick={() => updateMarketQuantity(row.ean, market, 1)} className="p-0.5 text-slate-500"><Plus className="w-2.5 h-2.5" /></button>
-                          {isOverridden && (
-                            <button onClick={() => resetMarketQuantity(row.ean, market)} title="Igualar a la cantidad de todos" className="text-[9px] text-indigo-400 ml-0.5">↺</button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+            {isCurrentWinner ? (
+              <span className="bg-emerald-500 text-slate-950 font-black text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider">
+                🥇 Más barato
+              </span>
+            ) : (
+              !currentVerdict.isCompleteBasket && (
+                <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  Canasta incompleta
+                </span>
+              )
+            )}
+          </div>
+
+          {/* Desglose de 3 líneas limpias */}
+          <div className="text-xs text-slate-400 space-y-1.5 pt-3 border-t border-slate-800">
+            <div className="flex justify-between">
+              <span>Total de góndola:</span>
+              <span className="text-slate-200">{formatPrice(currentVerdict.gondolaTotal)}</span>
+            </div>
+
+            {(listTotals[activeMarket] || 0) > currentVerdict.gondolaTotal && (
+              <div className="flex justify-between text-emerald-400">
+                <span>Ahorro en góndola (ofertas):</span>
+                <span>-{formatPrice((listTotals[activeMarket] || 0) - currentVerdict.gondolaTotal)}</span>
+              </div>
+            )}
+
+            {currentVerdict.bankDiscount && (
+              <div className="flex justify-between items-center text-amber-400 font-bold">
+                <span className="truncate pr-2">
+                  🏦 {currentVerdict.bankDiscount.label} {currentVerdict.bankDiscount.capped ? '(Tope máx)' : ''}:
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span>-{formatPrice(currentVerdict.bankDiscount.amount)}</span>
+                  {bankPromos[activeMarket] && (
+                    <button
+                      onClick={() => setTermsModalMarket(activeMarket)}
+                      className="text-[9px] text-blue-400 underline font-normal hover:text-blue-300 transition-colors"
+                      title="Ver bases legales y exclusiones de la promoción"
+                    >
+                      (Ver bases)
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
-        )
-      })}
 
+          {/* Nota de estimación prudente y disclaimer */}
+          <div className="mt-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-[11px] text-slate-400 leading-relaxed flex items-start gap-2">
+            <Info className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+            <p>
+              <strong className="text-slate-300">Estimación prudente:</strong> El ahorro aplica exclusiones legales para no inflar expectativas. Verificá siempre las condiciones comerciales vigentes en el comercio antes de pagar.
+            </p>
+          </div>
+
+          {(() => {
+            const directUrl = buildDirectCartUrl(activeMarket, cart)
+            return (
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                {directUrl && (
+                  <a
+                    href={`/api/r?url=${encodeURIComponent(directUrl)}&src=precios`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-950/40 cursor-pointer"
+                    title={`Cargar automáticamente los productos de tu changuito en ${activeMarket}`}
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    <span>Cargar changuito en {activeMarket}</span>
+                    <ExternalLink className="w-3.5 h-3.5 ml-0.5 opacity-80" />
+                  </a>
+                )}
+                {onOpenBuyAssistant && (
+                  <button
+                    onClick={() => onOpenBuyAssistant(activeMarket)}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      directUrl
+                        ? 'bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 shrink-0'
+                        : isCurrentWinner
+                          ? 'w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-md'
+                          : 'w-full bg-slate-800 hover:bg-slate-700 text-white'
+                    }`}
+                  >
+                    <span>{directUrl ? 'Ver checklist' : `Ir a comprar en ${activeMarket}`}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
+      {/* Lista Vertical de Productos (Limpia con Steppers Individuales) */}
+      <div className="space-y-2">
+        {cart.map(row => {
+          const m = row.markets[activeMarket]
+          const marketQty = getRowQuantity(row, activeMarket)
+          const isOverridden = row.marketQuantities?.[activeMarket] !== undefined
+          const promoActiva = m?.promoQty ? marketQty >= m.promoQty : false
+          const faltanParaPromo = m?.promoQty && !promoActiva ? m.promoQty - marketQty : 0
+          const precioUnit = m ? getEffectivePrice(m, marketQty) : 0
+          const totalLine = precioUnit * marketQty
+
+          return (
+            <div key={row.ean} className="p-3 bg-slate-900/60 border border-slate-800 rounded-2xl flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 bg-white rounded-xl p-1 shrink-0">
+                  <img src={row.imageUrl} alt={row.name} className="w-full h-full object-contain mix-blend-multiply" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-white truncate">{row.name}</p>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    {m?.promoLabel && (
+                      <button
+                        onClick={() => onOpenPromoDetail?.({
+                          name: row.name,
+                          imageUrl: row.imageUrl,
+                          market: activeMarket,
+                          listPrice: m.price,
+                          effectivePrice: precioUnit,
+                          qty: marketQty,
+                          promoLabel: m.promoLabel,
+                          promoQty: m.promoQty,
+                          excludedFromBank: m.excludedFromBankPromos
+                        })}
+                        className={`inline-flex items-center gap-0.5 text-[9px] font-black border px-1.5 py-0.5 rounded transition-all active:scale-95 cursor-pointer ${
+                          promoActiva
+                            ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}
+                        title="Ver desglose de la promo"
+                      >
+                        <span>🔥 {m.promoLabel}{!promoActiva && faltanParaPromo > 0 ? ` (+${faltanParaPromo})` : ''}</span>
+                        <Info className="w-2.5 h-2.5 opacity-70" />
+                      </button>
+                    )}
+                    {m?.excludedFromBankPromos && (
+                      <span className="text-[9px] text-slate-500 bg-slate-800 px-1 py-0.2 rounded">
+                        🚫 Sin reintegro
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Control individual de cantidad para este súper en mobile */}
+              <div
+                className={`flex items-center rounded-lg border px-1 py-0.5 gap-1 shrink-0 transition-all ${
+                  isOverridden
+                    ? 'bg-blue-950/60 border-blue-500/50 text-blue-300 ring-1 ring-blue-500/20'
+                    : 'bg-slate-800 border-slate-700 text-slate-300'
+                }`}
+              >
+                <button
+                  onClick={() => updateMarketQuantity(row.ean, activeMarket, -1)}
+                  className="w-5 h-5 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+                  title={`Restar 1 en ${activeMarket}`}
+                >
+                  <Minus className="w-2.5 h-2.5" />
+                </button>
+                <span
+                  className={`text-xs font-black w-3.5 text-center ${
+                    isOverridden ? 'text-blue-300 font-extrabold' : 'text-white'
+                  }`}
+                  title={isOverridden ? `Cantidad exclusiva para ${activeMarket} (Base: ${row.quantity})` : `Cantidad base (${row.quantity})`}
+                >
+                  {marketQty}
+                </span>
+                <button
+                  onClick={() => updateMarketQuantity(row.ean, activeMarket, 1)}
+                  className="w-5 h-5 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+                  title={`Sumar 1 en ${activeMarket}`}
+                >
+                  <Plus className="w-2.5 h-2.5" />
+                </button>
+                {isOverridden && (
+                  <button
+                    onClick={() => resetMarketQuantity(row.ean, activeMarket)}
+                    title={`Volver a cantidad base (${row.quantity})`}
+                    className="w-4 h-4 flex items-center justify-center text-blue-400 hover:text-blue-200 ml-0.5 transition-colors"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="text-right shrink-0 min-w-[55px]">
+                {m ? (
+                  <>
+                    {m.price > precioUnit && (
+                      <p className="text-[9px] text-slate-500 line-through leading-none mb-0.5">
+                        {formatPrice(m.price)} u.
+                      </p>
+                    )}
+                    <p className="text-sm font-black text-white">{formatPrice(totalLine)}</p>
+                    <p className={`text-[10px] ${m.price > precioUnit ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                      {formatPrice(precioUnit)} c/u
+                    </p>
+                  </>
+                ) : (
+                  <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-1 rounded-lg">
+                    Sin stock
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {termsModalMarket && bankPromos[termsModalMarket] && (
+        <PromoTermsModal
+          market={termsModalMarket}
+          bankPromo={bankPromos[termsModalMarket]!}
+          bankDiscount={storeVerdicts[termsModalMarket]?.bankDiscount}
+          cart={cart}
+          onClose={() => setTermsModalMarket(null)}
+        />
+      )}
     </div>
   )
 }
+

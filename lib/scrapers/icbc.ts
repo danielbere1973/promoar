@@ -2,7 +2,8 @@
 // Playwright establece la sesión, context.request hace las llamadas API
 // Un ScrapedPromo por segmento (distintos % y topes)
 
-import { chromium } from 'playwright';
+import { Browser } from 'playwright';
+import { launchBrowser } from './browserFactory';
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
 import { detectCategoria, dedup } from './bank-helpers';
 
@@ -53,7 +54,7 @@ export const ICBCScraper: Scraper = {
     console.log('[ICBC] Iniciando scraper V2...');
     const allPromos: ScrapedPromo[] = [];
 
-    const browser = await chromium.launch({
+    const browser = await launchBrowser({
       headless: true,
       args: ['--no-sandbox', '--disable-blink-features=AutomationControlled', '--ignore-certificate-errors'],
     });

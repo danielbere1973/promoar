@@ -11,7 +11,7 @@ import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
   Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
-  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2, History, Sparkles, Store
+  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2, History, Sparkles, Store, MousePointer
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -272,32 +272,58 @@ const MODO_CATEGORIAS = ['Supermercados', 'Combustible', 'Tecnologia', 'Petshops
 // ─── Main Component ───────────────────────────────────────────
 const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN ?? '1234'
 
+const BANNER_KEYS = [
+  { id: 'estacion_mascotera', label: 'Estación Mascotera' },
+  { id: 'coto', label: 'Coto' },
+  { id: 'modo', label: 'MODO' },
+  { id: 'galicia', label: 'Galicia' },
+  { id: 'carrefour', label: 'Carrefour' },
+  { id: 'santander', label: 'Santander' },
+]
+
 function BannerClickStats() {
-  const [stats, setStats] = useState<{ total: number; today: number } | null>(null)
+  const [stats, setStats] = useState<Record<string, { total: number; today: number }>>({})
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10)
     fetch('/api/admin/site-config').then(r => r.json()).then((d: Record<string, string>) => {
-      setStats({
-        total: parseInt(d[`banner_em_clicks_total`] ?? '0') || 0,
-        today: parseInt(d[`banner_em_clicks_${today}`] ?? '0') || 0,
-      })
-    }).catch(() => {})
+      const newStats: Record<string, { total: number; today: number }> = {}
+      for (const banner of BANNER_KEYS) {
+        newStats[banner.id] = {
+          total: parseInt(d[`banner_${banner.id}_clicks_total`] ?? '0') || 0,
+          today: parseInt(d[`banner_${banner.id}_clicks_${today}`] ?? '0') || 0,
+        }
+      }
+      setStats(newStats)
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [])
+
   return (
-    <div className="mb-6 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Banner Estación Mascotera — Clicks</p>
-      {stats === null ? (
+    <div className="mb-6 bg-white border border-gray-100 rounded-2xl p-4 sm:p-6 shadow-sm">
+      <h3 className="text-sm font-black text-indigo-900/60 uppercase tracking-widest mb-4 flex items-center gap-2">
+        <MousePointer size={16} />
+        Banners Publicitarios — Clics
+      </h3>
+      {loading ? (
         <p className="text-sm text-gray-400">Cargando...</p>
       ) : (
-        <div className="flex gap-6">
-          <div>
-            <p className="text-2xl font-black text-indigo-600">{stats.total}</p>
-            <p className="text-xs text-gray-400 mt-0.5">Total histórico</p>
-          </div>
-          <div>
-            <p className="text-2xl font-black text-emerald-600">{stats.today}</p>
-            <p className="text-xs text-gray-400 mt-0.5">Hoy</p>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {BANNER_KEYS.map(b => (
+            <div key={b.id} className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-between">
+              <p className="text-xs font-bold text-gray-600 mb-2">{b.label}</p>
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-xl font-black text-indigo-600 leading-none">{stats[b.id]?.total ?? 0}</p>
+                  <p className="text-[10px] text-gray-400 mt-1 uppercase">Total</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-base font-bold text-emerald-600 leading-none">+{stats[b.id]?.today ?? 0}</p>
+                  <p className="text-[10px] text-gray-400 mt-1 uppercase">Hoy</p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

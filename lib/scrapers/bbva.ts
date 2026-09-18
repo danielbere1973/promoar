@@ -1,7 +1,12 @@
 // BBVA Argentina Scraper — API pública
 // GET /willgo/fgo/API/v3/communications?rubros={id}&pager={n}
-// No requiere autenticación ni Playwright
+// No requiere sesión de navegador, pero la API bloquea por geo-IP fuera de
+// Argentina (403 en Vercel/GitHub Actions) — los requests se hacen vía
+// context.request de Playwright (launchBrowser) para salir por la IP del
+// Scraping Browser de BrightData cuando SCRAPING_BROWSER_WS está seteada.
 
+import type { APIRequestContext } from 'playwright';
+import { launchBrowser } from './browserFactory';
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
 import { detectCategoria, decodeHtmlEntities } from './bank-helpers';
 
@@ -179,16 +184,16 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
   return promos;
 }
 
-async function apiFetch(url: string): Promise<any> {
+async function apiFetch(request: APIRequestContext, url: string): Promise<any> {
   try {
-    const res = await fetch(url, {
+    const res = await request.get(url, {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Referer': PAGE_URL,
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok()) return null;
     return await res.json();
   } catch { return null; }
 }
@@ -199,13 +204,19 @@ export const BBVAScraper: Scraper = {
   name: BANK_NAME,
 
   async run(): Promise<ScrapedPromo[]> {
-    console.log('[BBVA] Iniciando scraper (API pública, sin browser)...');
+    console.log('[BBVA] Iniciando scraper (API pública vía Playwright request context)...');
     const allPromos: ScrapedPromo[] = [];
     const seenIds  = new Set<string>();
     const pendingItems: { item: any; rubroId: number }[] = [];
 
+    const browser = await launchBrowser({ headless: true, args: ['--no-sandbox'] });
+    const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+    const request = ctx.request;
+
+    try {
+
     // 1. Obtener rubros
-    const rubrosData = await apiFetch(`${API_BASE}/rubros/filtro?filtro_padre=true`);
+    const rubrosData = await apiFetch(request, `${API_BASE}/rubros/filtro?filtro_padre=true`);
     if (!rubrosData?.rubros) {
       console.log('[BBVA] No se pudo obtener rubros');
       return [];
@@ -223,7 +234,7 @@ export const BBVAScraper: Scraper = {
 
       while (true) {
         await delay(300);
-        const data = await apiFetch(`${API_BASE}/communications?rubros=${idRubro}&pager=${pager}`);
+        const data = await apiFetch(request, `${API_BASE}/communications?rubros=${idRubro}&pager=${pager}`);
         if (!data?.data || !Array.isArray(data.data) || data.data.length === 0) break;
 
         for (const item of data.data) {
@@ -255,7 +266,7 @@ export const BBVAScraper: Scraper = {
       const batch = pendingItems.slice(i, i + BATCH);
       await Promise.all(batch.map(async ({ item, rubroId }) => {
         let detail: CommunicationDetail | undefined;
-        const detailRes = await apiFetch(`${API_BASE}/communication/${item.id}`);
+        const detailRes = await apiFetch(request, `${API_BASE}/communication/${item.id}`);
         const d = detailRes?.data;
         if (d) {
           const requisitos = (d.beneficios ?? []).flatMap((b: any) => b.requisitos ?? []);
@@ -287,5 +298,8 @@ export const BBVAScraper: Scraper = {
 
     console.log(`[BBVAScraper] Total: ${unique.length} promos únicas`);
     return unique;
+    } finally {
+      await browser.close();
+    }
   },
 };

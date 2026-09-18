@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Search, Loader2, X, ExternalLink, ChevronRight, Filter } from 'lucide-react'
 import { CATEGORIES } from '../categories'
+import { PreciosSidebarNav, PreciosTabsNav } from '../PreciosSectionNav'
 import {
   formatPrice,
   extractCategory,
@@ -133,6 +134,9 @@ export default function PreciosTechPage() {
         <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={80} height={80} className="w-20 h-20 object-contain" />
       </Link>
 
+      {/* Selector de Sección */}
+      <PreciosSidebarNav currentSection="tech" />
+
       <div className="mt-4">
         <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-slate-500 mb-2 font-bold px-1">Categorías</p>
         {electroCats.map(cat => {
@@ -219,6 +223,9 @@ export default function PreciosTechPage() {
           </div>
 
           <div className={`transition-all duration-700 ease-out flex flex-col items-center ${hasSearched ? 'mt-0 mb-12' : 'mt-[5vh]'}`}>
+            {/* Píldoras de Sección (Supermercados | Farmacias | Electrónica) */}
+            <PreciosTabsNav currentSection="tech" />
+
             {!hasSearched && (
               <div className="text-center mb-10 space-y-4">
                 <div className="flex items-center justify-center">
@@ -488,6 +495,114 @@ export default function PreciosTechPage() {
           </div>
         </div>
       )}
+
+      {/* Footer oficial PromoAR */}
+      <footer className="bg-[#1E3A5F] border-t border-white/10 text-white py-12 px-4 mt-16">
+        <div className="max-w-7xl mx-auto grid sm:grid-cols-2 md:grid-cols-4 gap-8">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Image src="/promoar_logo_transparent.png" alt="PromoAR" width={32} height={32} className="h-8 w-auto object-contain" />
+              <p className="font-black text-lg">PromoAR</p>
+            </div>
+            <p className="text-xs text-blue-200 leading-relaxed">
+              El agregador de beneficios y comparador de ahorro inteligente más completo de Argentina.
+            </p>
+            <div className="flex items-center gap-2.5 mt-4">
+              <a
+                href="https://www.instagram.com/promoar.com.ar"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm transition-colors"
+                title="Instagram"
+              >
+                📷
+              </a>
+              <a
+                href="https://x.com/promoarok"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm transition-colors"
+                title="X (Twitter)"
+              >
+                𝕏
+              </a>
+              <a
+                href="https://wa.me/541173691613"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm transition-colors"
+                title="WhatsApp"
+              >
+                💬
+              </a>
+            </div>
+          </div>
+
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest text-blue-300 mb-3">Simuladores</p>
+            <ul className="space-y-2 text-xs text-blue-200">
+              <li>
+                <Link href="/ahorro-interactivo" className="hover:text-white transition-colors flex items-center gap-1.5">
+                  <span>⚡ Hub de Ahorro</span>
+                  <span className="text-[9px] bg-[#D94F2B] text-white font-black px-1.5 py-0.2 rounded-full">Nuevo</span>
+                </Link>
+              </li>
+              <li><Link href="/precios/super" className="hover:text-white transition-colors">🛒 Supermercados</Link></li>
+              <li><Link href="/precios/farmacias" className="hover:text-white transition-colors">💊 Farmacias</Link></li>
+              <li><Link href="/precios/tech" className="hover:text-white transition-colors font-bold">📺 Electrónica</Link></li>
+              <li><Link href="/ahorro-interactivo/combustible" className="hover:text-white transition-colors">⛽ Combustibles</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest text-blue-300 mb-3">Plataforma</p>
+            <ul className="space-y-2 text-xs text-blue-200">
+              <li><Link href="/promos/explorar" className="hover:text-white transition-colors">Catálogo de Promos</Link></li>
+              <li><Link href="/finanzas" className="hover:text-white transition-colors">Tasas y FCI</Link></li>
+              <li><Link href="/perfil" className="hover:text-white transition-colors">Mi Perfil Financiero</Link></li>
+              <li><Link href="/comunidad" className="hover:text-white transition-colors">Comunidad PromoAR</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest text-blue-300 mb-3">Institucional</p>
+            <ul className="space-y-2 text-xs text-blue-200">
+              <li><Link href="/quienes-somos" className="hover:text-white transition-colors">Quiénes somos</Link></li>
+              <li><Link href="/contacto" className="hover:text-white transition-colors">Contacto</Link></li>
+              <li><Link href="/privacidad" className="hover:text-white transition-colors">Privacidad</Link></li>
+              <li><Link href="/terminos" className="hover:text-white transition-colors">Términos y condiciones</Link></li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 mt-8 pt-6 border-t border-white/10 text-center text-xs text-blue-300/80">
+          © {new Date().getFullYear()} PromoAR. Todos los derechos reservados.
+        </div>
+      </footer>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-[#0A1428]/95 backdrop-blur-xl border-t border-gray-200 dark:border-slate-800 z-30 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex justify-around items-center px-3 py-2 text-[10px] font-bold text-gray-500 dark:text-slate-400">
+        <Link href="/promos/explorar" className="flex flex-col items-center gap-0.5 hover:text-gray-900 dark:hover:text-white">
+          <span className="text-base">🔥</span>
+          <span>Promos</span>
+        </Link>
+        <Link href="/ahorro-interactivo" className="flex flex-col items-center gap-0.5 text-[#D94F2B] font-black">
+          <span className="text-base">🛒</span>
+          <span>Ahorro</span>
+        </Link>
+        <Link href="/finanzas" className="flex flex-col items-center gap-0.5 hover:text-gray-900 dark:hover:text-white">
+          <span className="text-base">📈</span>
+          <span>Tasas</span>
+        </Link>
+        <Link href="/comunidad" className="flex flex-col items-center gap-0.5 hover:text-gray-900 dark:hover:text-white">
+          <span className="text-base">👥</span>
+          <span>Comunidad</span>
+        </Link>
+        <Link href="/perfil" className="flex flex-col items-center gap-0.5 hover:text-gray-900 dark:hover:text-white">
+          <span className="text-base">👤</span>
+          <span>Perfil</span>
+        </Link>
+      </nav>
     </div>
   )
 }

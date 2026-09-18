@@ -8,7 +8,7 @@ import { COMMERCE_DETAIL_TAG } from '@/lib/cache/detailCache'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
-export const revalidate = 3600
+export const revalidate = false
 
 const getCachedCommerceBySlug = unstable_cache(
   async (slug: string) => prisma.commerce.findUnique({
@@ -19,7 +19,7 @@ const getCachedCommerceBySlug = unstable_cache(
     },
   }).catch(() => null),
   ['commerce-detail-by-slug'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: 3600 },
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
 )
 
 const getCachedCommercePromos = unstable_cache(
@@ -42,7 +42,7 @@ const getCachedCommercePromos = unstable_cache(
     })
   },
   ['commerce-detail-promos'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: 3600 },
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
 )
 
 const DAYS_LABELS: Record<number, string> = {

@@ -866,22 +866,28 @@ TikTok/Instagram traen volumen con costo de atención alto. Mezclar ambos según
 - `'DEP,HOG,IND,CPE,PER'`
 - `'VIA,AUT,JUG,LIB,ESP,VAR,EDU'`
 
-## Notas ICBC scraper
-`lib/scrapers/icbc.ts` funciona perfecto corrido **localmente** (1495 promos vía intercepción +
-fallback con token). Desde GitHub Actions captura 0 rubros/0 items y termina sin promos —
-las IPs de datacenter de los runners de GH Actions son bloqueadas por el WAF de
-`utilidades-icbc-prod.pisol.net`, no es un bug del scraper. ICBC debe correrse siempre con
-"Ejecutar todos" local desde el admin, nunca con "Ejecutar todos GH".
+## Notas ICBC / BBVA / Galicia / Macro / NaranjaX / Santander scrapers — RESUELTO vía BrightData (17/9/2026)
+Históricamente ICBC (WAF por IP de datacenter) y BBVA (bloqueo geo-IP, `403
+{"error":"No disponible fuera de Argentina"}`) solo podían correrse **localmente**, nunca
+desde GitHub Actions ni Vercel/producción.
 
-## Notas BBVA scraper — correr siempre local, mismo patrón que ICBC
-`lib/scrapers/bbva.ts` (API pública `go.bbva.com.ar/willgo/fgo/API/v3`) bloquea por geo-IP
-con `403 {"error":"No disponible fuera de Argentina"}` cuando se corre desde Vercel
-(`promoar.com.ar`, botón del admin en producción) — los servidores de Vercel no geolocalizan
-como Argentina. Confirmado el 2/8/2026: mismo request con `curl` desde `localhost` (IP de
-Telecentro, Buenos Aires) responde `200` sin problema. BBVA debe correrse siempre local
-(`npm run dev` + "Ejecutar todos" desde el admin local), nunca desde producción/Vercel ni
-desde GitHub Actions — mismo bloqueo de origen que ICBC, pero por geo-IP en vez de WAF por
-IP de datacenter.
+Fix (commit `8078e56`, "feat: migrate scrapers to brightdata"): `lib/scrapers/browserFactory.ts`
+expone `launchBrowser()` — si existe la env var `SCRAPING_BROWSER_WS` (BrightData Scraping
+Browser, cargada como secret en GitHub Actions y en Vercel), se conecta vía
+`chromium.connectOverCDP()` a un browser remoto con IP residencial/rotativa argentina en vez
+de lanzar Chromium local. Sin esa env var, cae al `chromium.launch()` de siempre (sin cambios
+en dev local). Aplicado en `galicia.ts`, `icbc.ts`, `macro.ts`, `naranjax.ts`, `santander.ts`.
+
+`bbva.ts` no usa Playwright (API pública vía `fetch` plano) — no lo cubría el fix original.
+El 18/9/2026 se migró `apiFetch` para usar `context.request` de un browser lanzado con
+`launchBrowser()` en vez de `fetch` global, así también sale por la IP del Scraping Browser
+cuando `SCRAPING_BROWSER_WS` está seteada. Mismo mecanismo que los demás, sin costo extra
+(reusa el Scraping Browser ya contratado en vez de un proxy HTTP dedicado).
+
+Con `SCRAPING_BROWSER_WS` cargada en GitHub Actions/Vercel, estos 6 scrapers ya pueden
+correrse desde "Ejecutar todos GH" o desde producción sin la restricción de "solo local" —
+pendiente de confirmar con una corrida real desde GH Actions que ICBC/BBVA efectivamente
+traen promos (no verificado en producción todavía al momento de este commit).
 
 **Bug de paginación off-by-one — FIX aplicado 2/8/2026 (sin commitear)**: la API de BBVA
 pagina `communications?rubros={id}&pager={n}` desde `pager=0` (confirmado inspeccionando la

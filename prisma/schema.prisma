@@ -1050,3 +1050,14 @@ model shopping_list_items {
   @@index([shoppingListId])
   @@ignore
 }
+
+model AnonymousLead {
+  id         String   @id @default(cuid())
+  email      String
+  commerceId String?
+  promoId    String?
+  createdAt  DateTime @default(now())
+
+  @@index([commerceId])
+  @@map("anonymous_leads")
+}

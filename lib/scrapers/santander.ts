@@ -2,7 +2,8 @@
 // Estrategia: captura brand IDs de /brands?categories=ALL responses,
 // luego llama /brands/{id} via context.request (cookies del browser).
 
-import { chromium } from 'playwright';
+import { Browser } from 'playwright';
+import { launchBrowser } from './browserFactory';
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
 import { detectCategoria } from './bank-helpers';
 
@@ -141,9 +142,10 @@ export const SantanderScraper: Scraper = {
 
   async run(): Promise<ScrapedPromo[]> {
     console.log('[Santander] Iniciando scraper...');
-    const browser = await chromium.launch({
+    const browser = await launchBrowser({
       headless: false,
-      args: ['--no-sandbox', '--start-maximized'],
+      slowMo: 0,
+      args: ['--no-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled'],
     });
     const allPromos: ScrapedPromo[] = [];
     const allBrandIds = new Set<number>();
