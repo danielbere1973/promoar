@@ -69,7 +69,7 @@ export default function SucursalesManager({ commerceId }: { commerceId: string }
     if (!confirm('¿Seguro que querés eliminar esta sucursal?')) return
     
     try {
-      const res = await fetch(\`/api/comercios/sucursales?id=\${id}\`, { method: 'DELETE' })
+      const res = await fetch(`/api/comercios/sucursales?id=${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Error al eliminar')
       setBranches(prev => prev.filter(b => b.id !== id))
     } catch(err) {
