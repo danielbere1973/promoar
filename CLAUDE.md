@@ -866,6 +866,51 @@ TikTok/Instagram traen volumen con costo de atención alto. Mezclar ambos según
 - `'DEP,HOG,IND,CPE,PER'`
 - `'VIA,AUT,JUG,LIB,ESP,VAR,EDU'`
 
+## Cadena de bloqueos en save-promos/run-scraper (GitHub Actions → Vercel) — RESUELTO (18/9/2026)
+Después de correr un scraper Playwright (ej. Jumbo) desde "Ejecutar todos GH", el scraping
+funcionaba bien (28 promos encontradas) pero el guardado fallaba con `0/28 promos guardadas`.
+La causa fueron **4 capas de bloqueo distintas y sucesivas** en el mismo camino: el script
+`scripts/run-playwright-scraper.ts` hace `POST /api/internal/save-promos`, que a su vez llama
+internamente a `POST /api/admin/scrape` (server-to-server, sobre el dominio público
+`promoar.vercel.app`, no localhost) para reusar toda la lógica de upsert/matching. Cada capa
+de seguridad del proyecto bloqueaba ese segundo salto por un motivo distinto, y había que
+resolver las 4 para que terminara de funcionar:
+
+1. **Build roto** (`app/admin/UserCommercesView.tsx` faltante + backticks escapados en
+   `SucursalesManager.tsx`) — bloqueaba TODO el sitio, no solo el scraper. Resuelto en PRs #23/#24.
+2. **403 geo-block** (`middleware.ts` — "No disponible fuera de Argentina"): `save-promos/route.ts`
+   y `run-scraper/route.ts` (ambos en `api/internal/`) llamaban a `/api/admin/scrape` **sin ningún
+   header de auth**. El middleware exige `isInternalAuth` (Bearer `VTEX_SESSION_SECRET`) o sesión
+   para no aplicar el geo-block a requests con IP no-AR (como las de GitHub Actions/Vercel). Fix:
+   PR #25, agregar el header `Authorization: Bearer` en esas dos llamadas.
+3. **429 Vercel Firewall (Attack Challenge Mode)**: aun con el header correcto, la llamada al
+   dominio público `promoar.vercel.app` pasa por el firewall de Vercel, que puede challengear/
+   rate-limitear tráfico server-to-server (`X-Vercel-Mitigated: challenge`, devuelve HTML, no JSON
+   — de ahí el error `Unexpected token '<'`). La regla de bypass existente (`bypass-internal-api`)
+   solo cubría paths bajo `/api/internal/`, no `/api/admin/scrape`. Fix: se amplió el **path de esa
+   regla en el dashboard de Vercel** de `/api/internal/` a `/api/` (Project Settings → Firewall),
+   manteniendo la condición AND del header `Authorization: Bearer <VTEX_SESSION_SECRET>` — el
+   plan de Vercel no tiene límite para más de 3 reglas custom, así que se reusó/amplió la existente
+   en vez de crear una nueva.
+4. **307 redirect a `/login`**: aun con firewall bypasseado, `middleware.ts` seguía exigiendo
+   cookie de sesión NextAuth para `/api/admin/scrape` (no estaba en `PUBLIC_PATHS`), devolviendo
+   HTML de la página de login en vez de JSON. Fix: PR #26 — se agregó `/api/admin/scrape` a
+   `PUBLIC_PATHS` (sacándolo del gate ciego de sesión) y se le agregó auth propia dentro del route
+   (`isAuthorized()`: Bearer `VTEX_SESSION_SECRET` o sesión con rol `ADMIN`), mismo patrón ya usado
+   en `app/api/admin/snapshots/warm/route.ts`.
+
+**Trampa adicional que retrasó el diagnóstico**: después de mergear PR #26 a `main`, el nuevo
+deploy quedó "Ready" pero el dominio de producción (`promoar.com.ar`/`promoar.vercel.app`) seguía
+alias-eado al deploy **anterior** (el del PR #25) — Vercel no promovió automáticamente el deploy
+más nuevo a Production en este caso. Hubo que hacerlo manualmente desde el dashboard
+(Deployments → deploy correcto → "Promote to Production") para que el fix realmente tomara
+efecto. **Lección**: cuando un fix pusheado y mergeado "no aparece" en producción, verificar con
+`vercel inspect <dominio>` a qué deployment/commit está aliaseado realmente el dominio, no asumir
+que el merge más reciente ya es el que sirve el tráfico.
+
+Confirmado funcionando end-to-end el 18/9/2026 con el firewall reactivado (la regla de bypass
+ampliada convive bien con el resto de la protección).
+
 ## Notas ICBC / BBVA / Galicia / Macro / NaranjaX / Santander scrapers — RESUELTO vía BrightData (17/9/2026)
 Históricamente ICBC (WAF por IP de datacenter) y BBVA (bloqueo geo-IP, `403
 {"error":"No disponible fuera de Argentina"}`) solo podían correrse **localmente**, nunca
