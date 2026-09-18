@@ -26,11 +26,21 @@ if (!scraper) {
   process.exit(1)
 }
 
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    const res = await fetch(url, options)
+    if (res.status !== 429 || i === retries - 1) return res
+    console.log(`[${scraperId}] Rate limit (429) detectado en ${url}, reintentando en ${Math.pow(2, i)}s...`)
+    await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000))
+  }
+  return fetch(url, options) // fallback to return a Response even if it fails
+}
+
 async function main() {
   console.log(`[${scraperId}] Corriendo scraper...`)
   
   // Registrar el inicio de la corrida
-  const startRes = await fetch(`${API_URL}/api/internal/scraper-runs/log`, {
+  const startRes = await fetchWithRetry(`${API_URL}/api/internal/scraper-runs/log`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SECRET}` },
     body: JSON.stringify({ action: 'start', scraperId })
@@ -61,7 +71,7 @@ async function main() {
         const batchNum = Math.floor(i / BATCH_SIZE) + 1
         console.log(`[${scraperId}] Enviando batch ${batchNum}/${batches} (${batch.length} promos)...`)
 
-        const res = await fetch(`${API_URL}/api/internal/save-promos`, {
+        const res = await fetchWithRetry(`${API_URL}/api/internal/save-promos`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -90,7 +100,7 @@ async function main() {
 
   // Registrar el fin de la corrida (y disparar email)
   console.log(`[${scraperId}] Registrando fin de corrida y enviando reporte...`)
-  await fetch(`${API_URL}/api/internal/scraper-runs/log`, {
+  await fetchWithRetry(`${API_URL}/api/internal/scraper-runs/log`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SECRET}` },
     body: JSON.stringify({ action: 'finish', runId, scraperId, found: totalFound, processed: totalProcessed, error: errorMsg })
