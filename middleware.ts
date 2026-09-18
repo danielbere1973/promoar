@@ -183,10 +183,14 @@ export async function middleware(req: NextRequest) {
   // extranjeros que disparan queries a la DB en SSR) — excepto crawlers de buscadores
   // legítimos, que necesitamos para SEO, y las rutas de auth/estáticas ya filtradas arriba.
   if (!pathname.startsWith('/api/auth')) {
+    const isInternalAuth = req.headers.get('Authorization') === `Bearer ${process.env.VTEX_SESSION_SECRET}`
+    const hasSession = req.cookies.has('next-auth.session-token') || req.cookies.has('__Secure-next-auth.session-token')
     const country = req.geo?.country ?? req.headers.get('x-vercel-ip-country')
     const userAgent = req.headers.get('user-agent') || ''
     const isAllowedBot = ALLOWED_BOT_UA.test(userAgent)
-    if (country && country !== 'AR' && !isAllowedBot) {
+    
+    // Si tiene sesión activa o es auth interna (scripts), salteamos el bloqueo
+    if (country && country !== 'AR' && !isAllowedBot && !isInternalAuth && !hasSession) {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'No disponible fuera de Argentina' }, { status: 403 })
       }

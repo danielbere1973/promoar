@@ -118,9 +118,16 @@ export async function POST(req: NextRequest) {
                 // ("Visa Galicia"). Con varias empatadas en el mismo %, nombrar una sola
                 // implica falsamente exclusividad — se usa el canal (wallet si la tiene,
                 // si no la red) + cuántas entidades más aplican.
-                const label = matchingNames.length > 1
-                  ? `${req.wallet?.name || req.cardNetwork?.name || entityName} (+${matchingNames.length - 1} banco${matchingNames.length - 1 === 1 ? '' : 's'})`
-                  : (req.cardNetwork?.name ? `${entityName} ${req.cardNetwork.name}` : entityName)
+                let label = entityName
+                if (matchingNames.length > 2) {
+                  label = req.cardNetwork?.name ? `Tarjetas ${req.cardNetwork.name}` : `Múltiples bancos`
+                  if (req.discountType === 'DEBITO') label += ' Débito'
+                  if (req.discountType === 'CREDITO') label += ' Crédito'
+                } else if (matchingNames.length > 1) {
+                  label = `${req.wallet?.name || req.cardNetwork?.name || entityName} (+${matchingNames.length - 1} banco${matchingNames.length - 1 === 1 ? '' : 's'})`
+                } else {
+                  label = req.cardNetwork?.name ? `${entityName} ${req.cardNetwork.name}` : entityName
+                }
                 const normEntity = entityName.toLowerCase()
                 const normWallet = (req.wallet?.name || '').toLowerCase()
 
@@ -163,6 +170,8 @@ export async function POST(req: NextRequest) {
                     stackableNote: (p as any).stackableNote ?? null,
                     commerceNote: (p as any).commerceNote ?? null,
                   }
+                } else if (best && (req.discountValue ?? 0) === best.discountValue) {
+                  best.matchingEntityNames = Array.from(new Set([...best.matchingEntityNames, ...matchingNames]))
                 }
               }
             }

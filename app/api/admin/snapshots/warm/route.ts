@@ -54,21 +54,30 @@ export async function POST(req: NextRequest) {
     select: { userId: true, user: { select: { email: true, role: true } } },
   })
 
-  const [results, guestResults] = await Promise.all([
-    Promise.all(
-      profiles
-        .filter(p => !!p.user?.email)
-        .map(p =>
-          warmSnapshotForUser(
-            p.userId,
-            p.user!.email!,
-            p.user!.role === 'ADMIN' || p.user!.role === 'MODERATOR',
-            sharedContext
-          )
+  const filteredProfiles = profiles.filter(p => !!p.user?.email)
+  const results = []
+  
+  // Procesar en lotes (chunks) de 5 para no saturar el connection pool de Prisma (límite: 10)
+  const CHUNK_SIZE = 5
+  for (let i = 0; i < filteredProfiles.length; i += CHUNK_SIZE) {
+    const chunk = filteredProfiles.slice(i, i + CHUNK_SIZE)
+    const chunkResults = await Promise.all(
+      chunk.map(p =>
+        warmSnapshotForUser(
+          p.userId,
+          p.user!.email!,
+          p.user!.role === 'ADMIN' || p.user!.role === 'MODERATOR',
+          sharedContext
         )
-    ),
-    Promise.all(GUEST_REGIONS.map(province => warmGuestRegionSnapshot(province, sharedContext))),
-  ])
+      )
+    )
+    results.push(...chunkResults)
+  }
+
+  // Las regiones guest son pocas (3), se pueden hacer en paralelo al final
+  const guestResults = await Promise.all(
+    GUEST_REGIONS.map(province => warmGuestRegionSnapshot(province, sharedContext))
+  )
 
   const summary = {
     total: results.length,
