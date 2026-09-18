@@ -57,7 +57,10 @@ export async function POST(request: Request) {
     const baseUrl = process.env.NEXTAUTH_URL || 'https://promoar.vercel.app'
     const res = await fetch(`${baseUrl}/api/admin/scrape`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SECRET}`,
+      },
       body: JSON.stringify({ scraper: scraperId }),
     })
 
