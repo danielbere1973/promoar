@@ -28,46 +28,76 @@ if (!scraper) {
 
 async function main() {
   console.log(`[${scraperId}] Corriendo scraper...`)
-  const promos = await scraper.run()
-  console.log(`[${scraperId}] ${promos.length} promos encontradas`)
-
-  if (promos.length === 0) {
-    console.log(`[${scraperId}] Sin promos, saliendo`)
-    return
+  
+  // Registrar el inicio de la corrida
+  const startRes = await fetch(`${API_URL}/api/internal/scraper-runs/log`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SECRET}` },
+    body: JSON.stringify({ action: 'start', scraperId })
+  })
+  
+  if (!startRes.ok) {
+    console.error(`[${scraperId}] Error al registrar inicio de corrida: ${startRes.status}`)
+    process.exit(1)
   }
-
-  const BATCH_SIZE = 500
+  
+  const { runId } = await startRes.json()
+  
   let totalProcessed = 0
   let totalFound = 0
-  const batches = Math.ceil(promos.length / BATCH_SIZE)
+  let errorMsg = undefined
 
-  for (let i = 0; i < promos.length; i += BATCH_SIZE) {
-    const batch = promos.slice(i, i + BATCH_SIZE)
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1
-    console.log(`[${scraperId}] Enviando batch ${batchNum}/${batches} (${batch.length} promos)...`)
+  try {
+    const promos = await scraper.run()
+    console.log(`[${scraperId}] ${promos.length} promos encontradas`)
+    totalFound = promos.length
 
-    const res = await fetch(`${API_URL}/api/internal/save-promos`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SECRET}`,
-      },
-      body: JSON.stringify({ scraperId, promos: batch }),
-    })
+    if (promos.length > 0) {
+      const BATCH_SIZE = 500
+      const batches = Math.ceil(promos.length / BATCH_SIZE)
 
-    if (!res.ok) {
-      const text = await res.text()
-      console.error(`[${scraperId}] Error batch ${batchNum}: ${res.status} ${text}`)
-      process.exit(1)
+      for (let i = 0; i < promos.length; i += BATCH_SIZE) {
+        const batch = promos.slice(i, i + BATCH_SIZE)
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1
+        console.log(`[${scraperId}] Enviando batch ${batchNum}/${batches} (${batch.length} promos)...`)
+
+        const res = await fetch(`${API_URL}/api/internal/save-promos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SECRET}`,
+          },
+          // Envía promos como están
+          body: JSON.stringify({ scraperId, promos: batch }),
+        })
+
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(`Error batch ${batchNum}: ${res.status} ${text}`)
+        }
+
+        const data = await res.json()
+        totalProcessed += data.processed ?? 0
+        console.log(`[${scraperId}] Batch ${batchNum}: ${data.processed}/${data.found ?? batch.length} guardadas`)
+      }
+    } else {
+      console.log(`[${scraperId}] Sin promos, finalizando corrida de todas formas.`)
     }
-
-    const data = await res.json()
-    totalProcessed += data.processed ?? 0
-    totalFound += data.found ?? batch.length
-    console.log(`[${scraperId}] Batch ${batchNum}: ${data.processed}/${data.found} guardadas`)
+  } catch (e: any) {
+    errorMsg = e.message
+    console.error(`[${scraperId}] ERROR en la ejecución:`, errorMsg)
   }
 
-  console.log(`[${scraperId}] Total: ${totalProcessed}/${totalFound} promos guardadas`)
+  // Registrar el fin de la corrida (y disparar email)
+  console.log(`[${scraperId}] Registrando fin de corrida y enviando reporte...`)
+  await fetch(`${API_URL}/api/internal/scraper-runs/log`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SECRET}` },
+    body: JSON.stringify({ action: 'finish', runId, scraperId, found: totalFound, processed: totalProcessed, error: errorMsg })
+  })
+
+  console.log(`[${scraperId}] Total final: ${totalProcessed}/${totalFound} promos guardadas`)
+  if (errorMsg) process.exit(1)
 }
 
 main().catch(e => { console.error('ERROR:', e.message); process.exit(1) })

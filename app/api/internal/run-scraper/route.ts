@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Scraper "${scraperId}" requiere Playwright — usar GitHub Actions` }, { status: 400 })
   }
 
-  const run = await prisma.scraperRun.create({ data: { scraperId, status: 'running' } })
+  const run = await prisma.scraperRun.create({ data: { scraperId, status: 'running', trigger: 'gh_actions' } })
 
   try {
     const baseUrl = process.env.NEXTAUTH_URL || 'https://promoar.vercel.app'
@@ -82,6 +82,13 @@ export async function POST(request: Request) {
         data: { nextRunAt: computeNextRun(schedule) }
       })
     }
+    
+    // Importación dinámica para evitar ciclos
+    const { sendScraperReportEmail } = await import('@/lib/scraperReportEmail')
+    await sendScraperReportEmail({
+      results: [{ scraperId, status: 'success', found, processed, trigger: 'gh_actions' }],
+      batchLabel: 'GitHub Actions'
+    })
 
     return NextResponse.json({ ok: true, found, processed })
   } catch (e: any) {
@@ -89,6 +96,13 @@ export async function POST(request: Request) {
       where: { id: run.id },
       data: { status: 'error', finishedAt: new Date(), message: e.message }
     })
+    
+    const { sendScraperReportEmail } = await import('@/lib/scraperReportEmail')
+    await sendScraperReportEmail({
+      results: [{ scraperId, status: 'error', message: e.message, trigger: 'gh_actions' }],
+      batchLabel: 'GitHub Actions'
+    })
+    
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

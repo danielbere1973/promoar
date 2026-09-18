@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Building2, MapPin, Store, Search, Plus, Trash2, Edit3,
-  ExternalLink, Copy, Check, Globe, Instagram, Sparkles,
+  ExternalLink, Copy, Check, Globe, Camera, Sparkles,
   Layers, Tag, ChevronRight, AlertCircle, Navigation,
   Map as MapIcon, Filter, CheckCircle2, X, RefreshCw,
   SlidersHorizontal, ArrowUpRight, HelpCircle
@@ -665,7 +665,7 @@ export default function CommercesManagerView({
                             rel="noopener noreferrer"
                             className="flex items-center gap-1 hover:text-pink-600 transition-colors"
                           >
-                            <Instagram size={13} className="text-slate-400" />
+                            <Camera size={13} className="text-slate-400" />
                             Instagram
                             <ArrowUpRight size={11} className="text-slate-400" />
                           </a>

@@ -17,8 +17,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing scraperId or promos' }, { status: 400 })
   }
 
-  const run = await prisma.scraperRun.create({ data: { scraperId, status: 'running' } })
-
   try {
     const baseUrl = process.env.NEXTAUTH_URL || 'https://promoar.vercel.app'
     const res = await fetch(`${baseUrl}/api/admin/scrape`, {
@@ -36,17 +34,8 @@ export async function POST(request: Request) {
     const found = promos.length
     const processed = data.processed ?? 0
 
-    await prisma.scraperRun.update({
-      where: { id: run.id },
-      data: { status: 'success', finishedAt: new Date(), found, processed }
-    })
-
     return NextResponse.json({ ok: true, found, processed })
   } catch (e: any) {
-    await prisma.scraperRun.update({
-      where: { id: run.id },
-      data: { status: 'error', finishedAt: new Date(), message: e.message }
-    })
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
