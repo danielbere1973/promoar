@@ -2488,7 +2488,7 @@ function ScraperSchedulerTab() {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scraperId, ...(local && { forceLocal: true }) }),
+      body: JSON.stringify({ scraperId, ...(local && { forceLocal: true }), skipWarmup: true }),
     })
     if (res.ok) {
       if (useGh) {
@@ -2505,6 +2505,10 @@ function ScraperSchedulerTab() {
         const report = [{ scraperId: scraperId.toLowerCase(), status: 'success' as const, found, processed, skipped }]
         setRunReport(report)
         sendReportEmail(report)
+        
+        // Disparar warmup asincrónico por separado para evitar timeouts de 5 minutos
+        console.log(`[runNow] Scraper ${scraperId} OK. Disparando warmup global...`)
+        fetch('/api/admin/snapshots/warm', { method: 'POST' }).catch(e => console.error('Error warmup:', e))
       }
     } else {
       const data = await res.json().catch(() => ({}))
@@ -2659,7 +2663,7 @@ function ScraperSchedulerTab() {
         const res = await fetch('/api/admin/scrape', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scraper: s.id, categoria: (s as any).categoria, forceLocal: true }),
+          body: JSON.stringify({ scraper: s.id, categoria: (s as any).categoria, forceLocal: true, skipWarmup: true }),
         })
         const data = await res.json().catch(() => ({}))
         if (res.ok) {
@@ -2682,6 +2686,13 @@ function ScraperSchedulerTab() {
     }
     setRunning(null)
     setRunReport(report)
+    
+    // Disparar warmup global una sola vez al final
+    if (ok > 0) {
+      console.log('[runSelectedLocal] Disparando warmup global de snapshots...')
+      fetch('/api/admin/snapshots/warm', { method: 'POST' }).catch(e => console.error('Error warmup:', e))
+    }
+
     setMsg({ type: err > 0 ? 'error' : 'success', text: `Seleccionados: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
     setTimeout(() => setMsg(null), 15000)
     sendReportEmail(report, 'Selección local')
