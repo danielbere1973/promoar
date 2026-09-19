@@ -8,7 +8,7 @@ import { Scraper, ScrapedPromo } from './types';
 import { dedup, extractDates } from './bank-helpers';
 
 const BASE_URL  = 'https://ahorrosybeneficios.bancopatagonia.com.ar/ahorrosybeneficios';
-const JS_URL    = 'https://ahorrosybeneficios.bancopatagonia.com.ar/pub/media/mageplaza/search/ahorrosybeneficios_0.js';
+const JS_URL    = 'https://ahorrosybeneficios.bancopatagonia.com.ar/media/mageplaza/search/ahorrosybeneficios_0.js';
 const BANK_NAME = 'Banco Patagonia';
 
 const HEADERS = {
