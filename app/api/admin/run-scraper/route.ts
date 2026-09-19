@@ -12,9 +12,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await req.json() as { scraperId: string; forceLocal?: boolean }
+  const body = await req.json() as { scraperId: string; forceLocal?: boolean; skipWarmup?: boolean }
   const { scraperId } = body
   const forceLocal = !!body.forceLocal
+  const skipWarmup = !!body.skipWarmup
   if (!scraperId) return NextResponse.json({ error: 'Missing scraperId' }, { status: 400 })
 
   // Verificar que el scraper existe (por id o por nombre lowercase)
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
         // Pasar el token de sesión para auth
         'Cookie': req.headers.get('cookie') || '',
       },
-      body: JSON.stringify({ scraper: scraperId, forceLocal }),
+      body: JSON.stringify({ scraper: scraperId, forceLocal, skipWarmup }),
     })
 
     if (!res.ok) {
