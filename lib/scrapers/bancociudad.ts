@@ -359,8 +359,12 @@ export const BancoCiudadScraper: Scraper = {
       let capturedBody: any = null;
       let capturedHeaders: Record<string, string> = {};
 
+      let capturedUrl: string | null = null;
+
       page.on('request', req => {
         if (req.url().includes('busqueda') && req.method() === 'POST') {
+          capturedUrl = req.url();
+          console.log('[BancoCiudad] busqueda URL real capturada:', capturedUrl);
           capturedHeaders = req.headers();
           const raw = req.postData();
           if (raw) { try { capturedBody = JSON.parse(raw); } catch {} }
@@ -390,7 +394,7 @@ export const BancoCiudadScraper: Scraper = {
 
       });
 
-      await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 45000 });
+      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForTimeout(2000);
 
       // El primer POST que dispara la carga de la página es el de "destacados"
@@ -399,10 +403,15 @@ export const BancoCiudadScraper: Scraper = {
       // capturar el body/shape correcto (palabra_clave, quotas, zona, aplica_tienda,
       // tipo_cliente en mayúsculas) que la paginación necesita.
       try {
+        const busquedaPromise = page.waitForRequest(
+          req => req.url().includes('busqueda') && req.method() === 'POST',
+          { timeout: 15000 }
+        );
         await page.locator('text=Ver todos los beneficios').first().click({ timeout: 10000 });
-        await page.waitForTimeout(2000);
+        await busquedaPromise;
+        await page.waitForTimeout(500);
       } catch {
-        console.log('[BancoCiudad] No se pudo clickear "Ver todos los beneficios"');
+        console.log('[BancoCiudad] No se pudo clickear "Ver todos los beneficios" o no llegó el request de búsqueda');
       }
 
       if (!capturedBody) {
@@ -425,19 +434,24 @@ export const BancoCiudadScraper: Scraper = {
 
         let response;
         try {
-          response = await context.request.post(API_URL, {
+          response = await context.request.post(capturedUrl ?? API_URL, {
             headers: { ...capturedHeaders, 'Content-Type': 'application/json', 'Accept': 'application/json' },
             data: body,
           });
-        } catch {
+        } catch (err) {
+          console.log(`[BancoCiudad] fetchPage(${pagina}, ${rubroId}) request error:`, err);
           return null;
         }
 
-        if (!response.ok()) return null;
+        if (!response.ok()) {
+          console.log(`[BancoCiudad] fetchPage(${pagina}, ${rubroId}) status ${response.status()}`);
+          return null;
+        }
         try {
           const json = await response.json();
           return json?.retorno?.beneficios as any[] ?? [];
-        } catch {
+        } catch (err) {
+          console.log(`[BancoCiudad] fetchPage(${pagina}, ${rubroId}) parse error:`, err);
           return null;
         }
       };

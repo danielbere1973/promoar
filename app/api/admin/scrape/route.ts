@@ -188,6 +188,9 @@ export async function POST(req: NextRequest) {
       'jumbo', 'disco', 'vea', 'amex', 'cabal', 'changomas',
       'banco galicia', 'icbc', 'banco macro', 'naranjax', 'banco provincia',
       'banco santander', 'banco supervielle', 'banco ciudad', 'visa', 'banco patagonia',
+      // BBVA es HTTP puro pero usa launchBrowser() internamente (túnel BrightData
+      // por geo-IP) — sin Chromium disponible en Vercel, necesita el mismo guard.
+      'bbva',
       // BNA: digiventures.la bloquea IPs de datacenter de AWS/Vercel
       'banco nación argentina',
     ])
