@@ -840,6 +840,19 @@ export async function POST(req: NextRequest) {
       }).catch((e) => console.error('[push/notify] Error:', e))
     }
 
+    if (runId) {
+      await prisma.scraperRun.update({
+        where: { id: runId },
+        data: {
+          status: 'success',
+          finishedAt: new Date(),
+          found: flatPromos.length,
+          processed: processedCount,
+          skipped: skippedUnchanged,
+        },
+      }).catch((e) => console.error('[ScraperRun] Error actualizando a success:', e));
+    }
+
     // Trigger post-scraping del batch warm de HomeDecisionSnapshot (Prioridad 2,
     // Parte A — cpo-a-cto-dictamen-arquitectura-snapshot-async-25-8-2026.md):
     // si hubo promos nuevas/actualizadas, promoPoolVersion cambió para todos los
@@ -853,18 +866,7 @@ export async function POST(req: NextRequest) {
       }).catch((e) => console.error('[snapshots/warm] Error:', e))
     }
 
-    if (runId) {
-      await prisma.scraperRun.update({
-        where: { id: runId },
-        data: {
-          status: 'success',
-          finishedAt: new Date(),
-          found: flatPromos.length,
-          processed: processedCount,
-          skipped: skippedUnchanged,
-        },
-      }).catch((e) => console.error('[ScraperRun] Error actualizando a success:', e));
-    }
+
 
     return NextResponse.json({
       message: 'Scraping completado con éxito',
