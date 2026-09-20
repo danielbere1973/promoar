@@ -10,6 +10,33 @@ import { invalidatePublicPromosCache } from '@/lib/cache/promosCache';
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache';
 import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache';
 
+// Cache in-memory de tablas estáticas (no se mutan durante el procesamiento de un batch).
+// TTL corto: solo busca aprovechar reuso de instancia serverless entre batches
+// consecutivos de una misma corrida de scraper, no reemplaza la DB como fuente de verdad.
+const STATIC_ENTITIES_TTL_MS = 5 * 60 * 1000;
+
+async function fetchStaticEntities() {
+  const [categories, banks, wallets, cardNetworks, cardSegments] = await Promise.all([
+    prisma.category.findMany(),
+    prisma.bank.findMany({ include: { cardNetworks: { select: { id: true } }, segments: true } }),
+    prisma.wallet.findMany(),
+    prisma.cardNetwork.findMany(),
+    prisma.cardSegment.findMany({ include: { cardNetwork: true } }),
+  ]);
+  return { categories, banks, wallets, cardNetworks, cardSegments };
+}
+
+let staticEntitiesCache: { data: Awaited<ReturnType<typeof fetchStaticEntities>>; expiresAt: number } | null = null;
+
+async function getCachedStaticEntities() {
+  if (staticEntitiesCache && staticEntitiesCache.expiresAt > Date.now()) {
+    return staticEntitiesCache.data;
+  }
+  const data = await fetchStaticEntities();
+  staticEntitiesCache = { data, expiresAt: Date.now() + STATIC_ENTITIES_TTL_MS };
+  return data;
+}
+
 // Se agregó a PUBLIC_PATHS en middleware.ts (17/9/2026) porque el gate de sesión
 // redirigía a /login los llamados server-to-server internos (save-promos/run-scraper
 // internal → aquí, sin cookie), incluso pasando el firewall bypass. Mismo patrón que
@@ -263,17 +290,20 @@ export async function POST(req: NextRequest) {
     }
     console.log(`[Scrape] ${processablePromos.length} promos → ${grouped.size} promos únicas agrupadas`);
 
-    // ── Fetch masivo de entidades (una sola vez, en paralelo para minimizar tiempo de conexión abierta) ──
-    const [categories, banks, wallets, commercesResult, commerceAliases, cardNetworks, cardSegments] = await Promise.all([
-      prisma.category.findMany(),
-      prisma.bank.findMany({ include: { cardNetworks: { select: { id: true } }, segments: true } }),
-      prisma.wallet.findMany(),
+    // ── Fetch de entidades estáticas (categorías, bancos, billeteras, redes, segmentos) ──
+    // Estas tablas no se modifican durante el procesamiento de un batch, así que se
+    // cachean en memoria del proceso con TTL corto: si esta invocación serverless
+    // reutiliza la misma instancia que un batch anterior (frecuente en corridas de
+    // scraper con requests seguidas), evita repetir 5 findMany por cada uno de los
+    // N batches de una corrida grande, aliviando la presión sobre el pool de Neon.
+    // commerces/commerceAliases quedan afuera porque este mismo endpoint las puede
+    // crear/mutar durante su ejecución (ver `commerces = [...commerces, comMatch]` abajo).
+    const staticEntities = await getCachedStaticEntities();
+    const { categories, banks, wallets, cardNetworks, cardSegments } = staticEntities;
+    let [commerces, commerceAliases] = await Promise.all([
       (prisma.commerce as any).findMany({ select: { id: true, name: true, slug: true, logoUrl: true, active: true, website: true, defaultCategoryId: true } }),
       (prisma.commerceAlias as any).findMany({ select: { alias: true, commerceId: true } }),
-      prisma.cardNetwork.findMany(),
-      prisma.cardSegment.findMany({ include: { cardNetwork: true } }),
     ]);
-    let commerces = commercesResult;
     const sinCategoria = categories.find(c => c.slug === 'sin-categoria');
 
     // Default de fin de mes para promos sin validUntil explícito
