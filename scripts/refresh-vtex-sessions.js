@@ -302,7 +302,8 @@ async function collectPromosForSite({ host, baseUrl }) {
     // Navegar por cada categoría/subcategoría con paginación
     outer: for (const cat of CATEGORIES) {
       currentCat = cat
-      for (let page_num = 1; ; page_num++) {
+      const MAX_PAGES = 30 // tope de seguridad: ninguna categoría real tiene tantas páginas; evita loop infinito si el paginador no matchea
+      for (let page_num = 1; page_num <= MAX_PAGES; page_num++) {
         try {
           const url = page_num === 1
             ? `${baseUrl}/${cat}`
@@ -320,6 +321,7 @@ async function collectPromosForSite({ host, baseUrl }) {
             return match ? parseInt(match[1]) : null
           })
           if (totalPages !== null && page_num >= totalPages) break
+          if (totalPages === null && page_num >= 2) break // sin paginador detectable tras la 1ra página: no hay más resultados reales
         } catch {
           break
         }

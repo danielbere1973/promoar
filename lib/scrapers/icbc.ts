@@ -64,7 +64,6 @@ export const ICBCScraper: Scraper = {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         viewport: { width: 1280, height: 720 },
         locale: 'es-AR',
-        extraHTTPHeaders: { 'Accept-Language': 'es-AR,es;q=0.9,en;q=0.8' },
         ignoreHTTPSErrors: true,
       });
       await ctx.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
@@ -95,7 +94,10 @@ export const ICBCScraper: Scraper = {
         } catch {}
       });
 
-      await page.goto(PAGE_URL, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
+      await page.goto(PAGE_URL, { waitUntil: 'networkidle', timeout: 60000 }).catch((e) => {
+        console.log(`[ICBC] page.goto error: ${e.message}`);
+      });
+      console.log(`[ICBC] Página cargada, url final: ${page.url()}, título: ${await page.title().catch(() => '?')}`);
       await page.waitForTimeout(3000);
 
       // Scroll para disparar lazy loading
@@ -167,7 +169,10 @@ export const ICBCScraper: Scraper = {
             headers: capturedHeaders,
             timeout: 15000,
           });
-          if (!res.ok()) return null;
+          if (!res.ok()) {
+            console.log(`[ICBC] apiGet ${path} status ${res.status()} body: ${(await res.text()).slice(0, 300)}`);
+            return null;
+          }
           return await res.json();
         };
 
