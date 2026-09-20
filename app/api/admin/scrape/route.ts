@@ -831,13 +831,23 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Scrape] ✅ Procesadas: ${processedCount} | Sin cambios (skip): ${skippedUnchanged} | Sin categoría: ${skippedNoCategory} | Sin comercio: ${skippedNoCommerce}`);
 
-    // Actualizar activePromoCount solo en comercios que realmente cambiaron, en batches
+    // Actualizar activePromoCount solo en comercios que realmente cambiaron.
+    // Un solo groupBy en vez de un count() por comercio: evita abrir N conexiones
+    // extra al pool justo al final de cada batch del scraper (causa de los timeouts
+    // de pool en corridas grandes como Macro).
     const affectedCommerceIds = Array.from(changedCommerceIds)
-    for (let i = 0; i < affectedCommerceIds.length; i += 5) {
-      await Promise.all(affectedCommerceIds.slice(i, i + 5).map(async (cid) => {
-        const count = await prisma.promo.count({ where: { commerceId: cid, status: 'ACTIVE' } })
-        await prisma.commerce.update({ where: { id: cid }, data: { activePromoCount: count } })
-      }))
+    if (affectedCommerceIds.length > 0) {
+      const counts = await prisma.promo.groupBy({
+        by: ['commerceId'],
+        where: { commerceId: { in: affectedCommerceIds }, status: 'ACTIVE' },
+        _count: { _all: true },
+      })
+      const countByCommerce = new Map(counts.map(c => [c.commerceId, c._count._all]))
+      for (let i = 0; i < affectedCommerceIds.length; i += 5) {
+        await Promise.all(affectedCommerceIds.slice(i, i + 5).map((cid) =>
+          prisma.commerce.update({ where: { id: cid }, data: { activePromoCount: countByCommerce.get(cid) ?? 0 } })
+        ))
+      }
     }
 
     if (processedCount > 0) { 
