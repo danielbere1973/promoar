@@ -263,15 +263,18 @@ export async function POST(req: NextRequest) {
     }
     console.log(`[Scrape] ${processablePromos.length} promos → ${grouped.size} promos únicas agrupadas`);
 
-    // ── Fetch masivo de entidades (una sola vez) ───────────────────────────
-    const categories = await prisma.category.findMany();
+    // ── Fetch masivo de entidades (una sola vez, en paralelo para minimizar tiempo de conexión abierta) ──
+    const [categories, banks, wallets, commercesResult, commerceAliases, cardNetworks, cardSegments] = await Promise.all([
+      prisma.category.findMany(),
+      prisma.bank.findMany({ include: { cardNetworks: { select: { id: true } }, segments: true } }),
+      prisma.wallet.findMany(),
+      (prisma.commerce as any).findMany({ select: { id: true, name: true, slug: true, logoUrl: true, active: true, website: true, defaultCategoryId: true } }),
+      (prisma.commerceAlias as any).findMany({ select: { alias: true, commerceId: true } }),
+      prisma.cardNetwork.findMany(),
+      prisma.cardSegment.findMany({ include: { cardNetwork: true } }),
+    ]);
+    let commerces = commercesResult;
     const sinCategoria = categories.find(c => c.slug === 'sin-categoria');
-    const banks = await prisma.bank.findMany({ include: { cardNetworks: { select: { id: true } }, segments: true } });
-    const wallets = await prisma.wallet.findMany();
-    let commerces = await (prisma.commerce as any).findMany({ select: { id: true, name: true, slug: true, logoUrl: true, active: true, website: true, defaultCategoryId: true } });
-    const commerceAliases = await (prisma.commerceAlias as any).findMany({ select: { alias: true, commerceId: true } });
-    const cardNetworks = await prisma.cardNetwork.findMany();
-    const cardSegments = await prisma.cardSegment.findMany({ include: { cardNetwork: true } });
 
     // Default de fin de mes para promos sin validUntil explícito
     const endOfMonth = new Date()
