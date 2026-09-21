@@ -372,8 +372,14 @@ async function main() {
   const sitesToRun = DEBUG_SITE ? SITES.filter(s => s.host === DEBUG_SITE) : SITES
   for (const site of sitesToRun) {
     console.log(`\n--- ${site.host} ---`)
-    const promos = await collectPromosForSite(site)
-    await savePromos(site.host, promos)
+    try {
+      const promos = await collectPromosForSite(site)
+      await savePromos(site.host, promos)
+    } catch (e) {
+      // No dejar que un fallo en un sitio aborte los siguientes (ej: Vea nunca
+      // corría porque un error en Disco mataba el proceso entero antes de llegar).
+      console.error(`[${site.host}] ERROR: ${e.message}`)
+    }
   }
 
   console.log('\n✅ Listo.')
