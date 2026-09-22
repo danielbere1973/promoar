@@ -8,6 +8,10 @@ export const dynamic = 'force-dynamic'
 // "estancado" — ver reporte ejecutivo pedido por Pablo 4/9/2026.
 const STALE_DAYS = 7
 
+// Horas en 'running' antes de considerar el run colgado (proceso/job matado
+// externamente sin llegar a loguear su propio final) y marcarlo error solo.
+const STUCK_RUNNING_HOURS = 2
+
 // GET /api/admin/scraper-runs — reporte ejecutivo: última corrida por scraper +
 // lista de estancados (sin success hace más de STALE_DAYS días, o sin ningún registro).
 export async function GET(req: NextRequest) {
@@ -19,6 +23,22 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const scraperId = searchParams.get('scraperId')
   const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 200)
+
+  // Auto-limpieza de runs colgados: si un job murió externamente (timeout de
+  // GitHub Actions, crash del server) nunca llega a loguear su propio final y
+  // la fila queda en 'running' para siempre. Se marca error acá, en vez de
+  // depender de correr un script a mano cada vez.
+  await prisma.scraperRun.updateMany({
+    where: {
+      status: 'running',
+      startedAt: { lt: new Date(Date.now() - STUCK_RUNNING_HOURS * 60 * 60 * 1000) },
+    },
+    data: {
+      status: 'error',
+      message: `Interrumpido: sin actualizar hace más de ${STUCK_RUNNING_HOURS}h`,
+      finishedAt: new Date(),
+    },
+  })
 
   // Historial reciente (para el panel "corridas recientes")
   const recent = await prisma.scraperRun.findMany({
