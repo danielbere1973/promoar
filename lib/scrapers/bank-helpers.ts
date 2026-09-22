@@ -118,7 +118,8 @@ export function extractInstallments(text: string): number | null {
 }
 
 export function extractCap(text: string): number | null {
-  const m = text.match(/tope[:\s]+\$?\s*([\d.,]+)/i)
+  if (/sin\s+tope/i.test(text)) return null;
+  const m = text.match(/tope(?:\s+\w+){0,5}?[:\s]+\$?\s*([\d.,]+)/i)
     ?? text.match(/m[aá]ximo[:\s]+\$?\s*([\d.,]+)/i);
   if (m) return parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
   return null;
@@ -145,22 +146,31 @@ export function extractWallets(text: string): string[] {
   const t = normStr(text);
   const wallets: string[] = [];
   if (/\bMODO\b/.test(t)) wallets.push('MODO');
-  if (/MERCADO\s*PAGO/.test(t)) wallets.push('MercadoPago');
-  if (/CUENTA\s*DNI/.test(t)) wallets.push('CuentaDNI');
+  if (/MERCADO\s*PAGO/.test(t)) wallets.push('Mercado Pago');
+  if (/CUENTA\s*DNI/.test(t)) wallets.push('Cuenta DNI');
   if (/BUEPP|GUEPP|GÜEPP/.test(t)) wallets.push('BUEPP');
   if (/APP\s*CIUDAD|APP\s*BANCO\s*CIUDAD/.test(t)) wallets.push('MODO'); // App Ciudad usa MODO
   return wallets;
+}
+
+// Quita sufijos de razón social (S.A., SRL, S.R.L., etc.) que algunas fuentes
+// incluyen de forma inconsistente entre corridas (ej. "KEOPS" vs "KEOPS S A"),
+// lo que rompe el matching título+comercio usado para skipear promos sin cambios.
+const BUSINESS_SUFFIX_RE = /\s+S\.?\s*A\.?\s*U?\.?$|\s+S\.?\s*R\.?\s*L\.?$|\s+S\.?\s*A\.?\s*I\.?\s*C\.?$/i;
+
+export function stripBusinessSuffix(name: string): string {
+  return name.replace(BUSINESS_SUFFIX_RE, '').trim();
 }
 
 export function detectCategoria(text: string): string {
   const t = normStr(text);
   if (/JUMBO|CARREFOUR|DISCO|COTO|VEA|WALMART|CHANGO|DIARCO|SUPERMERCADO|ANONIMA|YAGUAR|MAXI|LA\s+GALLEGA|HIPERMAXI|CHANGOMAS|BELL'S|BELLS|COOPERATIVA|SUPER\s+VEA|LIDER|EKONO|SUPERCOOP|FOOD\s+MARKET|FERIAS\s+DE\s+LA\s+CIUDAD|\bRES\b/.test(t)) return 'Supermercados';
   if (/FARMACIA|FARMA|FARMACITY|DROGUERIA|PERFUMER|BOTICA|VANTAGE|SALCOBRAND/.test(t)) return 'Farmacias';
-  if (/\bYPF\b|\bSHELL\b|\bAXION\b|\bPETROBRAS\b|\bWICO\b|\bGULF\b|NAFTA|COMBUSTIBLE|ESTACION\s+DE\s+SERVICIO|SURTIDOR|PUMA\s+ENERGY/.test(t)) return 'Combustible';
-  if (/CONCESIONARIA|AUTOMOVIL|AUTOMOTOR(?!A)|0KM|CERO\s+KM|REPUESTO|PATENTAMIENTO|TALLER\s+MEC|DEALER|PEUGEOT|VOLKSWAGEN|\bFORD\b|TOYOTA|CHEVROLET|RENAULT|\bFIAT\b|\bHONDA\b|\bNISSAN\b|\bJEEP\b|HYUNDAI|WOLKSWAGEN/.test(t)) return 'Automotores';
+  if (/\bYPF\b|\bSHELL\b|\bAXION\b|\bPETROBRAS\b|\bWICO\b|\bGULF\b|NAFTA|COMBUSTIBLE|ESTACION\s+DE\s+SERVICIO|SURTIDOR|PUMA\s+ENERGY|\bINFINIA\b/.test(t)) return 'Combustible';
+  if (/CONCESIONARIA|AUTOMOVIL|AUTOMOTOR(?!A)|0KM|CERO\s+KM|REPUESTO|PATENTAMIENTO|TALLER\s+MEC|DEALER|PEUGEOT|VOLKSWAGEN|\bFORD\b|TOYOTA|CHEVROLET|RENAULT|\bFIAT\b|\bHONDA\b|\bNISSAN\b|\bJEEP\b|HYUNDAI|WOLKSWAGEN|LUBRICANTE|LUBRICENTRO|\bSERVICE\b|GOMERIA|LAVADERO\s+DE\s+AUTOS?/.test(t)) return 'Automotores';
   if (/HELADERIA|HELADOS|FREDDO|CHUNGO|GRIDO|VOLTA|CREMOLATTI|AMORINO|DOLCE\s+FREDDO/.test(t)) return 'Heladerías';
   if (/HOTEL|VUELO|AEROLINEA|AEROLINEAS\s+ARG|LATAM|FLYBONDI|JETSMART|DESPEGAR|ALMUNDO|BOOKING|EDREAMS|AGENCIA\s+DE\s+VIAJE|CRUCERO|PAQUETE\s+TURI|DRAGONPASS|ACCOR|MARRIOTT|HILTON|AIRBNB|TURISMO/.test(t)) return 'Viajes y Turismo';
-  if (/\bUBER\b|\bCABIFY\b|SUBTE|COLECTIVO|\bTAXI\b|TELEPASE|PEAJE|TRANSPORTE\s+PUBLI|SUBE|TRENES\s+ARG|BUS/.test(t)) return 'Transporte';
+  if (/\bUBER\b|\bCABIFY\b|SUBTE|COLECTIVO|\bTAXI\b|TELEPASE|PEAJE|\bTRANSPORTE\b|SUBE|TRENES\s+ARG|BUS/.test(t)) return 'Transporte';
   if (/RESTAURANT|PIZZA|BURGER|SUSHI|GASTRONOM|COMIDA|CAFE|BAR(?!\w)|BARES|BODEGON|PEDIDOS|RAPPI|DELIVERY|MCDONALD|STARBUCKS|MOSTAZA|PARRILLA|CARNICER|FIAMBRE|QUESERIA|QUESO\s|MEDIALUNA|CHURRO|EMPANADA|PICADA|ALMACEN\s+DE|GRANJA|ROTISERIA|VIANDAS|DESAYUNO|BUFFET|CONFITERIA|PANADERIA/.test(t)) return 'Gastronomía';
   if (/ELECTRO|GARBARINO|FRAVEGA|MUSIMUNDO|CELULAR|PC(?!\w)|NOTEBOOK|LENOVO|TECNOLOG|SAMSUNG|APPLE|IPHONE|COMPUTO|MEGATONE|POWERMAX|RODO/.test(t)) return 'Tecnología';
   if (/ROPA|MODA|ZAPATILLAS|CALZADO|INDUMENTARIA|ZARA|H&M|MIMO|KEVINGSTON|WRANGLER|LEVIS|VESTIMENTA|MARITHIME|RAPSODIA|JAZMIN|CHEEKY/.test(t)) return 'Indumentaria';
@@ -350,4 +360,28 @@ export function detectSalesChannel(text: string): 'ONLINE' | 'FISICA' | null {
     if (t.includes(s)) return 'FISICA'
   }
   return null
+}
+
+// Normaliza el salesChannel (legacy string de scrapers) al valor real del enum
+// Prisma `SalesChannel` (ONLINE|PHYSICAL|BOTH|UNKNOWN). 'FISICA' es el valor
+// histórico usado por los scrapers antes de que existiera el enum; cualquier
+// valor no reconocido cae a UNKNOWN con un warning en vez de fallar el upsert.
+export function normalizeSalesChannel(
+  value: string | null | undefined
+): 'ONLINE' | 'PHYSICAL' | 'BOTH' | 'UNKNOWN' {
+  switch (value) {
+    case 'ONLINE':
+      return 'ONLINE'
+    case 'FISICA':
+    case 'PHYSICAL':
+      return 'PHYSICAL'
+    case 'BOTH':
+      return 'BOTH'
+    case null:
+    case undefined:
+      return 'UNKNOWN'
+    default:
+      console.warn(`[normalizeSalesChannel] valor no reconocido: "${value}", usando UNKNOWN`)
+      return 'UNKNOWN'
+  }
 }

@@ -1,0 +1,96 @@
+.home-proto {
+  --brand: #1e3a5f;
+  --brand-light: #2d5a8e;
+  --accent: #d94f2b;
+  --accent-light: #e8724f;
+  --bg-page: #f4f1ea;
+  --bg-card: #ffffff;
+  --bg-tint: #fdf3ec;
+  --border: #eae4d8;
+  --text: #1a1a1a;
+  --text-muted: #6b6459;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  min-height: 100vh;
+  background: var(--bg-page);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 32px 24px 140px;
+}
+
+.home-proto * {
+  box-sizing: border-box;
+}
+
+.home-proto-header {
+  max-width: 1080px;
+  margin: 0 auto 28px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.home-proto-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.home-proto-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.home-proto-rubros {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.home-proto-rubros[data-mobile] {
+  max-width: 420px;
+}
+
+.home-proto-rubro-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 10px;
+}
+
+.home-proto-cta {
+  max-width: 1080px;
+  margin: 40px auto 0;
+  display: flex;
+  justify-content: center;
+}
+
+.home-proto-cta[data-mobile] {
+  max-width: 420px;
+}
+
+.home-proto-cta-btn {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--brand);
+  padding: 13px 28px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-proto * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

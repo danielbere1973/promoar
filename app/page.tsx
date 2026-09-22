@@ -65,7 +65,12 @@ const FAQS = [
 ]
 
 export default async function LandingPage() {
-  const promoCount = await prisma.promo.count({ where: { status: 'ACTIVE' } }).catch(() => 11000)
+  const [promoCount, superCount, fuelCount, pharmaCount] = await Promise.all([
+    prisma.promo.count({ where: { status: 'ACTIVE' } }).catch(() => 11000),
+    prisma.promo.count({ where: { status: 'ACTIVE', category: { slug: 'supermercados' } } }).catch(() => 0),
+    prisma.promo.count({ where: { status: 'ACTIVE', category: { slug: 'combustible' } } }).catch(() => 0),
+    prisma.promo.count({ where: { status: 'ACTIVE', category: { slug: 'farmacias' } } }).catch(() => 0),
+  ])
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
@@ -78,6 +83,13 @@ export default async function LandingPage() {
             <img src="/logo_promoar.jpeg" alt="PromoAR" className="h-10 w-auto max-w-[180px] object-contain rounded-lg" />
           </Link>
           <div className="flex items-center gap-3">
+            <Link
+              href="/ahorro-interactivo"
+              className="text-sm font-semibold text-gray-600 hover:text-[#D94F2B] transition-colors hidden sm:inline-flex items-center gap-1.5"
+            >
+              <span>Comparadores</span>
+              <span className="bg-[#D94F2B]/10 text-[#D94F2B] text-[10px] font-black px-1.5 py-0.5 rounded-full">Nuevo</span>
+            </Link>
             <Link href="/login" className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
               Ingresar
             </Link>
@@ -270,6 +282,137 @@ export default async function LandingPage() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── NUEVO: COMPARADORES DE AHORRO INTERACTIVO ── */}
+      <section className="py-20 bg-gradient-to-b from-slate-50 to-white border-y border-gray-100">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-12">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-[#D94F2B]/10 border border-[#D94F2B]/20 text-[#D94F2B] rounded-full px-3 py-1 text-xs font-black uppercase tracking-wider mb-3">
+                <span>⚡ Herramientas exclusivas</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D94F2B]" />
+                <span>Simulador en vivo</span>
+              </div>
+              <h2 className="text-3xl lg:text-4xl font-black text-[#1E3A5F] tracking-tight">
+                Calculá tu ahorro real antes de pagar
+              </h2>
+              <p className="text-gray-600 mt-2 max-w-2xl text-base">
+                Elegí el día, ingresá el monto de tu compra y compará qué banco o billetera te conviene usar calculando el tope de reintegro exacto.
+              </p>
+            </div>
+            <Link
+              href="/ahorro-interactivo"
+              className="inline-flex items-center gap-2 text-sm font-black text-[#1E3A5F] hover:text-[#D94F2B] transition-colors shrink-0 group"
+            >
+              <span>Ver todos los comparadores</span>
+              <span className="transition-transform group-hover:translate-x-1">→</span>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Supermercados */}
+            <div className="group bg-white rounded-3xl p-6 border-2 border-slate-100 hover:border-emerald-500/40 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                    🛒
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-wider bg-emerald-100/70 text-emerald-800 px-2.5 py-1 rounded-full">
+                    {superCount > 0 ? `${superCount.toLocaleString('es-AR')} promos` : 'Top rubro'}
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-gray-900 group-hover:text-emerald-700 transition-colors">
+                  Supermercados
+                </h3>
+                <p className="text-xs font-bold text-gray-400 mt-0.5 mb-3">Coto, Carrefour, Jumbo, Disco, Vea y más</p>
+                <p className="text-sm text-gray-600 leading-relaxed mb-6">
+                  Simulá tu changuito mensual. Descubrí si tu reintegro se corta en el tope y cuál tarjeta te da el mejor ahorro neto.
+                </p>
+              </div>
+              <Link
+                href="/ahorro-interactivo/supermercados"
+                className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl transition-colors shadow-sm"
+              >
+                <span>Simular supermercados</span>
+                <span>→</span>
+              </Link>
+            </div>
+
+            {/* Combustible */}
+            <div className="group bg-white rounded-3xl p-6 border-2 border-slate-100 hover:border-amber-500/40 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                    ⛽
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-wider bg-amber-100/70 text-amber-800 px-2.5 py-1 rounded-full">
+                    {fuelCount > 0 ? `${fuelCount.toLocaleString('es-AR')} promos` : 'Nafta & Diésel'}
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-gray-900 group-hover:text-amber-700 transition-colors">
+                  Combustible
+                </h3>
+                <p className="text-xs font-bold text-gray-400 mt-0.5 mb-3">YPF, Shell, Axion, Puma y Gulf</p>
+                <p className="text-sm text-gray-600 leading-relaxed mb-6">
+                  Calculá la carga del tanque con topes de reintegro de MODO, Personal Pay, YPF App y bancos por día de la semana.
+                </p>
+              </div>
+              <Link
+                href="/ahorro-interactivo/combustible"
+                className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-black text-sm rounded-xl transition-colors shadow-sm"
+              >
+                <span>Simular combustible</span>
+                <span>→</span>
+              </Link>
+            </div>
+
+            {/* Farmacias */}
+            <div className="group bg-white rounded-3xl p-6 border-2 border-slate-100 hover:border-blue-500/40 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                    💊
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-wider bg-blue-100/70 text-blue-800 px-2.5 py-1 rounded-full">
+                    {pharmaCount > 0 ? `${pharmaCount.toLocaleString('es-AR')} promos` : 'Salud & Cuidado'}
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-gray-900 group-hover:text-blue-700 transition-colors">
+                  Farmacias y Perfumerías
+                </h3>
+                <p className="text-xs font-bold text-gray-400 mt-0.5 mb-3">Farmacity, Selma, Openfarma, GPS Farma</p>
+                <p className="text-sm text-gray-600 leading-relaxed mb-6">
+                  Compará descuentos en medicamentos y perfumería según días activos, tope mensual y forma de pago.
+                </p>
+              </div>
+              <Link
+                href="/ahorro-interactivo/farmacias"
+                className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm rounded-xl transition-colors shadow-sm"
+              >
+                <span>Simular farmacias</span>
+                <span>→</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Banner de acceso directo */}
+          <div className="mt-8 bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] rounded-2xl p-4 sm:p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-center sm:text-left">
+              <span className="text-3xl">🎯</span>
+              <div>
+                <p className="font-black text-base">¿Querés ver el comparador centralizado?</p>
+                <p className="text-xs text-blue-200">Podés saltar entre las 3 categorías con un solo clic en nuestro Hub interactivo.</p>
+              </div>
+            </div>
+            <Link
+              href="/ahorro-interactivo"
+              className="px-5 py-2.5 bg-white text-[#1E3A5F] hover:bg-blue-50 rounded-xl font-black text-sm transition-all shrink-0 shadow"
+            >
+              Ir al Hub de Ahorro →
+            </Link>
           </div>
         </div>
       </section>
@@ -523,7 +666,13 @@ export default async function LandingPage() {
           <div>
             <p className="font-bold text-sm uppercase tracking-widest text-blue-300 mb-3">App</p>
             <ul className="space-y-2 text-sm text-blue-200">
-              <li><Link href="/promos" className="hover:text-white transition-colors">Ver promos</Link></li>
+              <li><Link href="/promos/explorar" className="hover:text-white transition-colors">Ver promos</Link></li>
+              <li>
+                <Link href="/ahorro-interactivo" className="hover:text-white transition-colors flex items-center gap-1.5">
+                  <span>Comparadores de ahorro</span>
+                  <span className="text-[9px] bg-[#D94F2B] text-white font-black px-1.5 py-0.5 rounded-full">Nuevo</span>
+                </Link>
+              </li>
               <li><Link href="/finanzas" className="hover:text-white transition-colors">Tasas</Link></li>
               <li><Link href="/perfil" className="hover:text-white transition-colors">Mi perfil</Link></li>
             </ul>
@@ -539,7 +688,7 @@ export default async function LandingPage() {
             <p className="font-bold text-sm uppercase tracking-widest text-blue-300 mb-3">Legal</p>
             <ul className="space-y-2 text-sm text-blue-200">
               <li><Link href="/privacidad" className="hover:text-white transition-colors">Privacidad</Link></li>
-              <li><Link href="/terminos" className="hover:text-white transition-colors">Términos</Link></li>
+              <li><Link href="/terminos" className="hover:text-white transition-colors">Términos y Condiciones</Link></li>
             </ul>
           </div>
         </div>

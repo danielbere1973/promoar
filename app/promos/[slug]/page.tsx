@@ -1,11 +1,53 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
 import { schemaOffer } from '@/lib/schema'
+import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
+import { getPromoScope } from '@/lib/utils/promoScope'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
+
+export const revalidate = 3600
+
+const getCachedPromoBySlug = unstable_cache(
+  async (slug: string) => prisma.promo.findUnique({
+    where: { slug },
+    include: {
+      commerce: true,
+      category: true,
+      requirements: {
+        include: { bank: true, wallet: true, cardNetwork: true },
+        orderBy: { discountValue: 'desc' },
+      },
+    },
+  }),
+  ['promo-detail-by-slug'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+)
+
+const getCachedCommerceBranchesCount = unstable_cache(
+  async (commerceId: string) => prisma.commerceBranch.findMany({
+    where: { commerceId },
+    take: 1,
+  }),
+  ['promo-detail-commerce-branches'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+)
+
+// Slugs de promos borradas (expiradas y purgadas) son re-pedidos por bots una y
+// otra vez sin que cambien nunca — cachear el intento de redirect evita repetir
+// la query a Prisma en cada re-crawl del mismo slug muerto.
+const getCachedGuessedCommerceSlug = unstable_cache(
+  async (guessedSlug: string) => prisma.commerce.findFirst({
+    where: { slug: guessedSlug },
+    select: { slug: true },
+  }),
+  ['promo-detail-guessed-commerce'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: 3600 },
+)
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -84,14 +126,7 @@ const CARD_NETWORK_LOGOS: Record<string, string> = {
 // ─── Metadata dinámica ────────────────────────────────────────────────────────
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const promo = await prisma.promo.findUnique({
-    where: { slug: params.slug },
-    include: {
-      commerce: true,
-      category: true,
-      requirements: { include: { bank: true, wallet: true, cardNetwork: true }, orderBy: { discountValue: 'desc' } },
-    },
-  })
+  const promo = await getCachedPromoBySlug(params.slug)
   if (!promo) return { title: 'Promociones bancarias en Argentina | PromoAR' }
   const bestReq = promo.requirements[0]
   const discount = bestReq ? discountLabel(bestReq) : ''
@@ -99,9 +134,17 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const networkNames = [...new Set(promo.requirements.flatMap(r => r.cardNetwork ? [r.cardNetwork.name] : []))]
   const title = `${discount} en ${promo.commerce.name}${bankWallet ? ` con ${bankWallet}` : ''}`
   const description = buildSeoDescription(promo, discount, bankWallet, networkNames)
+
+  // Post mortem (0-7 días vencida): noindex para que Google la retire del índice
+  // antes de que el día 8 pase a 404 real (ver PromoDetailPage)
+  const validUntilDate = promo.validUntil ? new Date(promo.validUntil) : null
+  const isExpiredNow = promo.status === 'EXPIRED' || (validUntilDate != null && validUntilDate < new Date())
+  const robots = isExpiredNow ? { index: false, follow: true } : undefined
+
   return {
     title,
     description,
+    robots,
     openGraph: {
       title,
       description,
@@ -128,87 +171,28 @@ export async function generateStaticParams() {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function PromoDetailPage({ params }: { params: { slug: string } }) {
-  const promo = await prisma.promo.findUnique({
-    where: { slug: params.slug },
-    include: {
-      commerce: true,
-      category: true,
-      requirements: {
-        include: { bank: true, wallet: true, cardNetwork: true },
-        orderBy: { discountValue: 'desc' },
-      },
-    },
-  })
+  const cachedPromo = await getCachedPromoBySlug(params.slug)
+  // unstable_cache serializa el resultado como JSON: Date vuelve como string, hay que recomponerlo
+  const promo = cachedPromo && {
+    ...cachedPromo,
+    validFrom: cachedPromo.validFrom ? new Date(cachedPromo.validFrom) : cachedPromo.validFrom,
+    validUntil: cachedPromo.validUntil ? new Date(cachedPromo.validUntil) : cachedPromo.validUntil,
+  }
 
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
 
-  // Promo borrada de la DB (expirada y purgada por el scraper) → intentar
-  // reconocer el comercio por el prefijo del slug y mostrar sus promos vigentes;
-  // si no matchea ningún comercio, 404 propio con categorías destacadas.
+  // Promo borrada de la DB (expirada y purgada por el scraper) → redirect 301
+  // al comercio si se puede reconocer por el prefijo del slug, para que Google
+  // actualice el índice y deje de re-pedir esta URL muerta en cada crawl
+  // (evita 2 queries extra a Prisma en cada hit repetido de bots a URLs viejas).
   if (!promo) {
     const guessedSlug = params.slug.split('-')[0]
     const guessedCommerce = guessedSlug
-      ? await prisma.commerce.findFirst({ where: { slug: guessedSlug } })
+      ? await getCachedGuessedCommerceSlug(guessedSlug)
       : null
 
     if (guessedCommerce) {
-      const vigentes = await prisma.promo.findMany({
-        where: { commerceId: guessedCommerce.id, status: 'ACTIVE', slug: { not: null } },
-        include: { requirements: { include: { bank: true, wallet: true }, take: 1, orderBy: { discountValue: 'desc' } } },
-        orderBy: { requirements: { _count: 'desc' } },
-        take: 6,
-      })
-
-      if (vigentes.length > 0) {
-        return (
-          <div className="min-h-screen bg-gray-50 pb-24">
-            <BackButton label={guessedCommerce.name} />
-            <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
-              <div className="bg-gray-100 border border-gray-200 rounded-3xl px-6 py-8 text-center space-y-2">
-                <p className="text-4xl">⏰</p>
-                <p className="text-lg font-black text-gray-700">Esta promo ya no está disponible</p>
-                <p className="text-sm text-gray-500">
-                  Pero <span className="font-semibold">{guessedCommerce.name}</span> tiene otras promos vigentes.
-                </p>
-              </div>
-              <div className="space-y-3">
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">
-                  Promos vigentes en {guessedCommerce.name}
-                </p>
-                {vigentes.map(v => {
-                  const req = v.requirements[0]
-                  const label = req ? discountLabel(req) : ''
-                  const entity = req?.bank?.name ?? req?.wallet?.name ?? ''
-                  return (
-                    <a
-                      key={v.id}
-                      href={`/promos/${v.slug}`}
-                      className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
-                    >
-                      <div>
-                        <p className="text-base font-black text-gray-800">{label}</p>
-                        {entity && <p className="text-xs text-gray-400 mt-0.5">con {entity}</p>}
-                      </div>
-                      <span className="text-indigo-500 font-black text-sm shrink-0 ml-3">→</span>
-                    </a>
-                  )
-                })}
-              </div>
-              <a
-                href="/promos"
-                className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg"
-              >
-                <div>
-                  <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Querés ver tus promos?</p>
-                  <p className="text-sm font-black">Ver todas las promos →</p>
-                </div>
-                <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
-              </a>
-            </div>
-            <BottomNav />
-          </div>
-        )
-      }
+      redirect(`/comercios/${guessedCommerce.slug}`)
     }
 
     notFound()
@@ -216,14 +200,19 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
   const isExpired = promo.status === 'EXPIRED' || (promo.validUntil != null && promo.validUntil < startOfToday)
 
-  // Promo vencida — página 200 con promos vigentes del mismo comercio
+  // Post mortem: día 0-7 vencida → 200 + noindex (ver generateMetadata). Día 8+ →
+  // 404 real, sin servir la página ni conservar la URL indexable. La fila de Promo
+  // (y PromoUsageEvent/PromoUsage/SavedPromo/PromoReport que dependen de ella) no
+  // se borra nunca — esto es puramente el estado público/SEO de la URL.
+  if (isExpired && promo.validUntil != null) {
+    const daysSinceExpiry = (startOfToday.getTime() - promo.validUntil.getTime()) / 86_400_000
+    if (daysSinceExpiry > 7) {
+      notFound()
+    }
+  }
+
+  // Promo vencida — página 200 con link a promos vigentes del mismo comercio (sin query extra a Prisma)
   if (isExpired) {
-    const vigentes = await prisma.promo.findMany({
-      where: { commerceId: promo.commerce.id, status: 'ACTIVE', slug: { not: null } },
-      include: { requirements: { include: { bank: true, wallet: true }, take: 1, orderBy: { discountValue: 'desc' } } },
-      orderBy: { requirements: { _count: 'desc' } },
-      take: 6,
-    })
     const firstReq = promo.requirements[0]
     const entityName = firstReq?.bank?.name ?? firstReq?.wallet?.name ?? null
     const entitySlug = firstReq?.bank?.slug ?? firstReq?.wallet?.slug ?? null
@@ -256,31 +245,17 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
             </a>
           )}
 
-          {/* Promos vigentes del mismo comercio */}
-          {vigentes.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">
-                Promos vigentes en {promo.commerce.name}
-              </p>
-              {vigentes.map(v => {
-                const req = v.requirements[0]
-                const label = req ? discountLabel(req) : ''
-                const entity = req?.bank?.name ?? req?.wallet?.name ?? ''
-                return (
-                  <a
-                    key={v.id}
-                    href={`/promos/${v.slug}`}
-                    className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
-                  >
-                    <div>
-                      <p className="text-base font-black text-gray-800">{label}</p>
-                      {entity && <p className="text-xs text-gray-400 mt-0.5">con {entity}</p>}
-                    </div>
-                    <span className="text-indigo-500 font-black text-sm shrink-0 ml-3">→</span>
-                  </a>
-                )
-              })}
-            </div>
+          {/* Link a promos vigentes del mismo comercio (sin query extra a Prisma) */}
+          {promo.commerce.slug && (
+            <a
+              href={`/comercios/${promo.commerce.slug}`}
+              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
+            >
+              <div>
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
+                <p className="text-sm font-black text-gray-800">en {promo.commerce.name} →</p>
+              </div>
+            </a>
           )}
 
           {/* CTA general */}
@@ -300,10 +275,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
     )
   }
 
-  const branches = await prisma.commerceBranch.findMany({
-    where: { commerceId: promo.commerce.id },
-    take: 1,
-  })
+  const branches = await getCachedCommerceBranchesCount(promo.commerce.id)
 
   const specificDates: string[] = promo.specificDates ? JSON.parse(promo.specificDates) : []
   const reqs = promo.requirements
@@ -345,6 +317,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   const minReq = reqs.find(r => r.minPurchase)
 
   const bestDiscount = discounts[0]
+  const scope = getPromoScope(promo)
 
   const jsonLd = schemaOffer({
     name: `${discountLabel(bestDiscount)} en ${promo.commerce.name}`,
@@ -368,7 +341,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
         {/* ── HERO ── */}
         <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl overflow-hidden shadow-lg relative">
-          {promo.salesChannel && (
+          {(promo.salesChannel === 'ONLINE' || promo.salesChannel === 'PHYSICAL') && (
             <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-br-xl">
               {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
             </div>
@@ -418,8 +391,34 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
           )}
         </p>
 
-        {/* ── NOTA / CONDICIÓN ESPECIAL ── */}
-        {promo.commerceNote && (
+        {/* ── CTA temprano (arriba del fold, antes de vigencia/legales) ── */}
+        <a
+          href="/promos"
+          className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-2xl px-5 py-3.5 shadow-md hover:shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <p className="text-sm font-black">Ver más promos como esta →</p>
+          <div className="w-8 h-8 rounded-xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-sm">
+            🎯
+          </div>
+        </a>
+
+        {/* ── ALERTA DE ALCANCE / CONDICIÓN RESTRINGIDA ── */}
+        {scope && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/40 rounded-2xl px-4 py-3.5 text-amber-900 dark:text-amber-200 shadow-sm">
+            <span className="text-xl shrink-0 mt-0.5">{scope.badgeIcon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold tracking-tight uppercase text-amber-800 dark:text-amber-300">
+                {scope.badgeText}
+              </p>
+              <p className="text-xs opacity-90 leading-relaxed mt-0.5">
+                {scope.fullWarning}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── NOTA / CONDICIÓN ESPECIAL ADICIONAL ── */}
+        {promo.commerceNote && (!scope || !scope.fullWarning.toLowerCase().includes(promo.commerceNote.toLowerCase())) && (
           <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
             <span className="text-base shrink-0">⚠️</span>
             <p className="text-xs text-amber-800 leading-relaxed">{promo.commerceNote}</p>
@@ -627,7 +626,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
 
           {promo.sourceUrl && (
             <a
-              href={promo.sourceUrl}
+              href={`/api/r?url=${encodeURIComponent(promo.sourceUrl)}&promo=${promo.id}&src=promo_slug_page`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 font-semibold"

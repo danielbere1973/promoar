@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
+import { getAuthToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (!url) return NextResponse.json({ error: 'Missing url' }, { status: 400 })
 
   // Registrar click de forma async (no bloquear el redirect)
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  const token = await getAuthToken(req)
   prisma.promoClick.create({
     data: {
       promoId: promoId ?? null,

@@ -34,6 +34,25 @@ function parseDias(diasPromo: string | null): number {
   return mask > 0 ? mask : 127;
 }
 
+// La API de BBVA no siempre completa `diasPromo` (queda vacío incluso cuando la
+// promo sí está restringida a días puntuales) — el dato real vive únicamente en
+// el texto de bases y condiciones (ej. "Disfrutá los martes y jueves de 20% de
+// reintegro..."). Cuando parseDias cae al default de 127 (todos los días),
+// intentamos extraer los días explícitos de ese texto antes de aceptar 127.
+const DAY_NAMES: [string, number][] = [
+  ['domingo', 0], ['lunes', 1], ['martes', 2], ['miércoles', 3], ['miercoles', 3],
+  ['jueves', 4], ['viernes', 5], ['sábado', 6], ['sabado', 6],
+];
+
+function parseDiasFromText(text: string): number | null {
+  const lower = text.toLowerCase();
+  let mask = 0;
+  for (const [name, bit] of DAY_NAMES) {
+    if (new RegExp(`\\b${name}\\b`).test(lower)) mask |= 1 << bit;
+  }
+  return mask > 0 ? mask : null;
+}
+
 function extractStoreName(cabecera: string): string {
   const norm = cabecera.trim();
   const enMatch = norm.match(/\ben\s+(.+?)(?:\s*\.|$)/i);
@@ -59,8 +78,13 @@ function extractDiscount(text: string): { value: number; type: string } | null {
 }
 
 function extractInstallments(text: string): number | null {
+  // BBVA no siempre incluye "sin interés" en la cabecera (ej. "Dexter 9 cuotas") —
+  // en el contexto de beneficios/comunicaciones de BBVA, "N cuotas" a secas ya
+  // implica CSI (si tuviera interés lo diría explícito, ej. "con interés").
+  if (/cuotas?\s+con\s+inter[eé]s/i.test(text)) return null;
   const m = text.match(/(\d+)\s+cuotas?\s+sin\s+inter[eé]s/i)
-    ?? text.match(/hasta\s+(\d+)\s+cuotas?/i);
+    ?? text.match(/hasta\s+(\d+)\s+cuotas?/i)
+    ?? text.match(/(\d+)\s+cuotas?\b/i);
   return m ? parseInt(m[1]) : null;
 }
 
@@ -81,7 +105,6 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
   const installments = extractInstallments(fullText);
   if (!discount && !installments) return [];
 
-  const validDays  = parseDias(item.diasPromo);
   const validFrom  = item.fechaDesde ?? undefined;
   const validUntil = item.fechaHasta ?? undefined;
   const cap        = item.montoTope ? parseFloat(String(item.montoTope).replace(/\./g, '')) : null;
@@ -100,7 +123,12 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
   const requisitosText = decodeHtmlEntities((detail?.requisitos ?? []).join(' '));
   const basesCondiciones = decodeHtmlEntities(detail?.basesCondiciones ?? '').replace(/<[^>]+>/g, ' ').trim();
 
-  const allText = `${fullText} ${item.descripcion ?? ''} ${requisitosText} ${basesCondiciones}`.toUpperCase();
+  const rawAllText = `${fullText} ${item.descripcion ?? ''} ${requisitosText} ${basesCondiciones}`;
+  const allText = rawAllText.toUpperCase();
+
+  const validDays = parseDias(item.diasPromo) === 127
+    ? parseDiasFromText(rawAllText) ?? 127
+    : parseDias(item.diasPromo);
   const paymentChannel: ScrapedPromo['paymentChannel'] =
     /\bQR\b|CODIGO\s+QR/.test(allText)        ? 'QR'  :
     /\bNFC\b|CONTACTLESS|SIN\s+CONTACTO/.test(allText) ? 'NFC' :
@@ -109,9 +137,22 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
 
   const description = fullText.slice(0, 500);
   const legalText = basesCondiciones || [item.descripcion, item.legales, item.leyendaLegal, item.textoLegal, item.terminosCondiciones].filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').trim();
+
+  let commerceNote: string | undefined;
+  if (/cabify/i.test(storeName) || /\bezeiza\b/i.test(rawAllText)) {
+    if (/\bezeiza\b/i.test(rawAllText)) {
+      commerceNote = 'Solo viajes hacia/desde Ezeiza';
+    }
+    const codeMatch = rawAllText.match(/c[oó]digo\s+([A-Z0-9]{4,12})/i);
+    if (codeMatch) {
+      commerceNote = commerceNote ? `${commerceNote} (${codeMatch[1].toUpperCase()})` : `Código: ${codeMatch[1].toUpperCase()}`;
+    }
+  }
+
   const base: Partial<ScrapedPromo> = {
     storeName, description, sourceText: legalText || description, sourceUrl: PAGE_URL,
     validFrom, validUntil, validDays, cap,
+    commerceNote, note: commerceNote,
     bankNames: [BANK_NAME], cardNetworks, categoria,
     paymentChannel, walletNames,
     storeLogoUrl: item.imagen || undefined,
@@ -176,7 +217,8 @@ export const BBVAScraper: Scraper = {
     // 2. Por cada rubro, paginar con los parámetros correctos: rubros= y pager=
     for (const rubro of rubros) {
       const { idRubro, nombre } = rubro;
-      let pager = 1;
+      // La API pagina desde 0 (pager=0 es la primera página real), no desde 1.
+      let pager = 0;
       let rubroCount = 0;
 
       while (true) {
@@ -196,8 +238,10 @@ export const BBVAScraper: Scraper = {
           rubroCount++;
         }
 
+        // "paginas: N" cuenta páginas de 1 origen (N páginas), pero pager es 0-origen,
+        // así que la última página válida es pager === totalPages - 1.
         const totalPages = parseInt(String(data.message ?? '').match(/paginas:\s*(\d+)/i)?.[1] ?? '1');
-        if (pager >= totalPages || data.data.length < 20) break;
+        if (pager >= totalPages - 1 || data.data.length < 20) break;
         pager++;
       }
 

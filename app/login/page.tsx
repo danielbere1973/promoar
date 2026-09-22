@@ -4,6 +4,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { Lock, Mail, Eye, EyeOff, ShieldCheck, Zap } from 'lucide-react'
+import { migrateGuestProfile } from '@/lib/migrateGuestProfile'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
@@ -63,6 +64,7 @@ function LoginForm() {
       setError('Credenciales incorrectas. Verificá tu correo y contraseña.')
       setLoading(false)
     } else {
+      await migrateGuestProfile()
       router.push('/promos')
       router.refresh()
     }

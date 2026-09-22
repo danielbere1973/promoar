@@ -3,6 +3,7 @@ import { Suspense } from 'react'
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
+import { migrateGuestProfile } from '@/lib/migrateGuestProfile'
 
 function VerificarContent() {
   const [code, setCode] = useState('')
@@ -54,6 +55,7 @@ function VerificarContent() {
       })
 
       if (result?.ok) {
+        await migrateGuestProfile()
         router.push('/')
       } else {
         setError('Error al iniciar sesión. Ingresá manualmente.')

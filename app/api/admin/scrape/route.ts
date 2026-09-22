@@ -4,7 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ALL_SCRAPERS } from '@/lib/scrapers';
 import { generatePromoSlug } from '@/lib/utils/promoSlug';
-import { detectCategoria, detectSalesChannel } from '@/lib/scrapers/bank-helpers';
+import { detectCategoria, detectSalesChannel, normalizeSalesChannel } from '@/lib/scrapers/bank-helpers';
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache';
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache';
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache';
 
 function normalizeStr(s: string): string {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -26,7 +29,12 @@ const CENCOSUD_GENERIC_NAMES = new Set([
 
 // Palabras gen\u00e9ricas que pueden preceder el nombre de un comercio sin ser parte de su identidad
 // (ej. "Supermercados Disco" \u2192 comercio "Disco"; pero "Morena Disco" \u2192 comercio distinto)
-const GENERIC_PREFIXES = new Set(['super', 'supermercado', 'supermercados', 'hipermercado', 'hipermercados', 'farmacia', 'farmacias', 'tienda', 'tiendas', 'mercado', 'mercados', 'local', 'locales'])
+// 'farmacia'/'farmacias' se sacó de esta lista el 22/7/2026: "FARMACIA MITRE" (comercio
+// real distinto) matcheaba al supermercado "MITRE" porque "farmacia" se trataba como
+// prefijo genérico intercambiable con "tienda"/"mercado". A diferencia de esos prefijos
+// (que describen el tipo de local sin aportar identidad), "farmacia" antepuesto a un
+// nombre propio forma parte de la identidad del comercio (rubro salud, no supermercado).
+const GENERIC_PREFIXES = new Set(['super', 'supermercado', 'supermercados', 'hipermercado', 'hipermercados', 'tienda', 'tiendas', 'mercado', 'mercados', 'local', 'locales'])
 
 function hasOnlyGenericPrefix(fullNorm: string, commerceNorm: string): boolean {
   const idx = fullNorm.indexOf(commerceNorm)
@@ -99,7 +107,7 @@ function promoFingerprint(data: any, reqs: any[]): string {
   const sortedReqs = [...new Set([...reqs]
     .map(r => [r.bankId ?? '', r.walletId ?? '', r.cardNetworkId ?? '',
                r.discountType, r.discountValue, r.paymentChannel ?? '', r.cardType ?? '',
-               r.cap ?? '', r.capPeriod ?? '', r.minPurchase ?? ''].join('|'))
+               r.cap ?? '', r.capPeriod ?? '', r.minPurchase ?? '', r.note ?? ''].join('|'))
   )].sort()
   const validUntilMs = data.validUntil instanceof Date ? data.validUntil.getTime() : (data.validUntil ? new Date(data.validUntil).getTime() : 0)
   const validUntilWeek = validUntilMs ? String(Math.floor(validUntilMs / (7 * 24 * 3600 * 1000))) : ''
@@ -109,11 +117,22 @@ function promoFingerprint(data: any, reqs: any[]): string {
     String(data.maxDiscountPct ?? ''),
     String(data.isCSIOnly ?? ''),
     String(data.salesChannel ?? ''),
+    String(data.categoryId ?? ''),
+    String(data.commerceNote ?? ''),
+    String(data.validFromHour ?? ''),
+    String(data.validToHour ?? ''),
     sortedReqs.join(';'),
   ].join('||')
 }
 
 export async function POST(req: NextRequest) {
+  // Registro centralizado en ScraperRun — antes solo /api/admin/run-scraper lo hacía,
+  // dejando ciego el historial cuando se corría desde "Ejecutar todos (local)" o
+  // selección local del admin, que llaman directo a este endpoint (bug reportado por
+  // Pablo 4/9/2026: corrió scrapers 31/7 y 1/9 y no quedó ningún rastro en ScraperRun).
+  // Se crea acá, con scraperId real, sin importar qué UI lo disparó.
+  let runId: string | null = null;
+  let scraperFilterForLog: string | undefined;
   try {
     let scraperFilter: string | undefined;
     let categoriaFilter: string | undefined;
@@ -126,6 +145,18 @@ export async function POST(req: NextRequest) {
       preScrapedPromos = body.promos; // promos pre-scrapeadas desde GitHub Actions
       forceLocal = !!body.forceLocal; // solapa "Local" del admin — saltea guard Playwright
     } catch { /* body vacío */ }
+
+    scraperFilterForLog = scraperFilter;
+    if (scraperFilter) {
+      const run = await prisma.scraperRun.create({
+        data: {
+          scraperId: scraperFilter.toLowerCase(),
+          status: 'running',
+          trigger: preScrapedPromos?.length ? 'gh_actions' : (forceLocal ? 'local' : 'http'),
+        },
+      });
+      runId = run.id;
+    }
 
     // Scrapers que requieren Playwright — no pueden correr en Vercel (Chromium no disponible)
     const PLAYWRIGHT_SCRAPER_NAMES = new Set([
@@ -230,7 +261,7 @@ export async function POST(req: NextRequest) {
     const branchesByCommerce = new Map<string, Array<{ lat: number; lng: number }>>();
 
     // ── FASE 1: Resolver entidades + crear comercios (secuencial) ─────────────
-    type ResolvedItem = { promoData: any; reqData: any[]; baseSlug: string; sourceUrl?: string | null; title: string; commerceId: string };
+    type ResolvedItem = { promoData: any; reqData: any[]; baseSlug: string; sourceUrl?: string | null; source?: string | null; externalId?: string | null; title: string; commerceId: string };
     const resolvedItems: ResolvedItem[] = [];
 
     for (const [, group] of Array.from(grouped.entries())) {
@@ -243,25 +274,29 @@ export async function POST(req: NextRequest) {
       if (!hasDiscount) continue;
 
       // ── Categoría ─────────────────────────────────────────────────────────
-      // 1. defaultCategoryId del comercio (curado manualmente) — pisa lo que diga el scraper
-      let catMatch: typeof categories[number] | undefined;
-      if (p.storeName) {
-        const knownCom = (commerces as any[]).find((c: any) => normalizeStr(c.name) === normalizeStr(p.storeName ?? ''));
-        if (knownCom?.defaultCategoryId) {
-          catMatch = categories.find(c => c.id === knownCom.defaultCategoryId) ?? undefined;
-        }
-      }
-      // 2. Categoría del scraper
-      if (!catMatch) {
-        catMatch = categories.find(c =>
-          normalizeStr(c.name) === normalizeStr(p.categoria ?? '')
-        );
-      }
-      // 3. detectCategoria como fallback
+      // Precedencia (RFC Club La Nación multi-beneficio, 12/8/2026): la señal de
+      // contenido (beneficio/scraper) pesa más que la curación por comercio,
+      // porque un mismo comercio puede tener beneficios de distinto rubro
+      // (ej. YPF: combustible vs. lubricante vs. tienda). defaultCategoryId
+      // queda como fallback, no como override — antes corría primero y forzaba
+      // TODOS los beneficios de un comercio a su categoría curada.
+      // 1. Categoría del scraper (ya puede incluir su propia cascada interna
+      //    beneficio-scoped > taxonomía de origen > nombre de comercio, ver clublanacion.ts)
+      let catMatch: typeof categories[number] | undefined = categories.find(c =>
+        normalizeStr(c.name) === normalizeStr(p.categoria ?? '')
+      );
+      // 2. detectCategoria sobre comercio+título como fallback genérico
       if (!catMatch) {
         const detected = detectCategoria(`${p.storeName ?? ''} ${p.title ?? ''}`);
         if (detected) {
           catMatch = categories.find(c => normalizeStr(c.name) === normalizeStr(detected));
+        }
+      }
+      // 3. defaultCategoryId del comercio (curado manualmente) — último fallback antes de Sin Categoría
+      if (!catMatch && p.storeName) {
+        const knownCom = (commerces as any[]).find((c: any) => normalizeStr(c.name) === normalizeStr(p.storeName ?? ''));
+        if (knownCom?.defaultCategoryId) {
+          catMatch = categories.find(c => c.id === knownCom.defaultCategoryId) ?? undefined;
         }
       }
       if (!catMatch) {
@@ -580,23 +615,38 @@ export async function POST(req: NextRequest) {
         const promoData = {
           title: p.title,
           description: p.description || '',
-          stackable: p.stackable ?? false,
-          validFrom: p.validFrom ? new Date(p.validFrom) : new Date(),
-          validUntil: p.validUntil ? new Date(p.validUntil) : endOfMonth,
+          // p.stackable=null significa "el scraper no encontró ninguna mención de
+          // acumulable/no acumulable" (no significa "no acumulable"). Se deja undefined
+          // para que en un update Prisma no toque el campo (conserva el valor existente,
+          // por si fue corregido a mano), y solo en un create aplica el default false
+          // — igual que antes, pero sin pisar datos ya buenos en cada re-scrape.
+          stackable: p.stackable ?? undefined,
+          validFrom: (() => {
+            const d = p.validFrom ? new Date(p.validFrom) : new Date()
+            return isNaN(d.getTime()) ? new Date() : d
+          })(),
+          validUntil: (() => {
+            const d = p.validUntil ? new Date(p.validUntil) : endOfMonth
+            return isNaN(d.getTime()) ? endOfMonth : d
+          })(),
           validDays: p.validDays ?? 127,
           specificDates: p.specificDates ? JSON.stringify(p.specificDates) : null,
-          categoryId: target.defaultCategoryId ?? catMatch.id,
+          categoryId: catMatch.id,
           commerceId: target.id,
           status: 'ACTIVE' as const,
           sourceUrl: p.sourceUrl ?? null,
+          source: p.source ?? null,
+          externalId: p.externalId ?? null,
           sourceText: p.sourceText ?? null,
-          salesChannel: salesChannel ?? null,
-          commerceNote: p.note ?? null,
+          salesChannel: normalizeSalesChannel(salesChannel),
+          commerceNote: p.commerceNote ?? p.note ?? null,
+          validFromHour: p.validFromHour ?? null,
+          validToHour: p.validToHour ?? null,
           maxDiscountPct,
           isCSIOnly,
         };
 
-        resolvedItems.push({ promoData, reqData, baseSlug, sourceUrl: p.sourceUrl, title: p.title, commerceId: target.id });
+        resolvedItems.push({ promoData, reqData, baseSlug, sourceUrl: p.sourceUrl, source: p.source, externalId: p.externalId, title: p.title, commerceId: target.id });
       }
     }
 
@@ -609,9 +659,9 @@ export async function POST(req: NextRequest) {
         commerceId: { in: involvedCommerceIds }
       },
       select: {
-        id: true, title: true, commerceId: true, sourceUrl: true, slug: true, status: true,
+        id: true, title: true, commerceId: true, sourceUrl: true, source: true, externalId: true, slug: true, status: true,
         validFrom: true, validUntil: true, validDays: true, maxDiscountPct: true, isCSIOnly: true,
-        salesChannel: true,
+        salesChannel: true, categoryId: true, commerceNote: true, validFromHour: true, validToHour: true,
         requirements: {
           select: {
             bankId: true, walletId: true, cardNetworkId: true, cardSegmentId: true,
@@ -627,6 +677,12 @@ export async function POST(req: NextRequest) {
       !!url && (url.includes('#') || /\/detalle\/\d+/.test(url));
     const byUrl = new Map(existingPromos.filter(p => isUniqueUrl(p.sourceUrl)).map(p => [p.sourceUrl!, p]));
     const byKey = new Map(existingPromos.map(p => [`${p.title}|${p.commerceId}`, p]));
+    // Identidad externa (source+externalId): clave primaria de matching cuando el scraper
+    // la provee (ej. Club La Nación, benefit-card id). Necesario para páginas multi-beneficio
+    // donde varias promos comparten el mismo sourceUrl y no pueden distinguirse por URL sola.
+    const byExternalId = new Map(
+      existingPromos.filter(p => p.source && p.externalId).map(p => [`${p.source}|${p.externalId}`, p])
+    );
     const existingSlugs = new Set((await prisma.promo.findMany({ select: { slug: true } })).map(p => p.slug).filter(Boolean));
 
     // Deduplicar resolvedItems: si el mismo (commerceId, título normalizado) aparece
@@ -644,16 +700,20 @@ export async function POST(req: NextRequest) {
 
     // ── FASE 3: Guardar en batches paralelos de 10 ────────────────────────────
     const newPromoIds: string[] = []
+    const updatedPromoIds: string[] = []
 
     const savePromo = async (item: ResolvedItem) => {
-      const { promoData, reqData, baseSlug, sourceUrl, title, commerceId } = item;
+      const { promoData, reqData, baseSlug, sourceUrl, source, externalId, title, commerceId } = item;
+      // Precedencia de matching: identidad externa (source+externalId) > sourceUrl única > title+commerceId.
+      // source+externalId es la más confiable (sobrevive cambios de título/descuento entre reruns),
+      // necesaria para páginas multi-beneficio (ej. Club La Nación) donde varias promos comparten sourceUrl.
+      const byExternalIdMatch = (source && externalId) ? byExternalId.get(`${source}|${externalId}`) : undefined;
       // byUrl puede mapear a una promo con distinto título si el scraper genera
       // múltiples promos del mismo item (misma URL, distinto discountType).
       // En ese caso ignorar byUrl y caer en byKey.
       const byUrlMatch = isUniqueUrl(sourceUrl) ? byUrl.get(sourceUrl!) : undefined;
-      const existing = (byUrlMatch && byUrlMatch.title === title)
-        ? byUrlMatch
-        : byKey.get(`${title}|${commerceId}`);
+      const existing = byExternalIdMatch
+        ?? ((byUrlMatch && byUrlMatch.title === title) ? byUrlMatch : byKey.get(`${title}|${commerceId}`));
 
       if (existing) {
         // Comparar fingerprint — si nada cambió, skip total (0 queries)
@@ -673,7 +733,13 @@ export async function POST(req: NextRequest) {
           await prisma.promoRequirement.deleteMany({ where: { promoId: existing.id } });
           let slug = baseSlug;
           if (existingSlugs.has(slug) && existing.slug !== slug) slug = `${baseSlug}-${existing.id.slice(-4)}`;
-          await prisma.promo.update({ where: { id: existing.id }, data: { ...promoData, slug, status: existing.status, requirements: { create: reqData } } });
+          // Si el scraper trae un validUntil nuevo y vigente para una promo que había quedado
+          // EXPIRED (venció y el sitio la volvió a publicar con fecha renovada), reactivarla.
+          const newValidUntil = promoData.validUntil instanceof Date ? promoData.validUntil : (promoData.validUntil ? new Date(promoData.validUntil) : null)
+          const renewedAndValid = existing.status === 'EXPIRED' && (!newValidUntil || newValidUntil >= new Date())
+          const nextStatus = renewedAndValid ? 'ACTIVE' : existing.status;
+          await prisma.promo.update({ where: { id: existing.id }, data: { ...promoData, slug, status: nextStatus, requirements: { create: reqData } } });
+          updatedPromoIds.push(existing.id);
         } catch (e: any) {
           if (e?.code === 'P2002') {
             // Slug duplicado al actualizar — skipear, ya existe una promo con ese slug
@@ -684,7 +750,7 @@ export async function POST(req: NextRequest) {
         if (existingSlugs.has(slug)) slug = `${baseSlug}-${Date.now().toString(36)}`;
         existingSlugs.add(slug);
         try {
-          const created = await prisma.promo.create({ data: { ...promoData, slug, status: 'DRAFT', requirements: { create: reqData } } });
+          const created = await prisma.promo.create({ data: { ...promoData, stackable: promoData.stackable ?? false, slug, status: 'DRAFT', requirements: { create: reqData } } });
           newPromoIds.push(created.id);
           changedCommerceIds.add(commerceId);
         } catch (e: any) {
@@ -713,6 +779,21 @@ export async function POST(req: NextRequest) {
       }))
     }
 
+    if (processedCount > 0) { await invalidatePublicPromosCache(); invalidateCategoriesCache(); invalidatePromoDetailCache(); invalidateCommerceDetailCache() }
+
+    // Invalidación incremental del Financial Match Index para las promos
+    // tocadas en este run (fire-and-forget, no bloquea la respuesta del scraper).
+    // Ver lib/financialMatchIndex.ts.
+    const touchedPromoIds = [...newPromoIds, ...updatedPromoIds]
+    if (touchedPromoIds.length > 0) {
+      import('@/lib/financialMatchIndex')
+        .then(({ invalidateForPromoIds }) => invalidateForPromoIds(touchedPromoIds))
+        .then(({ profilesRecalculated, rows }) => {
+          console.log(`[FinancialMatchIndex] Invalidación incremental: ${profilesRecalculated} perfiles recalculados, ${rows} filas`)
+        })
+        .catch((e) => console.error('[FinancialMatchIndex] Error en invalidación incremental:', e))
+    }
+
     // Disparar notificaciones push para las promos nuevas (fire-and-forget)
     if (newPromoIds.length > 0) {
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
@@ -724,6 +805,32 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({ promoIds: newPromoIds }),
       }).catch((e) => console.error('[push/notify] Error:', e))
+    }
+
+    // Trigger post-scraping del batch warm de HomeDecisionSnapshot (Prioridad 2,
+    // Parte A — cpo-a-cto-dictamen-arquitectura-snapshot-async-25-8-2026.md):
+    // si hubo promos nuevas/actualizadas, promoPoolVersion cambió para todos los
+    // usuarios con perfil, invalidando sus snapshots. Fire-and-forget para que la
+    // DB "amanezca" con los snapshots recalculados antes del próximo login.
+    if (processedCount > 0) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+      fetch(`${baseUrl}/api/admin/snapshots/warm`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.VTEX_SESSION_SECRET}` },
+      }).catch((e) => console.error('[snapshots/warm] Error:', e))
+    }
+
+    if (runId) {
+      await prisma.scraperRun.update({
+        where: { id: runId },
+        data: {
+          status: 'success',
+          finishedAt: new Date(),
+          found: flatPromos.length,
+          processed: processedCount,
+          skipped: skippedUnchanged,
+        },
+      }).catch((e) => console.error('[ScraperRun] Error actualizando a success:', e));
     }
 
     return NextResponse.json({
@@ -744,6 +851,12 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Error scrapeando:', error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    if (runId) {
+      await prisma.scraperRun.update({
+        where: { id: runId },
+        data: { status: 'error', finishedAt: new Date(), message: String(error).slice(0, 500) },
+      }).catch((e) => console.error('[ScraperRun] Error actualizando a error:', e));
+    }
+    return NextResponse.json({ error: String(error), scraperId: scraperFilterForLog }, { status: 500 });
   }
 }

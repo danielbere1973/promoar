@@ -52,6 +52,14 @@ export async function GET(request: Request) {
         'Supervielle': 'supervielle.com.ar',
         'Vea': 'vea.com.ar',
         'VISA': 'visa.com.ar',
+        'Petersen': 'bancosanjuan.com',
+        'Bancor': 'bancor.com.ar',
+        'Hipotecario': 'hipotecario.com.ar',
+        'Comafi': 'tevabien.com',
+        'Corrientes': 'promosdelbanco.com',
+        'Chubut': 'bancochubut.com.ar',
+        'Chaco': 'nbch.com.ar',
+        'Sol': 'bancodelsol.com',
       };
       const domains = scrapers.map(s => scraperDomains[s]).filter(Boolean);
       if (domains.length > 0) {
@@ -147,23 +155,30 @@ export async function GET(request: Request) {
     }).sort((a, b) => b.count - a.count);
 
     // 3. Por Banco
-    const bankFilterForReq: any = { bankId: { not: null } };
-    if (realBankIds.length > 0) bankFilterForReq.bankId = { in: realBankIds };
+    // Nota: se evita `bankId: { not: null } }` — con ~39k promos y >100k requirements,
+    // Prisma/pgbouncer necesita partir la query en varias, pero no puede hacerlo cuando
+    // hay filtros de negación (P2029 "Query parameter limit exceeded"). Se reemplaza por
+    // `bankId: { in: <ids reales> }`, equivalente pero positivo, y se seleccionan solo
+    // los campos necesarios de PromoRequirement en vez de promos completas.
+    const banks = await prisma.bank.findMany();
+    const allBankIds = banks.map(b => b.id);
+    const bankFilterForReq: any = { bankId: { in: realBankIds.length > 0 ? realBankIds : allBankIds } };
 
-    const promosConBanco = await prisma.promo.findMany({
-      where: { ...promoWhere, requirements: { some: bankFilterForReq } },
-      include: { requirements: { select: { bankId: true }, where: bankFilterForReq } }
+    const reqsConBanco = await prisma.promoRequirement.findMany({
+      where: { ...bankFilterForReq, promo: promoWhere },
+      select: { promoId: true, bankId: true },
     });
 
     const bankMap: Record<string, number> = {};
-    promosConBanco.forEach(p => {
-      const uniqueBanks = new Set(p.requirements.map(r => r.bankId).filter(Boolean));
-      uniqueBanks.forEach(bid => {
-        if (bid) bankMap[bid] = (bankMap[bid] || 0) + 1;
-      });
+    const promosPorBanco: Record<string, Set<string>> = {};
+    reqsConBanco.forEach(r => {
+      if (!r.bankId) return;
+      if (!promosPorBanco[r.bankId]) promosPorBanco[r.bankId] = new Set();
+      promosPorBanco[r.bankId].add(r.promoId);
     });
-
-    const banks = await prisma.bank.findMany();
+    Object.entries(promosPorBanco).forEach(([bid, promoIds]) => {
+      bankMap[bid] = promoIds.size;
+    });
     const byBank = Object.entries(bankMap).map(([bid, count]) => {
       const name = banks.find(b => b.id === bid)?.name || 'Otro';
       return {
@@ -209,6 +224,14 @@ export async function GET(request: Request) {
       { name: 'Supervielle',    patterns: ['supervielle.com.ar'] },
       { name: 'Vea',            patterns: ['vea.com.ar'] },
       { name: 'VISA',           patterns: ['visa.com.ar'] },
+      { name: 'Petersen',       patterns: ['bancosanjuan.com', 'bancosantafe.com.ar', 'bancoentrerios.com.ar', 'bancosantacruz.com'] },
+      { name: 'Bancor',         patterns: ['bancor.com.ar'] },
+      { name: 'Hipotecario',    patterns: ['hipotecario.com.ar'] },
+      { name: 'Comafi',         patterns: ['tevabien.com'] },
+      { name: 'Corrientes',     patterns: ['promosdelbanco.com'] },
+      { name: 'Chubut',         patterns: ['bancochubut.com.ar'] },
+      { name: 'Chaco',          patterns: ['nbch.com.ar'] },
+      { name: 'Sol',            patterns: ['bancodelsol.com'] },
     ];
 
     const scraperMap: Record<string, number> = {};

@@ -65,3 +65,15 @@ reporte_*.md
 
 # datos sensibles
 recovery-codes-vercel.txt
+.env*
+
+# logs de corridas de scrapers (locales, no versionar)
+/scraper-runs/
+
+# videos y archivos de referencia sueltos en la raíz
+*.mp4
+google-search.zip
+google-search/
+scripts/_check_*
+historia_promoar.jpeg
+

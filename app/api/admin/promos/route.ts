@@ -1,6 +1,9 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
 
 // Toggle isFeatured o bulk update category
 export async function PATCH(req: NextRequest) {
@@ -13,6 +16,10 @@ export async function PATCH(req: NextRequest) {
         where: { id: body.id },
         data: { isFeatured: body.isFeatured },
       })
+      await invalidatePublicPromosCache()
+      invalidateCategoriesCache()
+      invalidatePromoDetailCache()
+      invalidateCommerceDetailCache()
       return NextResponse.json({ ok: true, isFeatured: promo.isFeatured })
     }
 
@@ -38,6 +45,10 @@ export async function PATCH(req: NextRequest) {
       })
     }
 
+    await invalidatePublicPromosCache()
+    invalidateCategoriesCache()
+    invalidatePromoDetailCache()
+    invalidateCommerceDetailCache()
     return NextResponse.json({ updated: result.count })
   } catch (error) {
     console.error('[PATCH /api/admin/promos]', error)
@@ -70,6 +81,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const categoryId = searchParams.get('categoryId')
     const categoryIds = searchParams.get('categoryIds')?.split(',').filter(Boolean)
+    const commerceId = searchParams.get('commerceId')
     const status = searchParams.get('status') // ej. 'EXPIRED'
     const q = searchParams.get('q')?.trim()
     const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10) || 0)
@@ -82,6 +94,7 @@ export async function GET(req: NextRequest) {
     }
     if (categoryId) where.categoryId = categoryId
     if (categoryIds?.length) where.categoryId = { in: categoryIds }
+    if (commerceId) where.commerceId = commerceId
     if (q) {
       where.OR = [
         { title: { contains: q, mode: 'insensitive' } },
@@ -91,7 +104,7 @@ export async function GET(req: NextRequest) {
 
     // Sin ningún filtro (carga inicial sin categoría/búsqueda todavía elegida): no traer nada,
     // el payload completo (95MB+) cuelga las funciones serverless de Vercel.
-    if (!categoryId && !categoryIds?.length && !status && !q) {
+    if (!categoryId && !categoryIds?.length && !status && !q && !commerceId) {
       return NextResponse.json({ promos: [] })
     }
 
@@ -103,9 +116,9 @@ export async function GET(req: NextRequest) {
           commerce: true,
           requirements: {
             include: {
-              bank: { select: { id: true, name: true } },
-              wallet: { select: { id: true, name: true } },
-              cardNetwork: { select: { id: true, name: true } },
+              bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
+              wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
+              cardNetwork: { select: { id: true, name: true, slug: true } },
             },
           },
         },

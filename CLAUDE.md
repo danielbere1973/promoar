@@ -873,6 +873,28 @@ las IPs de datacenter de los runners de GH Actions son bloqueadas por el WAF de
 `utilidades-icbc-prod.pisol.net`, no es un bug del scraper. ICBC debe correrse siempre con
 "Ejecutar todos" local desde el admin, nunca con "Ejecutar todos GH".
 
+## Notas BBVA scraper — correr siempre local, mismo patrón que ICBC
+`lib/scrapers/bbva.ts` (API pública `go.bbva.com.ar/willgo/fgo/API/v3`) bloquea por geo-IP
+con `403 {"error":"No disponible fuera de Argentina"}` cuando se corre desde Vercel
+(`promoar.com.ar`, botón del admin en producción) — los servidores de Vercel no geolocalizan
+como Argentina. Confirmado el 2/8/2026: mismo request con `curl` desde `localhost` (IP de
+Telecentro, Buenos Aires) responde `200` sin problema. BBVA debe correrse siempre local
+(`npm run dev` + "Ejecutar todos" desde el admin local), nunca desde producción/Vercel ni
+desde GitHub Actions — mismo bloqueo de origen que ICBC, pero por geo-IP en vez de WAF por
+IP de datacenter.
+
+**Bug de paginación off-by-one — FIX aplicado 2/8/2026 (sin commitear)**: la API de BBVA
+pagina `communications?rubros={id}&pager={n}` desde `pager=0` (confirmado inspeccionando la
+llamada real del navegador: `pager=0` es la página 1 en la UI), pero el scraper arrancaba en
+`let pager = 1`, salteándose siempre los primeros 20 items de cada uno de los 13 rubros. En
+"Moda" (`idRubro=170`) esos 20 items salteados incluían justo a Dexter, Moov, Stock Center y
+Zara — por eso nunca se descubrían pese a existir y responder bien vía
+`/communication/{id}` directo. También se corrigió el corte de la última página (era
+`pager >= totalPages`, ahora `pager >= totalPages - 1`, porque `pager` es 0-origen pero
+`"paginas: N"` en la respuesta cuenta 1-origen). Fix en `lib/scrapers/bbva.ts` líneas
+~184-206, pendiente de correr localmente contra producción para confirmar que las 4 promos
+aparecen, y de commitear.
+
 ## GitHub Actions — `run-scrapers.yml` con schedule desactivado (desde 8/7/2026) — PENDIENTE reactivar el 13/7
 Hasta el 6/7 este workflow tuvo `cron: '0 * * * *'` (cada hora, todos los días) —
 residuo de una versión vieja que nunca se corrigió del todo al bajar la frecuencia.

@@ -5,6 +5,17 @@ import bcrypt from 'bcryptjs'
 import type { NextAuthOptions } from 'next-auth'
 
 export const authOptions: NextAuthOptions = {
+  // next-auth v4 calcula useSecureCookies a partir de si NEXTAUTH_URL empieza
+  // con "https://" — no a partir del request real. Si NEXTAUTH_URL quedó en
+  // "http://localhost:3000" (valor de .env local, probablemente copiado tal
+  // cual a las env vars de Vercel), en Preview (que SIEMPRE es https) NextAuth
+  // setea la cookie de sesión SIN el prefijo __Secure- ni el flag Secure.
+  // El login "funciona" (POST exitoso, cookie seteada) pero el middleware,
+  // que sí espera esa cookie con prefijo seguro en un host https, nunca la
+  // encuentra — por eso cualquier ruta protegida (/perfil, etc.) rebota a
+  // /login aunque el usuario ya inició sesión. Forzar true acá evita depender
+  // de que NEXTAUTH_URL esté bien seteado por entorno en Vercel.
+  useSecureCookies: process.env.NODE_ENV === 'production',
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
   providers: [

@@ -1,6 +1,8 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react'
 import { Share2, Copy, Check, Heart, Star } from 'lucide-react'
+import { resolveCoverageBadge } from '@/lib/coverageBadge'
+import { getPromoScope } from '@/lib/utils/promoScope'
 
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
@@ -43,6 +45,9 @@ type Req = {
   capPeriod?: string | null
   cardSegment?: { name: string } | null
   paymentChannel?: string | null
+  note?: string | null
+  segment?: string | null
+  accountType?: string | null
   usage?: { amountUsed: number; cap: number; exhausted: boolean; periodEnd: string | Date } | null
 }
 
@@ -50,12 +55,31 @@ type Promo = {
   id: string
   title: string
   slug?: string | null
+  description?: string | null
+  sourceText?: string | null
+  commerceNote?: string | null
+  plusDiscountNote?: string | null
+  accountType?: string | null
+  stackable?: boolean | null
+  stackableNote?: string | null
+  validFromHour?: number | null
+  validToHour?: number | null
   validDays: number
   salesChannel?: string | null
+  coverageStatus?: 'NEARBY' | 'TERRITORIAL' | 'ONLINE' | 'UNKNOWN' | null
+  coverageLabel?: string | null
   isSaved?: boolean
   category: { name: string; color: string; icon?: string }
   commerce: { id?: string; name: string; logoUrl?: string | null }
   requirements: Req[]
+  /** Requirement puntual que matchea el perfil real del usuario (calculado en
+   * lib/getPromos.ts vía matchesProfileShared). Cuando está presente, es la
+   * fuente de verdad para "qué banco/billetera es esta promo para mí" — sin
+   * esto, bestDiscountReq/entities miran TODOS los requirements de la promo
+   * y muestran el primero cargado en la DB, no el que realmente aplica al
+   * usuario (ej. una promo MODO agnóstica de banco terminaba mostrando el
+   * primer banco cargado, tipo "Banco Nación y MODO"). */
+  userBestDiscount?: Req | null
 }
 
 function bestDiscountReq(reqs: Req[]): Req | null {
@@ -80,6 +104,7 @@ function discountDisplay(req: Req | null): { num: string; unit: string; label: s
     case 'FIXED_AMOUNT':         return { num: `$${v.toLocaleString('es-AR')}`, unit: '', label: 'descuento', isCsi: false }
     case 'CUOTAS_SIN_INTERES':   return { num: `${v}`, unit: '', label: `cuota${v !== 1 ? 's' : ''} s/int.`, isCsi: true }
     case 'NXM':                  return { num: `${req.nxmN ?? 2}x${req.nxmM ?? 1}`, unit: '', label: 'prom.', isCsi: false }
+    case 'SEGUNDA_UNIDAD':       return { num: `${v}`, unit: '%', label: '2da unidad', isCsi: false }
     default:                     return { num: `${v}`, unit: '%', label: '', isCsi: false }
   }
 }
@@ -88,6 +113,14 @@ const CHANNEL_CHIPS: Record<string, { label: string; color: string }> = {
   NFC:           { label: 'NFC', color: 'bg-blue-50 text-blue-700 border-blue-200' },
   QR:            { label: 'QR', color: 'bg-purple-50 text-purple-700 border-purple-200' },
   TRANSFERENCIA: { label: 'Transfer.', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+}
+
+const CAP_PERIOD_LABELS: Record<string, string> = {
+  PER_TRANSACTION: '/compra',
+  DAILY: '/día',
+  WEEKLY: '/sem',
+  MONTHLY: '/mes',
+  TOTAL: ' total',
 }
 
 type Props = {
@@ -100,24 +133,38 @@ type Props = {
   fullWidth?: boolean
   priority?: boolean
   onRegisterUsage?: (req: Req, promo: Promo, e: React.MouseEvent) => void
+  /** Razones causales del Recommendation Block ("por qué se eligió"), no descriptivas de la promo. */
+  reasons?: string[]
 }
 
-export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, fullWidth, priority, onRegisterUsage }: Props) {
-  const bestReq = bestDiscountReq(promo.requirements)
+export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, fullWidth, priority, onRegisterUsage, reasons }: Props) {
+  // Cuando el perfil del usuario matchea un requirement puntual, ese es el
+  // único que importa para mostrar "para vos" — evita mezclar bancos/redes
+  // de requirements de otros usuarios dentro de la misma promo.
+  const personalizedReqs = promo.userBestDiscount ? [promo.userBestDiscount] : promo.requirements
+  const bestReq = bestDiscountReq(personalizedReqs)
   const { num, unit, label, isCsi } = discountDisplay(bestReq)
 
   const banks = Array.from(new Map(
-    promo.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])
+    personalizedReqs.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])
   ).values())
   const wallets = Array.from(new Map(
-    promo.requirements.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])
+    personalizedReqs.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])
   ).values())
   const networks = Array.from(new Map(
-    promo.requirements.filter(r => r.cardNetwork?.slug).map(r => [r.cardNetwork!.slug, r.cardNetwork!])
+    personalizedReqs.filter(r => r.cardNetwork?.slug).map(r => [r.cardNetwork!.slug, r.cardNetwork!])
   ).values())
   const entities = [...banks, ...wallets].slice(0, 2)
 
   const hasSinTope = promo.requirements.some(r => r.capUnlimited)
+  const capReq = personalizedReqs.find(r => r.cap != null) ?? promo.requirements.find(r => r.cap != null) ?? null
+  const capAmount = capReq?.cap != null ? capReq.cap : null
+  const capPeriod = capReq?.capPeriod || null
+  const capPeriodLabel = capPeriod ? (CAP_PERIOD_LABELS[capPeriod] || '') : ''
+
+  const minPurchaseReq = personalizedReqs.find(r => r.minPurchase != null) ?? promo.requirements.find(r => r.minPurchase != null) ?? null
+  const minPurchase = minPurchaseReq?.minPurchase != null ? minPurchaseReq.minPurchase : null
+
   const reqWithUsage = promo.requirements.find(r => r.usage) ?? null
   const usage = reqWithUsage?.usage ?? null
   const usagePct = usage ? Math.min(100, Math.round((usage.amountUsed / usage.cap) * 100)) : 0
@@ -125,7 +172,7 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   const cappedReq = reqWithUsage ?? promo.requirements.find(r => r.cap != null && r.capPeriod) ?? null
   // Para "Registrar uso": cualquier requirement con ahorro real (no CSI puro), priorizando uno con tope.
   const usableReq = cappedReq ?? (isCsi ? null : bestReq)
-  const segments = promo.requirements.map(r => r.cardSegment?.name).filter(Boolean)
+  const segments = personalizedReqs.map(r => r.cardSegment?.name).filter(Boolean)
   const exclusiveSegment = segments.length > 0 && new Set(segments).size === 1 ? segments[0] : null
 
   const channels = [...new Set(
@@ -133,6 +180,17 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
   )]
 
   const days = formatDays(promo.validDays)
+  const coverageBadge = resolveCoverageBadge(promo.coverageStatus, promo.coverageLabel)
+  const scope = getPromoScope(promo)
+
+  const conditionNote = (() => {
+    const note = promo.commerceNote || bestReq?.note || null
+    if (!note) return null
+    if (scope && scope.badgeText && note.toLowerCase().includes(scope.badgeText.toLowerCase().slice(0, 8))) {
+      return null
+    }
+    return note
+  })()
 
   const [showShare, setShowShare] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -175,6 +233,25 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
     'cabal': 'https://www.google.com/s2/favicons?sz=64&domain=cabal.com.ar',
   }
 
+  const WALLET_FALLBACK_LOGOS: Record<string, string> = {
+    'club-la-nacion': 'https://www.google.com/s2/favicons?sz=128&domain=lanacion.com.ar',
+    'clarin-365': 'https://www.google.com/s2/favicons?sz=128&domain=365.clarin.com',
+    'clarin-365-plus': 'https://www.google.com/s2/favicons?sz=128&domain=365.clarin.com',
+    'comunidad-coto': 'https://www.coto.com.ar/favicon.ico',
+    'modo': 'https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar',
+    'cuentadni': 'https://www.google.com/s2/favicons?sz=128&domain=bancoprovincia.com.ar',
+    'mercadopago': 'https://www.google.com/s2/favicons?sz=128&domain=mercadopago.com.ar',
+    'personalpay': 'https://www.google.com/s2/favicons?sz=128&domain=personalpay.com.ar',
+  }
+
+  const getEntityShortName = (name: string): string => {
+    const lower = name.toLowerCase()
+    if (lower.includes('club la nacion') || lower.includes('club la nación')) return 'Club LN'
+    if (lower.includes('clarín 365') || lower.includes('clarin 365') || lower.includes('365')) return '365'
+    if (lower.includes('comunidad coto')) return 'Comunidad Coto'
+    return name.split(' ').slice(-1)[0].substring(0, 9)
+  }
+
   return (
     <div
       onClick={onClick}
@@ -205,8 +282,10 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </div>
         )}
 
-        {/* Canal exclusivo — ícono compacto top-left */}
-        {promo.salesChannel && (
+        {/* Canal exclusivo — ícono compacto top-left. Solo para ONLINE/PHYSICAL
+            (canal único real); BOTH no es "exclusivo" de nada y UNKNOWN no debe
+            mostrar ningún badge (ausencia de dato ≠ dato). */}
+        {(promo.salesChannel === 'ONLINE' || promo.salesChannel === 'PHYSICAL') && (
           <span
             title={promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
             className={`absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center text-sm shadow-sm ${
@@ -271,9 +350,20 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           )}
         </div>
 
+        {/* Scope / Restricción badge — destacado para evitar información engañosa */}
+        {scope && (
+          <div
+            title={scope.fullWarning}
+            className="inline-flex items-center gap-1 self-start text-[9.5px] font-bold tracking-tight rounded-md px-1.5 py-0.5 max-w-full bg-amber-500/10 text-amber-900 dark:text-amber-300 border border-amber-500/20"
+          >
+            <span className="shrink-0 text-[10px] leading-none">{scope.badgeIcon}</span>
+            <span className="truncate leading-none">{scope.badgeText}</span>
+          </div>
+        )}
+
         {/* Descuento pill */}
         {num && (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1.5">
               <span className={`inline-flex items-baseline gap-0.5 rounded-full px-3 py-1 ${
                 isCsi
@@ -285,12 +375,63 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
               </span>
               <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{label}</span>
             </div>
-            {hasSinTope && (
-              <span className="inline-flex items-center gap-0.5 self-start text-[9px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 rounded-md px-1.5 py-0.5">
-                ∞ sin tope
-              </span>
-            )}
+
+            {/* Caps & Mínimos */}
+            <div className="flex flex-wrap items-center gap-1">
+              {hasSinTope ? (
+                <span className="inline-flex items-center gap-0.5 self-start text-[9px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 rounded-md px-1.5 py-0.5">
+                  ∞ sin tope
+                </span>
+              ) : capAmount != null ? (
+                <span className="inline-flex items-center gap-1 self-start text-[9.5px] font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-1.5 py-0.5">
+                  Tope ${capAmount.toLocaleString('es-AR')}{capPeriodLabel}
+                </span>
+              ) : null}
+
+              {minPurchase != null && (
+                <span className="inline-flex items-center gap-0.5 self-start text-[9px] font-bold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/40 rounded-md px-1.5 py-0.5">
+                  Mín. ${minPurchase.toLocaleString('es-AR')}
+                </span>
+              )}
+
+              {promo.plusDiscountNote && (
+                <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/40 rounded-md px-1.5 py-0.5">
+                  <span className="text-[10px] leading-none">🚀</span> {promo.plusDiscountNote}
+                </span>
+              )}
+
+              {(bestReq?.accountType === 'JUBILADO' || promo.accountType === 'JUBILADO') && (
+                <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/40 rounded-md px-1.5 py-0.5">
+                  👵 Exclusivo Jubilados
+                </span>
+              )}
+
+              {(bestReq?.accountType === 'HABERES' || promo.accountType === 'HABERES') && (
+                <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/40 rounded-md px-1.5 py-0.5">
+                  💼 Exclusivo Cuenta Sueldo
+                </span>
+              )}
+
+              {(bestReq?.accountType === 'ANSES' || promo.accountType === 'ANSES') && (
+                <span className="inline-flex items-center gap-1 self-start text-[9px] font-black uppercase tracking-wide text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/30 border border-cyan-200 dark:border-cyan-700/40 rounded-md px-1.5 py-0.5">
+                  🏛️ Exclusivo ANSES
+                </span>
+              )}
+            </div>
           </div>
+        )}
+
+        {/* Razones del Recommendation Block — solo presente cuando la card viene
+            del bloque de recomendaciones, nunca en el listado tradicional. */}
+        {reasons && reasons.length > 0 && (
+          <ul className="flex flex-col gap-0.5">
+            {reasons.map((r, i) => (
+              <li key={i} className="text-[9px] font-semibold text-[#1D3D6E] dark:text-[#8AADD4] flex items-start gap-1">
+                <span aria-hidden="true" className="shrink-0">✓</span>
+                <span className="line-clamp-1">{r}</span>
+              </li>
+            ))}
+          </ul>
         )}
 
         {/* Uso registrado — badge con tooltip. La card sigue mostrándose siempre,
@@ -321,32 +462,33 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
         {/* Entidades + redes */}
         {(entities.length > 0 || networks.length > 0) && (
           <div className="flex flex-wrap items-center gap-1">
-            {entities.map((e, i) => (
-              e.logoUrl ? (
+            {entities.map((e, i) => {
+              const entityLogo = e.logoUrl || (e.slug ? WALLET_FALLBACK_LOGOS[e.slug] : null)
+              return entityLogo ? (
                 e.slug ? (
                   <a key={i} href={`/bancos/${e.slug}`} onClick={ev => ev.stopPropagation()}
                     className="w-6 h-6 rounded-lg bg-white dark:bg-[#1E3055] border border-[#D0DBF0] dark:border-[#2A4070] flex items-center justify-center hover:border-[#1D3D6E] hover:shadow-sm transition-all overflow-hidden"
                     title={e.name}>
-                    <img src={e.logoUrl} alt={e.name} className="w-5 h-5 object-contain" />
+                    <img src={entityLogo} alt={e.name} className="w-5 h-5 object-contain" />
                   </a>
                 ) : (
                   <span key={i} className="w-6 h-6 rounded-lg bg-white dark:bg-[#1E3055] border border-[#D0DBF0] dark:border-[#2A4070] flex items-center justify-center overflow-hidden" title={e.name}>
-                    <img src={e.logoUrl} alt={e.name} className="w-5 h-5 object-contain" />
+                    <img src={entityLogo} alt={e.name} className="w-5 h-5 object-contain" />
                   </span>
                 )
               ) : (
                 e.slug ? (
                   <a key={i} href={`/bancos/${e.slug}`} onClick={ev => ev.stopPropagation()}
                     className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-[#EEF2F8] dark:bg-[#1E3055] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#2A4070] hover:bg-[#1D3D6E] hover:text-white transition-colors">
-                    {e.name.split(' ').slice(-1)[0].substring(0, 9)}
+                    {getEntityShortName(e.name)}
                   </a>
                 ) : (
                   <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-[#EEF2F8] dark:bg-[#1E3055] text-[#1D3D6E] dark:text-[#8AADD4] border border-[#D0DBF0] dark:border-[#2A4070]">
-                    {e.name.split(' ').slice(-1)[0].substring(0, 9)}
+                    {getEntityShortName(e.name)}
                   </span>
                 )
               )
-            ))}
+            })}
             {networks.slice(0, 2).map(n => (
               CARD_NETWORK_LOGOS[n.slug] ? (
                 <img key={n.slug} src={CARD_NETWORK_LOGOS[n.slug]} alt={n.name}
@@ -357,6 +499,23 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
                 </span>
               )
             ))}
+          </div>
+        )}
+
+        {/* Cobertura geográfica (ADR-001) — resuelto centralmente en lib/coverageBadge.ts.
+            UNKNOWN devuelve null: sin badge, sin ícono, sin color — ausencia de dato implica
+            ausencia de elemento visual, la tarjeta queda igual que hoy.
+            Se omite NEARBY si ya hay barra de sucursales cercanas abajo, para no duplicar el mensaje. */}
+        {coverageBadge && !(coverageBadge.status === 'NEARBY' && !!nearbyCount) && (
+          <div className="flex flex-wrap gap-1">
+            <span
+              className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-lg border ${coverageBadge.colorClass}`}
+              aria-label={coverageBadge.ariaLabel}
+            >
+              <span aria-hidden="true">{coverageBadge.icon}</span>
+              <span className="hidden sm:inline">{coverageBadge.label}</span>
+              <span className="sm:hidden">{coverageBadge.labelMobile}</span>
+            </span>
           </div>
         )}
 
@@ -375,10 +534,17 @@ export default function PromoCard({ promo, nearbyCount, onClick, onToggleSave, o
           </div>
         )}
 
-        {/* Días */}
-        {days !== 'Todos los días' && (
-          <p className="text-[10px] text-gray-400 dark:text-gray-500">{days}</p>
-        )}
+        {/* Días y notas de condiciones */}
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 truncate">
+            {days}
+          </p>
+          {conditionNote && (
+            <p className="text-[9.5px] text-gray-600 dark:text-gray-300 font-medium line-clamp-2 leading-tight bg-gray-50 dark:bg-slate-800/60 rounded px-1.5 py-0.5 border border-gray-200/60 dark:border-slate-700/50" title={conditionNote}>
+              {conditionNote}
+            </p>
+          )}
+        </div>
 
         {/* Registrar uso — cualquier promo con ahorro real (no CSI puro) */}
         {onRegisterUsage && usableReq && (

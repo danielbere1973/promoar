@@ -151,6 +151,17 @@ export default function OnboardingBanner({ isLoggedIn, hasProfile, profileReady 
               </button>
             )}
           </div>
+
+          {/* CPO Dictamen "Cierre de pendientes Guest/Home v2" (31/8/2026): un usuario
+              ya registrado no debe caer forzosamente en /registro. */}
+          {!isLoggedIn && (
+            <p className="text-center text-[12px] text-slate-400 dark:text-slate-500 mt-3">
+              ¿Ya tenés cuenta?{' '}
+              <button onClick={() => router.push('/login')} className="font-bold text-[#1D3D6E] dark:text-[#8AADD4] underline underline-offset-2">
+                Iniciar sesión →
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>

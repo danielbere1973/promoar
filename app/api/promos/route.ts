@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
-import { getToken } from 'next-auth/jwt'
+import { getAuthToken } from '@/lib/auth'
 import { getPromosData, PromoQueryParams } from '@/lib/getPromos'
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
 
 export async function GET(req: NextRequest) {
   try {
@@ -40,25 +43,31 @@ export async function GET(req: NextRequest) {
       guestProfileParam: searchParams.get('guest_profile'),
     }
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    const token = await getAuthToken(req)
     const email = (token?.email as string | undefined) || req.headers.get('x-user-email')
     const role = token?.role as string | undefined
     const isAdmin = role === 'ADMIN' || role === 'MODERATOR'
     const forMe = params.forMe ?? false
 
-    // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal
+    // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal.
+    // `forMe=true` sin sesión ni guest_profile no filtra nada (no hay perfil real
+    // detrás, ver hasProfile en getPromosData) — no debe tirar del path cacheable
+    // por sí solo, solo cuenta como "con perfil" si viene acompañado de alguno.
     const hasFilters = !!(
       params.bankIds?.length || params.walletIds?.length || params.networkIds?.length ||
       params.categorySlugs?.length || params.categorySlug || params.channels?.length ||
       params.commerceIds?.length || params.discountRanges?.length || params.hasInstallments
     )
-    const paginate = !forMe && !email && !hasFilters
+    const hasRealProfile = !!email || !!params.guestProfileParam
+    const paginate = !(forMe && hasRealProfile) && !email && !hasFilters
     const page = parseInt(searchParams.get('page') ?? '1') || 1
 
     // Fechas clave: buscar si hoy está dentro del window de alguna fecha especial
     // Servidor en UTC (Vercel) — ajustar a Argentina (UTC-3 fijo) para no adelantar el día
     const argNow = new Date(Date.now() - 3 * 60 * 60 * 1000)
-    const isWeekend = [5, 6, 0].includes(argNow.getDay())
+    // getUTCDay(), no getDay() — evita el doble desplazamiento de zona horaria en
+    // localhost/Windows (ya en UTC-3) que adelantaba el día (bug 27/8/2026).
+    const isWeekend = [5, 6, 0].includes(argNow.getUTCDay())
     const windowMax = new Date(); windowMax.setDate(windowMax.getDate() + 30)
     const keyDate = paginate ? await prisma.promoCalendar.findFirst({
       where: { date: { gte: new Date(), lte: windowMax } },
@@ -144,6 +153,10 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    await invalidatePublicPromosCache()
+    invalidateCategoriesCache()
+    invalidatePromoDetailCache()
+    invalidateCommerceDetailCache()
     return NextResponse.json({ promo }, { status: 201 })
   } catch (error) {
     console.error('[POST /api/promos]', error)

@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { TrendingUp, PiggyBank, DollarSign } from 'lucide-react'
+import { TrendingUp, PiggyBank, DollarSign, Wallet } from 'lucide-react'
 
 export const SECTIONS: { slug: string; label: string; icon: React.ReactNode }[] = [
-  { slug: 'plazo-fijo',   label: 'Plazo Fijo',  icon: <PiggyBank size={14} /> },
+  { slug: 'billeteras',   label: 'Billeteras',   icon: <Wallet size={14} /> },
+  { slug: 'plazo-fijo',   label: 'Plazo Fijo',   icon: <PiggyBank size={14} /> },
   { slug: 'divisas',      label: 'Divisas',      icon: <DollarSign size={14} /> },
   { slug: 'acciones-ar',  label: 'Acciones AR',  icon: <TrendingUp size={14} /> },
   { slug: 'acciones-usa', label: 'Acciones USA', icon: <TrendingUp size={14} /> },

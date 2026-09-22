@@ -17,6 +17,7 @@ type Requirement = {
   cardSegmentRef: { id: string; name: string } | null
 }
 
+
 type Promo = {
   id: string
   title: string
@@ -75,6 +76,10 @@ function fmtDate(d: string) {
 function fmtMoney(n: number) {
   return '$' + n.toLocaleString('es-AR', { maximumFractionDigits: 0 })
 }
+function sourceDomain(url: string | null): string | null {
+  if (!url) return null
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return null }
+}
 function maskToBooleans(mask: number) { return DAY_LABELS.map((_, i) => !!(mask & (1 << i))) }
 function buildDayMask(days: boolean[]) { return days.reduce((a, v, i) => a | (v ? 1 << i : 0), 0) }
 function buildForm(p: Promo) {
@@ -88,11 +93,22 @@ function buildForm(p: Promo) {
       bankId: r.bank?.id ?? '', walletId: r.wallet?.id ?? '',
       cardNetworkId: r.cardNetwork?.id ?? '', cardSegmentId: r.cardSegmentRef?.id ?? '',
       paymentChannel: r.paymentChannel,
+      discountType: r.discountType,
+      discountValue: r.discountValue != null ? String(r.discountValue) : '',
       cap: r.cap != null ? String(r.cap) : '',
       capPeriod: r.capPeriod ?? 'MONTHLY',
       capUnlimited: r.capUnlimited,
       minPurchase: r.minPurchase != null ? String(r.minPurchase) : '',
     })),
+    deletedReqIds: [] as string[],
+  }
+}
+
+function blankRequirement() {
+  return {
+    reqId: '', bankId: '', walletId: '', cardNetworkId: '', cardSegmentId: '',
+    paymentChannel: 'ANY', discountType: 'PERCENTAGE_REINTEGRO', discountValue: '',
+    cap: '', capPeriod: 'MONTHLY', capUnlimited: false, minPurchase: '',
   }
 }
 
@@ -163,6 +179,19 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
   function setReq(i: number, patch: Partial<typeof form.requirements[0]>) {
     setForm(f => { const r = [...f.requirements]; r[i] = { ...r[i], ...patch }; return { ...f, requirements: r } })
   }
+  function addReq() {
+    setForm(f => ({ ...f, requirements: [...f.requirements, blankRequirement()] }))
+  }
+  function removeReq(i: number) {
+    setForm(f => {
+      const r = [...f.requirements]
+      const [removed] = r.splice(i, 1)
+      return {
+        ...f, requirements: r,
+        deletedReqIds: removed.reqId ? [...f.deletedReqIds, removed.reqId] : f.deletedReqIds,
+      }
+    })
+  }
 
   async function save() {
     setSaving(true)
@@ -173,8 +202,11 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
           title: form.title, description: form.description,
           commerceId: form.commerceId, categoryId: form.categoryId,
           validDays: buildDayMask(form.days),
+          deletedReqIds: form.deletedReqIds,
           requirements: form.requirements.map(r => ({
             ...r,
+            reqId: r.reqId || undefined,
+            discountValue: r.discountValue !== '' ? Number(r.discountValue) : 0,
             cap: r.cap !== '' ? Number(r.cap) : null,
             minPurchase: r.minPurchase !== '' ? Number(r.minPurchase) : null,
           })),
@@ -256,28 +288,39 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
           </div>
 
           {/* Requirements table */}
-          {form.requirements.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Requisitos de pago · {form.requirements.length} fila{form.requirements.length !== 1 ? 's' : ''}
               </p>
+              <button type="button" onClick={addReq}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
+                + Agregar requisito
+              </button>
+            </div>
+            {form.requirements.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-3">Sin requisitos — esta promo no tiene ningún medio de pago asignado.</p>
+            ) : (
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 {/* Table header */}
                 <div className="grid gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[9px] font-black uppercase tracking-widest text-slate-400"
-                  style={{ gridTemplateColumns: '1.5fr 1.5fr 1fr 1.2fr 1.2fr 1.2fr 1.2fr' }}>
+                  style={{ gridTemplateColumns: '1.3fr 1.3fr 0.9fr 1fr 1fr 0.8fr 1fr 1fr 1fr 0.4fr' }}>
                   <span>Banco</span>
                   <span>Billetera</span>
                   <span>Red</span>
                   <span>Canal</span>
+                  <span>Tipo desc.</span>
+                  <span>Valor</span>
                   <span>Tope ($)</span>
                   <span>Período</span>
                   <span>Mínimo ($)</span>
+                  <span />
                 </div>
                 {/* Rows */}
                 {form.requirements.map((r, i) => (
-                  <div key={r.reqId}
+                  <div key={r.reqId || `new-${i}`}
                     className={`grid gap-2 px-3 py-2.5 items-center ${i < form.requirements.length - 1 ? 'border-b border-slate-100' : ''} ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
-                    style={{ gridTemplateColumns: '1.5fr 1.5fr 1fr 1.2fr 1.2fr 1.2fr 1.2fr' }}>
+                    style={{ gridTemplateColumns: '1.3fr 1.3fr 0.9fr 1fr 1fr 0.8fr 1fr 1fr 1fr 0.4fr' }}>
                     <select value={r.bankId} onChange={e => setReq(i, { bankId: e.target.value })} className={sel}>
                       <option value="">—</option>
                       {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -293,6 +336,12 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
                     <select value={r.paymentChannel} onChange={e => setReq(i, { paymentChannel: e.target.value })} className={sel}>
                       {PAYMENT_CHANNELS.map(ch => <option key={ch} value={ch}>{CHANNEL_META[ch]?.label ?? ch}</option>)}
                     </select>
+                    <select value={r.discountType} onChange={e => setReq(i, { discountType: e.target.value })} className={sel}>
+                      {Object.entries(DISCOUNT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                    <input type="number" placeholder="0"
+                      value={r.discountValue} onChange={e => setReq(i, { discountValue: e.target.value })}
+                      className={inp} />
                     <input type="number" placeholder="Sin tope"
                       value={r.cap} onChange={e => setReq(i, { cap: e.target.value, capUnlimited: false })}
                       className={inp} />
@@ -302,11 +351,15 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
                     <input type="number" placeholder="Sin mínimo"
                       value={r.minPurchase} onChange={e => setReq(i, { minPurchase: e.target.value })}
                       className={inp} />
+                    <button type="button" onClick={() => removeReq(i)}
+                      className="text-slate-300 hover:text-red-600 transition-colors flex justify-center">
+                      <X size={13} />
+                    </button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -379,6 +432,14 @@ function PromoRow({
           <p className="text-xs font-bold text-slate-900 truncate">{promo.commerce.name}</p>
           {promo.category && (
             <p className="text-xs text-slate-500 truncate">{promo.category.icon} {promo.category.name}</p>
+          )}
+          {/* Dominio de origen — para poder buscar manualmente en la fuente cuando falta
+              info que el scraper no completó (ej. requirements de pago). Pedido por
+              Pablo 5/9/2026: sin esto es "casi imposible" ubicar de dónde vino la promo. */}
+          {sourceDomain(promo.sourceUrl) && (
+            <p className="text-[10px] text-slate-400 truncate font-mono" title={promo.sourceUrl ?? undefined}>
+              {sourceDomain(promo.sourceUrl)}
+            </p>
           )}
         </div>
 
@@ -483,6 +544,7 @@ export default function PendingPromosTab() {
   const [banks, setBanks] = useState<Bank[]>([])
   const [wallets, setWallets] = useState<Wallet[]>([])
   const [cardNetworks, setCardNetworks] = useState<CardNetwork[]>([])
+  const [sourceFilter, setSourceFilter] = useState<string>('')
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -528,15 +590,32 @@ export default function PendingPromosTab() {
     }
   }
 
-  const allExpanded = expanded.size === promos.length && promos.length > 0
+  // Dominios de origen presentes en las pendientes actuales — pedido por Pablo 5/9/2026:
+  // sin esto, cuando falta info (ej. requirements) no hay forma de saber de qué scraper
+  // vino la promo para ir a revisar la fuente manualmente.
+  const availableSources = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of promos) {
+      const d = sourceDomain(p.sourceUrl)
+      if (d) set.add(d)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [promos])
+
+  const visiblePromos = useMemo(() => {
+    if (!sourceFilter) return promos
+    return promos.filter(p => sourceDomain(p.sourceUrl) === sourceFilter)
+  }, [promos, sourceFilter])
+
+  const allExpanded = expanded.size === visiblePromos.length && visiblePromos.length > 0
 
   function toggleAll() {
-    setSelected(s => s.size === promos.length ? new Set() : new Set(promos.map(p => p.id)))
+    setSelected(s => s.size === visiblePromos.length ? new Set() : new Set(visiblePromos.map(p => p.id)))
   }
   function toggleExpand(id: string) {
     setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
-  function expandAll()   { setExpanded(new Set(promos.map(p => p.id))) }
+  function expandAll()   { setExpanded(new Set(visiblePromos.map(p => p.id))) }
   function collapseAll() { setExpanded(new Set()) }
 
   async function act(ids: string[], action: 'approve' | 'reject') {
@@ -575,17 +654,29 @@ export default function PendingPromosTab() {
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
           <button onClick={toggleAll} className="shrink-0 text-slate-400 hover:text-slate-700">
-            {selected.size === promos.length && promos.length > 0 ? <CheckSquare size={15} className="text-slate-700" /> : <Square size={15} />}
+            {selected.size === visiblePromos.length && visiblePromos.length > 0 ? <CheckSquare size={15} className="text-slate-700" /> : <Square size={15} />}
           </button>
           <span className="text-xs font-semibold text-slate-600">
-            {loading ? 'Cargando…' : `${promos.length} pendientes`}
+            {loading ? 'Cargando…' : sourceFilter ? `${visiblePromos.length} de ${promos.length} pendientes` : `${promos.length} pendientes`}
             {selected.size > 0 && <span className="text-slate-400 font-normal"> · {selected.size} sel.</span>}
           </span>
+
+          {availableSources.length > 0 && (
+            <select
+              value={sourceFilter}
+              onChange={e => { setSourceFilter(e.target.value); setSelected(new Set()) }}
+              className="text-[11px] font-semibold text-slate-600 border border-slate-200 rounded-lg px-2 py-1.5 bg-white hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              title="Filtrar por fuente/scraper de origen"
+            >
+              <option value="">Todas las fuentes</option>
+              {availableSources.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
 
           <div className="flex-1" />
 
           {/* Expand / collapse */}
-          {promos.length > 0 && (
+          {visiblePromos.length > 0 && (
             <div className="flex items-center gap-1 border border-slate-200 rounded-lg overflow-hidden">
               <button onClick={expandAll} title="Desplegar todo"
                 className={`flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold transition-colors ${allExpanded ? 'bg-slate-200 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}>
@@ -611,20 +702,20 @@ export default function PendingPromosTab() {
                 <X size={11} /> Rechazar ({selectedIds.length})
               </button>
             </>
-          ) : promos.length > 0 ? (
+          ) : visiblePromos.length > 0 ? (
             <>
-              <button onClick={() => act(promos.map(p => p.id), 'approve')} disabled={saving}
+              <button onClick={() => act(visiblePromos.map(p => p.id), 'approve')} disabled={saving}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-                <Check size={11} /> Aprobar todas
+                <Check size={11} /> Aprobar {sourceFilter ? 'filtradas' : 'todas'}
               </button>
-              <button onClick={() => act(promos.map(p => p.id), 'reject')} disabled={saving}
+              <button onClick={() => act(visiblePromos.map(p => p.id), 'reject')} disabled={saving}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-500 text-[10px] font-bold rounded-lg hover:bg-red-100 disabled:opacity-50 border border-red-200 transition-colors">
-                <X size={11} /> Rechazar todas
+                <X size={11} /> Rechazar {sourceFilter ? 'filtradas' : 'todas'}
               </button>
             </>
           ) : null}
 
-          {promos.length > 0 && (
+          {visiblePromos.length > 0 && (
             <button onClick={autoValidate} disabled={validating || saving}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
               <ShieldCheck size={11} /> {validating ? 'Validando…' : 'Auto-validar'}
@@ -652,7 +743,7 @@ export default function PendingPromosTab() {
         )}
 
         {/* Column headers */}
-        {!loading && promos.length > 0 && (
+        {!loading && visiblePromos.length > 0 && (
           <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-slate-50/30">
             <div className="w-3.5 shrink-0" />
             <div className="w-8 shrink-0" />
@@ -673,7 +764,12 @@ export default function PendingPromosTab() {
             <p className="text-slate-400 text-sm font-medium">Sin promos pendientes</p>
             <p className="text-slate-300 text-xs mt-1">Las nuevas promos de los scrapers aparecen aquí antes de publicarse.</p>
           </div>
-        ) : promos.map(p => (
+        ) : visiblePromos.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-slate-400 text-sm font-medium">Ninguna pendiente de "{sourceFilter}"</p>
+            <button onClick={() => setSourceFilter('')} className="text-xs text-blue-600 hover:underline mt-1">Ver todas</button>
+          </div>
+        ) : visiblePromos.map(p => (
           <PromoRow
             key={p.id}
             promo={p}

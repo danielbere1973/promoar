@@ -18,14 +18,20 @@ export async function POST(req: NextRequest) {
   const email = await getAuthenticatedEmail(req)
   if (!email) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-  const { cards }: { cards: SyncCard[] } = await req.json()
+  const { cards, onlyIfEmpty }: { cards: SyncCard[]; onlyIfEmpty?: boolean } = await req.json()
   if (!Array.isArray(cards)) return NextResponse.json({ error: 'cards requerido' }, { status: 400 })
 
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { financialProfile: true },
+    include: { financialProfile: { include: { cards: true } } },
   })
   if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+
+  // CPO Dictamen "Cierre de pendientes Guest/Home v2" (31/8/2026): la migración de
+  // guestProfile no debe pisar un perfil ya cargado a mano por el usuario logueado.
+  if (onlyIfEmpty && (user.financialProfile?.cards.length ?? 0) > 0) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'profile_not_empty' })
+  }
 
   let profileId = user.financialProfile?.id
 

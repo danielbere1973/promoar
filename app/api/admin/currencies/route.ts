@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { invalidateEntitiesCache } from '@/lib/cache/filtersCache'
+import { invalidateBankDetailCache } from '@/lib/cache/detailCache'
 
 export async function GET() {
   const currencies = await prisma.currency.findMany({ orderBy: { code: 'asc' } })
@@ -13,6 +15,8 @@ export async function POST(req: Request) {
     const currency = await prisma.currency.create({
       data: { name, code, symbol }
     })
+    invalidateEntitiesCache()
+    invalidateBankDetailCache()
     return NextResponse.json(currency)
   } catch (error) {
     return NextResponse.json({ error: 'Error' }, { status: 500 })
@@ -25,6 +29,8 @@ export async function DELETE(req: Request) {
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing Id' }, { status: 400 })
     await prisma.currency.delete({ where: { id } })
+    invalidateEntitiesCache()
+    invalidateBankDetailCache()
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: 'Error' }, { status: 500 })

@@ -1,10 +1,12 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
-import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil, Bell, History } from 'lucide-react'
+import { Building2, Wallet, CreditCard, LogOut, X, Trash2, Plus, Heart, Mail, Pencil, Bell, History, TrendingUp } from 'lucide-react'
 import BottomNav from '../components/BottomNav'
 import PromoWizard, { GuestProfile } from '../components/PromoWizard'
 import NotificationSettings from '../components/NotificationSettings'
+import RubrosTab from '../components/perfil/RubrosTab'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type BankSegment = { id: string; name: string; bankId: string }
@@ -137,11 +139,11 @@ export default function PerfilPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
-  const [activeTab, setActiveTab] = useState<'personal' | 'finance' | 'notif' | 'historial'>('personal')
+  const [activeTab, setActiveTab] = useState<'personal' | 'finance' | 'rubros' | 'notif' | 'historial'>('personal')
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'notif' || t === 'finance' || t === 'personal' || t === 'historial') setActiveTab(t)
+    if (t === 'notif' || t === 'finance' || t === 'personal' || t === 'historial' || t === 'rubros') setActiveTab(t)
   }, [])
 
   type UsageHistoryItem = {
@@ -492,11 +494,11 @@ export default function PerfilPage() {
           </button>
         </div>
 
-        <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-2xl gap-1">
-          {(['personal', 'finance', 'historial', 'notif'] as const).map(tab => (
+        <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-2xl gap-1 overflow-x-auto">
+          {(['personal', 'finance', 'rubros', 'historial', 'notif'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2.5 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === tab ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-300 hover:text-gray-700 dark:hover:text-white'}`}>
-              {tab === 'personal' ? 'Personal' : tab === 'finance' ? 'Financiero' : tab === 'historial' ? <><History size={13} />Usos</> : <><Bell size={13} />Alertas</>}
+              className={`flex-1 py-2.5 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap px-2 ${activeTab === tab ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-300 hover:text-gray-700 dark:hover:text-white'}`}>
+              {tab === 'personal' ? 'Personal' : tab === 'finance' ? 'Financiero' : tab === 'rubros' ? 'Rubros' : tab === 'historial' ? <><History size={13} />Usos</> : <><Bell size={13} />Alertas</>}
             </button>
           ))}
         </div>
@@ -689,6 +691,10 @@ export default function PerfilPage() {
               )
             })}
           </div>
+
+        ) : activeTab === 'rubros' ? (
+          /* ══════════ TAB TUS RUBROS ══════════ */
+          <RubrosTab />
 
         ) : activeTab === 'notif' ? (
           /* ══════════ TAB NOTIFICACIONES ══════════ */
@@ -1184,6 +1190,29 @@ export default function PerfilPage() {
                 )}
               </div>
             </div>
+
+            {/* Acceso a Tasas de Plazo Fijo y Billeteras */}
+            <Link
+              href="/finanzas/billeteras"
+              className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-transparent border border-blue-200/70 dark:border-blue-800/50 hover:border-blue-400 transition-all group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 shrink-0">
+                  <TrendingUp size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    Tasas de Plazo Fijo y Billeteras
+                  </h4>
+                  <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                    Compará rendimientos de Mercado Pago, Naranja X y bancos
+                  </p>
+                </div>
+              </div>
+              <span className="text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-sm transition-colors ml-2">
+                →
+              </span>
+            </Link>
 
             <div className="bg-gray-50 dark:bg-slate-700 border border-gray-100 rounded-2xl px-4 py-3.5">
               <p className="text-[11px] text-gray-400 dark:text-slate-500 text-center leading-relaxed">

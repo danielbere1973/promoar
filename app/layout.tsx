@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { getServerSession } from 'next-auth/next'
 import { Analytics } from '@vercel/analytics/next'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import Providers from './providers'
 import PostHogProvider from './components/PostHogProvider'
@@ -32,13 +31,13 @@ export const metadata: Metadata = {
     siteName: 'PromoAR',
     title: 'PromoAR — Todas las promos de tus tarjetas, en un lugar',
     description: 'Descubrí descuentos y cuotas sin interés de más de 20 bancos y billeteras. Filtrado por tu perfil financiero.',
-    images: [{ url: '/logo_promoar.jpeg', width: 1200, height: 630, alt: 'PromoAR' }],
+    images: [{ url: '/api/og/daily', width: 1080, height: 1080, alt: 'Promos de hoy en PromoAR' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'PromoAR — Todas las promos de tus tarjetas',
     description: 'Descubrí descuentos y cuotas sin interés de más de 20 bancos y billeteras.',
-    images: ['/logo_promoar.jpeg'],
+    images: ['/api/og/daily'],
   },
   alternates: {
     canonical: BASE_URL,
@@ -87,7 +86,6 @@ export default async function RootLayout({
           </PostHogProvider>
         </Providers>
         <Analytics />
-        <SpeedInsights />
         {process.env.NEXT_PUBLIC_GA_ID && <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />}
       </body>
     </html>

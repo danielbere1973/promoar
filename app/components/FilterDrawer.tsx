@@ -4,6 +4,11 @@ import { X, Check, ChevronDown, ChevronUp, Search, SlidersHorizontal } from 'luc
 
 type FilterOption = { id: string; name: string; popular?: boolean; logoUrl?: string | null }
 
+// `.includes()` de JS no ignora acentos — "cafe" no matchea "Café Martínez" sin esto.
+function normalizeAccents(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 type UserProfile = {
   banks: { bankId: string }[]
   wallets: { walletId: string }[]
@@ -168,7 +173,7 @@ export default function FilterDrawer({ isOpen, onClose, onApply, currentFilters,
   )
 
   const filteredCommerces = commerceSearch.trim()
-    ? commerces.filter(c => c.toLowerCase().includes(commerceSearch.toLowerCase()))
+    ? commerces.filter(c => normalizeAccents(c).includes(normalizeAccents(commerceSearch)))
     : commerces.slice(0, 12)
 
   function EntityChips({ items, selected, onToggle }: { items: FilterOption[]; selected: string[]; onToggle: (id: string) => void }) {

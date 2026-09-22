@@ -1,14 +1,17 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import StatsView from './StatsView'
+import RetentionAnalyticsView from './RetentionAnalyticsView'
 import ClassifyButton from './ClassifyButton'
 import NotifPrefsTab from './NotifPrefsTab'
 import PendingPromosTab from './PendingPromosTab'
+import { NewsletterEditor } from './NewsletterEditor'
+import CommercesManagerView from './CommercesManagerView'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
   Tag, ChevronRight, Search, ShieldAlert, ShieldCheck, TrendingUp, CalendarClock, Play, Pause, CheckCircle, AlertCircle, Clock,
-  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2
+  GitMerge, Link2, Bell, ClipboardList, Mail, Send, Eye, Users2, History, Sparkles, Store
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -214,7 +217,7 @@ interface ScraperConfig {
 const SCRAPERS_CONFIG: ScraperConfig[] = [
   // Supermercados
   { id: 'coto',            name: 'Coto',            group: 'supermercado', categoria: 'Supermercados', description: 'Supermercado — legales' },
-  { id: 'diarco',          name: 'Diarco',          group: 'supermercado', categoria: 'Supermercados', description: 'Mayorista — HTML plano' },
+  { id: 'diarco',          name: 'Diarco',          group: 'supermercado', categoria: 'Supermercados', description: '⚠️ PAUSADO — Diarco borró /promociones/ (1/9/2026)' },
   { id: 'jumbo',           name: 'Jumbo',           group: 'supermercado', categoria: 'Supermercados', description: 'Cencosud — Playwright' },
   { id: 'disco',           name: 'Disco',           group: 'supermercado', categoria: 'Supermercados', description: 'Cencosud — Playwright' },
   { id: 'vea',             name: 'Vea',             group: 'supermercado', categoria: 'Supermercados', description: 'Cencosud — Playwright' },
@@ -247,14 +250,14 @@ const SCRAPERS_CONFIG: ScraperConfig[] = [
   { id: 'banco supervielle', name: 'Supervielle',   group: 'banco',        description: 'Next.js — tiers de cliente' },
   { id: 'banco patagonia', name: 'Patagonia',       group: 'banco',        description: 'Server-rendered — Mastercard' },
   { id: 'icbc',            name: 'ICBC',            group: 'banco',        description: 'Playwright — ignoreHTTPSErrors' },
-  { id: 'petersen',        name: 'Petersen',        group: 'banco',        description: 'Santa Fe + Entre Ríos + San Juan + Santa Cruz — Playwright' },
+  { id: 'petersen',        name: 'Petersen',        group: 'banco',        description: 'Santa Fe + Entre Ríos + San Juan + Santa Cruz — RSC fetch directo, sin Playwright' },
   { id: 'bancor',          name: 'Bancor',          group: 'banco',        description: 'Banco de Córdoba — GraphQL público, sin WAF' },
   { id: 'hipotecario',     name: 'Hipotecario',     group: 'banco',        description: 'WordPress — HTML server-rendered, sin WAF' },
   { id: 'comafi',          name: 'Comafi',          group: 'banco',        description: 'Te Va Bien (tevabien.com) — JSON público, sin WAF' },
-  { id: 'banco del sol',   name: 'Banco del Sol',   group: 'banco',        description: 'Webflow — Playwright headed (WAF Akamai)' },
-  { id: 'nuevo banco del chaco', name: 'Nuevo Banco del Chaco', group: 'banco', description: 'Promo TUYA (nbch.com.ar) — JSON público, sin WAF' },
-  { id: 'banco del chubut', name: 'Banco del Chubut', group: 'banco', description: 'Patagonia 365 — JSON público, sin WAF, incluye lat/lng de sucursales' },
-  { id: 'banco de corrientes', name: 'Banco de Corrientes', group: 'banco', description: 'Promos del Banco (promosdelbanco.com) — WordPress/TablePress, sin WAF' },
+  { id: 'sol',             name: 'Banco del Sol',   group: 'banco',        description: 'Webflow — Playwright headed (WAF Akamai)' },
+  { id: 'chaco', name: 'Nuevo Banco del Chaco', group: 'banco', description: 'Promo TUYA (nbch.com.ar) — JSON público, sin WAF' },
+  { id: 'chubut', name: 'Banco del Chubut', group: 'banco', description: 'Patagonia 365 — JSON público, sin WAF, incluye lat/lng de sucursales' },
+  { id: 'corrientes', name: 'Banco de Corrientes', group: 'banco', description: 'Promos del Banco (promosdelbanco.com) — WordPress/TablePress, sin WAF' },
 ]
 
 const GRUPO_LABEL: Record<ScraperGroup, string> = {
@@ -356,7 +359,7 @@ function normalizeSearch(s: string): string {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter'>('stats')
+  const [tab, setTab] = useState<'stats' | 'promos' | 'expired' | 'users' | 'entities' | 'form' | 'cleanup' | 'reports' | 'scheduler' | 'alertas' | 'pending' | 'newsletter' | 'analytics' | 'commerces-manager'>('stats')
   const [subTab, setSubTab] = useState<string>('') // Para rubros en promos o sub-entidades
   const [entities, setEntities] = useState<Entities | null>(null)
   const [promos, setPromos] = useState<PromoFull[]>([])
@@ -950,6 +953,15 @@ export default function AdminPage() {
         </div>
         <div className="flex items-center gap-3">
           <a
+            href="/admin/promos-v2"
+            className="flex items-center gap-2 text-xs px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-md shadow-blue-500/20"
+            title="Abrir el nuevo Studio y Bandeja de Promociones V2 en paralelo"
+          >
+            <Sparkles size={14} className="text-amber-300" />
+            <span>✨ Probar Nuevo Admin V2</span>
+            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-mono">Dual-Run</span>
+          </a>
+          <a
             href="/api/admin/export"
             download
             className="flex items-center gap-2 text-xs px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all"
@@ -989,7 +1001,15 @@ export default function AdminPage() {
       </header>
 
       {/* ── Main Nav ── */}
-      <nav className="bg-white border-b border-slate-200 px-6 flex items-center gap-1 shadow-sm">
+      <nav className="bg-white border-b border-slate-200 px-6 flex items-center gap-1 shadow-sm overflow-x-auto">
+        <a
+          href="/admin/promos-v2"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50/80 hover:bg-blue-100 rounded-xl transition-all mr-1 shrink-0 border border-blue-200"
+          title="Abrir el nuevo Studio y Bandeja de Promociones V2"
+        >
+          <Sparkles size={14} className="text-blue-600" />
+          <span>Studio & Bandeja V2</span>
+        </a>
         <TabButton active={tab === 'stats' || tab === 'promos'} icon={TrendingUp} onClick={() => setTab('stats')}>
           Estadísticas y Promos
         </TabButton>
@@ -998,6 +1018,9 @@ export default function AdminPage() {
         </TabButton>
         <TabButton active={tab === 'entities'} icon={Building2} onClick={() => { setTab('entities'); setSubTab('banks') }}>
           Entidades y Config
+        </TabButton>
+        <TabButton active={tab === 'commerces-manager'} icon={Store} onClick={() => setTab('commerces-manager')}>
+          Comercios & Sucursales
         </TabButton>
         <TabButton active={tab === 'expired'} icon={RefreshCw} onClick={() => setTab('expired')}>
           Expiradas
@@ -1016,6 +1039,9 @@ export default function AdminPage() {
         </TabButton>
         <TabButton active={tab === 'pending'} icon={ClipboardList} onClick={() => setTab('pending')}>
           Pendientes
+        </TabButton>
+        <TabButton active={tab === 'analytics'} icon={TrendingUp} onClick={() => setTab('analytics')}>
+          Analytics
         </TabButton>
         <TabButton active={tab === 'newsletter'} icon={Mail} onClick={() => setTab('newsletter')}>
           Newsletter
@@ -1106,11 +1132,24 @@ export default function AdminPage() {
         )}
         {tab === 'scheduler' && <ScraperSchedulerTab />}
 
+        {/* ══════════ TAB ANALYTICS (Paso 0 — Mi Ahorro de Hoy) ══════════ */}
+        {tab === 'analytics' && <RetentionAnalyticsView />}
+
         {/* ══════════ TAB ALERTAS ══════════ */}
         {tab === 'alertas' && <NotifPrefsTab />}
         {tab === 'pending' && <PendingPromosTab />}
 
         {tab === 'newsletter' && <NewsletterTab />}
+
+        {/* ══════════ TAB COMERCIOS & SUCURSALES ══════════ */}
+        {tab === 'commerces-manager' && (
+          <CommercesManagerView
+            onSelectCommerceForPromo={(commerceId) => {
+              setForm({ ...emptyForm(), commerceId })
+              setTab('form')
+            }}
+          />
+        )}
 
         {/* Alerts */}
         {(success || error) && (
@@ -1154,7 +1193,11 @@ export default function AdminPage() {
             )
           }
           const filteredPromos = promos.filter(p => {
-            if (p.status === 'EXPIRED') return false
+            // En modo búsqueda sí se incluyen EXPIRED (backend ya las trae con `q=`) —
+            // si no, buscar algo que venció es indistinguible de que nunca existió
+            // (Pablo 4/9/2026: buscó Clarín 365/Jumbo y no la encontraba porque estaba
+            // vencida, aunque la promo sí existe en la base).
+            if (p.status === 'EXPIRED' && !isSearching) return false
             if (isSearching) {
               if (filterCategories.length > 0 && !filterCategories.includes(p.categoryId)) return false
             } else {
@@ -1312,6 +1355,9 @@ export default function AdminPage() {
                 {loading && <Loader message="Cargando promociones..." />}
                 {filteredPromos.map(p => (
                   <div key={p.id} className="relative">
+                  {p.status === 'EXPIRED' && (
+                    <span className="absolute top-2 right-2 z-10 text-[10px] font-black uppercase text-white bg-slate-500 px-2 py-0.5 rounded-full shadow">Vencida</span>
+                  )}
                   <PromoCard
                     key={p.id}
                     promo={p}
@@ -1820,6 +1866,26 @@ export default function AdminPage() {
                     />
                   )))}
 
+                  {entities && subTab === 'commerces' && (
+                    <div className="bg-indigo-50 border border-indigo-200/80 rounded-2xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                      <div>
+                        <p className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                          <span>📍</span> Nuevo Gestor de Comercios, Sucursales y Promociones
+                        </p>
+                        <p className="text-[11px] text-indigo-700 font-medium">
+                          Geolocalizá sucursales con OpenStreetMap y parametrizá el modelo de presencia para el Decision Engine.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTab('commerces-manager')}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm shrink-0 self-start sm:self-auto"
+                      >
+                        Abrir Gestor Completo
+                      </button>
+                    </div>
+                  )}
+
                   {entities && subTab === 'commerces' && (entities.commerces?.length === 0 ? <EmptyState msg="No hay comercios cargados" /> : entities.commerces.map((c: any) => (
                     <EntityRow key={c.id} name={c.name} img={c.logoUrl}
                       badge={c.activePromos > 0 ? `${c.activePromos} promos` : undefined}
@@ -2266,7 +2332,7 @@ const PLAYWRIGHT_SCRAPER_IDS = new Set([
   'banco macro', 'naranjax', 'banco santander',
   'banco supervielle', 'banco ciudad', 'visa',
   'jumbo', 'disco', 'vea', 'banco patagonia',
-  'petersen', 'banco del sol',
+  'sol',
 ])
 
 function ScraperSchedulerTab() {
@@ -2277,6 +2343,73 @@ function ScraperSchedulerTab() {
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [flagged, setFlagged] = useState<Array<{ title: string; storeName: string; sourceUrl: string; description: string }>>([])
+  const [selectedLocal, setSelectedLocal] = useState<Set<string>>(new Set())
+  // Reporte ejecutivo en vivo (panel admin + email) — pedido por Pablo 4/9/2026:
+  // "no puede ser que yo no pueda ver el resultado en forma inmediata y, en lo posible, por mail"
+  const [runReport, setRunReport] = useState<Array<{ scraperId: string; status: 'success' | 'error'; found?: number; processed?: number; skipped?: number; message?: string | null }>>([])
+  const [staleScrapers, setStaleScrapers] = useState<Array<{ scraperId: string; lastStatus: string; lastRunAt: string; lastSuccessAt: string | null; daysSinceSuccess: number | null }>>([])
+  const [staleDaysThreshold, setStaleDaysThreshold] = useState(7)
+  // Última corrida por scraper, persistida en DB (ScraperRun) — a diferencia de runReport
+  // (que se pierde al recargar la página), esto sobrevive un refresh/reinicio del server.
+  // Pedido por Pablo 4/9/2026: "agregame la fecha de la última corrida" + historial consultable.
+  type ScraperRunRow = {
+    scraperId: string; status: string; startedAt: string; finishedAt: string | null
+    found: number | null; processed: number | null; skipped: number | null; message: string | null; trigger: string | null
+  }
+  const [latestRuns, setLatestRuns] = useState<Record<string, ScraperRunRow>>({})
+  const [historyModal, setHistoryModal] = useState<string | null>(null)
+  const [historyRows, setHistoryRows] = useState<ScraperRunRow[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  async function loadStale() {
+    const res = await fetch(`/api/admin/scraper-runs?t=${Date.now()}`, { cache: 'no-store' })
+    if (res.ok) {
+      const data = await res.json()
+      setStaleScrapers(data.stale ?? [])
+      setStaleDaysThreshold(data.staleDaysThreshold ?? 7)
+      setLatestRuns(data.latestByScraperId ?? {})
+    }
+  }
+
+  async function openHistory(scraperId: string) {
+    setHistoryModal(scraperId)
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/admin/scraper-runs?scraperId=${encodeURIComponent(scraperId)}&limit=100&t=${Date.now()}`, { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        setHistoryRows(data.recent ?? [])
+      }
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  function durationLabel(startedAt: string, finishedAt: string | null): string {
+    if (!finishedAt) return '—'
+    const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime()
+    if (ms < 0) return '—'
+    const mins = Math.floor(ms / 60000)
+    const secs = Math.round((ms % 60000) / 1000)
+    if (mins === 0) return `${secs}s`
+    return `${mins}m ${secs}s`
+  }
+
+  function fmtDateTime(iso: string): string {
+    return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  async function sendReportEmail(results: typeof runReport, batchLabel?: string) {
+    try {
+      await fetch('/api/admin/scraper-runs/report-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ results, batchLabel }),
+      })
+    } catch (e) {
+      console.error('Error enviando reporte por email:', e)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -2294,7 +2427,7 @@ function ScraperSchedulerTab() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadStale() }, [])
 
   async function save(scraperId: string) {
     const s = schedules[scraperId]
@@ -2313,6 +2446,7 @@ function ScraperSchedulerTab() {
 
   async function runNow(scraperId: string, local = false) {
     setRunning(scraperId)
+    setRunReport([])
     const isPlaywright = PLAYWRIGHT_SCRAPER_IDS.has(scraperId.toLowerCase())
     const useGh = isPlaywright && !local
     const endpoint = useGh ? '/api/admin/trigger-scraper' : '/api/admin/run-scraper'
@@ -2328,19 +2462,28 @@ function ScraperSchedulerTab() {
         const data = await res.json()
         const found = data.totalFound ?? data.found ?? 0
         const processed = data.processed ?? 0
-        const skipped = data.skippedUnchanged ?? 0
+        const skipped = data.skipped ?? data.skippedUnchanged ?? 0
         if (data.flagged?.length) setFlagged(data.flagged)
         const label = SCRAPERS_CONFIG.find(s => s.id === scraperId)?.name ?? scraperId
         const detail = `${found} leídas · ${processed} guardadas · ${skipped} sin cambios`
         setMsg({ type: 'success', text: `✅ ${label}: ${detail}` })
+        const report = [{ scraperId: scraperId.toLowerCase(), status: 'success' as const, found, processed, skipped }]
+        setRunReport(report)
+        sendReportEmail(report)
       }
     } else {
       const data = await res.json().catch(() => ({}))
       setMsg({ type: 'error', text: `❌ ${scraperId}: ${data.error ?? 'Error desconocido'}` })
+      if (!useGh) {
+        const report = [{ scraperId: scraperId.toLowerCase(), status: 'error' as const, message: data.error ?? 'Error desconocido' }]
+        setRunReport(report)
+        sendReportEmail(report)
+      }
     }
     setRunning(null)
     setTimeout(() => setMsg(null), 10000)
     load()
+    loadStale()
   }
 
   function update(scraperId: string, field: string, value: any) {
@@ -2363,7 +2506,9 @@ function ScraperSchedulerTab() {
   async function runAllHttp() {
     setMsg(null)
     setFlagged([])
+    setRunReport([])
     let ok = 0, err = 0, totalFound = 0, totalProcessed = 0
+    const report: typeof runReport = []
     for (const s of httpScrapers) {
       setRunning(s.id)
       const res = await fetch('/api/admin/run-scraper', {
@@ -2371,19 +2516,26 @@ function ScraperSchedulerTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scraperId: s.id }),
       })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
         ok++
-        const data = await res.json().catch(() => ({}))
         totalFound += data.found ?? 0
         totalProcessed += data.processed ?? 0
         if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
-      } else err++
+        report.push({ scraperId: s.id.toLowerCase(), status: 'success', found: data.found ?? 0, processed: data.processed ?? 0, skipped: data.skipped ?? 0 })
+      } else {
+        err++
+        report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: data.error ?? 'Error desconocido' })
+      }
     }
     setRunning(null)
+    setRunReport(report)
     const summary = `${ok} scrapers OK${err > 0 ? `, ${err} con error` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas`
     setMsg({ type: err > 0 ? 'error' : 'success', text: summary })
     setTimeout(() => setMsg(null), 15000)
+    sendReportEmail(report, 'Ejecutar todos (HTTP)')
     load()
+    loadStale()
   }
 
   async function runAllGh() {
@@ -2404,7 +2556,9 @@ function ScraperSchedulerTab() {
   async function runAllLocal() {
     setMsg(null)
     setFlagged([])
+    setRunReport([])
     let ok = 0, err = 0, totalFound = 0, totalProcessed = 0, totalSkipped = 0
+    const report: typeof runReport = []
     for (const s of httpScrapers) {
       setRunning(s.id)
       try {
@@ -2420,19 +2574,78 @@ function ScraperSchedulerTab() {
           totalProcessed += data.processed ?? 0
           totalSkipped += data.skippedUnchanged ?? 0
           if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
+          report.push({ scraperId: s.id.toLowerCase(), status: 'success', found: data.totalFound ?? data.found ?? 0, processed: data.processed ?? 0, skipped: data.skippedUnchanged ?? 0 })
         } else {
           err++
           console.error(`[${s.id}] ${data.error ?? res.status}`)
+          report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: data.error ?? String(res.status) })
         }
       } catch (e) {
         err++
         console.error(`[${s.id}] Error de conexión`, e)
+        report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: e instanceof Error ? e.message : 'Error de conexión' })
       }
     }
     setRunning(null)
+    setRunReport(report)
     setMsg({ type: err > 0 ? 'error' : 'success', text: `Local: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
     setTimeout(() => setMsg(null), 15000)
+    sendReportEmail(report, 'Ejecutar todos (local)')
     load()
+    loadStale()
+  }
+
+  function toggleLocalSelected(id: string) {
+    setSelectedLocal(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function runSelectedLocal() {
+    const targets = SCRAPERS_CONFIG.filter(s => selectedLocal.has(s.id))
+    if (targets.length === 0) return
+    setMsg(null)
+    setFlagged([])
+    setRunReport([])
+    let ok = 0, err = 0, totalFound = 0, totalProcessed = 0, totalSkipped = 0
+    const report: typeof runReport = []
+    for (const s of targets) {
+      setRunning(s.id)
+      try {
+        const res = await fetch('/api/admin/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scraper: s.id, categoria: (s as any).categoria, forceLocal: true }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok) {
+          ok++
+          totalFound += data.totalFound ?? data.found ?? 0
+          totalProcessed += data.processed ?? 0
+          totalSkipped += data.skippedUnchanged ?? 0
+          if (data.flagged?.length) setFlagged(prev => [...prev, ...data.flagged])
+          report.push({ scraperId: s.id.toLowerCase(), status: 'success', found: data.totalFound ?? data.found ?? 0, processed: data.processed ?? 0, skipped: data.skippedUnchanged ?? 0 })
+        } else {
+          err++
+          console.error(`[${s.id}] ${data.error ?? res.status}`)
+          report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: data.error ?? String(res.status) })
+        }
+      } catch (e) {
+        err++
+        console.error(`[${s.id}] Error de conexión`, e)
+        report.push({ scraperId: s.id.toLowerCase(), status: 'error', message: e instanceof Error ? e.message : 'Error de conexión' })
+      }
+    }
+    setRunning(null)
+    setRunReport(report)
+    setMsg({ type: err > 0 ? 'error' : 'success', text: `Seleccionados: ${ok} OK${err > 0 ? `, ${err} errores` : ''} · ${totalFound} leídas · ${totalProcessed} guardadas · ${totalSkipped} sin cambios` })
+    setTimeout(() => setMsg(null), 15000)
+    sendReportEmail(report, 'Selección local')
+    load()
+    loadStale()
   }
 
   return (
@@ -2462,6 +2675,224 @@ function ScraperSchedulerTab() {
           </p>
         </div>
       </div>
+
+      {/* Reporte ejecutivo en vivo — se llena inmediatamente después de correr uno o varios scrapers */}
+      {runReport.length > 0 && (() => {
+        const totals = runReport.reduce((acc, r) => {
+          acc.found += r.found ?? 0
+          acc.saved += r.processed ?? 0
+          acc.skipped += r.skipped ?? 0
+          if (r.status === 'error') acc.errors += 1
+          return acc
+        }, { found: 0, saved: 0, skipped: 0, errors: 0 })
+        const sorted = [...runReport].sort((a, b) => {
+          if (a.status !== b.status) return a.status === 'error' ? -1 : 1
+          return (b.processed ?? 0) - (a.processed ?? 0)
+        })
+        return (
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Panel admin · Scrapers</p>
+              <h3 className="text-base font-black text-slate-800 dark:text-slate-100">Reporte de la última corrida</h3>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-200 dark:bg-slate-700 overflow-hidden">
+              <div className="bg-white dark:bg-[#0F2040] px-4 py-3.5 flex flex-col gap-1">
+                <span className="text-2xl font-black tracking-tight text-slate-600 dark:text-slate-300 tabular-nums">{totals.found.toLocaleString('es-AR')}</span>
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Leídas</span>
+              </div>
+              <div className="bg-white dark:bg-[#0F2040] px-4 py-3.5 flex flex-col gap-1">
+                <span className="text-2xl font-black tracking-tight text-teal-600 dark:text-teal-400 tabular-nums">{totals.saved.toLocaleString('es-AR')}</span>
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Guardadas / actualizadas</span>
+              </div>
+              <div className="bg-white dark:bg-[#0F2040] px-4 py-3.5 flex flex-col gap-1">
+                <span className="text-2xl font-black tracking-tight text-slate-400 dark:text-slate-500 tabular-nums">{totals.skipped.toLocaleString('es-AR')}</span>
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Sin cambios</span>
+              </div>
+              <div className="bg-white dark:bg-[#0F2040] px-4 py-3.5 flex flex-col gap-1">
+                <span className={`text-2xl font-black tracking-tight tabular-nums ${totals.errors > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-300 dark:text-slate-600'}`}>{totals.errors}</span>
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Con error</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F2040] overflow-hidden">
+              <div className="grid grid-cols-[1fr_70px_70px_70px_84px] gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                <span>Scraper</span>
+                <span className="text-right">Leídas</span>
+                <span className="text-right">Guardadas</span>
+                <span className="text-right">Sin cambios</span>
+                <span className="text-right">Estado</span>
+              </div>
+              <div className="flex flex-col">
+                {sorted.map((r, i) => r.status === 'error' ? (
+                  <div key={`${r.scraperId}-${i}`} className={`flex flex-col gap-2 px-4 py-2.5 bg-red-50 dark:bg-red-950/30 ${i > 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}>
+                    <div className="grid grid-cols-[1fr_70px_70px_70px_84px] gap-2 items-center">
+                      <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200">{r.scraperId}</span>
+                      <span className="text-right text-slate-300 dark:text-slate-600">—</span>
+                      <span className="text-right text-slate-300 dark:text-slate-600">—</span>
+                      <span className="text-right text-slate-300 dark:text-slate-600">—</span>
+                      <span className="flex justify-end">
+                        <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
+                          <AlertCircle size={11} /> Error
+                        </span>
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] font-mono text-red-700 dark:text-red-400 bg-white dark:bg-[#0F2040] border border-red-200 dark:border-red-800 rounded-lg px-2.5 py-1.5">
+                      {r.message ?? 'Error desconocido'}
+                    </p>
+                  </div>
+                ) : (
+                  <div key={`${r.scraperId}-${i}`} className={`grid grid-cols-[1fr_70px_70px_70px_84px] gap-2 items-center px-4 py-2.5 ${i > 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}>
+                    <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200">{r.scraperId}</span>
+                    <span className="text-right text-[13px] font-bold text-slate-500 dark:text-slate-400 tabular-nums">{(r.found ?? 0).toLocaleString('es-AR')}</span>
+                    <span className="text-right text-[13px] font-bold text-teal-600 dark:text-teal-400 tabular-nums">{(r.processed ?? 0).toLocaleString('es-AR')}</span>
+                    <span className="text-right text-[13px] font-semibold text-slate-400 dark:text-slate-500 tabular-nums">{(r.skipped ?? 0).toLocaleString('es-AR')}</span>
+                    <span className="flex justify-end">
+                      <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                        <CheckCircle size={11} /> OK
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Alerta de scrapers estancados — sin corrida exitosa hace más de N días */}
+      {staleScrapers.length > 0 && (
+        <div className="rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 flex flex-col gap-2.5">
+          <h3 className="text-[13px] font-black text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+            <AlertCircle size={14} />
+            {staleScrapers.length} scraper{staleScrapers.length === 1 ? '' : 's'} sin corrida exitosa hace más de {staleDaysThreshold} días
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {staleScrapers.map(s => (
+              <span key={s.scraperId} className="text-[11px] font-bold bg-white dark:bg-[#0F2040] border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-400 px-2.5 py-1 rounded-full">
+                {s.scraperId} {s.daysSinceSuccess !== null ? `(${s.daysSinceSuccess}d)` : '(nunca OK)'}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Última corrida por scraper — persistido en DB, sobrevive reload/reinicio del server
+          (a diferencia del reporte en vivo de arriba, que se pierde al recargar la página).
+          Click en una fila abre el historial completo de ese scraper. */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F2040] overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2">
+            <History size={16} className="text-slate-500 dark:text-slate-400" />
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Última corrida por scraper</h3>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 hidden sm:inline">— click en una fila para ver el historial completo</span>
+          </div>
+          <button
+            onClick={() => loadStale()}
+            className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 px-2.5 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+            title="Refrescar tabla de corridas"
+          >
+            <RefreshCw size={12} />
+            Refrescar
+          </button>
+        </div>
+        <div className="grid grid-cols-[1fr_150px_70px_60px] sm:grid-cols-[1fr_170px_90px_90px_90px_70px] gap-2 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-700">
+          <span>Scraper</span>
+          <span>Última corrida</span>
+          <span className="hidden sm:inline text-right">Leídas</span>
+          <span className="hidden sm:inline text-right">Guardadas</span>
+          <span className="text-right">Skip.</span>
+          <span className="text-right">Estado</span>
+        </div>
+        <div className="max-h-[420px] overflow-y-auto">
+          {SCRAPERS_CONFIG.map((cfg, i) => {
+            const r = latestRuns[cfg.id.toLowerCase()]
+            return (
+              <button
+                key={cfg.id}
+                onClick={() => openHistory(cfg.id)}
+                className={`w-full grid grid-cols-[1fr_150px_70px_60px] sm:grid-cols-[1fr_170px_90px_90px_90px_70px] gap-2 items-center px-4 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${i > 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}
+              >
+                <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate">{cfg.name}</span>
+                <span className="text-[12px] text-slate-500 dark:text-slate-400">{r ? fmtDateTime(r.startedAt) : 'Nunca'}</span>
+                <span className="hidden sm:inline text-right text-[12px] font-semibold text-slate-500 dark:text-slate-400 tabular-nums">{r?.found?.toLocaleString('es-AR') ?? '—'}</span>
+                <span className="hidden sm:inline text-right text-[12px] font-semibold text-teal-600 dark:text-teal-400 tabular-nums">{r?.processed?.toLocaleString('es-AR') ?? '—'}</span>
+                <span className="text-right text-[12px] font-semibold text-slate-400 dark:text-slate-500 tabular-nums">{r?.skipped?.toLocaleString('es-AR') ?? '—'}</span>
+                <span className="flex justify-end">
+                  {!r && <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>}
+                  {r?.status === 'success' && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"><CheckCircle size={10} /> OK</span>}
+                  {r?.status === 'error' && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/40 text-red-700 dark:text-red-400"><AlertCircle size={10} /> Error</span>}
+                  {r?.status === 'running' && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400">Corriendo</span>}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Modal de historial completo de un scraper */}
+      {historyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setHistoryModal(null)}>
+          <div className="bg-white dark:bg-[#0F2040] rounded-2xl border border-slate-200 dark:border-slate-700 max-w-3xl w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-base font-black text-slate-800 dark:text-slate-100">Historial — {SCRAPERS_CONFIG.find(s => s.id === historyModal)?.name ?? historyModal}</h3>
+              <button onClick={() => setHistoryModal(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {historyLoading ? (
+                <p className="text-sm text-slate-400 px-5 py-8 text-center">Cargando...</p>
+              ) : historyRows.length === 0 ? (
+                <p className="text-sm text-slate-400 px-5 py-8 text-center">Sin corridas registradas para este scraper.</p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-white dark:bg-[#0F2040]">
+                    <tr className="text-slate-400 dark:text-slate-500 text-[10px] uppercase border-b border-slate-200 dark:border-slate-700">
+                      <th className="text-left py-2 px-3">Inicio</th>
+                      <th className="text-left py-2 px-3">Fin</th>
+                      <th className="text-right py-2 px-3">Duración</th>
+                      <th className="text-left py-2 px-3">Estado</th>
+                      <th className="text-right py-2 px-3">Leídas</th>
+                      <th className="text-right py-2 px-3">Guardadas</th>
+                      <th className="text-right py-2 px-3">Skip.</th>
+                      <th className="text-left py-2 px-3">Origen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyRows.map((r, i) => (
+                      <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="py-2 px-3 text-slate-600 dark:text-slate-300">{fmtDateTime(r.startedAt)}</td>
+                        <td className="py-2 px-3 text-slate-600 dark:text-slate-300">{r.finishedAt ? fmtDateTime(r.finishedAt) : '—'}</td>
+                        <td className="py-2 px-3 text-right text-slate-500 dark:text-slate-400 tabular-nums">{durationLabel(r.startedAt, r.finishedAt)}</td>
+                        <td className="py-2 px-3">
+                          {r.status === 'success' && <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold"><CheckCircle size={11} /> OK</span>}
+                          {r.status === 'error' && <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-bold"><AlertCircle size={11} /> Error</span>}
+                          {r.status === 'running' && <span className="text-blue-600 dark:text-blue-400 font-bold">Corriendo</span>}
+                        </td>
+                        <td className="py-2 px-3 text-right text-slate-500 dark:text-slate-400 tabular-nums">{r.found?.toLocaleString('es-AR') ?? '—'}</td>
+                        <td className="py-2 px-3 text-right text-teal-600 dark:text-teal-400 font-semibold tabular-nums">{r.processed?.toLocaleString('es-AR') ?? '—'}</td>
+                        <td className="py-2 px-3 text-right text-slate-400 dark:text-slate-500 tabular-nums">{r.skipped?.toLocaleString('es-AR') ?? '—'}</td>
+                        <td className="py-2 px-3 text-slate-400 dark:text-slate-500">{r.trigger ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {historyRows.some(r => r.status === 'error' && r.message) && (
+                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Mensajes de error</p>
+                  {historyRows.filter(r => r.status === 'error' && r.message).map((r, i) => (
+                    <p key={i} className="text-[11px] font-mono text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-2.5 py-1.5">
+                      {fmtDateTime(r.startedAt)}: {r.message}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {scraperSubTab === 'gh' && (
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -2685,14 +3116,34 @@ function ScraperSchedulerTab() {
 
       {/* ── Tabla Local (contingencia) ── */}
       {scraperSubTab === 'local' && <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 bg-orange-50 border-b border-orange-100">
+        <div className="px-5 py-3 bg-orange-50 border-b border-orange-100 flex items-center justify-between flex-wrap gap-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">
             Todos los scrapers corren localmente — requiere <code className="font-mono bg-orange-100 px-1 rounded">npm run dev</code>
           </p>
+          <button
+            onClick={runSelectedLocal}
+            disabled={!!running || selectedLocal.size === 0}
+            className="text-[10px] font-bold px-3 py-1.5 bg-orange-600 text-white hover:bg-orange-700 rounded-lg transition-colors disabled:opacity-40 flex items-center gap-1.5"
+          >
+            {running ? <RefreshCw size={11} className="animate-spin" /> : <Play size={11} />}
+            Ejecutar seleccionados{selectedLocal.size > 0 ? ` (${selectedLocal.size})` : ''}
+          </button>
         </div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
+              <th className="px-5 py-3 text-left w-8">
+                <input
+                  type="checkbox"
+                  checked={SCRAPERS_CONFIG.length > 0 && selectedLocal.size === SCRAPERS_CONFIG.length}
+                  onChange={() => {
+                    setSelectedLocal(prev =>
+                      prev.size === SCRAPERS_CONFIG.length ? new Set() : new Set(SCRAPERS_CONFIG.map(s => s.id))
+                    )
+                  }}
+                  className="w-3.5 h-3.5 accent-orange-600"
+                />
+              </th>
               <th className="px-5 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Scraper</th>
               <th className="px-5 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Tipo</th>
               <th className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Ejecutar</th>
@@ -2701,6 +3152,14 @@ function ScraperSchedulerTab() {
           <tbody>
             {SCRAPERS_CONFIG.map(cfg => (
               <tr key={cfg.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                <td className="px-5 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedLocal.has(cfg.id)}
+                    onChange={() => toggleLocalSelected(cfg.id)}
+                    className="w-3.5 h-3.5 accent-orange-600"
+                  />
+                </td>
                 <td className="px-5 py-3">
                   <p className="font-bold text-slate-800 text-xs">{cfg.name}</p>
                   <p className="text-[10px] text-slate-400">{cfg.description}</p>
@@ -3769,7 +4228,7 @@ function NewsletterTab() {
 
       {/* Compositor manual */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-        <h3 className="text-sm font-black text-slate-800">Envío manual (HTML libre)</h3>
+        <h3 className="text-sm font-black text-slate-800">Envío manual</h3>
 
         <div>
           <label className="text-xs font-bold text-slate-500 block mb-1.5">Asunto</label>
@@ -3781,16 +4240,7 @@ function NewsletterTab() {
           />
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-slate-500 block mb-1.5">Contenido (HTML)</label>
-          <textarea
-            value={htmlContent}
-            onChange={e => setHtmlContent(e.target.value)}
-            placeholder={'<h2>¡Hola!</h2>\n<p>Esta semana las mejores promos son...</p>'}
-            rows={10}
-            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:border-[#1E3A5F] resize-y"
-          />
-        </div>
+        <NewsletterEditor value={htmlContent} onChange={setHtmlContent} />
 
         {/* Preview toggle */}
         <div className="flex items-center gap-2">

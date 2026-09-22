@@ -2,6 +2,9 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
+import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
+import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
+import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
 
 async function isAdmin() {
   const session = await getServerSession()
@@ -138,6 +141,10 @@ export async function POST() {
       where: { id: { in: toApprove } },
       data: { status: 'ACTIVE' },
     })
+    await invalidatePublicPromosCache()
+    invalidateCategoriesCache()
+    invalidatePromoDetailCache()
+    invalidateCommerceDetailCache()
     // Obtener slugs para IndexNow
     const approved = await prisma.promo.findMany({
       where: { id: { in: toApprove }, slug: { not: null } },

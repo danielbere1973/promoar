@@ -1,7 +1,16 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/prisma'
 import { getAuthenticatedEmail } from '@/lib/auth'
+import { recalculateSnapshot } from '@/lib/recommendationSnapshot'
+
+// Acciones que modifican el perfil financiero (matching/ranking) — disparan
+// recalculo de RecommendationSnapshot en background. update_profile queda
+// afuera a propósito: son datos personales, no afectan matchesProfile/ranking.
+const SNAPSHOT_TRIGGER_ACTIONS = new Set([
+  'add_bank', 'remove_bank', 'add_wallet', 'remove_wallet', 'add_card', 'update_card', 'remove_card',
+])
 
 // GET /api/perfil — devuelve el perfil completo del usuario logueado
 export async function GET(req: NextRequest) {
@@ -15,8 +24,8 @@ export async function GET(req: NextRequest) {
     include: {
       financialProfile: {
         include: {
-          banks: { include: { bank: { select: { id: true, name: true, slug: true } } } },
-          wallets: { include: { wallet: { select: { id: true, name: true, slug: true } } } },
+          banks: { include: { bank: { select: { id: true, name: true, slug: true, logoUrl: true } } } },
+          wallets: { include: { wallet: { select: { id: true, name: true, slug: true, logoUrl: true } } } },
           cards: {
             include: {
               bank: { select: { id: true, name: true } },
@@ -201,6 +210,14 @@ export async function POST(req: NextRequest) {
     } else if (action === 'remove_card' && cardId) {
       if (!profileId) throw new Error("No hay perfil financiero")
       await prisma.userCard.deleteMany({ where: { id: cardId, financialProfileId: profileId } })
+    }
+
+    if (SNAPSHOT_TRIGGER_ACTIONS.has(action)) {
+      waitUntil(
+        recalculateSnapshot(user.id).catch(error => {
+          console.error('[POST /api/perfil] recalculateSnapshot falló en background', error)
+        })
+      )
     }
 
     return NextResponse.json({ ok: true })

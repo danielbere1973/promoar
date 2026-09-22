@@ -12,6 +12,8 @@ export interface ScrapedPromo {
   description: string;
   sourceText?: string;
   sourceUrl?: string;
+  source?: string;
+  externalId?: string;
   discount: string;
   discountType: string;
   cap?: number | null;
@@ -39,6 +41,9 @@ export interface ScrapedPromo {
   salesChannel?: 'ONLINE' | 'FISICA' | null;
   segment?: string;
   note?: string;
+  commerceNote?: string | null;
+  validFromHour?: number | null;
+  validToHour?: number | null;
   branches?: Array<{ address: string; city?: string; lat: number; lng: number }>;
 }
 
