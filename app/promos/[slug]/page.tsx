@@ -159,12 +159,17 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   }
 }
 
+// Pre-generar solo un top chico en build time (dynamicParams=true por default
+// genera el resto on-demand en el primer request y lo cachea, gracias a
+// revalidate=false más arriba). Con 2000 params, el build competía por el
+// pool de Neon (connection_limit=3 en producción) contra si mismo y otras
+// rutas con generateStaticParams (bancos, comercios) y tiraba P2024.
 export async function generateStaticParams() {
   const promos = await prisma.promo.findMany({
     where: { status: 'ACTIVE', slug: { not: null } },
     select: { slug: true },
     orderBy: { updatedAt: 'desc' },
-    take: 2000,
+    take: 150,
   })
   return promos.map(p => ({ slug: p.slug! }))
 }
