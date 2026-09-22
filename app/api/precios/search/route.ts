@@ -1740,7 +1740,6 @@ export async function GET(request: Request) {
           name: p.name,
           brand: p.brand,
           imageUrl: p.imageUrl,
-          excludedFromBankPromos: false,
           excludedFromBankPromos: p.excludedFromBankPromos ?? false,
           markets: {}
         })
