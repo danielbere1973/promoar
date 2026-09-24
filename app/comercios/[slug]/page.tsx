@@ -92,10 +92,17 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   }
 }
 
+// Pre-generar solo un top chico en build time — hay 13000+ comercios activos
+// con promos, y generarlos todos en build agotaba el pool de Neon
+// (connection_limit=3 en producción, error P2024). dynamicParams=true por
+// default genera el resto on-demand en el primer request y lo cachea
+// (revalidate=false más arriba), sin perder ninguna página.
 export async function generateStaticParams() {
   const commerces = await prisma.commerce.findMany({
     where: { active: true, promos: { some: { status: 'ACTIVE' } } },
     select: { slug: true },
+    orderBy: { activePromoCount: 'desc' },
+    take: 150,
   }).catch(() => [])
   return commerces.map(c => ({ slug: c.slug }))
 }

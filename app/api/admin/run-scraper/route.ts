@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Agent, fetch as undiciFetch } from 'undici'
 import { getAuthToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ALL_SCRAPERS } from '@/lib/scrapers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
+
+// El fetch nativo (undici) usa un headersTimeout de 5 minutos que no depende
+// de maxDuration — scrapers Playwright lentos (BBVA vía BrightData, Santander)
+// pueden superarlo aunque /api/admin/scrape termine bien y guarde en la DB.
+// Agent dedicado con timeout extendido solo para esta llamada server-to-server.
+const longTimeoutAgent = new Agent({ headersTimeout: 480_000, bodyTimeout: 480_000 })
 
 export async function POST(req: NextRequest) {
   const token = await getAuthToken(req)
@@ -44,7 +51,7 @@ export async function POST(req: NextRequest) {
     const host = req.headers.get('host') || 'localhost:3000'
     const protocol = host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https'
     const baseUrl = `${protocol}://${host}`
-    const res = await fetch(`${baseUrl}/api/admin/scrape`, {
+    const res = await undiciFetch(`${baseUrl}/api/admin/scrape`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,14 +59,15 @@ export async function POST(req: NextRequest) {
         'Cookie': req.headers.get('cookie') || '',
       },
       body: JSON.stringify({ scraper: scraperId, forceLocal, skipWarmup }),
-    })
+      dispatcher: longTimeoutAgent,
+    } as any)
 
     if (!res.ok) {
       const text = await res.text()
       throw new Error(`Scrape API error ${res.status}: ${text.slice(0, 200)}`)
     }
 
-    const data = await res.json()
+    const data = await res.json() as any
     const found = data.totalFound ?? data.found ?? 0
     const processed = data.processed ?? 0
 
