@@ -1827,6 +1827,16 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   </div>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
+                  <Link
+                    href="/ahorro-interactivo"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-8 px-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-[#D94F2B]/50 rounded-full flex items-center justify-center text-[#D94F2B] shrink-0 gap-1 text-[11px] font-black shadow-sm"
+                    title="Compara tus beneficios"
+                  >
+                    <Calculator size={13} />
+                    <span className="text-[10px] text-gray-700 dark:text-slate-200">Ahorro</span>
+                  </Link>
                   <ThemeToggle />
                   {status === 'authenticated' ? (
                     <button onClick={() => { import('next-auth/react').then(m => m.signOut({ callbackUrl: '/login' })) }}
@@ -1841,16 +1851,6 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
               {/* Buscador combo + Botón de Filtros mobile */}
               <div className="flex items-center gap-2">
-                <Link
-                  href="/ahorro-interactivo"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-10 px-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-[#D94F2B]/50 rounded-2xl flex items-center justify-center text-[#D94F2B] shrink-0 gap-1 text-[11px] font-black shadow-sm"
-                  title="Compara tus beneficios"
-                >
-                  <Calculator size={15} />
-                  <span className="text-[10px] text-gray-700 dark:text-slate-200">Ahorro</span>
-                </Link>
                 <div id="tour-buscador-mobile" className="flex-1 flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10">
                   <button
                     onClick={() => setSearchTab(prev => prev === 'comercios' ? 'productos' : 'comercios')}
