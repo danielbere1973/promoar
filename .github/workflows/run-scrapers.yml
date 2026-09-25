@@ -57,30 +57,58 @@ jobs:
             echo "playwright_scrapers=$PW" >> $GITHUB_OUTPUT
           fi
 
-  run-http:
+  prepare-matrix:
     needs: check
-    if: needs.check.outputs.http_scrapers != ''
     runs-on: ubuntu-latest
-    name: Scrapers HTTP
+    name: Preparar matrices
+    outputs:
+      http_matrix: ${{ steps.build.outputs.http_matrix }}
+      playwright_matrix: ${{ steps.build.outputs.playwright_matrix }}
     steps:
-      - name: Ejecutar scrapers HTTP
+      - name: Convertir listas a JSON para matrix
+        id: build
         run: |
-          IFS=',' read -ra SCRAPER_LIST <<< "${{ needs.check.outputs.http_scrapers }}"
-          for SCRAPER in "${SCRAPER_LIST[@]}"; do
-            echo "Ejecutando HTTP: $SCRAPER"
-            curl -s -X POST \
-              -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" \
-              -H "Content-Type: application/json" \
-              -d "{\"scraperId\":\"$SCRAPER\"}" \
-              "${{ secrets.API_URL }}/api/internal/run-scraper"
-            echo ""
-          done
+          python3 -c "
+          import json, os
+          http = '${{ needs.check.outputs.http_scrapers }}'
+          pw = '${{ needs.check.outputs.playwright_scrapers }}'
+          http_list = [s.strip() for s in http.split(',') if s.strip()]
+          pw_list = [s.strip() for s in pw.split(',') if s.strip()]
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'http_matrix={json.dumps(http_list)}\n')
+              f.write(f'playwright_matrix={json.dumps(pw_list)}\n')
+          "
+
+  run-http:
+    needs: prepare-matrix
+    if: needs.prepare-matrix.outputs.http_matrix != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scraper: ${{ fromJson(needs.prepare-matrix.outputs.http_matrix) }}
+    name: Scraper HTTP (${{ matrix.scraper }})
+    steps:
+      - name: Ejecutar scraper HTTP
+        run: |
+          echo "Ejecutando HTTP: ${{ matrix.scraper }}"
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"scraperId\":\"${{ matrix.scraper }}\"}" \
+            "${{ secrets.API_URL }}/api/internal/run-scraper"
+          echo ""
 
   run-playwright:
-    needs: check
-    if: needs.check.outputs.playwright_scrapers != ''
+    needs: prepare-matrix
+    if: needs.prepare-matrix.outputs.playwright_matrix != '[]'
     runs-on: ubuntu-latest
-    name: Scrapers Playwright
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        scraper: ${{ fromJson(needs.prepare-matrix.outputs.playwright_matrix) }}
+    name: Scraper Playwright (${{ matrix.scraper }})
     timeout-minutes: 30
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
@@ -96,7 +124,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline
 
-      - name: Ejecutar scrapers Playwright
+      - name: Ejecutar scraper Playwright
         shell: bash
         env:
           API_URL: ${{ secrets.API_URL }}
@@ -106,15 +134,12 @@ jobs:
         run: |
           Xvfb :99 -screen 0 1280x720x24 &
           sleep 2
-          IFS=',' read -ra SCRAPER_LIST <<< "${{ needs.check.outputs.playwright_scrapers }}"
-          for SCRAPER in "${SCRAPER_LIST[@]}"; do
-            echo "Ejecutando Playwright: $SCRAPER"
-            npx tsx scripts/run-playwright-scraper.ts "$SCRAPER"
-          done
+          echo "Ejecutando Playwright: ${{ matrix.scraper }}"
+          npx tsx scripts/run-playwright-scraper.ts "${{ matrix.scraper }}"
 
   auto-validate:
     needs: [check, run-http, run-playwright]
-    if: always() && (needs.run-http.result == 'success' || needs.run-playwright.result == 'success')
+    if: always() && (needs.run-http.result == 'success' || needs.run-http.result == 'failure' || needs.run-playwright.result == 'success' || needs.run-playwright.result == 'failure')
     runs-on: ubuntu-latest
     name: Auto-validar DRAFTs
     steps:
