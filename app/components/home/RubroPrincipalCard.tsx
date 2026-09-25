@@ -33,7 +33,7 @@ export default function RubroPrincipalCard({ rubro, principal, onOpenPromo, onOp
         onClick={() => onOpenPromo(candidatePromo(principal))}
         className="w-full text-left grid grid-cols-[96px_1fr] lg:grid-cols-[140px_minmax(0,280px)_1fr] bg-white dark:bg-[#0F2040] border border-[#E4E8EF] dark:border-slate-700 rounded-2xl overflow-hidden hover:border-[#1D3D6E]/40 dark:hover:border-[#3A6BC4]/50 hover:shadow-[0_8px_24px_rgba(29,61,110,0.12)] transition-all group"
       >
-        <div className="flex items-center justify-center p-4 row-span-2 lg:row-span-1 border-r border-[#F0F2F5] dark:border-slate-700">
+        <div className="relative flex items-center justify-center p-4 row-span-2 lg:row-span-1 border-r border-[#F0F2F5] dark:border-slate-700">
           <LogoImg
             src={identity.logoUrl ?? ''}
             fallbackInitial={identity.fallbackInitial}
@@ -41,6 +41,15 @@ export default function RubroPrincipalCard({ rubro, principal, onOpenPromo, onOp
             alt={principal.facts.commerceName}
             size={72}
           />
+          {identity.isDirect && (
+            <span
+              title="Promo del Local"
+              aria-label="Promo del Local"
+              className="absolute bottom-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#E8471C] text-white text-[10px] shadow-sm ring-2 ring-white dark:ring-[#0F2040]"
+            >
+              🏪
+            </span>
+          )}
         </div>
 
         <div className="p-4 flex flex-col justify-center gap-1.5 lg:border-r border-[#F0F2F5] dark:border-slate-700 min-w-0">

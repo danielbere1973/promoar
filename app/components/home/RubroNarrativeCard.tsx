@@ -36,13 +36,24 @@ export default function RubroNarrativeCard({ rubro, principal, alternativas, onO
           </h2>
 
           <div className="flex items-center gap-3 mb-3">
-            <LogoImg
-              src={identity.logoUrl ?? ''}
-              fallbackInitial={identity.fallbackInitial}
-              fallbackColor={identity.fallbackColor}
-              alt={principal.facts.commerceName}
-              size={48}
-            />
+            <div className="relative shrink-0">
+              <LogoImg
+                src={identity.logoUrl ?? ''}
+                fallbackInitial={identity.fallbackInitial}
+                fallbackColor={identity.fallbackColor}
+                alt={principal.facts.commerceName}
+                size={48}
+              />
+              {identity.isDirect && (
+                <span
+                  title="Promo del Local"
+                  aria-label="Promo del Local"
+                  className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#E8471C] text-white text-[9px] shadow-sm ring-2 ring-white dark:ring-[#0F2040]"
+                >
+                  🏪
+                </span>
+              )}
+            </div>
             {isGuest ? (
               <span className="text-[17px] font-black text-[#1D3D6E] dark:text-[#8AADD4] leading-snug">
                 {copy.guestHeadline}

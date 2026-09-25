@@ -183,6 +183,7 @@ export interface VisualIdentity {
   logoUrl: string | null
   fallbackInitial: string
   fallbackColor: string
+  isDirect: boolean
 }
 
 const FALLBACK_PALETTE = ['#1D3D6E', '#0a3ca8', '#E8471C', '#2E7D32', '#6A1B9A', '#B8860B']
@@ -194,12 +195,13 @@ function colorFromName(name: string): string {
 }
 
 export function visualIdentity(candidate: DecisionCandidate): VisualIdentity {
-  const promo = candidate.promo as { commerce?: { logoUrl?: string | null } } | null
+  const promo = candidate.promo as { commerce?: { logoUrl?: string | null }; isDirect?: boolean } | null
   const name = candidate.facts.commerceName
   return {
     logoUrl: promo?.commerce?.logoUrl ?? null,
     fallbackInitial: name.charAt(0).toUpperCase() || '?',
     fallbackColor: colorFromName(name),
+    isDirect: !!promo?.isDirect,
   }
 }
 

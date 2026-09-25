@@ -533,6 +533,7 @@ model Promo {
   commerceId         String
   status             PromoStatus        @default(DRAFT)
   isFeatured         Boolean            @default(false)
+  isDirect           Boolean            @default(false)
   maxDiscountPct     Int?
   isCSIOnly          Boolean            @default(false)
   sourceUrl          String?
@@ -564,6 +565,7 @@ model Promo {
   @@index([status])
   @@index([validUntil])
   @@index([status, isCSIOnly, maxDiscountPct(sort: Desc)])
+  @@index([isDirect])
   @@map("promos")
 }
 
@@ -892,6 +894,7 @@ enum PaymentChannel {
   TRANSFERENCIA
   DINERO_EN_CUENTA
   LINK_DE_PAGO
+  EFECTIVO
 }
 
 enum AccountType {

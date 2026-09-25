@@ -251,7 +251,8 @@ function buildCapFact(best: any): CapFact | null {
   }
 }
 
-function buildPaymentMethodFact(best: any): PaymentMethodFact {
+function buildPaymentMethodFact(best: any, isDirect: boolean): PaymentMethodFact {
+  if (isDirect) return { bankOrWalletName: 'Promo del Local' }
   if (!best) return { bankOrWalletName: 'Sin requisito específico' }
   const bankOrWalletName = best.bank?.name ?? best.wallet?.name ?? 'Sin requisito específico'
   return {
@@ -297,7 +298,7 @@ function buildFacts(promo: any, rubroId: string, now: Date): Facts {
     commerceName: promo.commerce?.name ?? 'Comercio',
     benefit: buildBenefitFact(best),
     cap: buildCapFact(best),
-    paymentMethod: buildPaymentMethodFact(best),
+    paymentMethod: buildPaymentMethodFact(best, !!promo.isDirect),
     validity: buildValidityFact(promo, now),
   }
 }
