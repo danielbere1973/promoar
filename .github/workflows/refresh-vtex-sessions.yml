@@ -1,8 +1,11 @@
 name: Refresh VTEX Sessions
 
 on:
-  # Este job tarda ~3hs (150 categorías x 3 sitios). A día por medio (15
-  # corridas/mes x 180 min) se comía 2700 min/mes él solo, más que la cuota
+  # Corre 1 job por sitio en paralelo (matrix), cada uno ~150 categorías.
+  # Wall-clock ahora es el tiempo del sitio más lento (no la suma de los 3);
+  # el consumo total de minutos de GH Actions no cambia (sigue siendo
+  # 3 corridas x ~duración por sitio). A día por medio (15 corridas/mes)
+  # se comía 2700 min/mes él solo, más que la cuota
   # entera de 2000 min/mes de GH Actions. Bajado a:
   #   1) 1 vez por semana (jueves, para llegar con cache fresco al fin de
   #      semana — Cencosud suele renovar promos para el finde) = ~4
@@ -35,6 +38,10 @@ on:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        site: [www.jumbo.com.ar, www.disco.com.ar, www.vea.com.ar]
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     steps:
@@ -49,11 +56,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline
 
-      - name: Refresh vtex promo cache
+      - name: Refresh vtex promo cache (${{ matrix.site }})
         env:
           API_URL: ${{ secrets.API_URL }}
           VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
           DISPLAY: ':99'
+          DEBUG_SITE: ${{ matrix.site }}
         run: |
           Xvfb :99 -screen 0 1280x720x24 &
           sleep 2
