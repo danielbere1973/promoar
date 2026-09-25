@@ -63,7 +63,7 @@ async function main() {
     totalFound = promos.length
 
     if (promos.length > 0) {
-      const BATCH_SIZE = 500
+      const BATCH_SIZE = 200
       const batches = Math.ceil(promos.length / BATCH_SIZE)
 
       for (let i = 0; i < promos.length; i += BATCH_SIZE) {
