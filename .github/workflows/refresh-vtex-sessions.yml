@@ -1,9 +1,10 @@
 name: Refresh VTEX Sessions
 
 on:
-  # Este job tarda ~3hs (150 categorías x 3 sitios). A día por medio (15
-  # corridas/mes x 180 min) se comía 2700 min/mes él solo, más que la cuota
-  # entera de 2000 min/mes de GH Actions. Bajado a:
+  # Este job tarda ~3hs (150 categorías x 3 sitios) cuando corría en un único
+  # runner secuencial. A día por medio (15 corridas/mes x 180 min) se comía
+  # 2700 min/mes él solo, más que la cuota entera de 2000 min/mes de GH
+  # Actions. Bajado a:
   #   1) 1 vez por semana (jueves, para llegar con cache fresco al fin de
   #      semana — Cencosud suele renovar promos para el finde) = ~4
   #      corridas/mes x 180 min = ~720 min/mes.
@@ -33,8 +34,27 @@ on:
   workflow_dispatch:          # trigger manual desde GitHub UI
 
 jobs:
+  # Separado en 3 jobs independientes (uno por supermercado Cencosud), a
+  # pedido de Pablo (26/9/2026): la corrida secuencial original (jumbo →
+  # disco → vea en un solo runner) llegó a superar las 6hs y se cortaba sin
+  # completar los 3 sitios. Con matrix + fail-fast:false cada sitio:
+  #   - corre en su propio runner, en paralelo → wall-clock total baja de
+  #     ~3hs (secuencial) a ~1hs (el más lento de los 3 en paralelo).
+  #   - aparece como job propio nombrado en la UI de GitHub Actions
+  #     ("VTEX: jumbo.com.ar", "VTEX: disco.com.ar", "VTEX: vea.com.ar"),
+  #     en vez de un único job "refresh" sin distinción.
+  #   - si uno falla o se cuelga, no arrastra a los otros dos (antes un
+  #     error en Disco podía impedir que Vea llegara a correr).
   refresh:
     runs-on: ubuntu-latest
+    name: "VTEX: ${{ matrix.host }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [www.jumbo.com.ar, www.disco.com.ar, www.vea.com.ar]
+    # Techo de seguridad por sitio: si un sitio individual se cuelga, corta
+    # a las 2hs en vez de arrastrar el problema de las +6hs originales.
+    timeout-minutes: 120
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     steps:
@@ -49,11 +69,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline
 
-      - name: Refresh vtex promo cache
+      - name: "Refresh vtex promo cache: ${{ matrix.host }}"
         env:
           API_URL: ${{ secrets.API_URL }}
           VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
           DISPLAY: ':99'
+          DEBUG_SITE: ${{ matrix.host }}
         run: |
           Xvfb :99 -screen 0 1280x720x24 &
           sleep 2

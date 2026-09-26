@@ -20,6 +20,8 @@ jobs:
     outputs:
       http_scrapers: ${{ steps.compute.outputs.http_scrapers }}
       playwright_scrapers: ${{ steps.compute.outputs.playwright_scrapers }}
+      http_matrix: ${{ steps.compute.outputs.http_matrix }}
+      playwright_matrix: ${{ steps.compute.outputs.playwright_matrix }}
     steps:
       - name: Determinar scrapers HTTP y Playwright a ejecutar
         id: compute
@@ -57,31 +59,53 @@ jobs:
             echo "playwright_scrapers=$PW" >> $GITHUB_OUTPUT
           fi
 
+          # Arma los arrays JSON para las matrices (1 entrada por scraper) a partir
+          # de las mismas listas CSV recién calculadas — así cada scraper corre
+          # como un job propio, con su nombre visible en la UI de Actions, en vez
+          # de quedar agrupado en un solo job "Scrapers HTTP"/"Scrapers Playwright".
+          # Nota: no se puede leer steps.compute.outputs.* desde el env: de este
+          # mismo step (todavía no existen mientras se está ejecutando), por eso
+          # se reusan $HTTP/$PW acá mismo (mismo script bash, siguen en scope).
+          python3 - <<PYEOF >> $GITHUB_OUTPUT
+          import json
+          http = """$HTTP"""
+          pw = """$PW"""
+          http_list = [s.strip() for s in http.split(",") if s.strip()]
+          pw_list = [s.strip() for s in pw.split(",") if s.strip()]
+          print(f"http_matrix={json.dumps(http_list)}")
+          print(f"playwright_matrix={json.dumps(pw_list)}")
+          PYEOF
+
   run-http:
     needs: check
     if: needs.check.outputs.http_scrapers != ''
     runs-on: ubuntu-latest
-    name: Scrapers HTTP
+    name: "HTTP: ${{ matrix.scraper }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        scraper: ${{ fromJSON(needs.check.outputs.http_matrix) }}
     steps:
-      - name: Ejecutar scrapers HTTP
+      - name: Ejecutar scraper HTTP
         run: |
-          IFS=',' read -ra SCRAPER_LIST <<< "${{ needs.check.outputs.http_scrapers }}"
-          for SCRAPER in "${SCRAPER_LIST[@]}"; do
-            echo "Ejecutando HTTP: $SCRAPER"
-            curl -s -X POST \
-              -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" \
-              -H "Content-Type: application/json" \
-              -d "{\"scraperId\":\"$SCRAPER\"}" \
-              "${{ secrets.API_URL }}/api/internal/run-scraper"
-            echo ""
-          done
+          echo "Ejecutando HTTP: ${{ matrix.scraper }}"
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.VTEX_SESSION_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"scraperId\":\"${{ matrix.scraper }}\"}" \
+            "${{ secrets.API_URL }}/api/internal/run-scraper"
+          echo ""
 
   run-playwright:
     needs: check
     if: needs.check.outputs.playwright_scrapers != ''
     runs-on: ubuntu-latest
-    name: Scrapers Playwright
+    name: "Playwright: ${{ matrix.scraper }}"
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scraper: ${{ fromJSON(needs.check.outputs.playwright_matrix) }}
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     steps:
@@ -96,7 +120,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline
 
-      - name: Ejecutar scrapers Playwright
+      - name: "Ejecutar: ${{ matrix.scraper }}"
         shell: bash
         env:
           API_URL: ${{ secrets.API_URL }}
@@ -106,15 +130,16 @@ jobs:
         run: |
           Xvfb :99 -screen 0 1280x720x24 &
           sleep 2
-          IFS=',' read -ra SCRAPER_LIST <<< "${{ needs.check.outputs.playwright_scrapers }}"
-          for SCRAPER in "${SCRAPER_LIST[@]}"; do
-            echo "Ejecutando Playwright: $SCRAPER"
-            npx tsx scripts/run-playwright-scraper.ts "$SCRAPER"
-          done
+          echo "Ejecutando Playwright: ${{ matrix.scraper }}"
+          npx tsx scripts/run-playwright-scraper.ts "${{ matrix.scraper }}"
 
   auto-validate:
     needs: [check, run-http, run-playwright]
-    if: always() && (needs.run-http.result == 'success' || needs.run-playwright.result == 'success')
+    # Con matrix + fail-fast:false, needs.run-*.result queda en "failure" si UNO
+    # solo de los scrapers de la matriz falla, aunque el resto haya guardado
+    # promos igual — por eso acá se corre salvo que AMBOS jobs hayan quedado
+    # completamente en skipped/cancelled (nada que validar).
+    if: always() && (needs.run-http.result != 'skipped' && needs.run-http.result != 'cancelled' || needs.run-playwright.result != 'skipped' && needs.run-playwright.result != 'cancelled')
     runs-on: ubuntu-latest
     name: Auto-validar DRAFTs
     steps:
