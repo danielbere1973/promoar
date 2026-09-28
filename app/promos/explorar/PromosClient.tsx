@@ -558,6 +558,12 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [loadingProximas, setLoadingProximas] = useState(false)
   const [focusedCatPromos, setFocusedCatPromos] = useState<Promo[]>([])
   const [focusedCatLoading, setFocusedCatLoading] = useState(false)
+  // Auto-relleno por categoría: cuando el feed paginado deja una sección con pocos
+  // comercios (ej. Petshops) pero todavía hay más páginas del feed general sin
+  // traer, se completa esa categoría puntual en segundo plano — el usuario nunca
+  // ve un botón, la sección aparece completa directamente.
+  const [catFillCache, setCatFillCache] = useState<Record<string, Promo[]>>({})
+  const catFillPendingRef = useRef<Set<string>>(new Set())
   const prevFilterKeyRef = useRef('')
   const [showAccessDenied, setShowAccessDenied] = useState(
     searchParams.get('error') === 'no-autorizado'
@@ -1026,6 +1032,95 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     load()
     return () => controller.abort()
   }, [session?.user?.email, status, selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, searchMode, page, refreshTick])
+
+  // Invalida el cache de auto-relleno cada vez que cambian filtros/perfil/vista:
+  // las promos ya traídas para una categoría fueron pedidas con los params viejos.
+  useEffect(() => {
+    setCatFillCache({})
+    catFillPendingRef.current.clear()
+  }, [selectedCats, activeFilters, forMe, timeFilter, guestProfile, province, session?.user?.email, refreshTick])
+
+  // Auto-relleno por categoría: si el feed paginado (page=1..N) deja una sección
+  // con menos comercios que el preview (8) pero todavía quedan páginas del feed
+  // general sin traer (hasMore=true), se completa esa categoría puntual con un
+  // fetch on-demand (mismo endpoint que "Ver todas") en vez de esperar a que el
+  // usuario descubra el faltante apretando "Cargar más promos" a ciegas.
+  useEffect(() => {
+    if (loading || status === 'loading') return
+    if (!hasMore) return // ya se trajo todo el feed, no hay nada que rellenar
+
+    const PREVIEW = 8
+    const commercesByCat = new Map<string, Set<string>>()
+    for (const p of promos) {
+      const key = p.category.slug ?? p.category.name
+      if (!commercesByCat.has(key)) commercesByCat.set(key, new Set())
+      commercesByCat.get(key)!.add(p.commerce.id ?? p.commerce.name)
+    }
+
+    const toFill: string[] = []
+    commercesByCat.forEach((set, slug) => {
+      if (set.size < PREVIEW && !catFillCache[slug] && !catFillPendingRef.current.has(slug)) {
+        toFill.push(slug)
+      }
+    })
+
+    if (toFill.length === 0) return
+
+    // Cola secuencial, NO en paralelo: disparar 10-15 fetches de golpe (uno por
+    // categoría corta) apenas carga la página era carísimo/lento (11-16s cada
+    // uno en local) y rellenaba categorías que el usuario ni llegó a scrollear.
+    // Prioridad: PRIORITY_CAT_SLUGS primero (las que se ven arriba), resto en
+    // el orden en que aparecen en el feed. Solo se procesa UNA por tick de
+    // efecto — cada fetch resuelto dispara un nuevo render, que vuelve a entrar
+    // acá y toma la siguiente pendiente.
+    const priority = toFill.filter(s => PRIORITY_CAT_SLUGS.includes(s))
+    const rest = toFill.filter(s => !PRIORITY_CAT_SLUGS.includes(s))
+    const slug = (priority[0] ?? rest[0])!
+
+    // AbortController real (no solo un flag `cancelled`): si el efecto se
+    // re-ejecuta antes de que este fetch resuelva (ej. `promos` cambia de
+    // referencia mientras el feed general sigue paginando en background), el
+    // cleanup aborta la request en curso y libera el slug de `pending` de
+    // inmediato — antes esto dejaba el fetch viejo corriendo igual y podía
+    // terminar agregando el mismo slug dos veces al cache si el efecto lo
+    // volvía a encolar mientras tanto (bug: 3 fetches duplicados de la misma
+    // categoría vistos en el log real, 27/9/2026).
+    const controller = new AbortController()
+    catFillPendingRef.current.add(slug)
+    const qp = new URLSearchParams()
+    qp.set('categories', slug)
+    qp.set('view', timeFilter)
+    qp.set('for_me', String(forMe))
+    if (activeFilters.banks.length) qp.set('banks', activeFilters.banks.join(','))
+    if (activeFilters.wallets.length) qp.set('wallets', activeFilters.wallets.join(','))
+    if (activeFilters.networks.length) qp.set('networks', activeFilters.networks.join(','))
+    if (activeFilters.days.length) qp.set('days', activeFilters.days.join(','))
+    if (activeFilters.channels.length) qp.set('channels', activeFilters.channels.join(','))
+    if (activeFilters.discountRanges.length) qp.set('discountRanges', activeFilters.discountRanges.join(','))
+    if (activeFilters.hasInstallments !== null) qp.set('hasInstallments', String(activeFilters.hasInstallments))
+    if (forMe && guestProfile?.cards?.length && status !== 'authenticated') {
+      qp.set('guest_profile', btoa(JSON.stringify(guestProfile)))
+    }
+    if (province) qp.set('province', province)
+    fetch(`/api/promos?${qp.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: session?.user?.email ? { 'x-user-email': session.user.email } : {},
+    })
+      .then(r => r.json())
+      .then(d => {
+        setCatFillCache(prev => ({ ...prev, [slug]: d.promos ?? [] }))
+      })
+      .catch((err) => {
+        if (err?.name === 'AbortError') return
+        setCatFillCache(prev => ({ ...prev, [slug]: [] }))
+      })
+      .finally(() => { catFillPendingRef.current.delete(slug) })
+    return () => {
+      controller.abort()
+      catFillPendingRef.current.delete(slug)
+    }
+  }, [promos, hasMore, loading, status, forMe, timeFilter, activeFilters, guestProfile, province, session?.user?.email, catFillCache])
 
   // Próximamente: fetch cuando se activa el toggle
   useEffect(() => {
@@ -1550,7 +1645,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 </button>
                 {openSections.has('days') && (
                   <div className="flex gap-1 px-3 pb-2 flex-wrap">
-                    {[{l:'L',b:2},{l:'M',b:4},{l:'X',b:8},{l:'J',b:16},{l:'V',b:32},{l:'S',b:64},{l:'D',b:1}].map(({l, b}) => {
+                    {[{l:'L',b:1},{l:'M',b:2},{l:'X',b:3},{l:'J',b:4},{l:'V',b:5},{l:'S',b:6},{l:'D',b:0}].map(({l, b}) => {
                       const isActive = activeFilters.days.includes(b)
                       return (
                         <button key={l} onClick={() => setActiveFilters(prev => ({ ...prev, days: isActive ? prev.days.filter(d => d !== b) : [...prev.days, b] }))}
@@ -2420,6 +2515,23 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             byCat.get(key)!.promos.push(p)
           }
 
+          // Auto-relleno: mezclar las promos extra traídas en segundo plano para
+          // categorías que quedaron cortas por la paginación del feed general
+          // (ver efecto de catFillCache más arriba). Se dedupea por id de promo
+          // contra lo que ya está en la sección.
+          for (const [slug, extra] of Object.entries(catFillCache)) {
+            if (extra.length === 0) continue
+            const sec = byCat.get(slug)
+            if (!sec) continue
+            const existingIds = new Set(sec.promos.map(p => p.id))
+            for (const p of extra) {
+              if (!existingIds.has(p.id)) {
+                sec.promos.push(p)
+                existingIds.add(p.id)
+              }
+            }
+          }
+
           // Orden lógico: categorías prioritarias primero (en este orden fijo),
           // luego el resto por cantidad de promos y % de descuento máximo
           const priorityCats = PRIORITY_CAT_SLUGS.filter(slug => byCat.has(slug))
@@ -2458,7 +2570,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
           const PREVIEW = 8
 
-          const Section = ({ title, subtitle, catKey, promoList, isFirst }: { title: string; subtitle: string; catKey?: string; promoList: typeof promosFiltradas; isFirst?: boolean }) => {
+          const Section = ({ title, subtitle, catKey, promoList, isFirst, isFilled }: { title: string; subtitle: string; catKey?: string; promoList: typeof promosFiltradas; isFirst?: boolean; isFilled?: boolean }) => {
             const isExpanded = !catKey || focusedCat === catKey
 
             // Agrupar por comercio, preservando el orden de aparición (ya viene ordenado por descuento/popularidad)
@@ -2496,7 +2608,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                       className="w-7 h-7 rounded-full bg-[#F0F2F5] dark:bg-slate-700 hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] dark:text-white transition-colors text-sm font-bold">
                       ›
                     </button>
-                    {catKey && groups.length > PREVIEW && (
+                    {catKey && (groups.length > PREVIEW || (!isFilled && (promoList.length > PREVIEW || hasMore))) && (
                       <button onClick={() => setFocusedCat(catKey)}
                         className="text-[11px] font-semibold text-[#D94F2B] ml-1 whitespace-nowrap">
                         Ver todas →
@@ -2517,6 +2629,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                       isCommerceSaved={favCommerces.includes(g.commerce.name)}
                       priority={isFirst && gi <= 2}
                       onRegisterUsage={handleRegisterUsage}
+                      filterDays={activeFilters.days}
                     />
                   ))}
                 </div>
@@ -2623,8 +2736,12 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
               )}
               {catOrder.map(key => {
                 const sec = byCat.get(key)!
+                // Si la categoría ya se autocompletó (está en catFillCache) el conteo
+                // es exacto, aunque el feed general todavía tenga más páginas sin traer.
+                const isFilled = key in catFillCache
+                const countLabel = hasMore && !isFilled ? `${sec.promos.length}+ promos` : `${sec.promos.length} promos`
                 return (
-                  <Section key={key} catKey={key} title={`${sec.catIcon} ${sec.catName}`} subtitle={`${sec.promos.length} promos`} promoList={sec.promos} />
+                  <Section key={key} catKey={key} title={`${sec.catIcon} ${sec.catName}`} subtitle={countLabel} promoList={sec.promos} isFilled={isFilled} />
                 )
               })}
             </div>

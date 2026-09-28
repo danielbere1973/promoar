@@ -97,16 +97,24 @@ type Props<P extends Promo> = {
   nearbyCount?: number | null
   priority?: boolean
   onRegisterUsage?: (req: any, promo: P, e: React.MouseEvent) => void
+  /** Días seleccionados en el filtro (0=domingo..6=sábado). Si hay alguno, "Hoy" pasa a
+   *  significar "el/los día(s) filtrado(s)" en vez del día calendario real. */
+  filterDays?: number[]
 }
 
-export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, nearbyCount, priority, onRegisterUsage }: Props<P>) {
+export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, nearbyCount, priority, onRegisterUsage, filterDays }: Props<P>) {
   const [expanded, setExpanded] = useState(false)
   const [showOtherDays, setShowOtherDays] = useState(false)
   const [showAlertDetail, setShowAlertDetail] = useState(false)
 
   if (promos.length === 0) return null
 
-  const todayMask = 1 << new Date().getDay()
+  const todayMask = filterDays && filterDays.length > 0
+    ? filterDays.reduce((mask, d) => mask | (1 << d), 0)
+    : 1 << new Date().getDay()
+  const todayLabel = filterDays && filterDays.length > 0
+    ? (filterDays.length === 1 ? DAY_NAMES[filterDays[0]] : 'los días filtrados')
+    : 'Hoy'
   const sorted = [...promos].sort((a, b) => discountValue(b) - discountValue(a))
   const today = sorted.filter(p => isValidToday(p, todayMask))
   const others = sorted.filter(p => !isValidToday(p, todayMask))
@@ -201,7 +209,7 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
       {/* Hoy */}
       {today.length > 0 && (
         <div className="px-3 pt-3">
-          <p className="text-[11px] font-black text-[#1E3A5F] dark:text-white uppercase tracking-wide mb-2">Hoy</p>
+          <p className="text-[11px] font-black text-[#1E3A5F] dark:text-white uppercase tracking-wide mb-2">{todayLabel}</p>
           <div className="grid grid-cols-2 gap-2.5 pb-1">
             <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} fullWidth onRegisterUsage={onRegisterUsage} />
             {restToday.map(p => (
