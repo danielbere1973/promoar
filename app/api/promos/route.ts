@@ -49,14 +49,24 @@ export async function GET(req: NextRequest) {
     const isAdmin = role === 'ADMIN' || role === 'MODERATOR'
     const forMe = params.forMe ?? false
 
-    // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal.
+    // Paginación: solo para invitados sin filtros de banco/wallet/red/categoría/canal/día.
     // `forMe=true` sin sesión ni guest_profile no filtra nada (no hay perfil real
     // detrás, ver hasProfile en getPromosData) — no debe tirar del path cacheable
     // por sí solo, solo cuenta como "con perfil" si viene acompañado de alguno.
+    // BUG (27/9/2026): faltaba `day`/`dayIndices` acá — un filtro de día explícito
+    // (ej. "Viernes" desde el cuadro superior, sin categoría/banco seleccionado)
+    // caía igual en el camino cacheado (getPublicPromosPage), que solo filtra por
+    // el día REAL del servidor (defaultDayBit) e ignora por completo `dayIndices`.
+    // Resultado: promos que sí aplicaban el día filtrado (ej. Estación Mascotera,
+    // Vie+Sáb) desaparecían porque el server evaluaba el día de hoy (domingo), no
+    // el filtrado. Con `day`/`dayIndices` acá, ese caso sale del camino cacheado
+    // y pasa por el camino no-cacheado que sí respeta `dayIndices` (ver
+    // lib/getPromos.ts líneas ~718-733 y ~966-968).
     const hasFilters = !!(
       params.bankIds?.length || params.walletIds?.length || params.networkIds?.length ||
       params.categorySlugs?.length || params.categorySlug || params.channels?.length ||
-      params.commerceIds?.length || params.discountRanges?.length || params.hasInstallments
+      params.commerceIds?.length || params.discountRanges?.length || params.hasInstallments ||
+      params.day || params.dayIndices?.length
     )
     const hasRealProfile = !!email || !!params.guestProfileParam
     const paginate = !(forMe && hasRealProfile) && !email && !hasFilters

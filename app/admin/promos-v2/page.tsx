@@ -74,6 +74,14 @@ const ALL_WALLETS = [
   { id: 'cmogquvtl00fq7b3c2lu7249m', slug: 'buepp', name: 'BUEPP (Ciudad)', logoUrl: 'https://th.bing.com/th/id/OIP.ywKgdEuGPW8H7wwSKYvADgHaDY?w=324&h=159&c=7&r=0&o=7&pid=1.7&rm=3' },
   { id: 'cmpcws2az0000d8ffsfhk9iqa', slug: 'cencopay', name: 'CencoPay', logoUrl: 'https://tse2.mm.bing.net/th/id/OIP.q6wycCCA9j2PagBT7gDuXwHaHV?r=0&rs=1&pid=ImgDetMain&o=7&rm=3' },
   { id: 'cmoxdt3fr0000bezn7m9v17w7', slug: 'carrefour-banco', name: 'Carrefour Banco', logoUrl: 'https://th.bing.com/th/id/OIP.5uH3QMcr13jwpv_99FzL4wHaD4?w=304&h=180&c=7&r=0&o=7&pid=1.7&rm=3' },
+  // OJO (27/9/2026): Open Pay NO es una wallet del usuario, es el posnet/medio
+  // de cobro DEL COMERCIO (igual que Nave con Banco Galicia). Cargar una promo
+  // con banco=BBVA + wallet=Open Pay exige que el USUARIO tenga la wallet
+  // "Open Pay" en su perfil, cosa que no existe/no aplica — el requisito real
+  // es solo tener tarjeta BBVA, listo. Bug real encontrado en 4 requirements
+  // de "Estacion Mascotera" (fix: walletId=null + nota aclarando el posnet).
+  // Si aparece un caso similar (Nave, Lapos, etc.), NO seleccionar wallet acá:
+  // dejar solo el banco y aclarar el posnet en el campo "note" del requirement.
   { id: 'cmtsyihof0000vdfuo3ruhpxh', slug: 'open-pay', name: 'Open Pay', logoUrl: 'https://www.openpayargentina.com.ar/_ipx/_/img/header/openpay-color.svg' },
 ]
 

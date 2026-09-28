@@ -788,7 +788,13 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
         // view='week' (caso de Recommendation Block) no filtra por día en SQL —
         // el bitmask se re-aplica igual más abajo (líneas ~459-468) sobre el
         // resultado, sin cambios respecto al camino viejo.
-        const dayBitForQuery = view === 'week' ? null : defaultDayBit
+        // BUG (27/9/2026): usaba siempre `defaultDayBit` (día real del servidor),
+        // ignorando un filtro de día explícito (`dayIndices`, ej. "Viernes" desde
+        // el cuadro superior) cuando forMe=true entraba por este camino de
+        // candidatos — mismo bug que el de getPublicPromosPage (línea ~785).
+        const dayBitForQuery = view === 'week' ? null
+          : dayIndices?.length ? dayIndices.reduce((mask, d) => mask | (1 << d), 0)
+          : defaultDayBit
         const candidates = await getCandidatePromosForProfile({
           dayBit: dayBitForQuery,
           province: userProvince,

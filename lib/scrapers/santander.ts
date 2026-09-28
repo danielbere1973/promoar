@@ -22,7 +22,7 @@ const CODE_MAP: Record<string, string> = {
   DEP: 'Deportes', HOG: 'Hogar', VIA: 'Viajes y Turismo',
   IND: 'Indumentaria', AUT: 'Automotores', JUG: 'Jugueterías',
   LIB: 'Librerías', ESP: 'Entretenimiento', VAR: 'Otros', EDU: 'Otros',
-  TRA: 'Transporte', COM: 'Combustible',
+  TRA: 'Transporte', COM: 'Combustible', PET: 'Petshops',
 };
 
 function parseDays(item: any): number {
@@ -225,8 +225,13 @@ export const SantanderScraper: Scraper = {
 
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
           try {
+            // Sin "categories": el propio frontend pide la lista completa de marcas
+            // sin filtrar por rubro (usa exclusive=&page=N&limit=12). Filtrar acá por
+            // una lista curada de códigos (ALL_CATS) excluye de raíz cualquier rubro
+            // fuera de esa lista (ej. "PET" - Mascotas, ausente en CODE_MAP) y esas
+            // marcas nunca llegan a capturarse.
             const res = await context.request.get(
-              `${BFF_BASE}/brands?categories=${encodeURIComponent(ALL_CATS)}&page=${pageNum}&limit=50`,
+              `${BFF_BASE}/brands?page=${pageNum}&limit=50`,
               { headers: { ...bffHeaders, 'Accept': 'application/json', 'Referer': PAGE_URL }, timeout: 10000 }
             );
             if (!res.ok()) { 
