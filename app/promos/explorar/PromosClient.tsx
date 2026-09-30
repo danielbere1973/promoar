@@ -16,6 +16,7 @@ import CommerceGroupCard from '../../components/CommerceGroupCard'
 import { GuestProfile } from '../../components/PromoWizard'
 import ThemeToggle from '../../components/ThemeToggle'
 import SplashScreen from '../../components/SplashScreen'
+import OnboardingBanner from '../../components/OnboardingBanner'
 import { useTracking } from '@/lib/useTracking'
 import { DynamicAdBanner } from '../../components/DynamicAdBanner'
 
@@ -624,6 +625,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [entities, setEntities] = useState({ banks: [], wallets: [], cardNetworks: [] })
   const [userProfile, setUserProfile] = useState<{ banks: {bankId:string}[], wallets: {walletId:string}[], cards: {cardNetworkId:string|null}[] } | null>(null)
   const [profileReady, setProfileReady] = useState(false)
+  const hasProfile = !!userProfile && (userProfile.banks.length > 0 || userProfile.wallets.length > 0 || userProfile.cards.length > 0)
   const initialFilters: FilterState = {
     banks: [], wallets: [], networks: [], days: [], channels: [],
     hasCap: null, capMin: null, capMax: null, capPeriods: [],
@@ -2095,6 +2097,14 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         </div>
 
         <div className="px-6 py-6 pb-28 max-w-[1440px] w-full mx-auto">
+
+        {/* Onboarding/registro (28/9/2026): /promos/explorar pasó a ser la
+            puerta de entrada de los invitados (redirect de "/"), y antes no
+            tenía ningún gancho de registro — solo existía en /promos (Home v2).
+            Mismo componente/comportamiento (dismissible, localStorage). */}
+        <div className="max-w-3xl mx-auto w-full">
+          <OnboardingBanner isLoggedIn={status === 'authenticated'} hasProfile={hasProfile} profileReady={profileReady} />
+        </div>
 
         {/* Banner perfil guest */}
         {status !== 'authenticated' && guestProfile && !guestBannerDismissed && forMe && (
