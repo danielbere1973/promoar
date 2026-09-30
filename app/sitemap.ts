@@ -24,8 +24,12 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
   // Sitemap único: estáticas + finanzas + bancos + billeteras + comercios
   if (id === 0) {
     const staticRoutes: MetadataRoute.Sitemap = [
-      { url: BASE_URL,                  lastModified: now, changeFrequency: 'daily',   priority: 1.0 },
-      { url: `${BASE_URL}/promos`,      lastModified: now, changeFrequency: 'hourly',  priority: 0.9 },
+      // "/" ahora redirige (28/9/2026, invitado→/promos/explorar, logueado→/promos):
+      // se saca del sitemap con priority 1.0 y se pasa a /bienvenida, que es
+      // donde vive el contenido de marketing que Google venía indexando.
+      { url: `${BASE_URL}/bienvenida`,  lastModified: now, changeFrequency: 'daily',   priority: 0.6 },
+      { url: `${BASE_URL}/promos`,      lastModified: now, changeFrequency: 'hourly',  priority: 1.0 },
+      { url: `${BASE_URL}/promos/explorar`, lastModified: now, changeFrequency: 'hourly', priority: 0.9 },
       { url: `${BASE_URL}/login`,       lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
       { url: `${BASE_URL}/registro`,    lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     ]
