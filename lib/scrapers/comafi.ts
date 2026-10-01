@@ -1,4 +1,7 @@
-// Banco Comafi — portal de beneficios "Te va bien" (tevabien.com), Civinext CMS.
+// Banco Comafi — portal de beneficios "Te va bien", Civinext CMS. Migrado de
+// tevabien.com a promocionescomafi.com (~09/2026); tevabien.com ahora devuelve
+// un 302 a este dominio. Se apunta directo acá para no depender de que el
+// cliente fetch siga el redirect (y sus cookies de Cloudflare) correctamente.
 // El listado /beneficios.aspx renderiza los items client-side vía
 // GET /json/apps/benefits.aspx?pagesize=500&allfields=&state=0&city=0&t={ts}
 // (respuesta JSON plana, hasta ~500 items — sin paginación real necesaria, ~276
@@ -12,7 +15,7 @@ import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
 import { extractCap, detectCategoria, dedup } from './bank-helpers';
 
 const BANK_NAME = 'Banco Comafi';
-const BASE_URL = 'https://www.tevabien.com';
+const BASE_URL = 'https://www.promocionescomafi.com';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 interface BenefitItem {

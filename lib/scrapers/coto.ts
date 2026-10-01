@@ -480,47 +480,57 @@ export const CotoScraper: Scraper = {
     const contentHtml: string = pageJson?.Main?.[0]?.content ?? '';
     const $ = cheerio.load(contentHtml);
     const container = $('.atg_store_company_content');
-    const paragraphs = (container.length ? container : $.root()).find('p').toArray();
 
-    // Coto ya no separa cada promo con el patrón de texto ** TITULO **: ahora
-    // cada bloque arranca con un <p> cuyo primer nodo es un <strong> en
-    // mayúsculas (el título), y el cuerpo son los <p> siguientes hasta el
-    // próximo título. Reconstruimos el mismo formato "texto plano" que
-    // esperan los extractores de abajo (extractDates, extractDiscount, etc.)
-    // a partir de cada bloque de <p> del DOM en vez de un regex sobre texto.
     type Block = { title: string; bodyText: string };
     const blocks: Block[] = [];
-    let current: Block | null = null;
 
-    for (const el of paragraphs) {
-      const $p = $(el);
-      const firstNode = $p
-        .contents()
-        .filter((_, n) => (n.type === 'text' ? (n.data || '').trim().length > 0 : true))
-        .first()[0];
+    // Rediseño de la página (visto por primera vez ~09/2026): cada legal ahora
+    // es una tarjeta `.legal-card` con `.legal-header` (título) y `.legal-body`
+    // (texto completo), dentro de `#legalesList`. Mucho más simple que la vieja
+    // heurística de <p><strong>; se usa directo cuando existe.
+    const legalCards = container.find('.legal-card').toArray();
 
-      let strongText: string | null = null;
-      if (firstNode) {
-        const $first = $(firstNode);
-        if (firstNode.tagName === 'strong') {
-          strongText = $first.text().trim();
-        } else if (['span', 'b'].includes(firstNode.tagName || '') && $first.find('strong').length) {
-          strongText = $first.find('strong').first().text().trim();
-        }
+    if (legalCards.length > 0) {
+      for (const el of legalCards) {
+        const $card = $(el);
+        const title = $card.find('.legal-header').first().text().trim();
+        const bodyText = $card.find('.legal-body').first().text().trim();
+        if (title) blocks.push({ title, bodyText });
       }
+    } else {
+      // Fallback al formato viejo (<p> con <strong> como título) por si Coto
+      // vuelve a cambiar la estructura o conviven ambos formatos.
+      const paragraphs = (container.length ? container : $.root()).find('p').toArray();
+      let current: Block | null = null;
 
-      const hasLower = strongText ? /[a-z]/.test(strongText.replace(/&[a-z]+;/gi, '')) : false;
-      const looksLikeTitle = !!strongText && strongText.length >= 5 && strongText.length <= 100 && !hasLower;
+      for (const el of paragraphs) {
+        const $p = $(el);
+        const firstNode = $p
+          .contents()
+          .filter((_, n) => (n.type === 'text' ? (n.data || '').trim().length > 0 : true))
+          .first()[0];
 
-      if (looksLikeTitle && strongText) {
-        current = { title: strongText, bodyText: '' };
-        blocks.push(current);
-        // El resto del <p> (después del <strong> del título, si comparte el mismo <p>
-        // separado por <br/>) es cuerpo de esa misma promo.
-        const restText = $p.text().replace(strongText, '').trim();
-        if (restText) current.bodyText += restText + '\n';
-      } else if (current) {
-        current.bodyText += $p.text().trim() + '\n';
+        let strongText: string | null = null;
+        if (firstNode) {
+          const $first = $(firstNode);
+          if (firstNode.tagName === 'strong') {
+            strongText = $first.text().trim();
+          } else if (['span', 'b'].includes(firstNode.tagName || '') && $first.find('strong').length) {
+            strongText = $first.find('strong').first().text().trim();
+          }
+        }
+
+        const hasLower = strongText ? /[a-z]/.test(strongText.replace(/&[a-z]+;/gi, '')) : false;
+        const looksLikeTitle = !!strongText && strongText.length >= 5 && strongText.length <= 100 && !hasLower;
+
+        if (looksLikeTitle && strongText) {
+          current = { title: strongText, bodyText: '' };
+          blocks.push(current);
+          const restText = $p.text().replace(strongText, '').trim();
+          if (restText) current.bodyText += restText + '\n';
+        } else if (current) {
+          current.bodyText += $p.text().trim() + '\n';
+        }
       }
     }
 
@@ -530,7 +540,7 @@ export const CotoScraper: Scraper = {
       const title = blocks[i].title.trim();
 
       // Ignorar títulos irrelevantes
-      if (title.length < 5 || /promo rodados|publicidad/i.test(title)) continue;
+      if (title.length < 5 || /promo rodados|publicidad|productos exclu[ií]dos/i.test(title)) continue;
 
       const bodyText = blocks[i].bodyText.trim();
 

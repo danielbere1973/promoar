@@ -222,17 +222,28 @@ function extractDiscount(card: ModoCard): Array<{ value: number; type: string }>
   }
 
   // Fallback: extraer desde slug cuando los campos principales no tienen descuento
-  // Patrones: "30off", "25off-12csi", "10-comercio-banco-mes26" (número al inicio)
+  // Patrones: "30off", "30-off", "12csi", "12-csi", "10-comercio-banco-mes26" (número al inicio)
   if (raw.length === 0) {
-    const slugOff = card.slug.match(/(?:^|-)(\d+)off(?:-|$)/i);
+    const slugOff = card.slug.match(/(?:^|-)(\d+)-?off(?:-|$)/i);
     if (slugOff) raw.push({ value: parseInt(slugOff[1]), type: 'PERCENTAGE_DESCUENTO' });
-    const slugCsi = card.slug.match(/(?:^|-)(\d+)csi(?:-|$)/i);
+    const slugCsi = card.slug.match(/(?:^|-)(\d+)-?csi(?:-|$)/i);
     if (slugCsi) raw.push({ value: parseInt(slugCsi[1]), type: 'CUOTAS_SIN_INTERES' });
-    // Patrón "N-comercio-banco": número al inicio del slug seguido de letra (ej: "10-simmons-credicoop")
+    // Patrón "N-comercio-banco": número al inicio del slug seguido de letra (ej: "10-simmons-credicoop").
+    // Excluye prefijos tipo fecha (AAMM, ej. "2608-") que encabezan la mayoría de los slugs de Macro.
     if (raw.length === 0) {
       const slugLeading = card.slug.match(/^(\d+)-[a-z]/i);
       if (slugLeading) {
         const v = parseInt(slugLeading[1]);
+        if (v > 0 && v <= 100) raw.push({ value: v, type: 'PERCENTAGE_DESCUENTO' });
+      }
+    }
+    // Patrón "comercio-N" al final del slug sin sufijo "off"/"csi" explícito
+    // (ej: "2608-macro-casadeesteban-30", "...-autoservicioperrone-10"). Último
+    // recurso: solo corre si nada anterior matcheó.
+    if (raw.length === 0) {
+      const slugTrailing = card.slug.match(/-(\d{1,2})$/);
+      if (slugTrailing) {
+        const v = parseInt(slugTrailing[1]);
         if (v > 0 && v <= 100) raw.push({ value: v, type: 'PERCENTAGE_DESCUENTO' });
       }
     }
@@ -292,7 +303,7 @@ function extractStoreName(card: ModoCard): string {
 
 // ─── Fetch individual promo (solo cap + bcra_code de bancos) ──────────────────
 
-async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
+async function fetchCapAndBanks(promoUrl: string, slug: string): Promise<CapDetails> {
   const result: CapDetails = { cap: null, capUnlimited: false, capPeriod: null, banks: [], cardNetworks: [], paymentChannels: [], legalText: '', minPurchase: null, stackable: null };
   try {
     const { data: html } = await axios.get(promoUrl, {
@@ -319,16 +330,18 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
       result.capUnlimited = true;
     }
 
-    // period_type → capPeriod
-    const periodMatch = html.match(/\\"period_type\\":\s*\\"([^"]+)\\"/);
+    // period_type / cap_period → capPeriod (el rediseño ~09/2026 renombró la key y
+    // los valores pasaron de "monthly"/"daily"/"weekly" a "month"/"day"/"week")
+    const periodMatch = html.match(/\\"(?:period_type|cap_period)\\":\s*\\"([^"]+)\\"/);
     if (periodMatch) {
       const p = periodMatch[1].toLowerCase();
-      if (p === 'daily') result.capPeriod = 'DAILY';
-      else if (p === 'weekly') result.capPeriod = 'WEEKLY';
-      else if (p === 'monthly') result.capPeriod = 'MONTHLY';
+      if (p === 'daily' || p === 'day') result.capPeriod = 'DAILY';
+      else if (p === 'weekly' || p === 'week') result.capPeriod = 'WEEKLY';
+      else if (p === 'monthly' || p === 'month') result.capPeriod = 'MONTHLY';
     }
 
-    // Método 1: banks[] con bcra_code (promos de banco único)
+    // Método 1: banks[] con bcra_code (promos de banco único) — legacy, ya no aparece
+    // embebido en el HTML desde el rediseño ~09/2026, se mantiene como fallback.
     const banksMatch = html.match(/\\"banks\\":\s*(\[[\s\S]*?\])/);
     if (banksMatch) {
       try {
@@ -346,6 +359,26 @@ async function fetchCapAndBanks(promoUrl: string): Promise<CapDetails> {
       const nameBankMatches = [...html.matchAll(/\\"name_bank\\":\s*\\"([^"\\]+)\\"/g)];
       for (const m of nameBankMatches) {
         result.banks.push({ name: m[1] });
+      }
+    }
+
+    // Método 3: endpoint dedicado /api/rewards/v2/benefit/{slug}/banks — desde el
+    // rediseño ~09/2026 la lista de bancos ya no viene embebida en el HTML en absoluto
+    // (ni banks[] ni name_bank), se carga client-side vía este endpoint. Es la fuente
+    // principal ahora; los métodos 1/2 quedan como fallback por si alguna promo vieja
+    // todavía la trae embebida.
+    if (result.banks.length === 0) {
+      try {
+        const banksUrl = `${PROMO_BASE_URL}/api/rewards/v2/benefit/${slug}/banks`;
+        const { data: banksData } = await axios.get(banksUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
+          timeout: 10000,
+        });
+        for (const bank of banksData?.banks ?? []) {
+          if (bank.name) result.banks.push({ name: bank.name, bcraCode: bank.bcra_code });
+        }
+      } catch (e) {
+        console.error(`[MODO] Error fetching banks endpoint for ${slug}:`, e);
       }
     }
 
@@ -515,7 +548,7 @@ export const ModoScraper: Scraper = {
     for (let i = 0; i < cardsWithDiscount.length; i += CAP_BATCH) {
       const batch = cardsWithDiscount.slice(i, i + CAP_BATCH);
       const results = await Promise.all(
-        batch.map(card => fetchCapAndBanks(`${PROMO_BASE_URL}/${card.slug}`))
+        batch.map(card => fetchCapAndBanks(`${PROMO_BASE_URL}/${card.slug}`, card.slug))
       );
       batch.forEach((card, j) => capDetailsMap.set(card.slug, results[j]));
       console.log(`[MODO] Cap fetch ${Math.min(i + CAP_BATCH, cardsWithDiscount.length)}/${cardsWithDiscount.length}`);
