@@ -9,8 +9,15 @@
 // fechas, pero NO el tope de reintegro; el tope sale del <meta name="description">
 // de la página de detalle /{id}-{slug}.benefit.aspx (formato fijo:
 // "{rubro} - {info de descuento} - {tope o 'Sin tope de reintegro'} - Consultar vigencia").
-// Sin WAF, fetch directo (aunque el sitio usa Cloudflare, sirve HTML completo sin retos).
+// El sitio usa Cloudflare con Bot Management (__cf_bm): desde IP residencial/local
+// responde sin reto, pero desde la IP de datacenter de Vercel devuelve body vacío/challenge
+// sin error HTTP visible (totalFound:0 silencioso) — mismo síntoma que ICBC/BBVA/Galicia.
+// Fix (01/10/2026): requests vía context.request de Playwright (launchBrowser) para salir
+// por la IP residencial del Scraping Browser de BrightData cuando SCRAPING_BROWSER_WS
+// está seteada; sin esa env var cae a Playwright local (sin cambios en dev).
 
+import type { APIRequestContext } from 'playwright';
+import { launchBrowser } from './browserFactory';
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
 import { extractCap, detectCategoria, dedup } from './bank-helpers';
 
@@ -173,18 +180,21 @@ function buildDetailUrl(item: BenefitItem): string {
   return `${BASE_URL}/${item.i}-${slugify(item.b)}.benefit.aspx`;
 }
 
-async function fetchItems(): Promise<BenefitItem[]> {
+async function fetchItems(request: APIRequestContext): Promise<BenefitItem[]> {
   const url = `${BASE_URL}/json/apps/benefits.aspx?pagesize=500&allfields=&state=0&city=0&t=${Date.now()}`;
-  const res = await fetch(url, { headers: { 'User-Agent': UA } });
-  if (!res.ok) return [];
-  const items: BenefitItem[] = await res.json();
-  return items;
+  try {
+    const res = await request.get(url, { headers: { 'User-Agent': UA } });
+    if (!res.ok()) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
 }
 
-async function fetchCapFromDetail(url: string): Promise<number | null> {
+async function fetchCapFromDetail(request: APIRequestContext, url: string): Promise<number | null> {
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
-    if (!res.ok) return null;
+    const res = await request.get(url, { headers: { 'User-Agent': UA } });
+    if (!res.ok()) return null;
     const html = await res.text();
     const m = html.match(/<meta name="description" content="([^"]*)"/);
     if (!m) return null;
@@ -250,22 +260,30 @@ function itemToPromos(item: BenefitItem, cap: number | null): ScrapedPromo[] {
 export const ComafiScraper: Scraper = {
   name: 'Comafi',
   async run(): Promise<ScrapedPromo[]> {
-    const items = await fetchItems();
-    const all: ScrapedPromo[] = [];
+    const browser = await launchBrowser({ headless: true, args: ['--no-sandbox'] });
+    const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+    const request = ctx.request;
 
-    for (const item of items) {
-      // Solo nos interesan los tipos de descuento simple/cuotas que ya sabemos parsear
-      // con confianza (406 cuotas, 407 %, 409 %+cuotas). El resto (2x1, obsequio,
-      // bonificación, cuotas fijas) requeriría lógica de discountType distinta —
-      // se dejan afuera por ahora en vez de asumir su semántica.
-      if (![406, 407, 409].includes(item.t)) continue;
+    try {
+      const items = await fetchItems(request);
+      const all: ScrapedPromo[] = [];
 
-      const sourceUrl = buildDetailUrl(item);
-      const cap = await fetchCapFromDetail(sourceUrl);
-      all.push(...itemToPromos(item, cap));
-      await new Promise(r => setTimeout(r, 120));
+      for (const item of items) {
+        // Solo nos interesan los tipos de descuento simple/cuotas que ya sabemos parsear
+        // con confianza (406 cuotas, 407 %, 409 %+cuotas). El resto (2x1, obsequio,
+        // bonificación, cuotas fijas) requeriría lógica de discountType distinta —
+        // se dejan afuera por ahora en vez de asumir su semántica.
+        if (![406, 407, 409].includes(item.t)) continue;
+
+        const sourceUrl = buildDetailUrl(item);
+        const cap = await fetchCapFromDetail(request, sourceUrl);
+        all.push(...itemToPromos(item, cap));
+        await new Promise(r => setTimeout(r, 120));
+      }
+
+      return dedup(all);
+    } finally {
+      await browser.close();
     }
-
-    return dedup(all);
   },
 };
