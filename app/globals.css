@@ -53,6 +53,21 @@ body {
   100% { transform: translate(var(--tx), calc(var(--ty) + 120px)) rotate(720deg); opacity: 0; }
 }
 
+@keyframes pulseLoop {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.035); }
+}
+
+.pulse-loop {
+  animation: pulseLoop 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-loop {
+    animation: none;
+  }
+}
+
 @layer components {
   .glass {
     @apply bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/20 dark:border-slate-800/20;
