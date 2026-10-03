@@ -28,11 +28,29 @@ function computeNextRun(frequency: string, dayOfWeek?: number, dayOfMonth?: numb
   return next
 }
 
+// Mismo umbral y lógica que /api/admin/scraper-runs: si un job muere afuera
+// (timeout de GitHub Actions, corridas paralelas saturando Neon) nunca llega a
+// loguear su propio final y la fila queda en 'running' para siempre, mostrando
+// el ícono de spinner infinito en el panel aunque el run ya terminó hace rato.
+const STUCK_RUNNING_HOURS = 2
+
 export async function GET(req: NextRequest) {
   const token = await getAuthToken(req)
   if (!token || token.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  await prisma.scraperRun.updateMany({
+    where: {
+      status: 'running',
+      startedAt: { lt: new Date(Date.now() - STUCK_RUNNING_HOURS * 60 * 60 * 1000) },
+    },
+    data: {
+      status: 'error',
+      message: `Interrumpido: sin actualizar hace más de ${STUCK_RUNNING_HOURS}h`,
+      finishedAt: new Date(),
+    },
+  })
 
   const [schedules, lastRuns] = await Promise.all([
     prisma.scraperSchedule.findMany({ orderBy: { scraperId: 'asc' } }),
