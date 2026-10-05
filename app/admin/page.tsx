@@ -2579,17 +2579,25 @@ function ScraperSchedulerTab() {
 
   async function runAllGh() {
     setMsg(null)
-    let ok = 0
-    for (const s of playwrightScrapers) {
-      const res = await fetch('/api/admin/trigger-scraper', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scraperId: s.id }),
-      })
-      if (res.ok) ok++
+    // Un solo workflow_dispatch con todos los IDs juntos (scraper_id acepta lista
+    // separada por comas) en vez de un dispatch por scraper: así entran en la misma
+    // matriz y respetan max-parallel:1 del job run-playwright. Disparar N workflows
+    // sueltos casi simultáneos hacía que corrieran en paralelo entre sí (runs distintos
+    // no se coordinan), saturando el pool de conexiones de Neon — causa confirmada de
+    // la pérdida de promos de Macro el 1/10/2026 (773/6488 guardadas, resto perdido por
+    // error de Prisma en medio de la corrida).
+    const scraperId = playwrightScrapers.map(s => s.id).join(',')
+    const res = await fetch('/api/admin/trigger-scraper', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scraperId }),
+    })
+    if (res.ok) {
+      setMsg({ type: 'success', text: `🤖 Workflow disparado en GitHub Actions (${playwrightScrapers.length} scrapers en cola, secuencial)` })
+    } else {
+      setMsg({ type: 'error', text: 'Error al disparar el workflow en GitHub Actions' })
     }
-    setMsg({ type: 'success', text: `🤖 ${ok} workflows GitHub Actions disparados` })
-    setTimeout(() => setMsg(null), 5000)
+    setTimeout(() => setMsg(null), 6000)
   }
 
   async function runAllLocal() {

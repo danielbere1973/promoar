@@ -1,10 +1,11 @@
 import { notFound, redirect } from 'next/navigation'
 import { unstable_cache } from 'next/cache'
+import { getServerSession } from 'next-auth/next'
 import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
-import NotifyMeButton from '@/app/components/NotifyMeButton'
+import DetailSidebar from './DetailSidebar'
 import { schemaOffer } from '@/lib/schema'
 import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
 import { getPromoScope } from '@/lib/utils/promoScope'
@@ -35,6 +36,56 @@ const getCachedCommerceBranchesCount = unstable_cache(
     take: 1,
   }),
   ['promo-detail-commerce-branches'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+)
+
+// Otras promos activas del mismo comercio con bancos/billeteras distintos — alimenta
+// el comparador del hero (principio tomado de Manguito: grid con condición real por
+// opción, nunca solo el dato repetido). Se trae por comercio, no por promo individual,
+// para que el comparador no dependa de la promo actual estar en el top del ranking.
+const getCachedCommerceOtherPromos = unstable_cache(
+  async (commerceId: string, excludePromoId: string) => prisma.promo.findMany({
+    where: { commerceId, status: 'ACTIVE', id: { not: excludePromoId } },
+    include: {
+      requirements: {
+        include: { bank: true, wallet: true },
+        orderBy: { discountValue: 'desc' },
+        take: 1,
+      },
+    },
+    orderBy: { maxDiscountPct: 'desc' },
+    take: 6,
+  }),
+  ['promo-detail-commerce-other-promos'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+)
+
+// Descubrimiento cruzado ("También te podría interesar"): otros comercios con
+// promo activa, de categorías distintas a la actual, ordenados por popularidad
+// (activePromoCount) — no es un comparador del mismo comercio, es variedad real.
+const getCachedRelatedCommerces = unstable_cache(
+  async (excludeCategoryId: string, excludeCommerceId: string) => prisma.commerce.findMany({
+    where: {
+      defaultCategoryId: { not: excludeCategoryId },
+      id: { not: excludeCommerceId },
+      activePromoCount: { gt: 0 },
+    },
+    select: {
+      slug: true,
+      name: true,
+      logoUrl: true,
+      defaultCategory: { select: { name: true, icon: true } },
+      promos: {
+        where: { status: 'ACTIVE' },
+        select: { requirements: { orderBy: { discountValue: 'desc' }, take: 1, select: { discountValue: true, discountType: true } } },
+        orderBy: { maxDiscountPct: 'desc' },
+        take: 1,
+      },
+    },
+    orderBy: { activePromoCount: 'desc' },
+    take: 8,
+  }),
+  ['promo-detail-related-commerces'],
   { tags: [PROMO_DETAIL_TAG], revalidate: false },
 )
 
@@ -107,6 +158,23 @@ function buildSeoDescription(promo: { commerce: { name: string }; category: { na
   return parts.join(' ')
 }
 
+// Tag de condición real para el comparador (Variante E): tope > día > canal > "todos los días" por defecto.
+// Nunca vacío — un tag vacío es lo que hace que un comparador se sienta decorativo en vez de útil.
+function conditionTag(req: any, validDays: number | null): string {
+  if (req?.cap) {
+    const period = req.capPeriod === 'MONTHLY' ? 'por mes' : req.capPeriod === 'WEEKLY' ? 'por semana' : 'por día'
+    return `Tope $${req.cap.toLocaleString('es-AR')} ${period}`
+  }
+  if (validDays && validDays !== 127) {
+    const label = buildDaysLabel(validDays)
+    return label.charAt(0).toUpperCase() + label.slice(1)
+  }
+  if (req?.paymentChannel && req.paymentChannel !== 'ANY') {
+    return CHANNEL_LABEL[req.paymentChannel] ?? req.paymentChannel
+  }
+  return 'Todos los días'
+}
+
 const CHANNEL_LABEL: Record<string, string> = {
   QR: 'QR / MODO',
   NFC: 'Sin contacto',
@@ -177,7 +245,10 @@ export async function generateStaticParams() {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function PromoDetailPage({ params }: { params: { slug: string } }) {
-  const cachedPromo = await getCachedPromoBySlug(params.slug)
+  const [cachedPromo, session] = await Promise.all([
+    getCachedPromoBySlug(params.slug),
+    getServerSession(),
+  ])
   // unstable_cache serializa el resultado como JSON: Date vuelve como string, hay que recomponerlo
   const promo = cachedPromo && {
     ...cachedPromo,
@@ -281,7 +352,21 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
     )
   }
 
-  const branches = await getCachedCommerceBranchesCount(promo.commerce.id)
+  const isLoggedIn = !!session?.user?.email
+
+  const [branches, otherPromosRaw, relatedCommercesRaw, userWithProfile] = await Promise.all([
+    getCachedCommerceBranchesCount(promo.commerce.id),
+    getCachedCommerceOtherPromos(promo.commerce.id, promo.id),
+    getCachedRelatedCommerces(promo.category.id, promo.commerce.id),
+    isLoggedIn
+      ? prisma.user.findUnique({
+          where: { email: session!.user!.email! },
+          select: { financialProfile: { select: { id: true } } },
+        })
+      : null,
+  ])
+
+  const hasProfile = !!userWithProfile?.financialProfile
 
   const specificDates: string[] = promo.specificDates ? JSON.parse(promo.specificDates) : []
   const reqs = promo.requirements
@@ -325,6 +410,44 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   const bestDiscount = discounts[0]
   const scope = getPromoScope(promo)
 
+  // Comparador Variante E: otras promos activas del mismo comercio, con su propia
+  // entidad + descuento + condición real. Si no hay ninguna, no se muestra el grid
+  // (comercio con 1 sola promo activa es el caso más común — hero + CTA alcanza).
+  const comparatorItems = otherPromosRaw.map((p: any) => {
+    const req = p.requirements[0]
+    const entityName = req?.bank?.name ?? req?.wallet?.name ?? 'Otro medio'
+    return {
+      slug: p.slug,
+      entityName,
+      initial: entityName[0]?.toUpperCase() ?? '?',
+      discount: discountLabel(req),
+      tag: conditionTag(req, p.validDays),
+    }
+  })
+
+  const relatedCommerces = relatedCommercesRaw
+    .filter((c: any) => c.promos[0]?.requirements[0])
+    .map((c: any) => {
+      const req = c.promos[0].requirements[0]
+      return {
+        slug: c.slug,
+        name: c.name,
+        logoUrl: c.logoUrl,
+        categoryName: c.defaultCategory?.name ?? '',
+        categoryIcon: c.defaultCategory?.icon ?? '🏪',
+        discount: discountLabel(req),
+      }
+    })
+
+  const bestEntityName = banks[0]?.name ?? wallets[0]?.name ?? ''
+  const ctaHref = !isLoggedIn ? '/login?next=/promos' : hasProfile ? '/promos?for_me=true' : '/perfil'
+  const ctaTitle = !isLoggedIn ? 'Decinos tus tarjetas' : hasProfile ? 'Ver mis promos' : 'Completá tu perfil'
+  const ctaSubtitle = !isLoggedIn
+    ? 'y te mostramos primero la que más te conviene'
+    : hasProfile
+    ? 'ordenadas según tus bancos y tarjetas'
+    : 'y te mostramos primero la que más te conviene'
+
   const jsonLd = schemaOffer({
     name: `${discountLabel(bestDiscount)} en ${promo.commerce.name}`,
     description: promo.title !== promo.commerce.name ? promo.title : promo.description,
@@ -336,47 +459,100 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   })
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50 pb-24 lg:pb-0 lg:flex">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <BackButton label={promo.commerce.name} />
+      <DetailSidebar />
 
-      <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
+      <div className="flex-1 min-w-0 lg:overflow-y-auto">
+      <div className="lg:hidden">
+        <BackButton label={promo.commerce.name} />
+      </div>
 
-        {/* ── HERO ── */}
-        <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl overflow-hidden shadow-lg relative">
-          {(promo.salesChannel === 'ONLINE' || promo.salesChannel === 'PHYSICAL') && (
-            <div className="absolute top-0 left-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-br-xl">
-              {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
+      <div className="max-w-lg lg:max-w-none mx-auto px-4 lg:px-10 pt-4 lg:pt-7 space-y-3 lg:space-y-0">
+
+        {/* ── BREADCRUMB DESKTOP ── */}
+        <div className="hidden lg:flex items-center justify-between gap-2 mb-5">
+          <div className="text-[13px] text-gray-400 font-semibold">
+            <a href="/promos" className="text-gray-500 hover:text-gray-700">&larr; Promos</a>
+            <span className="text-gray-300 mx-1.5">/</span>
+            <a href={`/categorias/${promo.category.slug}`} className="text-gray-500 hover:text-gray-700">{promo.category.name}</a>
+            <span className="text-gray-300 mx-1.5">/</span>
+            <span className="text-[#1E3A5F]">{promo.commerce.name}</span>
+          </div>
+        </div>
+
+        <div className="lg:grid lg:grid-cols-[1.3fr_0.9fr] lg:gap-7 lg:items-start lg:max-w-[980px]">
+        <div className="lg:flex lg:flex-col lg:gap-4 space-y-3 lg:space-y-0">
+
+        {/* ── HEADER COMPACTO ── */}
+        <div className="flex items-center gap-3 px-1 lg:hidden">
+          {promo.commerce.logoUrl ? (
+            <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="w-12 h-12 rounded-2xl object-contain border border-gray-100 bg-white p-1.5 shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-sm font-black text-gray-500 shrink-0">
+              {promo.commerce.name[0]}
             </div>
           )}
-          <div className="px-6 pt-6 pb-5 text-white">
-            {/* Categoría */}
-            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
+          <div className="flex-1 min-w-0">
+            <p className="text-lg font-black text-gray-900 leading-tight truncate">{promo.commerce.name}</p>
+            <p className="text-[11px] text-gray-400">
               {promo.category.icon} {promo.category.name}
+              {comparatorItems.length > 0 && ` · ${comparatorItems.length + 1} promos de ${comparatorItems.length + 1} bancos/billeteras`}
+            </p>
+          </div>
+        </div>
+
+        {/* ── HERO — único lugar con el dato destacado ── */}
+        <div className="bg-gradient-to-br from-[#1E3A5F] to-[#2a4f82] rounded-3xl overflow-hidden shadow-lg relative">
+          {/* Header del hero en desktop: logo + nombre comercio dentro de la misma tarjeta */}
+          <div className="hidden lg:flex items-center gap-3 px-6 pt-5">
+            {promo.commerce.logoUrl ? (
+              <img src={promo.commerce.logoUrl} alt={promo.commerce.name} className="w-11 h-11 rounded-xl object-contain border border-white/20 bg-white p-1.5 shrink-0" />
+            ) : (
+              <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-sm font-black text-white shrink-0">
+                {promo.commerce.name[0]}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-lg font-black text-white leading-tight truncate">{promo.commerce.name}</p>
+              <p className="text-[11px] text-blue-200">
+                {promo.category.icon} {promo.category.name}
+                {comparatorItems.length > 0 && ` · ${comparatorItems.length + 1} promos de ${comparatorItems.length + 1} bancos/billeteras`}
+              </p>
+            </div>
+          </div>
+          {(promo.salesChannel === 'ONLINE' || promo.salesChannel === 'PHYSICAL') ? (
+            <div className="absolute top-0 right-0 z-10 bg-yellow-400 text-red-600 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-bl-xl">
+              {promo.salesChannel === 'ONLINE' ? 'Exclusivo Online' : 'Exclusivo Físico'}
+            </div>
+          ) : !isExpired ? (
+            <div className="absolute top-0 right-0 z-10 bg-[#D94F2B] text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-bl-xl">
+              Válido hoy
+            </div>
+          ) : null}
+          <div className="px-6 pt-6 pb-5 text-white">
+            <span className="text-[10px] font-black uppercase tracking-widest text-blue-300">
+              {comparatorItems.length > 0 ? `La mejor opción ahora: ${bestEntityName}` : bestEntityName}
             </span>
 
-            {/* Beneficio principal — grande */}
             <div className="mt-2 mb-1">
               {discounts.length === 1 ? (
-                <p className="text-5xl font-black tracking-tight leading-none">
+                <p className="text-4xl font-black tracking-tight leading-none">
                   {discountLabel(bestDiscount)}
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2 items-end">
                   {discounts.map((d, i) => (
-                    <span key={i} className={`font-black tracking-tight leading-none ${i === 0 ? 'text-5xl' : 'text-3xl text-indigo-300'}`}>
+                    <span key={i} className={`font-black tracking-tight leading-none ${i === 0 ? 'text-4xl' : 'text-2xl text-blue-300'}`}>
                       {discountLabel(d)}
                     </span>
                   ))}
                 </div>
               )}
             </div>
-
-            {/* Comercio */}
-            <p className="text-indigo-200 text-sm font-semibold mt-2">{promo.commerce.name}</p>
           </div>
 
           {/* Título de la promo */}
@@ -386,6 +562,45 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
             </div>
           )}
         </div>
+
+        {/* ── COMPARADOR: otras formas de pagar en el mismo comercio ── */}
+        {comparatorItems.length > 0 && (
+          <div className="space-y-2.5">
+            <p className="text-[13px] font-black text-gray-900 px-1">Comparar formas de pagar</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white border-2 border-[#1E3A5F] rounded-2xl px-3.5 py-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div className="w-6 h-6 rounded-md bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600 shrink-0">
+                    {bestEntityName[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <p className="text-[11.5px] font-extrabold text-gray-900 truncate">{bestEntityName}</p>
+                </div>
+                <p className="text-xl font-black text-[#1E3A5F] leading-none mb-2">{discountLabel(bestDiscount)}</p>
+                <span className="inline-block text-[9px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                  {conditionTag(reqs[0], promo.validDays)}
+                </span>
+              </div>
+              {comparatorItems.map(item => (
+                <a
+                  key={item.slug}
+                  href={`/promos/${item.slug}`}
+                  className="bg-white border border-gray-200 rounded-2xl px-3.5 py-3 hover:border-[#1E3A5F]/40 transition-colors"
+                >
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <div className="w-6 h-6 rounded-md bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600 shrink-0">
+                      {item.initial}
+                    </div>
+                    <p className="text-[11.5px] font-extrabold text-gray-900 truncate">{item.entityName}</p>
+                  </div>
+                  <p className="text-xl font-black text-emerald-600 leading-none mb-2">{item.discount}</p>
+                  <span className="inline-block text-[9px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                    {item.tag}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── PÁRRAFO SEO ── */}
         <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed px-1 text-justify">
@@ -397,12 +612,18 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
           )}
         </p>
 
-        {/* ── CTA de Captura de Valor (arriba del fold, antes de vigencia/legales) ── */}
-        <NotifyMeButton 
-          commerceId={promo.commerce.id} 
-          promoId={promo.id} 
-          commerceName={promo.commerce.name} 
-        />
+        {/* ── CTA unificado: beneficio explícito, copy según estado de sesión ── */}
+        <a
+          href={ctaHref}
+          className="pulse-loop flex items-center gap-3 bg-gray-900 rounded-2xl px-4 py-3.5 hover:bg-gray-800 transition-colors"
+        >
+          <div className="w-9 h-9 rounded-xl bg-[#D94F2B] flex items-center justify-center shrink-0 text-base">💳</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-extrabold text-white leading-tight">{ctaTitle}</p>
+            <p className="text-[11px] text-gray-400">{ctaSubtitle}</p>
+          </div>
+          <span className="text-gray-500 text-lg shrink-0">→</span>
+        </a>
 
         {/* ── ALERTA DE ALCANCE / CONDICIÓN RESTRINGIDA ── */}
         {scope && (
@@ -638,25 +859,71 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
           )}
         </div>
 
+        </div>
+
+        {/* ── TAMBIÉN TE PODRÍA INTERESAR — descubrimiento cruzado ── */}
+        {relatedCommerces.length > 0 && (
+          <div className="pt-1 lg:pt-0">
+            <p className="text-[13px] font-black text-gray-900 px-1 lg:px-0 mb-2.5">También te podría interesar</p>
+
+            {/* Mobile: scroll horizontal */}
+            <div className="flex lg:hidden gap-2.5 overflow-x-auto pb-1 -mx-4 px-4 snap-x snap-mandatory">
+              {relatedCommerces.map(c => (
+                <a
+                  key={c.slug}
+                  href={`/promos/${c.slug}`}
+                  className="shrink-0 w-[132px] snap-start bg-white border border-gray-100 rounded-2xl px-3 py-3"
+                >
+                  {c.logoUrl ? (
+                    <img src={c.logoUrl} alt={c.name} className="w-9 h-9 rounded-xl object-contain border border-gray-100 bg-white p-1 mb-2" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center text-xs font-black text-gray-500 mb-2">
+                      {c.name[0]}
+                    </div>
+                  )}
+                  <p className="text-[12px] font-extrabold text-gray-900 leading-tight truncate">{c.name}</p>
+                  <p className="text-[10px] text-gray-400 mb-1">{c.categoryIcon} {c.categoryName}</p>
+                  <p className="text-sm font-black text-emerald-600 leading-none">{c.discount}</p>
+                </a>
+              ))}
+            </div>
+
+            {/* Desktop: lista vertical en columna derecha */}
+            <div className="hidden lg:flex flex-col gap-2">
+              {relatedCommerces.map(c => (
+                <a
+                  key={c.slug}
+                  href={`/promos/${c.slug}`}
+                  className={`flex items-center gap-3 bg-white rounded-2xl px-3.5 py-3 border transition-colors hover:border-[#1E3A5F]/40 ${
+                    c.name === 'Estación Mascotera' ? 'border-2 border-[#D94F2B]' : 'border-gray-100'
+                  }`}
+                >
+                  {c.logoUrl ? (
+                    <img src={c.logoUrl} alt={c.name} className="w-10 h-10 rounded-xl object-contain border border-gray-100 bg-white p-1 shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-xs font-black text-gray-500 shrink-0">
+                      {c.name[0]}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12.5px] font-extrabold text-gray-900 leading-tight truncate">{c.name}</p>
+                    <p className="text-[10px] text-gray-400">{c.categoryIcon} {c.categoryName}</p>
+                  </div>
+                  <p className="text-base font-black text-emerald-600 leading-none shrink-0">{c.discount}</p>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        </div>
+
       </div>
 
-      {/* ── CTA viral ── */}
-      <div className="max-w-lg mx-auto px-4 pb-4 mt-3">
-        <a
-          href="/promos"
-          className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg hover:shadow-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
-        >
-          <div>
-            <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Querés ver tus promos?</p>
-            <p className="text-sm font-black">Ver todas las promos de mis tarjetas →</p>
-          </div>
-          <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">
-            🎯
-          </div>
-        </a>
+      <div className="lg:hidden">
+        <BottomNav />
       </div>
-
-      <BottomNav />
+      </div>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 name: Run Scheduled Scrapers
+run-name: "${{ github.event.inputs.scraper_id != '' && format('Scrapers: {0}', github.event.inputs.scraper_id) || 'Scrapers programados' }}"
 
 on:
   # schedule DESACTIVADO temporalmente a pedido del usuario (17/09)
