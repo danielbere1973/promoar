@@ -1,11 +1,11 @@
 import { notFound, redirect } from 'next/navigation'
 import { unstable_cache } from 'next/cache'
-import { getServerSession } from 'next-auth/next'
 import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
 import DetailSidebar from './DetailSidebar'
+import DetailCTA from './DetailCTA'
 import { schemaOffer } from '@/lib/schema'
 import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
 import { getPromoScope } from '@/lib/utils/promoScope'
@@ -61,30 +61,39 @@ const getCachedCommerceOtherPromos = unstable_cache(
 )
 
 // Descubrimiento cruzado ("También te podría interesar"): otros comercios con
-// promo activa, de categorías distintas a la actual, ordenados por popularidad
-// (activePromoCount) — no es un comparador del mismo comercio, es variedad real.
+// promo activa, de categorías distintas a la actual. Se trae un pool amplio
+// ordenado por popularidad (activePromoCount, señal de que vale la pena
+// mostrarlo) y se reordena en memoria por el % de descuento real de la mejor
+// promo de cada uno (mismo criterio isCSIOnly/maxDiscountPct que el resto del
+// sitio) — Prisma no permite ordenar Commerce por un campo de su relación.
 const getCachedRelatedCommerces = unstable_cache(
-  async (excludeCategoryId: string, excludeCommerceId: string) => prisma.commerce.findMany({
-    where: {
-      defaultCategoryId: { not: excludeCategoryId },
-      id: { not: excludeCommerceId },
-      activePromoCount: { gt: 0 },
-    },
-    select: {
-      slug: true,
-      name: true,
-      logoUrl: true,
-      defaultCategory: { select: { name: true, icon: true } },
-      promos: {
-        where: { status: 'ACTIVE' },
-        select: { requirements: { orderBy: { discountValue: 'desc' }, take: 1, select: { discountValue: true, discountType: true } } },
-        orderBy: { maxDiscountPct: 'desc' },
-        take: 1,
+  async (excludeCategoryId: string, excludeCommerceId: string) => {
+    const pool = await prisma.commerce.findMany({
+      where: {
+        defaultCategoryId: { not: excludeCategoryId },
+        id: { not: excludeCommerceId },
+        activePromoCount: { gt: 0 },
       },
-    },
-    orderBy: { activePromoCount: 'desc' },
-    take: 8,
-  }),
+      select: {
+        slug: true,
+        name: true,
+        logoUrl: true,
+        defaultCategory: { select: { name: true, icon: true } },
+        promos: {
+          where: { status: 'ACTIVE' },
+          select: { requirements: { orderBy: { discountValue: 'desc' }, take: 1, select: { discountValue: true, discountType: true } } },
+          orderBy: [{ isCSIOnly: 'asc' }, { maxDiscountPct: 'desc' }],
+          take: 1,
+        },
+      },
+      orderBy: { activePromoCount: 'desc' },
+      take: 40,
+    })
+    return pool
+      .filter(c => c.promos[0]?.requirements[0])
+      .sort((a, b) => (b.promos[0].requirements[0].discountValue ?? 0) - (a.promos[0].requirements[0].discountValue ?? 0))
+      .slice(0, 8)
+  },
   ['promo-detail-related-commerces'],
   { tags: [PROMO_DETAIL_TAG], revalidate: false },
 )
@@ -245,10 +254,7 @@ export async function generateStaticParams() {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function PromoDetailPage({ params }: { params: { slug: string } }) {
-  const [cachedPromo, session] = await Promise.all([
-    getCachedPromoBySlug(params.slug),
-    getServerSession(),
-  ])
+  const cachedPromo = await getCachedPromoBySlug(params.slug)
   // unstable_cache serializa el resultado como JSON: Date vuelve como string, hay que recomponerlo
   const promo = cachedPromo && {
     ...cachedPromo,
@@ -296,77 +302,74 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
     const entityType = firstReq?.bank ? 'bancos' : firstReq?.wallet ? 'bancos' : null
 
     return (
-      <div className="min-h-screen bg-gray-50 pb-24">
-        <BackButton label={promo.commerce.name} />
-        <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
-
-          {/* Banner vencida */}
-          <div className="bg-gray-100 border border-gray-200 rounded-3xl px-6 py-8 text-center space-y-2">
-            <p className="text-4xl">⏰</p>
-            <p className="text-lg font-black text-gray-700">Esta promo ya venció</p>
-            <p className="text-sm text-gray-500">
-              La promoción de <span className="font-semibold">{promo.commerce.name}</span> ya no está vigente.
-            </p>
+      <div className="min-h-screen bg-gray-50 pb-24 lg:pb-0 lg:flex">
+        <DetailSidebar />
+        <div className="flex-1 min-w-0 lg:overflow-y-auto">
+          <div className="lg:hidden">
+            <BackButton label={promo.commerce.name} />
           </div>
+          <div className="max-w-lg lg:max-w-xl mx-auto px-4 lg:px-10 pt-4 lg:pt-10 space-y-4">
 
-          {/* Link a entidad */}
-          {entitySlug && entityType && (
-            <a
-              href={`/${entityType}/${entitySlug}`}
-              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
-            >
-              <div>
-                <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
-                <p className="text-sm font-black text-gray-800">{entityName} →</p>
-              </div>
-            </a>
-          )}
-
-          {/* Link a promos vigentes del mismo comercio (sin query extra a Prisma) */}
-          {promo.commerce.slug && (
-            <a
-              href={`/comercios/${promo.commerce.slug}`}
-              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
-            >
-              <div>
-                <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
-                <p className="text-sm font-black text-gray-800">en {promo.commerce.name} →</p>
-              </div>
-            </a>
-          )}
-
-          {/* CTA general */}
-          <a
-            href="/promos"
-            className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg"
-          >
-            <div>
-              <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Querés ver tus promos?</p>
-              <p className="text-sm font-black">Ver todas las promos →</p>
+            {/* Banner vencida */}
+            <div className="bg-gray-100 border border-gray-200 rounded-3xl px-6 py-8 text-center space-y-2">
+              <p className="text-4xl">⏰</p>
+              <p className="text-lg font-black text-gray-700">Esta promo ya venció</p>
+              <p className="text-sm text-gray-500">
+                La promoción de <span className="font-semibold">{promo.commerce.name}</span> ya no está vigente.
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
-          </a>
+
+            {/* Link a entidad */}
+            {entitySlug && entityType && (
+              <a
+                href={`/${entityType}/${entitySlug}`}
+                className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
+              >
+                <div>
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
+                  <p className="text-sm font-black text-gray-800">{entityName} →</p>
+                </div>
+              </a>
+            )}
+
+            {/* Link a promos vigentes del mismo comercio (sin query extra a Prisma) */}
+            {promo.commerce.slug && (
+              <a
+                href={`/comercios/${promo.commerce.slug}`}
+                className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
+              >
+                <div>
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
+                  <p className="text-sm font-black text-gray-800">en {promo.commerce.name} →</p>
+                </div>
+              </a>
+            )}
+
+            {/* CTA general */}
+            <a
+              href="/promos"
+              className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg"
+            >
+              <div>
+                <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Querés ver tus promos?</p>
+                <p className="text-sm font-black">Ver todas las promos →</p>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
+            </a>
+          </div>
+          <div className="lg:hidden">
+            <BottomNav />
+          </div>
         </div>
-        <BottomNav />
       </div>
     )
   }
 
-  const isLoggedIn = !!session?.user?.email
-
-  const [branches, otherPromosRaw, relatedCommercesRaw, userWithProfile] = await Promise.all([
+  const [branches, otherPromosRaw, relatedCommercesRaw] = await Promise.all([
     getCachedCommerceBranchesCount(promo.commerce.id),
     getCachedCommerceOtherPromos(promo.commerce.id, promo.id),
     getCachedRelatedCommerces(promo.category.id, promo.commerce.id),
-    isLoggedIn
-      ? prisma.user.findUnique({
-          where: { email: session!.user!.email! },
-          select: { financialProfile: { select: { id: true } } },
-        })
-      : null,
   ])
-
-  const hasProfile = !!userWithProfile?.financialProfile
 
   const specificDates: string[] = promo.specificDates ? JSON.parse(promo.specificDates) : []
   const reqs = promo.requirements
@@ -440,13 +443,6 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
     })
 
   const bestEntityName = banks[0]?.name ?? wallets[0]?.name ?? ''
-  const ctaHref = !isLoggedIn ? '/login?next=/promos' : hasProfile ? '/promos?for_me=true' : '/perfil'
-  const ctaTitle = !isLoggedIn ? 'Decinos tus tarjetas' : hasProfile ? 'Ver mis promos' : 'Completá tu perfil'
-  const ctaSubtitle = !isLoggedIn
-    ? 'y te mostramos primero la que más te conviene'
-    : hasProfile
-    ? 'ordenadas según tus bancos y tarjetas'
-    : 'y te mostramos primero la que más te conviene'
 
   const jsonLd = schemaOffer({
     name: `${discountLabel(bestDiscount)} en ${promo.commerce.name}`,
@@ -563,6 +559,9 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
           )}
         </div>
 
+        {/* ── CTA unificado: beneficio explícito, copy según estado de sesión ── */}
+        <DetailCTA />
+
         {/* ── COMPARADOR: otras formas de pagar en el mismo comercio ── */}
         {comparatorItems.length > 0 && (
           <div className="space-y-2.5">
@@ -611,19 +610,6 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
             networks.map(n => n.name),
           )}
         </p>
-
-        {/* ── CTA unificado: beneficio explícito, copy según estado de sesión ── */}
-        <a
-          href={ctaHref}
-          className="pulse-loop flex items-center gap-3 bg-gray-900 rounded-2xl px-4 py-3.5 hover:bg-gray-800 transition-colors"
-        >
-          <div className="w-9 h-9 rounded-xl bg-[#D94F2B] flex items-center justify-center shrink-0 text-base">💳</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-extrabold text-white leading-tight">{ctaTitle}</p>
-            <p className="text-[11px] text-gray-400">{ctaSubtitle}</p>
-          </div>
-          <span className="text-gray-500 text-lg shrink-0">→</span>
-        </a>
 
         {/* ── ALERTA DE ALCANCE / CONDICIÓN RESTRINGIDA ── */}
         {scope && (
