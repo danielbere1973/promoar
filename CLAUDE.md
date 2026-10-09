@@ -1000,9 +1000,26 @@ Con esto `MacroScraper1` (startPage=1) sigue usando el camino por click como ant
 cambios de comportamiento, y `MacroScraper2` (startPage=51) salta directo a su offset sin
 clickear nada.
 
-**Estado**: fix aplicado en PR #44 (`fix/macro-scraper-split`), aún sin correr una prueba
-real que confirme que `MacroScraper2` ya no da timeout — pendiente de verificar en la
-próxima corrida.
+**Estado**: fix aplicado en PR #44 (`fix/macro-scraper-split`), que se mergeó a `main` sin
+este commit por timing (el merge ocurrió antes de que el commit del fix se pusheara) — se
+necesitó un PR #45 adicional para traerlo. Una vez mergeado #45, `MacroScraper2` sí entró
+al camino de offset directo (ya no clickeaba desde la página 1), pero reveló un segundo
+bug: offset de cálculo incorrecto.
+
+**Bug #2 — offset mal calculado (RESUELTO, mismo día 9/10/2026)**: con el camino de offset
+ya activo, la llamada con `offset=2501` (fórmula `1 + (startPage-1)*PAGE_SIZE` con
+`startPage=51`) devolvía `500 Server Error`. Pablo confirmó inspeccionando el sitio que el
+link real que arma el paginador para la página 83 es
+`?offset=83` — es decir, **el offset del endpoint es 1:1 con el número de página**, no
+`página × 50` como se había asumido. Fix: `offset = startPage` (en vez de
+`1 + (startPage-1)*PAGE_SIZE`), incremento `offset += 1` por página (en vez de `+= PAGE_SIZE`),
+y se sacó la condición de corte `items.length < PAGE_SIZE` (asumía mal el tamaño de página
+real del endpoint, que no está confirmado — ahora corta solo por `items.length === 0` o por
+alcanzar `endPage`).
+
+**Estado**: fix de offset commiteado en la misma rama `fix/macro-scraper-split` (PR #45),
+pendiente de mergear y de una corrida real que confirme que `MacroScraper2` trae promos
+sin 500 ni timeout.
 
 ## Notas ICBC / BBVA / Galicia / Macro / NaranjaX / Santander scrapers — RESUELTO vía BrightData (17/9/2026)
 Históricamente ICBC (WAF por IP de datacenter) y BBVA (bloqueo geo-IP, `403
