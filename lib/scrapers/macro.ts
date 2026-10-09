@@ -21,12 +21,9 @@ import { extractCap } from './cencosud-helpers';
 
 const PAGE_URL      = 'https://www.macro.com.ar/beneficios?d=Any';
 const API_BASE      = 'https://apipublic.macro.com.ar/v1/card-benefits';
-const CATALOG_BASE  = `${API_BASE}/provinces/AR-0`;
 const DETAIL_BASE   = API_BASE;
 const BANK_NAME     = 'Banco Macro';
-const PAGE_WAIT     = 6000;  // ms entre páginas para que cargue la API (más tiempo en CI)
-const LIST_CODE     = 'beneficios-mb';
-const PAGE_SIZE     = 50;
+const PAGE_WAIT     = 6000;  // ms entre páginas dentro del rango (full, para que cargue la API)
 
 // Corte entre el scraper 1 y el 2. Hoy el catálogo tiene ~83 páginas; se deja margen
 // hasta 100 (el máximo observado) repartiendo 1-50 / 51-100.
@@ -415,74 +412,27 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
         });
         console.log('[Macro] Botón encontrado:', btnExists);
 
-        // Paginar directamente via context.request (comparte cookies de sesión con el browser)
-        // Usar el endpoint real descubierto: AR-0?list-code=beneficios-mb&offset=N
-        // El offset ya es saltable: arrancamos directo en el offset del rango asignado,
-        // así cada scraper no paga el tiempo de las páginas que no le tocan.
+        // El endpoint de catálogo NO permite "saltar" a un offset/página arbitraria:
+        // probado offset=51 (y antes offset=2501) en frío devuelve HTTP 500 — confirmado
+        // también manualmente por Pablo en el sitio real: no se puede ir directo a la
+        // página 51, hay que clickear "siguiente" una por una desde la página 1 (navegó
+        // así hasta la página 78 y funcionó). Osea: el paginado por click es la ÚNICA vía
+        // que funciona, para cualquier startPage. El bloque de offset-jump que estaba acá
+        // quedó demostrado no-funcional y se eliminó (ver resumen-scrapers.md).
         //
-        // Se usa SIEMPRE que startPage > 1 (aunque btnExists sea true): el paginado
-        // por click (más abajo) no tiene forma de "saltar" páginas en el sitio — tiene
-        // que clickear "siguiente" una por una desde la página 1, pagando PAGE_WAIT (6s)
-        // por cada página descartada antes de llegar a su rango. Con startPage=51 eso
-        // son ~50 clicks * 6s = ~300s solo para arrancar, lo que vuela el timeout.
-        // El offset del endpoint sí permite saltar directo, así que es la única vía
-        // viable para cualquier scraper cuyo rango no empiece en la página 1.
-        if (!btnExists || capturedCodes.size === 0 || startPage > 1) {
-          console.log('[Macro] Paginando directamente via context.request (cookies de sesión)...')
-          const apiHeaders: Record<string, string> = {
-            'Accept': 'application/json',
-            'Referer': PAGE_URL,
-            'Origin': 'https://www.macro.com.ar',
-          }
-          if (capturedApiKey) apiHeaders['Apikey'] = capturedApiKey
+        // Lo que sí se puede optimizar: las páginas antes de `startPage` no necesitan
+        // procesarse (el listener de 'response' ya las ignora vía `inRange`), así que
+        // esta fase de "avance" usa una espera corta entre clicks (confirmado por Pablo:
+        // cada transición de página tarda <2s en el sitio real) en vez de PAGE_WAIT (6s,
+        // pensado para la fase real de captura donde hay que darle tiempo a la respuesta
+        // de la API). Esto evita que MacroScraper2 (startPage=51) tarde ~300s solo para
+        // llegar a su rango y vuele el timeout de GH Actions/Vercel.
+        const SKIP_WAIT = 1500; // ms entre clicks mientras avanzamos fuera de nuestro rango
 
-          let pageNum = startPage
-          // El offset del endpoint es 1:1 con el número de página (confirmado inspeccionando
-          // el link real que arma el sitio: ?offset=83 carga la página 83 del paginador) —
-          // NO es "1 + (página-1)*PAGE_SIZE" como se asumió originalmente, eso generaba
-          // offsets absurdamente altos (ej. 2501 para la página 51) que la API rechazaba con 500.
-          let offset = startPage
-          let totalExpected = 0
-          while (endPage === null || pageNum <= endPage) {
-            const url = `${CATALOG_BASE}?list-code=${LIST_CODE}&offset=${offset}`
-            try {
-              const res = await context.request.get(url, { headers: apiHeaders, timeout: 15000 })
-              const body = await res.text()
-              console.log(`[Macro] Catálogo offset=${offset} (página ${pageNum}): HTTP ${res.status()} body=${body.slice(0, 200)}`)
-              if (!res.ok()) break
-              const json = JSON.parse(body)
-              const items: any[] = json?.promotions ?? json?.items ?? []
-              if (totalExpected === 0 && json?.total) totalExpected = json.total
-              if (items.length === 0) break
-              let nuevos = 0
-              for (const item of items) {
-                const code = item.city ?? item.code ?? item['external-code']
-                if (code && !capturedCodes.has(String(code))) {
-                  capturedCodes.add(String(code))
-                  nuevos++
-                }
-              }
-              console.log(`[Macro] offset=${offset} (página ${pageNum}): ${items.length} items, +${nuevos} nuevos (total: ${capturedCodes.size}${totalExpected ? '/' + totalExpected : ''})`)
-              // No cortar por "items.length < PAGE_SIZE": el tamaño de página real del
-              // endpoint no está confirmado y asumirlo mal corta la paginación antes de
-              // tiempo. El corte real es items.length === 0 (arriba) o llegar a endPage.
-              offset += 1
-              pageNum++
-            } catch (e) {
-              console.log('[Macro] Error en catálogo:', e)
-              break
-            }
-          }
-        }
-
-        // Si el botón fue encontrado Y el rango arranca en la página 1, esperar que el
-        // interceptor llene los codes y paginar por click hasta endPage (el listener de
-        // response ya filtra qué páginas quedan dentro del rango asignado). Para
-        // startPage > 1 ya se resolvió todo arriba vía offset directo — no repetir acá.
-        if (btnExists && startPage === 1) {
+        if (btnExists) {
           console.log('[Macro] Esperando primer batch del catálogo...');
           const waitStart = Date.now();
-          while (capturedCodes.size === 0 && catalogPage < startPage && Date.now() - waitStart < 45000) {
+          while (catalogPage === 0 && Date.now() - waitStart < 45000) {
             await page.waitForTimeout(500);
           }
           if (catalogPage === 0) {
@@ -491,13 +441,18 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
             await page.screenshot({ path: '/tmp/macro-debug.png' }).catch(() => {})
           } else {
             console.log(`[Macro] Primer batch: página ${catalogPage}, ${capturedCodes.size} códigos`);
-            // Paginar por clicks en "siguiente" hasta cubrir todo el rango asignado
+            // Paginar por clicks en "siguiente" hasta cubrir todo el rango asignado.
+            // Antes de llegar a startPage usamos SKIP_WAIT (avance rápido, sin capturar
+            // nada útil); dentro del rango usamos PAGE_WAIT (full, para que el listener
+            // de response tenga tiempo de capturar bien la página).
             const MAX_PAGINAS = endPage ?? 100;
             while (catalogPage < MAX_PAGINAS) {
-              console.log(`[Macro] Antes de click siguiente — página actual ${catalogPage}, ${capturedCodes.size} códigos capturados`);
+              const skipping = catalogPage < startPage;
+              const wait = skipping ? SKIP_WAIT : PAGE_WAIT;
+              console.log(`[Macro] Antes de click siguiente — página actual ${catalogPage}, ${capturedCodes.size} códigos capturados${skipping ? ' (avance rápido, fuera de rango)' : ''}`);
               const codesAntes = capturedCodes.size;
               const pageAntes = catalogPage;
-              await page.waitForTimeout(PAGE_WAIT);
+              await page.waitForTimeout(wait);
               const hasNext = await page.evaluate(() => {
                 const btn = document.querySelector('.bm-pagination_next') as HTMLElement | null;
                 if (!btn) return false;
@@ -505,12 +460,14 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
                 return true;
               });
               if (!hasNext) { console.log('[Macro] No hay más páginas.'); break; }
-              await page.waitForTimeout(PAGE_WAIT);
+              await page.waitForTimeout(wait);
               // Si ya pasamos el rango asignado y no hubo códigos/páginas nuevas, cortar
               if (catalogPage === pageAntes && capturedCodes.size === codesAntes) { console.log('[Macro] Sin cambios — fin de paginación.'); break; }
               if (endPage !== null && catalogPage >= endPage) { console.log(`[Macro] Rango ${rangeLabel} completo — fin de paginación.`); break; }
             }
           }
+        } else {
+          console.log('[Macro] ⚠️ Botón "Todas las categorías" no encontrado — no se puede paginar.')
         }
 
         console.log(`[Macro] Catálogo (${rangeLabel}) completo — ${capturedCodes.size} promos. Navegando detalles...`);
