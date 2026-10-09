@@ -244,7 +244,8 @@ const SCRAPERS_CONFIG: ScraperConfig[] = [
   { id: 'banco galicia',   name: 'Galicia',         group: 'banco',        description: 'React SPA — intercepción API' },
   { id: 'bbva',            name: 'BBVA',            group: 'banco',        description: 'Next.js — intercepción API' },
   { id: 'banco santander', name: 'Santander',       group: 'banco',        description: 'Playwright — intercepción API' },
-  { id: 'banco macro',     name: 'Macro',           group: 'banco',        description: 'Playwright — intercepción API' },
+  { id: 'banco macro 1',   name: 'Macro 1',         group: 'banco',        description: 'Playwright — páginas 1-50, intercepción API' },
+  { id: 'banco macro 2',   name: 'Macro 2',         group: 'banco',        description: 'Playwright — páginas 51+, intercepción API' },
   { id: 'banco nación',    name: 'Nación',          group: 'banco',        description: 'Semana Nación — Playwright' },
   { id: 'banco provincia', name: 'Provincia',       group: 'banco',        description: 'API SearchBeneficio' },
   { id: 'banco ciudad',    name: 'Ciudad',          group: 'banco',        description: 'Playwright — intercepción API' },
@@ -2364,7 +2365,7 @@ const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 const PLAYWRIGHT_SCRAPER_IDS = new Set([
   'amex', 'cabal', 'changomas', 'banco galicia', 'icbc',
-  'banco macro', 'naranjax', 'banco santander',
+  'banco macro 1', 'banco macro 2', 'naranjax', 'banco santander',
   'banco supervielle', 'banco ciudad', 'visa',
   'jumbo', 'disco', 'vea', 'banco patagonia',
   'sol', 'bbva',

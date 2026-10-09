@@ -911,6 +911,72 @@ que el merge más reciente ya es el que sirve el tráfico.
 Confirmado funcionando end-to-end el 18/9/2026 con el firewall reactivado (la regla de bypass
 ampliada convive bien con el resto de la protección).
 
+## Regresión 429 en scrapers HTTP — causa distinta: Vercel Bot Management (RESUELTO 9/10/2026)
+Mismo síntoma que el bloqueo de arriba (429 con HTML de challenge page, `<title>Ve...`) pero
+con una causa nueva: la sección **Bot Management** del dashboard de Vercel (Project Settings →
+Firewall, separada de las "Custom Rules" donde vive `bypass-internal-api`) tenía
+**"Bot Protection" en modo "Challenge"** — challengea cualquier request de origen no-browser
+(sin UA de navegador) que no sea un bot verificado (Googlebot, etc.). El `fetch()` server-to-server
+de `app/api/internal/run-scraper/route.ts` hacia `/api/admin/scrape` no tiene UA de navegador,
+así que caía en ese challenge pese a mandar el header `Authorization: Bearer VTEX_SESSION_SECRET`
+correcto — la regla custom `bypass-internal-api` estaba en acción **"Log"** (solo registra, no
+hace skip/bypass real) y no alcanza a frenar la evaluación de Bot Management, que es una capa
+aparte. Esto explica por qué "el jueves pasado funcionaba": Bot Management es independiente de
+las Custom Rules y pudo haberse activado (manual o automáticamente) después de esa corrida.
+**Fix**: cambiar "Bot Protection" de "Challenge" a una acción que no bloquee el tráfico interno
+(ver dashboard → Firewall → Bot Management). No requirió cambios de código — `middleware.ts`,
+`app/api/internal/run-scraper/route.ts` y `app/api/admin/scrape/route.ts` ya estaban correctos
+y sin cambios desde el fix del 18/9. **Lección**: ante un 429 con challenge page, revisar
+**ambas** capas del Firewall de Vercel por separado — Custom Rules Y Bot Management — no asumir
+que la regla custom ya conocida sigue siendo la única fuente de bloqueo.
+
+## Macro desdoblado en 2 scrapers para evitar timeout ~300s — HECHO, sin probar aún (9/10/2026)
+El scraper de Macro recorre todo el catálogo de categorías (~83-100 páginas) vía Playwright,
+con riesgo de superar el timeout de ~300s de Vercel/GH Actions en una sola corrida — y sin
+forma de saber si una corrida larga realmente terminó bien o quedó cortada a mitad.
+
+**Pedido explícito de Pablo**: desdoblar en 2 scrapers, uno que lea la primera mitad de
+páginas y otro el resto — pero **sin correr en paralelo**: "no tienen que correr en paralelo.
+tienen que correr uno y luego otro como pasa con todos los scrapers". Se descartó cualquier
+diseño que buscara paralelizar para ganar velocidad; el objetivo es solo evitar el timeout,
+preservando la ejecución secuencial ya usada para el resto de los scrapers (por la misma
+razón de fondo que el incidente de pool de conexiones Neon del 1/10/2026 con corridas
+paralelas de Macro).
+
+**Implementación** (`lib/scrapers/macro.ts`): toda la lógica de scraping (login, selección
+de provincia, paginación del catálogo, fetch de detalle, parsing) se extrajo a una factory
+`makeMacroScraper(name, startPage, endPage)`, parametrizada por rango de páginas. Se exportan
+`MacroScraper1` (páginas 1-50) y `MacroScraper2` (páginas 51+), además del `MacroScraper`
+original sin rango (mantenido solo por compatibilidad, no registrado en ningún lado). La
+paginación —tanto el camino por click (`.bm-pagination_next`) como el fallback por offset
+(`context.request.get()`)— salta directo al offset de inicio del rango asignado en vez de
+recorrer páginas que no le corresponden a ese scraper.
+
+**Ejecución secuencial**: no hizo falta tocar la lógica de scheduling. El job `run-playwright`
+de `.github/workflows/run-scrapers.yml` ya tiene `max-parallel: 1` en su matrix (agregado tras
+el incidente del 1/10) — con los 2 IDs de Macro en esa misma matrix, GH Actions los corre uno
+después del otro automáticamente, sin cambios adicionales de workflow.
+
+**Archivos tocados** (registro de los 2 nuevos scraper IDs — `banco macro 1` / `banco macro 2`
+— en todos los puntos que antes conocían solo `banco macro`):
+- `lib/scrapers/macro.ts` — factory + 2 exports nuevos
+- `lib/scrapers/index.ts` — import + `BANCO_SCRAPERS`/`ALL_SCRAPERS`
+- `app/admin/page.tsx` — `SCRAPERS_CONFIG` (2 entradas, "Macro 1"/"Macro 2") y
+  `PLAYWRIGHT_SCRAPER_IDS`
+- `app/api/internal/run-scraper/route.ts` — Set `PLAYWRIGHT_IDS`
+- `app/api/admin/run-scraper/route.ts` — Set `PLAYWRIGHT_IDS`
+- `app/api/admin/scrape/route.ts` — Set `PLAYWRIGHT_SCRAPER_NAMES`
+- `.github/workflows/run-scrapers.yml` — env `PLAYWRIGHT_SCRAPERS`
+
+No se tocaron las referencias a "Macro"/"Banco Macro" como nombre de entidad o dominio
+(dropdown de reportes por banco en `app/admin/page.tsx` línea ~1523, mapeo de dominio para
+stats línea ~3280) — son independientes de cuántos procesos de scraper cubren ese banco.
+
+**Estado al cierre de esta sesión**: solo cambios de código locales, sin commitear. Verificado
+únicamente con `npx tsc --noEmit` (sin regresiones nuevas). No se corrió ni en localhost ni en
+ningún otro entorno — falta probar una corrida real (local o GH Actions) antes de confiar en
+que el split funciona end-to-end.
+
 ## Notas ICBC / BBVA / Galicia / Macro / NaranjaX / Santander scrapers — RESUELTO vía BrightData (17/9/2026)
 Históricamente ICBC (WAF por IP de datacenter) y BBVA (bloqueo geo-IP, `403
 {"error":"No disponible fuera de Argentina"}`) solo podían correrse **localmente**, nunca
