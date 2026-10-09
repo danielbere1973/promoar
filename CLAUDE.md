@@ -972,10 +972,37 @@ No se tocaron las referencias a "Macro"/"Banco Macro" como nombre de entidad o d
 (dropdown de reportes por banco en `app/admin/page.tsx` línea ~1523, mapeo de dominio para
 stats línea ~3280) — son independientes de cuántos procesos de scraper cubren ese banco.
 
-**Estado al cierre de esta sesión**: solo cambios de código locales, sin commitear. Verificado
-únicamente con `npx tsc --noEmit` (sin regresiones nuevas). No se corrió ni en localhost ni en
-ningún otro entorno — falta probar una corrida real (local o GH Actions) antes de confiar en
-que el split funciona end-to-end.
+**Estado al cierre de la sesión inicial**: solo cambios de código locales, sin commitear.
+Verificado únicamente con `npx tsc --noEmit` (sin regresiones nuevas). No se corrió ni en
+localhost ni en ningún otro entorno — faltaba probar una corrida real.
+
+**Bug encontrado al primer uso real — RESUELTO (9/10/2026)**: `MacroScraper2` dio timeout
+de 300s **2 veces seguidas** al correrlo en GH Actions. Causa: el camino de paginación por
+click (`btnExists === true`, el caso normal) no tenía forma de "saltarse" páginas en el
+sitio — el catálogo de Macro siempre se carga desde su página 1 en el navegador, así que
+el scraper igual tenía que clickear `.bm-pagination_next` 50 veces (pagando `PAGE_WAIT`,
+6s, por cada click) solo para descartar las páginas 1-50 y llegar recién ahí a su rango
+real (51+). Eso son ~300s consumidos **antes de empezar a hacer nada útil** — exactamente
+el timeout, y exactamente lo opuesto al objetivo original del split.
+
+El camino alternativo por `context.request.get()` con `offset` sí podía saltar
+directo al offset de inicio del rango — pero antes solo se usaba como fallback cuando
+`btnExists` era `false` o no se había capturado ningún código todavía, nunca cuando el
+botón se encontraba normalmente.
+
+**Fix** en `lib/scrapers/macro.ts`: la condición para usar el camino por offset directo
+ahora es `!btnExists || capturedCodes.size === 0 || startPage > 1` (antes:
+`!btnExists || capturedCodes.size === 0`) — cualquier scraper cuyo rango no arranque en
+la página 1 usa el offset directo, sin importar si el botón se encontró. Y el bloque de
+paginación por click, más abajo, ahora solo corre si `btnExists && startPage === 1`
+(antes: `btnExists` solo) — para no duplicar el trabajo ya resuelto por el offset.
+Con esto `MacroScraper1` (startPage=1) sigue usando el camino por click como antes sin
+cambios de comportamiento, y `MacroScraper2` (startPage=51) salta directo a su offset sin
+clickear nada.
+
+**Estado**: fix aplicado en PR #44 (`fix/macro-scraper-split`), aún sin correr una prueba
+real que confirme que `MacroScraper2` ya no da timeout — pendiente de verificar en la
+próxima corrida.
 
 ## Notas ICBC / BBVA / Galicia / Macro / NaranjaX / Santander scrapers — RESUELTO vía BrightData (17/9/2026)
 Históricamente ICBC (WAF por IP de datacenter) y BBVA (bloqueo geo-IP, `403

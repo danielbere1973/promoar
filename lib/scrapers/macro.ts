@@ -419,7 +419,15 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
         // Usar el endpoint real descubierto: AR-0?list-code=beneficios-mb&offset=N
         // El offset ya es saltable: arrancamos directo en el offset del rango asignado,
         // así cada scraper no paga el tiempo de las páginas que no le tocan.
-        if (!btnExists || capturedCodes.size === 0) {
+        //
+        // Se usa SIEMPRE que startPage > 1 (aunque btnExists sea true): el paginado
+        // por click (más abajo) no tiene forma de "saltar" páginas en el sitio — tiene
+        // que clickear "siguiente" una por una desde la página 1, pagando PAGE_WAIT (6s)
+        // por cada página descartada antes de llegar a su rango. Con startPage=51 eso
+        // son ~50 clicks * 6s = ~300s solo para arrancar, lo que vuela el timeout.
+        // El offset del endpoint sí permite saltar directo, así que es la única vía
+        // viable para cualquier scraper cuyo rango no empiece en la página 1.
+        if (!btnExists || capturedCodes.size === 0 || startPage > 1) {
           console.log('[Macro] Paginando directamente via context.request (cookies de sesión)...')
           const apiHeaders: Record<string, string> = {
             'Accept': 'application/json',
@@ -461,10 +469,11 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
           }
         }
 
-        // Si el botón fue encontrado, esperar que el interceptor llene los codes y paginar por click
-        // hasta alcanzar startPage, y seguir clickeando hasta endPage (el listener de response ya
-        // filtra qué páginas quedan dentro del rango asignado).
-        if (btnExists) {
+        // Si el botón fue encontrado Y el rango arranca en la página 1, esperar que el
+        // interceptor llene los codes y paginar por click hasta endPage (el listener de
+        // response ya filtra qué páginas quedan dentro del rango asignado). Para
+        // startPage > 1 ya se resolvió todo arriba vía offset directo — no repetir acá.
+        if (btnExists && startPage === 1) {
           console.log('[Macro] Esperando primer batch del catálogo...');
           const waitStart = Date.now();
           while (capturedCodes.size === 0 && catalogPage < startPage && Date.now() - waitStart < 45000) {
