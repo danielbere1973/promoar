@@ -437,7 +437,11 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
           if (capturedApiKey) apiHeaders['Apikey'] = capturedApiKey
 
           let pageNum = startPage
-          let offset = 1 + (startPage - 1) * PAGE_SIZE
+          // El offset del endpoint es 1:1 con el número de página (confirmado inspeccionando
+          // el link real que arma el sitio: ?offset=83 carga la página 83 del paginador) —
+          // NO es "1 + (página-1)*PAGE_SIZE" como se asumió originalmente, eso generaba
+          // offsets absurdamente altos (ej. 2501 para la página 51) que la API rechazaba con 500.
+          let offset = startPage
           let totalExpected = 0
           while (endPage === null || pageNum <= endPage) {
             const url = `${CATALOG_BASE}?list-code=${LIST_CODE}&offset=${offset}`
@@ -459,8 +463,10 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
                 }
               }
               console.log(`[Macro] offset=${offset} (página ${pageNum}): ${items.length} items, +${nuevos} nuevos (total: ${capturedCodes.size}${totalExpected ? '/' + totalExpected : ''})`)
-              if (items.length < PAGE_SIZE) break
-              offset += PAGE_SIZE
+              // No cortar por "items.length < PAGE_SIZE": el tamaño de página real del
+              // endpoint no está confirmado y asumirlo mal corta la paginación antes de
+              // tiempo. El corte real es items.length === 0 (arriba) o llegar a endPage.
+              offset += 1
               pageNum++
             } catch (e) {
               console.log('[Macro] Error en catálogo:', e)
