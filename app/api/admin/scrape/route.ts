@@ -823,7 +823,14 @@ export async function POST(req: NextRequest) {
       processedCount++;
     };
 
-    const BATCH = 5;
+    // BATCH bajado de 5 a 3 (9/10/2026): cada savePromo con cambios reales hace
+    // hasta 2 queries secuenciales (deleteMany+update, o create) — con 5 en paralelo
+    // más las queries de FASE 1/2 corriendo en la misma instancia serverless, se
+    // llegaba a saturar el pool de Prisma (connection_limit=10 en DATABASE_URL) y
+    // tirar "Timed out fetching a new connection from the connection pool" en
+    // corridas grandes (ej. Macro, 500 promos nuevas por HTTP batch). Con 3 en
+    // paralelo queda margen para las demás queries concurrentes de la misma request.
+    const BATCH = 3;
     for (let i = 0; i < resolvedItems.length; i += BATCH) {
       await Promise.all(resolvedItems.slice(i, i + BATCH).map(savePromo));
       console.log(`[Scrape] Batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(resolvedItems.length / BATCH)} — ${Math.min(i + BATCH, resolvedItems.length)}/${resolvedItems.length}`);
