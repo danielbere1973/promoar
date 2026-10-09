@@ -26,12 +26,15 @@ if (!scraper) {
   process.exit(1)
 }
 
+// Reintenta en 429 (rate limit) y también en 500 (ej. timeout de pool de conexiones
+// de Neon bajo carga — ver resumen-scrapers.md 9/10/2026) para que un error puntual
+// de un batch no aborte toda la corrida y pierda los batches restantes ya scrapeados.
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3) {
   for (let i = 0; i < retries; i++) {
     const res = await fetch(url, options)
-    if (res.status !== 429 || i === retries - 1) return res
-    console.log(`[${scraperId}] Rate limit (429) detectado en ${url}, reintentando en ${Math.pow(2, i)}s...`)
-    await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000))
+    if ((res.status !== 429 && res.status !== 500) || i === retries - 1) return res
+    console.log(`[${scraperId}] HTTP ${res.status} en ${url}, reintentando en ${Math.pow(2, i + 1)}s...`)
+    await new Promise(r => setTimeout(r, Math.pow(2, i + 1) * 1000))
   }
   return fetch(url, options) // fallback to return a Response even if it fails
 }
@@ -63,7 +66,14 @@ async function main() {
     totalFound = promos.length
 
     if (promos.length > 0) {
-      const BATCH_SIZE = 500
+      // Bajado de 500 a 200 (9/10/2026): cada batch grande mantiene la instancia
+      // serverless de /api/admin/scrape viva más tiempo sosteniendo sus conexiones
+      // de Prisma abiertas (hasta 10, ver DATABASE_URL connection_limit) — con 22
+      // batches de 500 en una corrida de Macro, el pool terminaba saturado y
+      // tirando "Timed out fetching a new connection from the connection pool" a
+      // mitad de corrida (batch 15/22). Batches más chicos sueltan las conexiones
+      // más seguido entre llamadas.
+      const BATCH_SIZE = 200
       const batches = Math.ceil(promos.length / BATCH_SIZE)
 
       for (let i = 0; i < promos.length; i += BATCH_SIZE) {
