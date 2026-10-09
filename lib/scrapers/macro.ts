@@ -422,12 +422,13 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
         //
         // Lo que sí se puede optimizar: las páginas antes de `startPage` no necesitan
         // procesarse (el listener de 'response' ya las ignora vía `inRange`), así que
-        // esta fase de "avance" usa una espera corta entre clicks (confirmado por Pablo:
-        // cada transición de página tarda <2s en el sitio real) en vez de PAGE_WAIT (6s,
-        // pensado para la fase real de captura donde hay que darle tiempo a la respuesta
-        // de la API). Esto evita que MacroScraper2 (startPage=51) tarde ~300s solo para
-        // llegar a su rango y vuele el timeout de GH Actions/Vercel.
-        const SKIP_WAIT = 1500; // ms entre clicks mientras avanzamos fuera de nuestro rango
+        // mientras estamos fuera de rango no hace falta ESPERAR a que el listener termine
+        // de procesar nada — solo click tras click, al ritmo que tarde el sitio en habilitar
+        // el botón "siguiente" de nuevo. SKIP_WAIT pasa a ser solo un margen mínimo pre-click
+        // (dejarle un respiro al DOM para re-renderizar la grilla), sin espera post-click.
+        // Dentro del rango real seguimos usando PAGE_WAIT (6s) antes y después, para que el
+        // listener de response tenga tiempo de capturar bien la página.
+        const SKIP_WAIT = 400; // ms mínimo antes de cada click mientras estamos fuera de rango
 
         if (btnExists) {
           console.log('[Macro] Esperando primer batch del catálogo...');
@@ -448,19 +449,36 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
             const MAX_PAGINAS = endPage ?? 100;
             while (catalogPage < MAX_PAGINAS) {
               const skipping = catalogPage < startPage;
-              const wait = skipping ? SKIP_WAIT : PAGE_WAIT;
-              console.log(`[Macro] Antes de click siguiente — página actual ${catalogPage}, ${capturedCodes.size} códigos capturados${skipping ? ' (avance rápido, fuera de rango)' : ''}`);
               const codesAntes = capturedCodes.size;
               const pageAntes = catalogPage;
-              await page.waitForTimeout(wait);
-              const hasNext = await page.evaluate(() => {
-                const btn = document.querySelector('.bm-pagination_next') as HTMLElement | null;
-                if (!btn) return false;
-                btn.click();
-                return true;
-              });
-              if (!hasNext) { console.log('[Macro] No hay más páginas.'); break; }
-              await page.waitForTimeout(wait);
+
+              if (skipping) {
+                // Fuera de rango: un solo margen corto (no esperamos aparte a que el
+                // listener termine de procesar — igual lo va a tirar porque !inRange).
+                // El mismo SKIP_WAIT post-click le da lugar a que la respuesta de la
+                // página anterior llegue y el contador catalogPage avance antes del
+                // chequeo de "sin cambios" de abajo.
+                const hasNext = await page.evaluate(() => {
+                  const btn = document.querySelector('.bm-pagination_next') as HTMLElement | null;
+                  if (!btn) return false;
+                  btn.click();
+                  return true;
+                });
+                if (!hasNext) { console.log('[Macro] No hay más páginas.'); break; }
+                await page.waitForTimeout(SKIP_WAIT);
+              } else {
+                console.log(`[Macro] Antes de click siguiente — página actual ${catalogPage}, ${capturedCodes.size} códigos capturados`);
+                await page.waitForTimeout(PAGE_WAIT);
+                const hasNext = await page.evaluate(() => {
+                  const btn = document.querySelector('.bm-pagination_next') as HTMLElement | null;
+                  if (!btn) return false;
+                  btn.click();
+                  return true;
+                });
+                if (!hasNext) { console.log('[Macro] No hay más páginas.'); break; }
+                await page.waitForTimeout(PAGE_WAIT);
+              }
+
               // Si ya pasamos el rango asignado y no hubo códigos/páginas nuevas, cortar
               if (catalogPage === pageAntes && capturedCodes.size === codesAntes) { console.log('[Macro] Sin cambios — fin de paginación.'); break; }
               if (endPage !== null && catalogPage >= endPage) { console.log(`[Macro] Rango ${rangeLabel} completo — fin de paginación.`); break; }
