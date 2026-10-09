@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
     // Scrapers que requieren Playwright — no pueden correr en Vercel (Chromium no disponible)
     const PLAYWRIGHT_SCRAPER_NAMES = new Set([
       'jumbo', 'disco', 'vea', 'amex', 'cabal', 'changomas',
-      'banco galicia', 'icbc', 'banco macro', 'naranjax', 'banco provincia',
+      'banco galicia', 'icbc', 'banco macro 1', 'banco macro 2', 'naranjax', 'banco provincia',
       'banco santander', 'banco supervielle', 'banco ciudad', 'visa', 'banco patagonia',
       // BBVA es HTTP puro pero usa launchBrowser() internamente (túnel BrightData
       // por geo-IP) — sin Chromium disponible en Vercel, necesita el mismo guard.

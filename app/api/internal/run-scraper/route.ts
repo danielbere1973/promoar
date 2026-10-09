@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   // Los scrapers Playwright no pueden correr en Vercel — solo GitHub Actions
   const PLAYWRIGHT_IDS = new Set([
     'amex', 'cabal', 'changomas', 'banco galicia', 'icbc',
-    'banco macro', 'naranjax', 'banco provincia', 'banco santander',
+    'banco macro 1', 'banco macro 2', 'naranjax', 'banco provincia', 'banco santander',
     'banco supervielle', 'banco ciudad', 'visa',
     'jumbo', 'disco', 'vea',
   ])

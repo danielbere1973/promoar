@@ -33,7 +33,7 @@ import { GaliciaScraper } from './galicia';
 import { BrubankScraper } from './brubank';
 import { BBVAScraper } from './bbva';
 import { SantanderScraper } from './santander';
-import { MacroScraper } from './macro';
+import { MacroScraper1, MacroScraper2 } from './macro'; // desdoblado en 2 el 9/10/2026 para evitar timeout ~300s (ver lib/scrapers/macro.ts)
 import { ICBCScraper } from './icbc';
 import { BancoCiudadScraper } from './bancociudad';
 import { PatagoniaScraper } from './patagonia';
@@ -83,7 +83,8 @@ export const BANCO_SCRAPERS: Scraper[] = [
   GaliciaScraper,
   BBVAScraper,
   SantanderScraper,
-  MacroScraper,
+  MacroScraper1,
+  MacroScraper2,
   BNAScraper,
   BancoCiudadScraper,
   SupervielleScraper,
@@ -109,7 +110,8 @@ export const ALL_SCRAPERS: Scraper[] = [
   GaliciaScraper,
   BBVAScraper,
   SantanderScraper,
-  MacroScraper,
+  MacroScraper1,
+  MacroScraper2,
   BNAScraper,
   BancoCiudadScraper,
   SupervielleScraper,
