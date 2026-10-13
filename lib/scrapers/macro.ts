@@ -349,7 +349,10 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
         // (confirmado en logs: "Apikey capturada"/"Página N fuera de rango" ocurren DURANTE
         // la espera de este goto, no después). 'domcontentloaded' + las esperas explícitas
         // de abajo (urlServicios + timeout fijo) ya cubren lo que networkidle intentaba dar.
-        await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        // Timeout alto (120s): el Scraping Browser remoto de BrightData puede estar
+        // resolviendo un challenge/WAF en segundo plano antes de entregar el documento,
+        // lo que puede tardar bastante más que el timeout de red normal de un goto directo.
+        await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
         // Esperar a que el JS inicialice urlServicios
         await page.waitForFunction(() => !!(window as any).urlServicios, { timeout: 15000 }).catch(() => {})
         await page.waitForTimeout(2000)
