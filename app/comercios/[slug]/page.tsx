@@ -104,7 +104,7 @@ export async function generateStaticParams() {
     orderBy: { activePromoCount: 'desc' },
     take: 150,
   }).catch(() => [])
-  return commerces.map(c => ({ slug: c.slug }))
+  return commerces.filter(c => c.slug.trim() !== '').map(c => ({ slug: c.slug }))
 }
 
 export default async function CommercePage({ params }: { params: { slug: string } }) {
