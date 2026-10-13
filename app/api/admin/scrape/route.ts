@@ -28,6 +28,35 @@ async function fetchStaticEntities() {
 
 let staticEntitiesCache: { data: Awaited<ReturnType<typeof fetchStaticEntities>>; expiresAt: number } | null = null;
 
+// Cache de comercios/alias con TTL corto (10/10/2026): sin esto, cada uno de los N
+// batches HTTP de una corrida de scraper grande (ej. Macro, 20 batches de 200 promos)
+// repetía un findMany() sin límite sobre TODA la tabla de comercios (13000+ filas) —
+// esa query lenta mantenía ocupada una conexión del pool de Prisma (connection_limit=10)
+// en cada batch, degradando la capacidad de respuesta hasta agotar el pool a mitad de
+// corrida ("Timed out fetching a new connection from the connection pool", visto en
+// Macro 2 repetidamente). TTL corto (no 5min como las demás estáticas) porque esta
+// tabla sí se muta durante la corrida — se invalida explícitamente en los dos puntos
+// donde el código crea/actualiza un Commerce, así el próximo batch (2s después) ya ve
+// el cambio sin tener que re-consultar toda la tabla.
+const COMMERCES_CACHE_TTL_MS = 30 * 1000;
+let commercesCache: { commerces: any[]; aliases: any[]; expiresAt: number } | null = null;
+
+async function getCachedCommerces() {
+  if (commercesCache && commercesCache.expiresAt > Date.now()) {
+    return commercesCache;
+  }
+  const [commerces, aliases] = await Promise.all([
+    (prisma.commerce as any).findMany({ select: { id: true, name: true, slug: true, logoUrl: true, active: true, website: true, defaultCategoryId: true } }),
+    (prisma.commerceAlias as any).findMany({ select: { alias: true, commerceId: true } }),
+  ]);
+  commercesCache = { commerces, aliases, expiresAt: Date.now() + COMMERCES_CACHE_TTL_MS };
+  return commercesCache;
+}
+
+function invalidateCommercesCache() {
+  commercesCache = null;
+}
+
 async function getCachedStaticEntities() {
   if (staticEntitiesCache && staticEntitiesCache.expiresAt > Date.now()) {
     return staticEntitiesCache.data;
@@ -300,10 +329,9 @@ export async function POST(req: NextRequest) {
     // crear/mutar durante su ejecución (ver `commerces = [...commerces, comMatch]` abajo).
     const staticEntities = await getCachedStaticEntities();
     const { categories, banks, wallets, cardNetworks, cardSegments } = staticEntities;
-    let [commerces, commerceAliases] = await Promise.all([
-      (prisma.commerce as any).findMany({ select: { id: true, name: true, slug: true, logoUrl: true, active: true, website: true, defaultCategoryId: true } }),
-      (prisma.commerceAlias as any).findMany({ select: { alias: true, commerceId: true } }),
-    ]);
+    const commercesData = await getCachedCommerces();
+    let commerces = commercesData.commerces;
+    const commerceAliases = commercesData.aliases;
     const sinCategoria = categories.find(c => c.slug === 'sin-categoria');
 
     // Default de fin de mes para promos sin validUntil explícito
@@ -410,6 +438,7 @@ export async function POST(req: NextRequest) {
         // Actualizar en la lista local para siguientes promos del mismo scrape
         const idx = commerces.findIndex((c: any) => c.id === comMatch!.id);
         if (idx !== -1) commerces[idx] = comMatch;
+        invalidateCommercesCache();
       }
 
       if (!comMatch && !multiComMatches && p.storeName && toSlug(p.storeName)) {
@@ -428,6 +457,7 @@ export async function POST(req: NextRequest) {
           },
         });
         commerces = [...commerces, comMatch];
+        invalidateCommercesCache();
       }
 
       const commerceTargets: any[] = multiComMatches ?? (comMatch ? [comMatch] : []);
