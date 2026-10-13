@@ -437,7 +437,18 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
         // (dejarle un respiro al DOM para re-renderizar la grilla), sin espera post-click.
         // Dentro del rango real seguimos usando PAGE_WAIT (6s) antes y después, para que el
         // listener de response tenga tiempo de capturar bien la página.
-        const SKIP_WAIT = 400; // ms mínimo antes de cada click mientras estamos fuera de rango
+        //
+        // BUG (10/10/2026): con SKIP_WAIT=400ms, el click en "siguiente" no le daba tiempo
+        // a la respuesta de red de llegar antes de evaluar "sin cambios" en la iteración
+        // siguiente — catalogPage todavía no se había incrementado, así que el chequeo de
+        // corte de abajo (catalogPage === pageAntes && capturedCodes.size === codesAntes)
+        // daba true de inmediato y cortaba la paginación en la página 2-3, mucho antes de
+        // llegar al startPage real (ej. 51 para MacroScraper2). Confirmado en logs de GH
+        // Actions: "Página 3/4/5/6 fuera de rango" seguido de "Sin cambios — fin de
+        // paginación" tras solo 4 páginas. Subido a 2500ms: suficiente para que la API
+        // responda sin pagar el costo completo de PAGE_WAIT (6s) en páginas que se van a
+        // descartar igual.
+        const SKIP_WAIT = 2500; // ms mínimo antes de cada click mientras estamos fuera de rango
 
         if (btnExists) {
           console.log('[Macro] Esperando primer batch del catálogo...');
