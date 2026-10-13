@@ -99,6 +99,16 @@ async function main() {
         const data = await res.json()
         totalProcessed += data.processed ?? 0
         console.log(`[${scraperId}] Batch ${batchNum}: ${data.processed}/${data.found ?? batch.length} guardadas`)
+
+        // Pequeño respiro entre batches (10/10/2026): aunque son secuenciales, la
+        // instancia serverless de /api/admin/scrape no necesariamente cierra sus
+        // conexiones de Prisma apenas responde — sin este margen, el batch siguiente
+        // puede arrancar mientras el pool todavía está drenando el anterior y chocar
+        // con "Timed out fetching a new connection from the connection pool" (visto
+        // en Macro 2, batch 13-16/20). 2s es insignificante contra los ~300s de límite.
+        if (i + BATCH_SIZE < promos.length) {
+          await new Promise(r => setTimeout(r, 2000))
+        }
       }
     } else {
       console.log(`[${scraperId}] Sin promos, finalizando corrida de todas formas.`)
