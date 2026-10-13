@@ -287,7 +287,13 @@ function extractCardTier(card: ModoCard): CardTier | null {
 
 function extractStoreName(card: ModoCard): string {
   const where = card.where?.trim() || '';
-  const isGeneric = /consultar|adheridos|locales|tienda online/i.test(normStr(where)) || !where;
+  // "where" basura (ej. ".", "-", solo puntuación/dígitos) no debe tratarse como
+  // nombre de comercio real — sin este chequeo, extractStoreName lo devolvía tal
+  // cual (no es "genérico" según las palabras clave de abajo ni está vacío), y
+  // ese nombre de 1 carácter generaba un slug vacío en toSlug() que colapsaba
+  // comercios no relacionados en un único Commerce fantasma (ver CLAUDE.md).
+  const isJunk = where.length < 3 || !/[A-Za-zÁ-ÿ]{2,}/.test(where);
+  const isGeneric = isJunk || /consultar|adheridos|locales|tienda online/i.test(normStr(where)) || !where;
 
   if (!isGeneric) return where;
 

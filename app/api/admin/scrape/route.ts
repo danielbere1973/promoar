@@ -412,7 +412,7 @@ export async function POST(req: NextRequest) {
         if (idx !== -1) commerces[idx] = comMatch;
       }
 
-      if (!comMatch && !multiComMatches && p.storeName) {
+      if (!comMatch && !multiComMatches && p.storeName && toSlug(p.storeName)) {
         const slug = toSlug(p.storeName);
         comMatch = await prisma.commerce.upsert({
           where: { slug },
