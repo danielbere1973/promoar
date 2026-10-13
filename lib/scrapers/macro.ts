@@ -343,7 +343,13 @@ function makeMacroScraper(name: string, startPage: number, endPage: number | nul
           }
         });
 
-        await page.goto(PAGE_URL, { waitUntil: 'networkidle', timeout: 45000 });
+        // 'networkidle' nunca resuelve en esta página: tiene polling/analytics continuo
+        // que mantiene tráfico de red permanente, así que Playwright nunca ve 500ms de
+        // silencio y el timeout salta aunque el catálogo ya haya respondido por completo
+        // (confirmado en logs: "Apikey capturada"/"Página N fuera de rango" ocurren DURANTE
+        // la espera de este goto, no después). 'domcontentloaded' + las esperas explícitas
+        // de abajo (urlServicios + timeout fijo) ya cubren lo que networkidle intentaba dar.
+        await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
         // Esperar a que el JS inicialice urlServicios
         await page.waitForFunction(() => !!(window as any).urlServicios, { timeout: 15000 }).catch(() => {})
         await page.waitForTimeout(2000)
