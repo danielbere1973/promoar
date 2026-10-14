@@ -70,12 +70,23 @@ function extractStoreName(cabecera: string): string {
   return cleaned || norm;
 }
 
-function extractDiscount(text: string): { value: number; type: string } | null {
-  const m = text.match(/(\d+(?:[.,]\d+)?)\s*%\s*(?:de\s+)?(?:reintegro|descuento|ahorro|off)/i);
+function extractDiscount(text: string, typeHintText?: string): { value: number; type: string } | null {
+  // Fix 14/10/2026: BBVA no siempre pega la palabra "reintegro"/"descuento" al lado del
+  // "%" en cabecera/subcabecera (ej. "La Fonte D Oro 20%" — el tipo real, "reintegro",
+  // solo aparece en item.requisitos del detalle). El regex original exigía esa palabra
+  // pegada, así que el pre-filtro de la línea ~246 (que solo recibe fullText, sin el
+  // detalle) descartaba estos items ANTES de pedir el detalle, perdiendo promos reales
+  // (confirmado con id=88117, cabecera "La Fonte D Oro 20%" sin "reintegro"). Ahora el
+  // match principal sigue intentando capturar el tipo si está pegado en el mismo texto;
+  // si no, cae a un fallback de "N%" simple (solo para no perder el item), y el tipo se
+  // resuelve con typeHintText cuando está disponible (fullText + requisitos + bases).
+  const withType = text.match(/(\d+(?:[.,]\d+)?)\s*%\s*(?:de\s+)?(?:reintegro|descuento|ahorro|off)/i);
+  const m = withType ?? text.match(/(\d+(?:[.,]\d+)?)\s*%/);
   if (m) {
     const v = parseFloat(m[1].replace(',', '.'));
     if (v > 0 && v <= 100) {
-      const type = /reintegro|ahorro/i.test(m[0]) ? 'PERCENTAGE_REINTEGRO' : 'PERCENTAGE_DESCUENTO';
+      const hint = typeHintText ?? m[0];
+      const type = /reintegro|ahorro/i.test(hint) ? 'PERCENTAGE_REINTEGRO' : 'PERCENTAGE_DESCUENTO';
       return { value: v, type };
     }
   }
@@ -106,7 +117,8 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
   if (!storeName || storeName.length < 2) return [];
 
   const fullText     = `${cabecera} ${subcabecera}`;
-  const discount     = extractDiscount(fullText);
+  const requisitosTextEarly = decodeHtmlEntities((detail?.requisitos ?? []).join(' '));
+  const discount     = extractDiscount(fullText, `${fullText} ${requisitosTextEarly}`);
   const installments = extractInstallments(fullText);
   if (!discount && !installments) return [];
 
@@ -125,7 +137,7 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
     { network: 'American Express Banco', type: cardType },
   ];
 
-  const requisitosText = decodeHtmlEntities((detail?.requisitos ?? []).join(' '));
+  const requisitosText = requisitosTextEarly;
   const basesCondiciones = decodeHtmlEntities(detail?.basesCondiciones ?? '').replace(/<[^>]+>/g, ' ').trim();
 
   const rawAllText = `${fullText} ${item.descripcion ?? ''} ${requisitosText} ${basesCondiciones}`;
