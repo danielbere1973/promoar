@@ -118,8 +118,8 @@ export default function RetentionAnalyticsView() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard icon={Users} label="Home views" value={totals.homeViews} sub={`${totals.authenticatedHomeViews} logueados · ${totals.anonymousHomeViews} anónimos`} />
-        <KpiCard icon={Eye} label="Impresiones" value={totals.impressions} />
+        <KpiCard icon={Users} label="Bloque mostrado" value={totals.homeViews} />
+        <KpiCard icon={Eye} label="Vistas" value={totals.impressions} />
         <KpiCard icon={MousePointerClick} label="Clicks" value={totals.clicks} sub={`CTR ${pct(rates.clickThroughRate)}`} />
         <KpiCard icon={BookmarkCheck} label="Guardados / usados" value={totals.saves} sub={`${pct(rates.saveRate)} de los clicks`} />
       </div>
@@ -129,8 +129,7 @@ export default function RetentionAnalyticsView() {
           <TrendingUp size={16} /> Funnel de sesiones únicas
         </h3>
         <div className="space-y-3">
-          <FunnelBar label="Vieron el Home" value={funnel.sessionsWithHomeView} max={funnel.sessionsWithHomeView} />
-          <FunnelBar label="Vieron una recomendación" value={funnel.sessionsWithImpression} max={funnel.sessionsWithHomeView} />
+          <FunnelBar label="Vieron el bloque" value={funnel.sessionsWithHomeView} max={funnel.sessionsWithHomeView} />
           <FunnelBar label="Clickearon una recomendación" value={funnel.sessionsWithClick} max={funnel.sessionsWithHomeView} />
           <FunnelBar label="Guardaron / usaron" value={funnel.sessionsWithSave} max={funnel.sessionsWithHomeView} />
         </div>
@@ -142,21 +141,19 @@ export default function RetentionAnalyticsView() {
           <thead>
             <tr className="text-slate-400 text-left">
               <th className="py-1 pr-4">Día</th>
-              <th className="py-1 pr-4">Home views</th>
-              <th className="py-1 pr-4">Impresiones</th>
+              <th className="py-1 pr-4">Bloque mostrado</th>
               <th className="py-1 pr-4">Clicks</th>
               <th className="py-1 pr-4">Guardados</th>
             </tr>
           </thead>
           <tbody>
             {data.series.length === 0 && (
-              <tr><td colSpan={5} className="py-4 text-center text-slate-300">Sin eventos en el período</td></tr>
+              <tr><td colSpan={4} className="py-4 text-center text-slate-300">Sin eventos en el período</td></tr>
             )}
             {data.series.map(d => (
               <tr key={d.day} className="border-t border-slate-100">
                 <td className="py-1.5 pr-4 font-bold text-slate-600">{d.day}</td>
                 <td className="py-1.5 pr-4">{d.HOME_VIEW}</td>
-                <td className="py-1.5 pr-4">{d.RECOMMENDATION_IMPRESSION}</td>
                 <td className="py-1.5 pr-4">{d.RECOMMENDATION_CLICK}</td>
                 <td className="py-1.5 pr-4">{d.ACTION_SAVE_OR_USE}</td>
               </tr>
@@ -166,26 +163,22 @@ export default function RetentionAnalyticsView() {
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        <h3 className="text-sm font-black text-slate-700 mb-4">Rubros — impresiones vs clicks</h3>
+        <h3 className="text-sm font-black text-slate-700 mb-4">Comercios más clickeados desde la recomendación</h3>
         {rubros.length === 0 ? (
           <p className="text-sm text-slate-300 text-center py-4">Sin datos todavía</p>
         ) : (
           <table className="w-full text-xs">
             <thead>
               <tr className="text-slate-400 text-left">
-                <th className="py-1 pr-4">Rubro</th>
-                <th className="py-1 pr-4">Impresiones</th>
+                <th className="py-1 pr-4">Comercio</th>
                 <th className="py-1 pr-4">Clicks</th>
-                <th className="py-1 pr-4">CTR</th>
               </tr>
             </thead>
             <tbody>
               {rubros.map(r => (
                 <tr key={r.rubroId} className="border-t border-slate-100">
                   <td className="py-1.5 pr-4 font-bold text-slate-600">{r.rubroId}</td>
-                  <td className="py-1.5 pr-4">{r.impressions}</td>
                   <td className="py-1.5 pr-4">{r.clicks}</td>
-                  <td className="py-1.5 pr-4">{pct(r.ctr)}</td>
                 </tr>
               ))}
             </tbody>

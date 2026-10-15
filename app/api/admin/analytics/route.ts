@@ -4,10 +4,16 @@ import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
+// Nombres reales emitidos hoy por lib/recommendationEvents.ts (Recommendation
+// Block v1, ver RecommendationBlock.tsx/HomeHero.tsx/PromosClient.tsx). Los
+// nombres viejos (HOME_VIEW/RECOMMENDATION_IMPRESSION/RECOMMENDATION_CLICK)
+// quedaron huérfanos cuando se borró app/home-v2/HomeV2Client.tsx el 29/8/2026
+// — nadie los emite desde entonces, por eso el panel se veía "sin datos".
 const PASO0_EVENTS = [
-  'HOME_VIEW',
-  'RECOMMENDATION_IMPRESSION',
-  'RECOMMENDATION_CLICK',
+  'recommendation_block_shown',
+  'recommendation_clicked',
+  'recommendation_cta_clicked',
+  'recommendation_empty',
   'ACTION_SAVE_OR_USE',
 ] as const
 
@@ -34,10 +40,8 @@ export async function GET(req: NextRequest) {
     uniqueSessions[type] = new Set()
   }
 
-  const rubroImpressions: Record<string, number> = {}
-  const rubroClicks: Record<string, number> = {}
-  let authenticatedHomeViews = 0
-  let anonymousHomeViews = 0
+  const commerceImpressions: Record<string, number> = {}
+  const commerceClicks: Record<string, number> = {}
 
   for (const ev of events) {
     totals[ev.eventType] = (totals[ev.eventType] ?? 0) + 1
@@ -48,46 +52,47 @@ export async function GET(req: NextRequest) {
     byDay[day][ev.eventType] = (byDay[day][ev.eventType] ?? 0) + 1
 
     const payload = ev.payload as Record<string, unknown> | null
-    if (ev.eventType === 'HOME_VIEW') {
-      if (payload?.authenticated) authenticatedHomeViews++
-      else anonymousHomeViews++
-    }
-    if (ev.eventType === 'RECOMMENDATION_IMPRESSION' && typeof payload?.rubroId === 'string') {
-      rubroImpressions[payload.rubroId] = (rubroImpressions[payload.rubroId] ?? 0) + 1
-    }
-    if (ev.eventType === 'RECOMMENDATION_CLICK' && typeof payload?.rubroId === 'string') {
-      rubroClicks[payload.rubroId] = (rubroClicks[payload.rubroId] ?? 0) + 1
+    if (ev.eventType === 'recommendation_clicked' && typeof payload?.commerceId === 'string') {
+      commerceClicks[payload.commerceId] = (commerceClicks[payload.commerceId] ?? 0) + 1
     }
   }
 
-  const homeViews = totals['HOME_VIEW'] ?? 0
-  const impressions = totals['RECOMMENDATION_IMPRESSION'] ?? 0
-  const clicks = totals['RECOMMENDATION_CLICK'] ?? 0
+  const homeViews = totals['recommendation_block_shown'] ?? 0
+  const impressions = totals['recommendation_block_shown'] ?? 0
+  const clicks = totals['recommendation_clicked'] ?? 0
   const saves = totals['ACTION_SAVE_OR_USE'] ?? 0
 
   const funnel = {
-    sessionsWithHomeView: uniqueSessions['HOME_VIEW']?.size ?? 0,
-    sessionsWithImpression: uniqueSessions['RECOMMENDATION_IMPRESSION']?.size ?? 0,
-    sessionsWithClick: uniqueSessions['RECOMMENDATION_CLICK']?.size ?? 0,
+    sessionsWithHomeView: uniqueSessions['recommendation_block_shown']?.size ?? 0,
+    sessionsWithImpression: uniqueSessions['recommendation_block_shown']?.size ?? 0,
+    sessionsWithClick: uniqueSessions['recommendation_clicked']?.size ?? 0,
     sessionsWithSave: uniqueSessions['ACTION_SAVE_OR_USE']?.size ?? 0,
   }
 
-  const rubros = Array.from(new Set([...Object.keys(rubroImpressions), ...Object.keys(rubroClicks)]))
-    .map(rubroId => ({
-      rubroId,
-      impressions: rubroImpressions[rubroId] ?? 0,
-      clicks: rubroClicks[rubroId] ?? 0,
-      ctr: rubroImpressions[rubroId] ? (rubroClicks[rubroId] ?? 0) / rubroImpressions[rubroId] : 0,
+  // "Rubros" del panel viejo no existe más en el payload (recommendation_clicked
+  // trackea commerceId/promoId, no rubroId) — se muestra por comercio en su lugar.
+  const commerceIds = Object.keys(commerceClicks)
+  const commerceNames = commerceIds.length
+    ? await prisma.commerce.findMany({ where: { id: { in: commerceIds } }, select: { id: true, name: true } })
+    : []
+  const nameById = new Map(commerceNames.map(c => [c.id, c.name]))
+
+  const commerces = commerceIds
+    .map(commerceId => ({
+      rubroId: nameById.get(commerceId) ?? commerceId,
+      impressions: commerceImpressions[commerceId] ?? 0,
+      clicks: commerceClicks[commerceId] ?? 0,
+      ctr: 0,
     }))
-    .sort((a, b) => b.impressions - a.impressions)
+    .sort((a, b) => b.clicks - a.clicks)
 
   const series = Object.entries(byDay)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([day, counts]) => ({
       day,
-      HOME_VIEW: counts['HOME_VIEW'] ?? 0,
-      RECOMMENDATION_IMPRESSION: counts['RECOMMENDATION_IMPRESSION'] ?? 0,
-      RECOMMENDATION_CLICK: counts['RECOMMENDATION_CLICK'] ?? 0,
+      HOME_VIEW: counts['recommendation_block_shown'] ?? 0,
+      RECOMMENDATION_IMPRESSION: counts['recommendation_block_shown'] ?? 0,
+      RECOMMENDATION_CLICK: counts['recommendation_clicked'] ?? 0,
       ACTION_SAVE_OR_USE: counts['ACTION_SAVE_OR_USE'] ?? 0,
     }))
 
@@ -99,15 +104,15 @@ export async function GET(req: NextRequest) {
       impressions,
       clicks,
       saves,
-      authenticatedHomeViews,
-      anonymousHomeViews,
+      authenticatedHomeViews: 0,
+      anonymousHomeViews: 0,
     },
     rates: {
       clickThroughRate: impressions ? clicks / impressions : 0,
       saveRate: clicks ? saves / clicks : 0,
     },
     funnel,
-    rubros,
+    rubros: commerces,
     series,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
