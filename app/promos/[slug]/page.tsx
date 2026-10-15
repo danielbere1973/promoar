@@ -1,9 +1,11 @@
 import { notFound, redirect } from 'next/navigation'
 import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
+import PromoUnavailable from '@/app/components/PromoUnavailable'
 import DetailSidebar from './DetailSidebar'
 import DetailCTA from './DetailCTA'
 import { schemaOffer } from '@/lib/schema'
@@ -95,6 +97,94 @@ const getCachedRelatedCommerces = unstable_cache(
       .slice(0, 8)
   },
   ['promo-detail-related-commerces'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+)
+
+const FEATURED_PROMO_SELECT = {
+  id: true, slug: true, title: true, validDays: true, validDaysNote: true,
+  specificDates: true, salesChannel: true, geographicScope: true, provinces: true,
+  validFrom: true, validUntil: true, categoryId: true, commerceId: true,
+  isFeatured: true, commerceNote: true, validFromHour: true, validToHour: true,
+  stackable: true, description: true, sourceUrl: true, sourceText: true, stackableNote: true,
+  category: { select: { name: true, slug: true, icon: true, color: true } },
+  commerce: { select: { id: true, name: true, slug: true, logoUrl: true } },
+  requirements: {
+    include: {
+      bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
+      wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
+      cardNetwork: { select: { id: true, name: true, slug: true } },
+    },
+  },
+} as const
+
+// Pool genérico de promos destacadas — fallback cuando no hay categoría de
+// referencia (404 sin pista de qué buscaba el usuario) o para completar hasta 6.
+const getCachedFeaturedPromos = unstable_cache(
+  async () => prisma.promo.findMany({
+    where: { status: 'ACTIVE' },
+    select: FEATURED_PROMO_SELECT,
+    orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
+    take: 6,
+  }),
+  ['promo-detail-featured-promos'],
+  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+)
+
+// Mismo pool pero acotado al rubro de la promo vencida — si alguien buscaba
+// jugueterías, no tiene sentido mostrarle combustible. Dentro del rubro, prioriza
+// la misma entidad (banco/billetera) que buscaba el usuario (si vino por BBVA,
+// mostrarle Galicia primero no tiene sentido aunque sea la misma categoría).
+// Completa con el resto de la categoría y, si aun así no alcanza 6, con el pool
+// genérico de todas las categorías.
+const getCachedFeaturedPromosByCategory = unstable_cache(
+  async (categoryId: string, bankId: string | null, walletId: string | null) => {
+    const orderByDiscount: Prisma.PromoOrderByWithRelationInput[] = [
+      { isFeatured: 'desc' },
+      { maxDiscountPct: { sort: 'desc', nulls: 'last' } },
+    ]
+
+    const sameEntityWhere = bankId
+      ? { requirements: { some: { bankId } } }
+      : walletId
+        ? { requirements: { some: { walletId } } }
+        : null
+
+    const sameEntity = sameEntityWhere
+      ? await prisma.promo.findMany({
+          where: { status: 'ACTIVE', categoryId, ...sameEntityWhere },
+          select: FEATURED_PROMO_SELECT,
+          orderBy: orderByDiscount,
+          take: 6,
+        })
+      : []
+
+    const seenIds = new Set(sameEntity.map(p => p.id))
+    let result = sameEntity
+
+    if (result.length < 6) {
+      const restOfCategory = await prisma.promo.findMany({
+        where: { status: 'ACTIVE', categoryId, id: { notIn: Array.from(seenIds) } },
+        select: FEATURED_PROMO_SELECT,
+        orderBy: orderByDiscount,
+        take: 6 - result.length,
+      })
+      result = [...result, ...restOfCategory]
+      restOfCategory.forEach(p => seenIds.add(p.id))
+    }
+
+    if (result.length < 6) {
+      const filler = await prisma.promo.findMany({
+        where: { status: 'ACTIVE', categoryId: { not: categoryId } },
+        select: FEATURED_PROMO_SELECT,
+        orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
+        take: 6 - result.length,
+      })
+      result = [...result, ...filler.filter(p => !seenIds.has(p.id))]
+    }
+
+    return result
+  },
+  ['promo-detail-featured-promos-by-category'],
   { tags: [PROMO_DETAIL_TAG], revalidate: false },
 )
 
@@ -294,74 +384,26 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
     }
   }
 
-  // Promo vencida — página 200 con link a promos vigentes del mismo comercio (sin query extra a Prisma)
+  // Promo vencida — página 200 (noindex, ver generateMetadata) con el mismo
+  // "gancho" de promos destacadas que la 404 real, en vez del banner plano viejo.
   if (isExpired) {
     const firstReq = promo.requirements[0]
     const entityName = firstReq?.bank?.name ?? firstReq?.wallet?.name ?? null
     const entitySlug = firstReq?.bank?.slug ?? firstReq?.wallet?.slug ?? null
-    const entityType = firstReq?.bank ? 'bancos' : firstReq?.wallet ? 'bancos' : null
+
+    const featuredPromos = promo.categoryId
+      ? await getCachedFeaturedPromosByCategory(promo.categoryId, firstReq?.bankId ?? null, firstReq?.walletId ?? null)
+      : await getCachedFeaturedPromos()
 
     return (
-      <div className="min-h-screen bg-gray-50 pb-24 lg:pb-0 lg:flex">
-        <DetailSidebar />
-        <div className="flex-1 min-w-0 lg:overflow-y-auto">
-          <div className="lg:hidden">
-            <BackButton label={promo.commerce.name} />
-          </div>
-          <div className="max-w-lg lg:max-w-xl mx-auto px-4 lg:px-10 pt-4 lg:pt-10 space-y-4">
-
-            {/* Banner vencida */}
-            <div className="bg-gray-100 border border-gray-200 rounded-3xl px-6 py-8 text-center space-y-2">
-              <p className="text-4xl">⏰</p>
-              <p className="text-lg font-black text-gray-700">Esta promo ya venció</p>
-              <p className="text-sm text-gray-500">
-                La promoción de <span className="font-semibold">{promo.commerce.name}</span> ya no está vigente.
-              </p>
-            </div>
-
-            {/* Link a entidad */}
-            {entitySlug && entityType && (
-              <a
-                href={`/${entityType}/${entitySlug}`}
-                className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
-              >
-                <div>
-                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
-                  <p className="text-sm font-black text-gray-800">{entityName} →</p>
-                </div>
-              </a>
-            )}
-
-            {/* Link a promos vigentes del mismo comercio (sin query extra a Prisma) */}
-            {promo.commerce.slug && (
-              <a
-                href={`/comercios/${promo.commerce.slug}`}
-                className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:bg-indigo-50 transition-colors"
-              >
-                <div>
-                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-0.5">Ver promos vigentes</p>
-                  <p className="text-sm font-black text-gray-800">en {promo.commerce.name} →</p>
-                </div>
-              </a>
-            )}
-
-            {/* CTA general */}
-            <a
-              href="/promos"
-              className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg"
-            >
-              <div>
-                <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Querés ver tus promos?</p>
-                <p className="text-sm font-black">Ver todas las promos →</p>
-              </div>
-              <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
-            </a>
-          </div>
-          <div className="lg:hidden">
-            <BottomNav />
-          </div>
-        </div>
-      </div>
+      <PromoUnavailable
+        reason="expired"
+        commerceName={promo.commerce.name}
+        commerceSlug={promo.commerce.slug}
+        entityName={entityName}
+        entitySlug={entitySlug}
+        promos={featuredPromos}
+      />
     )
   }
 
