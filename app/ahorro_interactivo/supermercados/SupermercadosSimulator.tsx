@@ -635,6 +635,9 @@ export default function SupermercadosSimulator({
                             )}
                             <p className="text-[11px] text-slate-500">
                               Válido: {item.matchedPromo.validDays.join(', ')}
+                              {(item.matchedPromo.validDaysBitmask & todayInfo.bit) === 0 && item.matchedPromo.validDaysBitmask < 127 && (
+                                <span className="ml-1.5 text-amber-400 font-medium">· no es válida hoy</span>
+                              )}
                             </p>
                             <div className="flex flex-wrap gap-1 pt-1">
                               {Array.from(new Set(
