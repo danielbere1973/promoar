@@ -42,21 +42,33 @@ function extractCap(title: string, desc: string | null): number | null {
   return null
 }
 
+// Slugs de comercio que identifican de forma inequívoca a cada cadena —
+// evita falsos positivos de nombres que contienen la palabra de la marca
+// sin ser la cadena (ej. "Morena Disco" es una discoteca, no el super Disco).
+const BRAND_COMMERCE_SLUGS: Record<SupermarketBrand, string[]> = {
+  Coto: ['coto'],
+  Carrefour: ['carrefour'],
+  Jumbo: ['jumbo'],
+  Changomas: ['changomas'],
+  Dia: ['dia', 'supermercados-dia'],
+  Disco: ['disco', 'disco-vea'],
+  Vea: ['vea', 'disco-vea'],
+}
+
 // Mapeo canónico a las cadenas líderes de supermercados
 function resolveSupermarketBrands(commerceName: string, title: string, desc: string | null, commerceSlug: string): SupermarketBrand[] {
-  const full = `${commerceName || ''} ${title || ''} ${desc || ''} ${commerceSlug || ''}`.toLowerCase()
+  const slug = (commerceSlug || '').toLowerCase()
   const brands: SupermarketBrand[] = []
 
-  if (/\bcoto\b/i.test(full)) brands.push('Coto')
-  if (/\bcarrefour\b/i.test(full)) brands.push('Carrefour')
-  if (/\bjumbo\b/i.test(full)) brands.push('Jumbo')
-  if (/\bchangomas\b|\bchango\s*m[aá]s\b/i.test(full)) brands.push('Changomas')
-  if (/\b(?:supermercados\s+)?dia\b|\bd[ií]a%\b/i.test(full)) brands.push('Dia')
-  if (/\bdisco\b/i.test(full)) brands.push('Disco')
-  if (/\bvea\b/i.test(full)) brands.push('Vea')
+  for (const [brand, slugs] of Object.entries(BRAND_COMMERCE_SLUGS) as [SupermarketBrand, string[]][]) {
+    if (slugs.includes(slug)) brands.push(brand)
+  }
 
-  // Promociones especiales Cencosud (aplicables a Jumbo, Disco y Vea)
-  if (brands.length === 0 && /\bcencosud\b/i.test(full)) {
+  if (brands.length > 0) return brands
+
+  // Fallback: promociones genéricas sin comercio puntual (ej. Cencosud a nivel marca)
+  const full = `${title || ''} ${desc || ''}`.toLowerCase()
+  if (/\bcencosud\b/i.test(full)) {
     brands.push('Jumbo', 'Disco', 'Vea')
   }
 
@@ -370,6 +382,7 @@ export default async function SupermercadosSimulatorPage() {
     },
     select: {
       id: true,
+      slug: true,
       title: true,
       description: true,
       sourceUrl: true,
@@ -515,6 +528,7 @@ export default async function SupermercadosSimulatorPage() {
     for (const brand of brands) {
       promos.push({
         id: `${p.id}-${brand}`,
+        promoSlug: p.slug ?? p.id,
         brand,
         title: p.title,
         description: p.description,

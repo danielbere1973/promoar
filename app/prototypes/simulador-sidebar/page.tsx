@@ -376,6 +376,7 @@ export default async function SimuladorSidebarPage() {
     },
     select: {
       id: true,
+      slug: true,
       title: true,
       description: true,
       sourceUrl: true,
@@ -463,6 +464,7 @@ export default async function SimuladorSidebarPage() {
     for (const brand of brands) {
       promos.push({
         id: `${p.id}-${brand}`,
+        promoSlug: p.slug ?? p.id,
         brand,
         title: p.title,
         description: p.description,

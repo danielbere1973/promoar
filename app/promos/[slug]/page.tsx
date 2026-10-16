@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client'
 import { Metadata } from 'next'
 import BottomNav from '@/app/components/BottomNav'
 import BackButton from '@/app/components/BackButton'
+import BackLink from './BackLink'
 import PromoUnavailable from '@/app/components/PromoUnavailable'
 import DetailSidebar from './DetailSidebar'
 import DetailCTA from './DetailCTA'
@@ -514,7 +515,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
         {/* ── BREADCRUMB DESKTOP ── */}
         <div className="hidden lg:flex items-center justify-between gap-2 mb-5">
           <div className="text-[13px] text-gray-400 font-semibold">
-            <a href="/promos" className="text-gray-500 hover:text-gray-700">&larr; Promos</a>
+            <BackLink fallbackHref="/promos" />
             <span className="text-gray-300 mx-1.5">/</span>
             <a href={`/categorias/${promo.category.slug}`} className="text-gray-500 hover:text-gray-700">{promo.category.name}</a>
             <span className="text-gray-300 mx-1.5">/</span>

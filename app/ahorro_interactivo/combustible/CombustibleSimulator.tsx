@@ -19,6 +19,7 @@ export interface CombustibleRequirement {
 
 export interface CombustiblePromoItem {
   id: string
+  promoSlug: string
   brand: FuelBrand
   title: string
   description: string | null
@@ -447,14 +448,19 @@ export default function CombustibleSimulator({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {results.map(item => {
                 const isWinner = hasAnyMatch && topBrand?.brand === item.brand && item.savings > 0
+                const CardTag = item.matchedPromo ? Link : 'div'
+                const cardProps = item.matchedPromo
+                  ? { href: `/promos/${item.matchedPromo.promoSlug}` }
+                  : {}
                 return (
-                  <div
+                  <CardTag
                     key={item.brand}
+                    {...(cardProps as any)}
                     className={`rounded-2xl p-4 transition-all flex flex-col justify-between border ${
                       isWinner
                         ? `${item.config.borderClass} ${item.config.glowClass} bg-gradient-to-b ${item.config.bgGradient}`
                         : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700'
-                    }`}
+                    } ${item.matchedPromo ? 'cursor-pointer' : ''}`}
                   >
                     <div>
                       {/* Cabecera de marca */}
@@ -504,13 +510,18 @@ export default function CombustibleSimulator({
                                 Tope: ${item.matchedPromo.capAmount.toLocaleString('es-AR')} por mes
                               </p>
                             )}
+                            <p className="text-[11px] text-slate-500">
+                              Válido: {item.matchedPromo.validDays.join(', ')}
+                            </p>
                             <div className="flex flex-wrap gap-1 pt-1">
-                              {item.matchedPromo.requirements.map((req, idx) => (
+                              {Array.from(new Set(
+                                item.matchedPromo.requirements.map(req => req.bankName || req.walletName || req.cardNetworkName)
+                              )).map((label, idx) => (
                                 <span
                                   key={idx}
                                   className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300"
                                 >
-                                  {req.bankName || req.walletName || req.cardNetworkName}
+                                  {label}
                                 </span>
                               ))}
                             </div>
@@ -546,7 +557,7 @@ export default function CombustibleSimulator({
                         </span>
                       </div>
                     )}
-                  </div>
+                  </CardTag>
                 )
               })}
             </div>
