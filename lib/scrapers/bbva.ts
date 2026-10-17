@@ -131,17 +131,29 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
   const isDebit  = /débito|debito/i.test(item.grupoTarjeta ?? '');
   const isCredit = /crédito|credito/i.test(item.grupoTarjeta ?? '');
   const cardType: 'CREDIT' | 'DEBIT' | null = isCredit && !isDebit ? 'CREDIT' : isDebit && !isCredit ? 'DEBIT' : null;
-  const cardNetworks: CardNetworkWithType[] = [
-    { network: 'VISA',                   type: cardType },
-    { network: 'Mastercard',             type: cardType },
-    { network: 'American Express Banco', type: cardType },
-  ];
 
   const requisitosText = requisitosTextEarly;
   const basesCondiciones = decodeHtmlEntities(detail?.basesCondiciones ?? '').replace(/<[^>]+>/g, ' ').trim();
 
   const rawAllText = `${fullText} ${item.descripcion ?? ''} ${requisitosText} ${basesCondiciones}`;
   const allText = rawAllText.toUpperCase();
+
+  // BBVA a veces restringe la promo a una sola red ("...exclusivamente con tu
+  // tarjeta MASTERCARD BBVA...", confirmado en id=cmv0i1ynz9ya267radeu8xvae /
+  // "Transporte | Mastercard") sin que grupoTarjeta lo refleje — hay que leerlo
+  // del texto. Sin mención exclusiva, se asume que aplica a las 3 redes.
+  const exclusiveNetwork =
+    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?TARJETA\s+VISA\b/.test(allText) ? 'VISA' :
+    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?TARJETA\s+MASTERCARD\b/.test(allText) ? 'Mastercard' :
+    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?TARJETA\s+AMERICAN\s+EXPRESS\b/.test(allText) ? 'American Express Banco' :
+    null;
+  const cardNetworks: CardNetworkWithType[] = exclusiveNetwork
+    ? [{ network: exclusiveNetwork, type: cardType }]
+    : [
+        { network: 'VISA',                   type: cardType },
+        { network: 'Mastercard',             type: cardType },
+        { network: 'American Express Banco', type: cardType },
+      ];
 
   const validDays = parseDias(item.diasPromo) === 127
     ? parseDiasFromText(rawAllText) ?? 127
