@@ -47,7 +47,7 @@ import { CorrientesScraper } from './corrientes'; // Banco de Corrientes (promos
 import { ChubutScraper } from './chubut'; // Banco del Chubut (Patagonia 365, apilaravel)
 import { ChacoScraper } from './chaco'; // Nuevo Banco del Chaco (Promo TUYA, Kendo API)
 import { SolScraper } from './banco-del-sol'; // Banco del Sol (Webflow/Finsweet, WAF Akamai)
-// ProvinciaScraper reemplazado por CuentaDNIScraper V3 (cheerio, sin Playwright)
+import { ProvinciaScraper } from './provincia'; // Banco Provincia — CuentaDNI Beneficios (Playwright), distinto de CuentaDNIScraper (wallet, cheerio)
 
 export const SUPERMERCADO_SCRAPERS: Scraper[] = [
   CotoScraper,
@@ -99,6 +99,7 @@ export const BANCO_SCRAPERS: Scraper[] = [
   ChubutScraper,
   ChacoScraper,
   SolScraper,
+  ProvinciaScraper,
 ];
 
 export const ALL_SCRAPERS: Scraper[] = [
@@ -126,6 +127,7 @@ export const ALL_SCRAPERS: Scraper[] = [
   ChubutScraper,
   ChacoScraper,
   SolScraper,
+  ProvinciaScraper,
 ];
 
 export * from './types';
