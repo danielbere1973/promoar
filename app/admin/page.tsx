@@ -2368,7 +2368,7 @@ const PLAYWRIGHT_SCRAPER_IDS = new Set([
   'banco macro 1', 'banco macro 2', 'naranjax', 'banco santander',
   'banco supervielle', 'banco ciudad', 'visa',
   'jumbo', 'disco', 'vea', 'banco patagonia',
-  'sol', 'bbva',
+  'sol', 'bbva', 'banco provincia',
 ])
 
 function ScraperSchedulerTab() {
