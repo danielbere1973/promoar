@@ -767,7 +767,13 @@ export async function POST(req: NextRequest) {
     const isUniqueUrl = (url?: string | null) =>
       !!url && (url.includes('#') || /\/detalle\/\d+/.test(url));
     const byUrl = new Map(existingPromos.filter(p => isUniqueUrl(p.sourceUrl)).map(p => [p.sourceUrl!, p]));
-    const byKey = new Map(existingPromos.map(p => [`${p.title}|${p.commerceId}`, p]));
+    // Normalizar sufijos de estado transitorio ("(Próximamente)", "(Eminent)") antes de
+    // armar la clave de matching: el scraper reescribe el título sin el sufijo cuando una
+    // promo pasa de "viene pronto" a "ya activa" (o viceversa), y sin esto el match por
+    // título exacto fallaba, generando una fila duplicada en vez de actualizar la existente
+    // (hallazgo 17/10/2026, 223 duplicados detectados en Galicia).
+    const normalizeTitleKey = (t: string) => t.replace(/\s*\((Pr[oó]ximamente|Eminent)\)\s*$/i, '').trim();
+    const byKey = new Map(existingPromos.map(p => [`${normalizeTitleKey(p.title)}|${p.commerceId}`, p]));
     // Identidad externa (source+externalId): clave primaria de matching cuando el scraper
     // la provee (ej. Club La Nación, benefit-card id). Necesario para páginas multi-beneficio
     // donde varias promos comparten el mismo sourceUrl y no pueden distinguirse por URL sola.
@@ -804,7 +810,7 @@ export async function POST(req: NextRequest) {
       // En ese caso ignorar byUrl y caer en byKey.
       const byUrlMatch = isUniqueUrl(sourceUrl) ? byUrl.get(sourceUrl!) : undefined;
       const existing = byExternalIdMatch
-        ?? ((byUrlMatch && byUrlMatch.title === title) ? byUrlMatch : byKey.get(`${title}|${commerceId}`));
+        ?? ((byUrlMatch && byUrlMatch.title === title) ? byUrlMatch : byKey.get(`${normalizeTitleKey(title)}|${commerceId}`));
 
       if (existing) {
         // Comparar fingerprint — si nada cambió, skip total (0 queries)

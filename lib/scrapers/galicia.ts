@@ -349,7 +349,13 @@ export const GaliciaScraper: Scraper = {
           const json = await res.json();
 
           // Capturar categorías — estructura: { data: { list: [{id, descripcion}] } }
-          if (url.includes('categorias') || url.includes('categoria')) {
+          // Match estricto sobre el path (no "includes" genérico): la URL del
+          // catálogo por categoría (/promociones/catalogo?...idCategoria=8...)
+          // también contiene la substring "categoria" y pisaba esta lista con
+          // [] en cada request de catálogo, dejando el scraper sin categorías
+          // para iterar.
+          const pathOnly = url.split('?')[0];
+          if (/\/categorias?$/.test(pathOnly)) {
             const list: any[] = json?.data?.list ?? json?.data ?? (Array.isArray(json) ? json : []);
             if (Array.isArray(list) && list.length > 0) {
               capturedCategories = list.map((c: any) => ({
@@ -372,8 +378,26 @@ export const GaliciaScraper: Scraper = {
         } catch {}
       });
 
-      // Cargar la página para obtener tokens y capturar categorías
-      await page.goto(PAGE_URL, { waitUntil: 'networkidle', timeout: 45000 });
+      // Cargar la página para obtener tokens y capturar categorías. Tanto "networkidle" como "load"
+      // nunca se cumplen vía el Scraping Browser remoto (BrightData) — confirmado con diagnóstico:
+      // "load" cuelga los 45s completos sin resolver, dejando sin presupuesto de tiempo al
+      // waitForResponse que sigue. "domcontentloaded" sí resuelve rápido (~3s, confirmado) incluso
+      // bajo BrightData, pero es demasiado temprano: la app React todavía no hidrató ni disparó el
+      // request BFF de categorías en ese punto. Por eso se espera esa response explícitamente después,
+      // con su propio timeout generoso, en vez de depender de un estado de red fijo del navigation.
+      try {
+        await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      } catch {
+        console.log('[Galicia] Timeout cargando página (domcontentloaded), continuando...');
+      }
+      try {
+        await page.waitForResponse(
+          (res) => res.url().includes('loyalty.bff.bancogalicia.com.ar') && res.url().toLowerCase().includes('categoria'),
+          { timeout: 30000 }
+        );
+      } catch {
+        console.log('[Galicia] No se detectó response de categorías tras cargar la página, continuando...');
+      }
       await page.waitForTimeout(3000);
 
       // Si no capturamos categorías del interceptor, llamarlas directo
@@ -386,9 +410,13 @@ export const GaliciaScraper: Scraper = {
             `${BFF_BASE}/categorias?idAudiencia=1&SubCategoria=false&Visibles=true`,
             { headers: { ...capturedHeaders, 'Accept': 'application/json', 'Referer': PAGE_URL } }
           );
+          console.log(`[Galicia] Fetch manual categorías: HTTP ${catRes.status()}`);
+          const rawBody = await catRes.text();
+          console.log('[Galicia] Fetch manual categorías raw:', rawBody.slice(0, 500));
           if (catRes.ok()) {
-            const json = await catRes.json();
-            const cats = Array.isArray(json) ? json : (json.data ?? json.categorias ?? json.items ?? []);
+            let json: any;
+            try { json = JSON.parse(rawBody); } catch { json = null; }
+            const cats = Array.isArray(json) ? json : (json?.data?.list ?? json?.data ?? json?.categorias ?? json?.items ?? []);
             capturedCategories = (Array.isArray(cats) ? cats : []).map((c: any) => ({
               id: c.id ?? c.idCategoria ?? c.Id,
               nombre: c.descripcion ?? c.nombre ?? c.name ?? c.Name ?? '',
@@ -422,6 +450,112 @@ export const GaliciaScraper: Scraper = {
         }
       });
 
+      // Capturar la URL REAL (con todos sus query params) que la SPA usa al
+      // llamar /promociones/catalogo — puede traer parámetros (firma, audiencia,
+      // token) que nuestra reconstrucción manual de la URL no incluye.
+      let realCatalogoUrl: string | null = null;
+      let realCatalogoResponseJson: any = null;
+      page.on('request', req => {
+        const url = req.url();
+        // Match estricto: debe ser el BFF de personalización, no cualquier URL
+        // que contenga la substring "/promociones/catalogo" (ej. una imagen
+        // bajo /catalogo-de-beneficios/ matcheaba antes por error).
+        if (url.startsWith(`${BFF_BASE}/promociones/catalogo`) && !realCatalogoUrl) {
+          realCatalogoUrl = url;
+          console.log(`[Galicia] 🔍 URL real de catálogo capturada: ${url}`);
+          console.log(`[Galicia] 🔍 TODOS los headers del request real:`, JSON.stringify(req.headers()));
+        }
+      });
+      page.on('response', async res => {
+        const url = res.url();
+        if (url.startsWith(`${BFF_BASE}/promociones/catalogo`) && !realCatalogoResponseJson) {
+          try {
+            realCatalogoResponseJson = await res.json();
+            console.log(`[Galicia] 🔍 Respuesta REAL de catálogo (de la SPA, status ${res.status()}):`, JSON.stringify(realCatalogoResponseJson).slice(0, 500));
+          } catch {}
+        }
+      });
+
+      // Intentar que la SPA dispare el request de catálogo por sí misma:
+      // clickear el chip de categoría dentro del iframe real del widget
+      // (beneficios.galicia.ar) — NO vive en el documento top-level, por eso
+      // page.locator() nunca lo encontraba. El widget renderiza cada chip 3
+      // veces (carrusel infinito); solo la copia con bounding box real
+      // (width>0) está realmente en pantalla, así que se filtra por eso antes
+      // de clickear. Click vía DOM nativo (el.click()) para no depender del
+      // chequeo de "visible en viewport" de Playwright, que falla seguido por
+      // timing/scroll del iframe.
+      if (!realCatalogoUrl) {
+        try {
+          const widgetFrame = page.frames().find(fr => fr.url().includes('beneficios.galicia.ar'));
+          if (!widgetFrame) {
+            console.log('[Galicia] 🔍 No se encontró el iframe del widget (beneficios.galicia.ar)');
+          } else {
+            const catName = capturedCategories[0]?.nombre;
+            if (catName) {
+              // Esperar a que el carrusel de categorías tenga el texto buscado (puede tardar más que el resto del widget)
+              let catTextReady = false;
+              for (let attempt = 0; attempt < 10; attempt++) {
+                const count = await widgetFrame.evaluate((label: string) => {
+                  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                  let c = 0;
+                  let n: Node | null = walker.nextNode();
+                  while (n) { if (n.textContent && n.textContent.trim() === label) c++; n = walker.nextNode(); }
+                  return c;
+                }, catName).catch(() => 0);
+                if (count > 0) { catTextReady = true; break; }
+                await page.waitForTimeout(2000);
+              }
+              console.log(`[Galicia] 🔍 Chip "${catName}" presente en DOM del widget:`, catTextReady);
+
+              const clickResult = await widgetFrame.evaluate((label: string) => {
+                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                const matches: Element[] = [];
+                let n: Node | null = walker.nextNode();
+                while (n) {
+                  if (n.textContent && n.textContent.trim() === label && n.parentElement) matches.push(n.parentElement);
+                  n = walker.nextNode();
+                }
+                for (const el of matches) {
+                  const rect = el.getBoundingClientRect();
+                  if (rect.width > 0 && rect.height > 0) {
+                    (el as HTMLElement).click();
+                    return { clicked: true };
+                  }
+                }
+                return { clicked: false };
+              }, catName).catch((e) => ({ clicked: false, error: String(e) }));
+              console.log('[Galicia] 🔍 Click en chip de categoría:', JSON.stringify(clickResult));
+
+              if (clickResult.clicked) {
+                await page.waitForTimeout(1500);
+                // Clickear "Aplicar" (mismo patrón: DOM nativo, primer match con parentElement)
+                const aplicarResult = await widgetFrame.evaluate(() => {
+                  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                  let n: Node | null = walker.nextNode();
+                  while (n) {
+                    if (n.textContent && n.textContent.trim() === 'Aplicar' && n.parentElement) {
+                      (n.parentElement as HTMLElement).click();
+                      return { clicked: true };
+                    }
+                    n = walker.nextNode();
+                  }
+                  return { clicked: false };
+                }).catch((e) => ({ clicked: false, error: String(e) }));
+                console.log('[Galicia] 🔍 Click en "Aplicar":', JSON.stringify(aplicarResult));
+
+                await page.waitForResponse(
+                  r => r.url().startsWith(`${BFF_BASE}/promociones/catalogo`),
+                  { timeout: 10000 }
+                ).catch(() => {});
+              }
+            }
+          }
+        } catch (e) {
+          console.log('[Galicia] 🔍 Error intentando click de categoría:', e);
+        }
+      }
+
       // Intentar endpoint de detalle con el primer item del catálogo
       // Iterar por categoría y página
       let totalPromos = 0;
@@ -436,15 +570,42 @@ export const GaliciaScraper: Scraper = {
             break outer;
           }
 
-          const url = `${BFF_BASE}/promociones/catalogo?page=${page_}&pageSize=${PAGE_SIZE}&IdCategoria=${cat.id}`;
+          // Si capturamos la URL real que usa la SPA, la usamos como base
+          // (preserva cualquier query param extra que la SPA agregue) y solo
+          // pisamos page/IdCategoria. Si no, fallback a la URL reconstruida a mano.
+          let url: string;
+          if (realCatalogoUrl) {
+            const u = new URL(realCatalogoUrl);
+            u.searchParams.set('page', String(page_));
+            u.searchParams.set('pageSize', String(PAGE_SIZE));
+            u.searchParams.set('idCategoria', String(cat.id));
+            url = u.toString();
+          } else {
+            // Confirmado por captura real de tráfico (19/10/2026): el endpoint usa
+            // "idCategoria" en minúscula (no "IdCategoria") y requiere criterioDeOrden.
+            url = `${BFF_BASE}/promociones/catalogo?criterioDeOrden=Cuotas&idCategoria=${cat.id}&page=${page_}&pageSize=${PAGE_SIZE}`;
+          }
+
           try {
+            // context.request.get() sí llega al servidor (a diferencia de un fetch
+            // hecho con page.evaluate, que queda sujeto a CORS del navegador real
+            // y nunca llega a completarse — eso daba HTTP 0). Le mandamos los
+            // headers de auth capturados del tráfico real de la página.
             const res = await context.request.get(url, {
-              headers: { 'Accept': 'application/json', 'Referer': PAGE_URL, 'Origin': 'https://www.galicia.ar' },
+              headers: { ...capturedHeaders, 'Accept': 'application/json', 'Referer': PAGE_URL, 'Origin': 'https://www.galicia.ar' },
             });
 
             console.log(`[Galicia] Cat ${cat.nombre} p${page_}: HTTP ${res.status()}`);
 
-            if (!res.ok()) break;
+            if (!res.ok()) {
+              if (page_ === 1 && cat === capturedCategories[0]) {
+                const errBody = await res.text().catch(() => '<no body>');
+                console.log(`[Galicia] Cat ${cat.nombre} p1 error body:`, errBody.slice(0, 500));
+                console.log(`[Galicia] Cat ${cat.nombre} p1 error headers:`, JSON.stringify(res.headers()));
+                console.log(`[Galicia] Cat ${cat.nombre} p1 url pedida:`, url);
+              }
+              break;
+            }
 
             const rawText = await res.text();
             if (page_ === 1 && cat === capturedCategories[0]) {
@@ -476,7 +637,7 @@ export const GaliciaScraper: Scraper = {
                 if (!it.id) return null;
                 try {
                   const dr = await context.request.get(`${BFF_DETAIL}/${it.id}`, {
-                    headers: { 'Accept': 'application/json', 'Referer': PAGE_URL },
+                    headers: { ...capturedHeaders, 'Accept': 'application/json', 'Referer': PAGE_URL },
                   });
                   if (!dr.ok()) return null;
                   const d = await dr.json();
