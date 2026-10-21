@@ -1250,6 +1250,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
         if (range === '0-10')  return maxVal > 0 && maxVal <= 10
         if (range === '10-20') return maxVal > 10 && maxVal <= 20
         if (range === '20-30') return maxVal > 20 && maxVal <= 30
+        if (range === '10-30') return maxVal > 10 && maxVal <= 30
         if (range === '30+')   return maxVal > 30
         return false
       })
