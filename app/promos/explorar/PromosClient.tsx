@@ -32,6 +32,7 @@ const PromoWizard = dynamic(() => import('../../components/PromoWizard'), { ssr:
 const ProvinceSelector = dynamic(() => import('../../components/ProvinceSelector'), { ssr: false })
 const TourOverlay = dynamic(() => import('../../components/TourOverlay'), { ssr: false })
 const RegisterUsageModal = dynamic(() => import('../../components/RegisterUsageModal'), { ssr: false })
+const SearchOverlay = dynamic(() => import('../../components/SearchOverlay'), { ssr: false })
 
 // Caché de módulo: sobrevive navegaciones internas, se limpia con F5
 // TTL de 5 minutos para la carga por defecto (sin filtros complejos)
@@ -555,6 +556,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [showProximas, setShowProximas] = useState(false)
+  const [showSearchOverlay, setShowSearchOverlay] = useState(false)
   const [proximas, setProximas] = useState<Promo[]>([])
   const [loadingProximas, setLoadingProximas] = useState(false)
   const [focusedCatPromos, setFocusedCatPromos] = useState<Promo[]>([])
@@ -608,8 +610,6 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
   const [focusedCat, setFocusedCat] = useState<string | null>(null)
-  const [focusedCatSearch, setFocusedCatSearch] = useState('')
-  const [focusedCatSort, setFocusedCatSort] = useState<'default' | 'discount' | 'alpha'>('default')
   const [entitiesPromo, setEntitiesPromo] = useState<Promo | null>(null)
   const [usageModal, setUsageModal] = useState<{ requirement: any; commerceName: string; discountLabel: string; promoId: string } | null>(null)
   const [expandedPromos, setExpandedPromos] = useState<Set<string>>(new Set())
@@ -643,7 +643,6 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [wizardOpen, setWizardOpen] = useState(false)
   const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null)
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
-  const mobileSearchRef = useRef<HTMLInputElement>(null)
   const [searchTab, setSearchTab] = useState<'comercios' | 'productos'>('comercios')
   const [searchText, setSearchText] = useState('')
   const [searchMode, setSearchMode] = useState<'startsWith' | 'contains' | 'exact'>('startsWith')
@@ -654,7 +653,6 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [productSearchLoading, setProductSearchLoading] = useState(false)
   const [productSearched, setProductSearched] = useState(false)
   const [productCategoryFilter, setProductCategoryFilter] = useState<string | null>(null)
-  const productSearchRef = useRef<HTMLInputElement>(null)
   const productDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [province, setProvince] = useState<string | null>(initialProvince ?? null)
   const [showProvinceSelector, setShowProvinceSelector] = useState(false)
@@ -888,6 +886,25 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       categoriaParamApplied.current = true
     }
   }, [categoriaParam, categorias])
+
+  // Resultado del SearchOverlay llegando por URL (?commerce=, ?bank=, ?wallet=, ?network=)
+  const searchParamApplied = useRef(false)
+  useEffect(() => {
+    if (searchParamApplied.current) return
+    const commerce = searchParams.get('commerce')
+    const bank = searchParams.get('bank')
+    const wallet = searchParams.get('wallet')
+    const network = searchParams.get('network')
+    if (!commerce && !bank && !wallet && !network) return
+    searchParamApplied.current = true
+    setActiveFilters(prev => ({
+      ...prev,
+      commerces: commerce ? [commerce] : prev.commerces,
+      banks: bank ? [bank] : prev.banks,
+      wallets: wallet ? [wallet] : prev.wallets,
+      networks: network ? [network] : prev.networks,
+    }))
+  }, [searchParams])
 
   // Sincroniza selectedCats (slugs) → URL, sin re-render
   const prevCatsRef = useRef<string[]>([])
@@ -1141,8 +1158,6 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     let cancelled = false
     setFocusedCatLoading(true)
     setFocusedCatPromos([])
-    setFocusedCatSearch('')
-    setFocusedCatSort('default')
     const qp = new URLSearchParams()
     qp.set('categories', focusedCat)
     qp.set('view', timeFilter)
@@ -1830,49 +1845,14 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                   </span>
                 </Link>
 
-                <div id="tour-buscador" className="hidden md:flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10 w-96">
-                  <button onClick={() => setSearchTab('comercios')}
-                    className={`px-3 h-full text-[10px] font-black uppercase whitespace-nowrap border-r border-gray-200 dark:border-slate-600 transition-all ${
-                      searchTab === 'comercios' ? 'bg-gray-900 text-white' : 'text-gray-400 dark:text-slate-400 hover:text-gray-600'
-                    }`}>
-                    Comercios
-                  </button>
-                  <button onClick={() => setSearchTab('productos')}
-                    className={`px-3 h-full text-[10px] font-black uppercase whitespace-nowrap border-r border-gray-200 dark:border-slate-600 transition-all ${
-                      searchTab === 'productos' ? 'bg-gray-900 text-white' : 'text-gray-400 dark:text-slate-400 hover:text-gray-600'
-                    }`}>
-                    Productos
-                  </button>
-                  <div className="relative flex-1 h-full">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 pointer-events-none" />
-                    {searchTab === 'comercios' ? (
-                      <input
-                        type="text"
-                        placeholder="Buscar comercio..."
-                        value={searchText}
-                        onChange={(e) => {
-                          setSearchText(e.target.value)
-                          setSearchMode('startsWith')
-                          if (searchTimer.current) clearTimeout(searchTimer.current)
-                          searchTimer.current = setTimeout(() => {
-                            const val = e.target.value
-                            setActiveFilters(prev => ({ ...prev, commerces: val ? [val] : [] }))
-                            if (val) track({ type: 'COMMERCE_SEARCH', query: val })
-                          }, 400)
-                        }}
-                        className="w-full h-full pl-8 pr-3 bg-transparent text-gray-900 dark:text-white text-[11px] font-medium outline-none"
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        placeholder="Ej: zapatillas, carteras..."
-                        value={productQuery}
-                        onChange={(e) => setProductQuery(e.target.value)}
-                        className="w-full h-full pl-8 pr-3 bg-transparent text-gray-900 dark:text-white text-[11px] font-medium outline-none"
-                      />
-                    )}
-                  </div>
-                </div>
+                <button
+                  id="tour-buscador"
+                  onClick={() => setShowSearchOverlay(true)}
+                  className="hidden md:flex items-center gap-2 px-3.5 h-10 w-96 rounded-2xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-[#1D3D6E]/40 text-gray-400 dark:text-slate-500 text-xs font-medium transition-all shrink-0 shadow-sm"
+                >
+                  <Search size={15} />
+                  <span>Buscá comercio, banco, tarjeta o un producto...</span>
+                </button>
 
                 <button
                   id="tour-filtros"
@@ -1946,50 +1926,17 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                 </div>
               </div>
 
-              {/* Buscador combo + Botón de Filtros mobile */}
+              {/* Buscador + Botón de Filtros mobile */}
               <div className="flex items-center gap-2">
-                <div id="tour-buscador-mobile" className="flex-1 flex items-center bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden h-10">
-                  <button
-                    onClick={() => setSearchTab(prev => prev === 'comercios' ? 'productos' : 'comercios')}
-                    className="flex items-center gap-1 px-3 h-full text-[11px] font-black text-gray-700 dark:text-slate-200 whitespace-nowrap border-r border-gray-200 dark:border-slate-600 shrink-0"
-                  >
-                    {searchTab === 'comercios' ? 'Comercios' : 'Productos'}
-                    <ChevronDown size={11} className="opacity-50" />
-                  </button>
-                  <div className="relative flex-1 h-full">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 pointer-events-none" />
-                    <input
-                      ref={searchTab === 'comercios' ? mobileSearchRef : productSearchRef}
-                      type="text"
-                      placeholder={searchTab === 'comercios' ? 'Buscar comercio...' : 'Ej: carteras, zapatillas...'}
-                      value={searchTab === 'comercios' ? searchText : productQuery}
-                      onChange={e => {
-                        if (searchTab === 'comercios') {
-                          setSearchText(e.target.value)
-                          setSearchMode('startsWith')
-                          if (searchTimer.current) clearTimeout(searchTimer.current)
-                          searchTimer.current = setTimeout(() => {
-                            setActiveFilters(prev => ({ ...prev, commerces: e.target.value ? [e.target.value] : [] }))
-                          }, 400)
-                        } else {
-                          setProductQuery(e.target.value)
-                        }
-                      }}
-                      className="w-full h-full pl-8 pr-8 bg-transparent dark:text-white text-xs font-medium outline-none"
-                    />
-                    {(searchTab === 'comercios' ? searchText : productQuery) && (
-                      <button
-                        onClick={() => {
-                          if (searchTab === 'comercios') { setSearchText(''); setActiveFilters(prev => ({ ...prev, commerces: [] })) }
-                          else setProductQuery('')
-                        }}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500"
-                      >
-                        <X size={13} />
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <button
+                  id="tour-buscador-mobile"
+                  onClick={() => setShowSearchOverlay(true)}
+                  aria-label="Buscar comercio, banco, billetera, tarjeta o un producto"
+                  className="flex-1 flex items-center gap-2 px-3 h-10 rounded-2xl bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-slate-500 text-xs font-medium"
+                >
+                  <Search size={15} />
+                  <span>Buscá comercio, banco, producto...</span>
+                </button>
 
                 {/* Botón de Filtros mobile destacado arriba junto al buscador */}
                 <button
@@ -2581,12 +2528,17 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
           const PREVIEW = 8
 
           const Section = ({ title, subtitle, catKey, promoList, isFirst, isFilled }: { title: string; subtitle: string; catKey?: string; promoList: typeof promosFiltradas; isFirst?: boolean; isFilled?: boolean }) => {
-            const isExpanded = !catKey || focusedCat === catKey
+            const isThisCatExpanded = !!catKey && focusedCat === catKey
+            const isExpanded = isThisCatExpanded
+            // Al expandir inline una categoría puntual, se usa el fetch completo
+            // (focusedCatPromos, mismo que antes alimentaba el overlay fullscreen)
+            // en vez del preview parcial — así "Ver todas" trae de verdad todo.
+            const effectiveList = isThisCatExpanded && focusedCatPromos.length > 0 ? focusedCatPromos : promoList
 
             // Agrupar por comercio, preservando el orden de aparición (ya viene ordenado por descuento/popularidad)
             const groups: { commerce: typeof promoList[0]['commerce']; promos: typeof promoList }[] = []
             const groupMap = new Map<string, typeof groups[0]>()
-            for (const p of promoList) {
+            for (const p of effectiveList) {
               const key = p.commerce.id ?? p.commerce.name
               let group = groupMap.get(key)
               if (!group) {
@@ -2598,6 +2550,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
             }
 
             const shown = isExpanded ? groups : groups.slice(0, PREVIEW)
+            const canExpand = !!catKey && (groups.length > PREVIEW || (!isFilled && (promoList.length > PREVIEW || hasMore)))
             const scrollRef = React.useRef<HTMLDivElement>(null)
             const scroll = (dir: 'left' | 'right') => {
               scrollRef.current?.scrollBy({ left: dir === 'right' ? 180 : -180, behavior: 'smooth' })
@@ -2610,39 +2563,65 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
                     <p className="text-[11px] text-[#8B96A5] dark:text-slate-400 mt-0.5">{subtitle}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <button onClick={() => scroll('left')}
-                      className="w-7 h-7 rounded-full bg-[#F0F2F5] dark:bg-slate-700 hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] dark:text-white transition-colors text-sm font-bold">
-                      ‹
-                    </button>
-                    <button onClick={() => scroll('right')}
-                      className="w-7 h-7 rounded-full bg-[#F0F2F5] dark:bg-slate-700 hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] dark:text-white transition-colors text-sm font-bold">
-                      ›
-                    </button>
-                    {catKey && (groups.length > PREVIEW || (!isFilled && (promoList.length > PREVIEW || hasMore))) && (
-                      <button onClick={() => setFocusedCat(catKey)}
+                    {!isExpanded && (
+                      <>
+                        <button onClick={() => scroll('left')}
+                          className="w-7 h-7 rounded-full bg-[#F0F2F5] dark:bg-slate-700 hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] dark:text-white transition-colors text-sm font-bold">
+                          ‹
+                        </button>
+                        <button onClick={() => scroll('right')}
+                          className="w-7 h-7 rounded-full bg-[#F0F2F5] dark:bg-slate-700 hover:bg-[#E4E8EF] flex items-center justify-center text-[#1E3A5F] dark:text-white transition-colors text-sm font-bold">
+                          ›
+                        </button>
+                      </>
+                    )}
+                    {canExpand && (
+                      <button onClick={() => setFocusedCat(isExpanded ? null : (catKey ?? null))}
                         className="text-[11px] font-semibold text-[#D94F2B] ml-1 whitespace-nowrap">
-                        Ver todas →
+                        {isExpanded ? '← Ver menos' : 'Ver todas →'}
                       </button>
                     )}
                   </div>
                 </div>
-                <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
-                  {shown.map((g, gi) => (
-                    <CommerceGroupCard
-                      key={g.commerce.id ?? g.commerce.name}
-                      commerce={g.commerce}
-                      promos={g.promos}
-                      nearbyCount={g.commerce.id ? nearbyBranches[g.commerce.id]?.count : null}
-                      onPromoClick={handlePromoClick}
-                      onToggleSave={toggleSave}
-                      onToggleSaveCommerce={toggleFavCommerce}
-                      isCommerceSaved={favCommerces.includes(g.commerce.name)}
-                      priority={isFirst && gi <= 2}
-                      onRegisterUsage={handleRegisterUsage}
-                      filterDays={activeFilters.days}
-                    />
-                  ))}
-                </div>
+                {isThisCatExpanded && focusedCatLoading && focusedCatPromos.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-[13px] text-[#8B96A5] dark:text-slate-400">Cargando todas las promos...</div>
+                ) : isExpanded ? (
+                  <div className="flex flex-wrap gap-2.5 px-4 pb-2">
+                    {shown.map((g, gi) => (
+                      <CommerceGroupCard
+                        key={g.commerce.id ?? g.commerce.name}
+                        commerce={g.commerce}
+                        promos={g.promos}
+                        nearbyCount={g.commerce.id ? nearbyBranches[g.commerce.id]?.count : null}
+                        onPromoClick={handlePromoClick}
+                        onToggleSave={toggleSave}
+                        onToggleSaveCommerce={toggleFavCommerce}
+                        isCommerceSaved={favCommerces.includes(g.commerce.name)}
+                        priority={isFirst && gi <= 2}
+                        onRegisterUsage={handleRegisterUsage}
+                        filterDays={activeFilters.days}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none' }}>
+                    {shown.map((g, gi) => (
+                      <CommerceGroupCard
+                        key={g.commerce.id ?? g.commerce.name}
+                        commerce={g.commerce}
+                        promos={g.promos}
+                        nearbyCount={g.commerce.id ? nearbyBranches[g.commerce.id]?.count : null}
+                        onPromoClick={handlePromoClick}
+                        onToggleSave={toggleSave}
+                        onToggleSaveCommerce={toggleFavCommerce}
+                        isCommerceSaved={favCommerces.includes(g.commerce.name)}
+                        priority={isFirst && gi <= 2}
+                        onRegisterUsage={handleRegisterUsage}
+                        filterDays={activeFilters.days}
+                      />
+                    ))}
+                  </div>
+                )}
                 <div className="h-px bg-[#F0F2F5] dark:bg-slate-700 mt-4 mx-4" />
               </div>
             )
@@ -2824,121 +2803,6 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
     </main>
     </div>{/* fin flex row sidebar+content */}
 
-      {/* ── Overlay "Ver todas" de una categoría ── */}
-      {focusedCat && (() => {
-        const catInfo = categorias.find(c => c.slug === focusedCat)
-        const sec = catInfo
-          ? { catName: catInfo.name, catIcon: catInfo.icon ?? '🏷️' }
-          : (() => {
-              for (const p of promosFiltradas) {
-                const key = p.category.slug ?? p.category.name
-                if (key === focusedCat) return { catName: p.category.name, catIcon: p.category.icon ?? '🏷️' }
-              }
-              return null
-            })()
-        const rawCatPromos = focusedCatPromos.length > 0 ? focusedCatPromos : promosFiltradas.filter(p => (p.category.slug ?? p.category.name) === focusedCat)
-        const q = normalizeAccents(focusedCatSearch.trim())
-        const searchedPromos = q ? rawCatPromos.filter(p => normalizeAccents(p.commerce.name).includes(q)) : rawCatPromos
-        const catPromos = focusedCatSort === 'default'
-          ? searchedPromos
-          : [...searchedPromos].sort((a, b) => {
-              if (focusedCatSort === 'discount') {
-                const diff = (bestPercentageReq(b)?.discountValue ?? 0) - (bestPercentageReq(a)?.discountValue ?? 0)
-                if (diff !== 0) return diff
-                return a.commerce.name.localeCompare(b.commerce.name, 'es')
-              }
-              return a.commerce.name.localeCompare(b.commerce.name, 'es')
-            })
-        if (!sec) return null
-        return (
-          <div className="fixed inset-0 z-50 flex flex-col">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setFocusedCat(null)} />
-            <div className="relative bg-white dark:bg-slate-900 flex flex-col h-full max-w-lg mx-auto w-full shadow-2xl">
-              {/* Header */}
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-10 space-y-2.5">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setFocusedCat(null)}
-                    className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-gray-600 dark:text-white font-bold text-sm shrink-0">
-                    ←
-                  </button>
-                  <div>
-                    <p className="text-[15px] font-black text-[#1E3A5F] dark:text-white">{sec.catIcon} {sec.catName}</p>
-                    <p className="text-[11px] text-[#8B96A5]">{focusedCatLoading ? 'Cargando...' : `${catPromos.length} promos`}</p>
-                  </div>
-                </div>
-                {/* Buscador + orden */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={focusedCatSearch}
-                    onChange={e => setFocusedCatSearch(e.target.value)}
-                    placeholder="Buscar comercio..."
-                    className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-xl border border-[#EAECF0] dark:border-slate-700 bg-[#F8F9FB] dark:bg-slate-800 text-[#1E3A5F] dark:text-white placeholder:text-[#8B96A5] focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20"
-                  />
-                  <select
-                    value={focusedCatSort}
-                    onChange={e => setFocusedCatSort(e.target.value as any)}
-                    className="text-[12px] font-semibold px-2.5 py-2 rounded-xl border border-[#EAECF0] dark:border-slate-700 bg-[#F8F9FB] dark:bg-slate-800 text-[#1E3A5F] dark:text-white focus:outline-none shrink-0"
-                  >
-                    <option value="default">Relevancia</option>
-                    <option value="discount">Mayor descuento</option>
-                    <option value="alpha">Alfabético</option>
-                  </select>
-                </div>
-              </div>
-              {/* Grid vertical */}
-              <div className="overflow-y-auto flex-1 p-4">
-                {focusedCatLoading ? (
-                  <div className="flex justify-center py-12 text-gray-400 text-sm">Cargando promos...</div>
-                ) : catPromos.length === 0 ? (
-                  <div className="flex justify-center py-12 text-gray-400 text-sm">Sin resultados para "{focusedCatSearch}"</div>
-                ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {catPromos.map(p => {
-                    const pctReq = bestPercentageReq(p)
-                    const label = discountLabel(p)
-                    const banks = Array.from(new Map(p.requirements.filter(r => r.bank?.name).map(r => [r.bank!.name, r.bank!])).values())
-                    const wallets = Array.from(new Map(p.requirements.filter(r => r.wallet?.name).map(r => [r.wallet!.name, r.wallet!])).values())
-                    const entities = [...banks, ...wallets].slice(0, 2)
-                    const nb = p.commerce.id ? nearbyBranches[p.commerce.id] : null
-                    return (
-                      <div key={p.id} onClick={() => { openPromoDetail(p); setFocusedCat(null) }}
-                        className="bg-white dark:bg-slate-800 border border-[#EAECF0] dark:border-slate-700 rounded-2xl overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
-                        <div className="relative bg-[#F8F9FB] dark:bg-slate-900 border-b border-[#F0F2F5] dark:border-slate-700 flex items-center justify-center" style={{ height: 72 }}>
-                          {p.commerce.logoUrl
-                            ? <img src={p.commerce.logoUrl} alt={p.commerce.name} className="max-h-10 max-w-[80%] object-contain p-1" />
-                            : <span className="text-2xl">{p.category.icon ?? '🏷️'}</span>
-                          }
-                          {label && (
-                            <div className="absolute top-1.5 right-1.5 bg-[#D94F2B] text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">
-                              {pctReq && pctReq.discountType !== 'FIXED_AMOUNT' ? `${pctReq.discountValue}%` : label.replace('Hasta ', '')}
-                            </div>
-                          )}
-                        </div>
-                        <div className="px-2.5 py-2 space-y-1">
-                          <p className="text-[11px] font-bold text-[#1E3A5F] dark:text-white truncate">{p.commerce.name}</p>
-                          {entities.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {entities.map((e, i) => (
-                                <span key={i} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#EEF2F8] dark:bg-slate-700 text-[#3A5A7A] dark:text-slate-300">
-                                  {e.name.split(' ').slice(-1)[0]}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {nb && <p className="text-[9px] text-emerald-600 font-semibold">📍 {nb.count} sucursales</p>}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
       {detailPromo && (
         <PromoDetailSheet
           promo={detailPromo}
@@ -2967,9 +2831,7 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
 
       <BottomNav
         onFilter={() => setIsFilterOpen(true)}
-        onSearch={() => {
-          setTimeout(() => (searchTab === 'productos' ? productSearchRef : mobileSearchRef).current?.focus(), 100)
-        }}
+        onSearch={() => setShowSearchOverlay(true)}
       />
       <FilterDrawer
         isOpen={isFilterOpen}
@@ -3009,6 +2871,29 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       )}
 
       <TourOverlay isAuthenticated={status === 'authenticated'} blocked={showProvinceSelector} />
+
+      <SearchOverlay
+        forceOpen={showSearchOverlay}
+        onForceOpenHandled={() => setShowSearchOverlay(false)}
+        forMe={forMe}
+        guestProfile={status !== 'authenticated' ? guestProfile : null}
+        onSelectCommerce={(name) => {
+          setSearchMode('exact')
+          setActiveFilters(prev => ({ ...prev, commerces: [name] }))
+        }}
+        onSelectEntity={(type, id) => {
+          setActiveFilters(prev => ({
+            ...prev,
+            banks: type === 'bank' ? [id] : prev.banks,
+            wallets: type === 'wallet' ? [id] : prev.wallets,
+            networks: type === 'network' ? [id] : prev.networks,
+          }))
+        }}
+        onSearchProduct={(q) => {
+          setSearchTab('productos')
+          setProductQuery(q)
+        }}
+      />
     </div>
     </>
   )

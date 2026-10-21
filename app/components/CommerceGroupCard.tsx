@@ -100,9 +100,12 @@ type Props<P extends Promo> = {
   /** Días seleccionados en el filtro (0=domingo..6=sábado). Si hay alguno, "Hoy" pasa a
    *  significar "el/los día(s) filtrado(s)" en vez del día calendario real. */
   filterDays?: number[]
+  /** true cuando la card vive en un grid (ej. categoría expandida "Ver todas") en vez
+   *  del carrusel horizontal — usa ancho 100% de la celda en lugar del ancho fijo en px. */
+  gridLayout?: boolean
 }
 
-export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, nearbyCount, priority, onRegisterUsage, filterDays }: Props<P>) {
+export default function CommerceGroupCard<P extends Promo>({ commerce, promos, onPromoClick, onToggleSave, onToggleSaveCommerce, isCommerceSaved, nearbyCount, priority, onRegisterUsage, filterDays, gridLayout }: Props<P>) {
   const [expanded, setExpanded] = useState(false)
   const [showOtherDays, setShowOtherDays] = useState(false)
   const [showAlertDetail, setShowAlertDetail] = useState(false)
@@ -125,7 +128,10 @@ export default function CommerceGroupCard<P extends Promo>({ commerce, promos, o
 
   if (!expanded) {
     return (
-      <div className="flex-shrink-0 relative" style={{ width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}>
+      <div
+        className={gridLayout ? 'relative w-full' : 'flex-shrink-0 relative'}
+        style={gridLayout ? undefined : { width: 'calc((100vw - 48px) / 2.1)', minWidth: 148, maxWidth: 175 }}
+      >
         <PromoCard promo={featured} nearbyCount={nearbyCount} onClick={() => onPromoClick(featured)} onToggleSave={onToggleSave} onToggleSaveCommerce={onToggleSaveCommerce} isCommerceSaved={isCommerceSaved} fullWidth priority={priority} onRegisterUsage={onRegisterUsage} />
         {bestOtherDay && (
           <button
