@@ -241,14 +241,19 @@ export default async function CommercePage({ params }: { params: { slug: string 
       </div>
 
       {/* ── CTA ── */}
-      <div className="max-w-2xl mx-auto px-4 pb-10">
-        <Link href="/promos"
+      <div className="max-w-2xl mx-auto px-4 pb-10 space-y-2.5">
+        <Link href="/login?next=/promos"
           className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg hover:shadow-xl transition-all hover:scale-[1.01]">
           <div>
             <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Querés ver tus promos?</p>
-            <p className="text-sm font-black">Ver todas las promos de mis tarjetas →</p>
+            <p className="text-sm font-black">¡Registrate 100% gratis y mirá tus promos!</p>
           </div>
           <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
+        </Link>
+        <Link href="/promos/explorar"
+          className="flex items-center justify-center gap-2 border border-[#1E3A5F]/30 text-[#1E3A5F] rounded-2xl px-4 py-3 text-sm font-bold hover:bg-[#1E3A5F]/5 transition-colors">
+          Ver todas las promos que tenemos para vos
+          <span className="text-base">→</span>
         </Link>
       </div>
 
