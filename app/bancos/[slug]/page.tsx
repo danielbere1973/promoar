@@ -196,6 +196,12 @@ export default async function BancoPage({ params, searchParams }: { params: { sl
               <p className="text-blue-200 text-[11px] font-bold mt-0.5">Categorías</p>
             </div>
           </div>
+
+          <Link href="/promos/explorar"
+            className="flex items-center justify-center gap-2 bg-white/10 border border-white/20 text-white rounded-2xl px-4 py-3 text-sm font-bold mt-3 hover:bg-white/20 transition-colors">
+            Ver todas las promos que tenemos para vos
+            <span className="text-base">→</span>
+          </Link>
         </div>
       </div>
 
