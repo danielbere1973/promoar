@@ -28,7 +28,7 @@ export default function DetailCTA() {
 
   const ctaHref = !isLoggedIn ? '/login?next=/promos' : hasProfile ? '/promos/explorar' : '/perfil'
   const ctaTitle = !isLoggedIn
-    ? '¡Registrate!'
+    ? '¡Registrate 100% gratis!'
     : hasProfile
     ? 'Clickeá acá y no te pierdas otros beneficios que quizás no conocías'
     : 'Completá tu perfil financiero'
@@ -39,16 +39,27 @@ export default function DetailCTA() {
     : 'Te mostramos todos tus beneficios según tus bancos y tarjetas'
 
   return (
-    <a
-      href={ctaHref}
-      className="pulse-loop flex items-center gap-3 bg-gray-900 rounded-2xl px-4 py-3.5 hover:bg-gray-800 transition-colors"
-    >
-      <div className="w-9 h-9 rounded-xl bg-[#D94F2B] flex items-center justify-center shrink-0 text-base">💳</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-extrabold text-white leading-tight">{ctaTitle}</p>
-        <p className="text-[11px] text-gray-400">{ctaSubtitle}</p>
-      </div>
-      <span className="text-gray-500 text-lg shrink-0">→</span>
-    </a>
+    <div className="space-y-2">
+      <a
+        href={ctaHref}
+        className="pulse-loop flex items-center gap-3 bg-gray-900 rounded-2xl px-4 py-3.5 hover:bg-gray-800 transition-colors"
+      >
+        <div className="w-9 h-9 rounded-xl bg-[#D94F2B] flex items-center justify-center shrink-0 text-base">💳</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-extrabold text-white leading-tight">{ctaTitle}</p>
+          <p className="text-[11px] text-gray-400">{ctaSubtitle}</p>
+        </div>
+        <span className="text-gray-500 text-lg shrink-0">→</span>
+      </a>
+      {!isLoggedIn && (
+        <a
+          href="/promos/explorar"
+          className="flex items-center justify-center gap-2 border border-[#1D3D6E]/30 text-[#1D3D6E] dark:text-blue-300 dark:border-blue-300/30 rounded-2xl px-4 py-3 text-sm font-bold hover:bg-[#1D3D6E]/5 dark:hover:bg-blue-300/5 transition-colors"
+        >
+          Ver todas las promos que tenemos para vos
+          <span className="text-base">→</span>
+        </a>
+      )}
+    </div>
   )
 }

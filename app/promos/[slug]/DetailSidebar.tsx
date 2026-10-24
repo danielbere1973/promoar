@@ -2,6 +2,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import SidebarMultiSelect from './SidebarMultiSelect'
+import SidebarLinkList from './SidebarLinkList'
 
 const NAV_ITEMS = [
   { label: 'Inicio', icon: '🏠', href: '/promos' },
@@ -11,10 +13,23 @@ const NAV_ITEMS = [
   { label: 'Mi perfil', icon: '👤', href: '/perfil' },
 ]
 
-// Sidebar desktop exclusivo de /promos/[slug] — el resto del sitio sigue
-// con BottomNav en todos los tamaños de pantalla (tiene filtros/favoritos
-// que este layout nuevo todavía no cubre).
-export default function DetailSidebar() {
+export type SidebarCategory = { name: string; icon: string; color: string; count: number; anchor: string; slug?: string }
+export type SidebarEntity = { id: string; name: string; slug: string; logoUrl: string | null; type: 'bank' | 'wallet' }
+export type SidebarCommerce = { id: string; name: string; slug: string; logoUrl: string | null }
+
+type Props = {
+  categories?: SidebarCategory[]
+  otherEntities?: SidebarEntity[]
+  commerces?: SidebarCommerce[]
+  entityFilters?: SidebarEntity[]
+}
+
+// Sidebar desktop exclusivo de /promos/[slug] y páginas de detalle (banco,
+// comercio) — el resto del sitio sigue con BottomNav en todos los tamaños
+// de pantalla (tiene filtros/favoritos que este layout nuevo todavía no
+// cubre). categories/otherEntities son opcionales: sólo las páginas de
+// banco/billetera las pasan, como desplegables debajo de la navegación.
+export default function DetailSidebar({ categories, otherEntities, commerces, entityFilters }: Props) {
   const pathname = usePathname()
   const { data: session, status } = useSession()
   const isLoggedIn = status === 'authenticated'
@@ -27,7 +42,7 @@ export default function DetailSidebar() {
   })()
 
   return (
-    <div className="hidden lg:flex flex-col w-60 shrink-0 bg-white dark:bg-[#0F2040] border-r border-gray-100 dark:border-slate-800 px-4 py-6 gap-7 sticky top-0 h-screen">
+    <div className="hidden lg:flex flex-col w-60 shrink-0 bg-white dark:bg-[#0F2040] border-r border-gray-100 dark:border-slate-800 px-4 py-6 gap-7 sticky top-0 h-screen overflow-y-auto no-scrollbar">
       <Link href="/promos" className="pulse-loop text-[19px] font-black text-[#1E3A5F] dark:text-white w-fit">
         Promo<span className="text-[#D94F2B]">AR</span>
       </Link>
@@ -51,6 +66,43 @@ export default function DetailSidebar() {
           )
         })}
       </nav>
+
+      {categories && categories.length > 1 && (
+        <SidebarMultiSelect
+          title="Categorías"
+          paramKey="cats"
+          options={categories.map(cat => ({ value: cat.slug ?? cat.anchor, label: cat.name, icon: cat.icon, count: cat.count }))}
+        />
+      )}
+
+      {commerces && commerces.length > 0 && (
+        <SidebarMultiSelect
+          title="Comercios"
+          paramKey="commerces"
+          searchable
+          searchPlaceholder="Buscar comercio..."
+          options={commerces.map(c => ({ value: c.slug, label: c.name, logoUrl: c.logoUrl }))}
+        />
+      )}
+
+      {entityFilters && entityFilters.length > 0 && (
+        <SidebarMultiSelect
+          title="Bancos y billeteras"
+          paramKey="entities"
+          searchable
+          searchPlaceholder="Buscar banco o billetera..."
+          options={entityFilters.map(e => ({ value: e.slug, label: e.name, logoUrl: e.logoUrl }))}
+        />
+      )}
+
+      {otherEntities && otherEntities.length > 0 && (
+        <SidebarLinkList
+          title="Otros bancos y billeteras"
+          searchable
+          searchPlaceholder="Buscar banco o billetera..."
+          options={otherEntities.map(e => ({ href: `/bancos/${e.slug}`, label: e.name, logoUrl: e.logoUrl }))}
+        />
+      )}
 
       <div className="mt-auto flex flex-col gap-2 pt-2.5 border-t border-gray-100 dark:border-slate-800">
         {isLoggedIn ? (

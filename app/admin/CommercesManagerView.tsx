@@ -130,6 +130,12 @@ export default function CommercesManagerView({
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [branchesFilter, setBranchesFilter] = useState<'all' | 'yes' | 'no'>('all')
   const [modelFilter, setModelFilter] = useState<string>('')
+  const [logoFilter, setLogoFilter] = useState<'all' | 'yes' | 'no'>('all')
+  const [promoCountFilterOn, setPromoCountFilterOn] = useState(false)
+  const [minPromos, setMinPromos] = useState<string>('')
+  const [maxPromos, setMaxPromos] = useState<string>('')
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; totalPages: number } | null>(null)
 
   // Detalle seleccionado
   const [selectedCommerceId, setSelectedCommerceId] = useState<string | null>(null)
@@ -173,22 +179,30 @@ export default function CommercesManagerView({
       if (selectedCategory) params.set('categoryId', selectedCategory)
       if (branchesFilter !== 'all') params.set('hasBranches', branchesFilter)
       if (modelFilter) params.set('locationModel', modelFilter)
+      if (logoFilter !== 'all') params.set('hasLogo', logoFilter)
+      if (promoCountFilterOn) {
+        if (minPromos.trim() !== '') params.set('minPromos', minPromos.trim())
+        if (maxPromos.trim() !== '') params.set('maxPromos', maxPromos.trim())
+      }
       params.set('limit', '80')
+      params.set('page', String(page))
 
       const res = await fetch(`/api/admin/commerces?${params.toString()}`)
       if (!res.ok) throw new Error('Error al cargar lista')
       const data = await res.json()
 
       setCommerces(data.commerces || [])
+      if (data.pagination) setPagination(data.pagination)
       if (data.categories?.length) setCategories(data.categories)
 
-      // Auto-seleccionar el primero si no hay selección o quedó huérfana
+      // Auto-seleccionar el primero solo si no hay ninguna selección vigente.
+      // Si la selección actual ya no está en esta página (p.ej. tras guardar un
+      // cambio que la saca del filtro), se mantiene igual: no forzar otro comercio.
       if (data.commerces?.length > 0) {
-        if (!selectedCommerceId || !data.commerces.some((c: any) => c.id === selectedCommerceId)) {
+        if (!selectedCommerceId) {
           setSelectedCommerceId(data.commerces[0].id)
         }
-      } else {
-        setSelectedCommerceId(null)
+      } else if (!selectedCommerceId) {
         setCommerceDetail(null)
       }
     } catch (err: any) {
@@ -196,11 +210,17 @@ export default function CommercesManagerView({
     } finally {
       setLoadingList(false)
     }
-  }, [searchText, selectedCategory, branchesFilter, modelFilter, selectedCommerceId])
+  }, [searchText, selectedCategory, branchesFilter, modelFilter, logoFilter, promoCountFilterOn, minPromos, maxPromos, page, selectedCommerceId])
 
   useEffect(() => {
     fetchCommerces()
   }, [fetchCommerces])
+
+  // Volver a la página 1 cuando cambia cualquier filtro (no al cambiar de página,
+  // ni al editar un comercio — eso no debe afectar page/filtros)
+  useEffect(() => {
+    setPage(1)
+  }, [searchText, selectedCategory, branchesFilter, modelFilter, logoFilter, promoCountFilterOn, minPromos, maxPromos])
 
   // 2. Cargar detalle de comercio seleccionado
   const fetchCommerceDetail = useCallback(async (id: string) => {
@@ -495,6 +515,49 @@ export default function CommercesManagerView({
               >
                 Locales únicos
               </button>
+              <button
+                onClick={() => setLogoFilter(logoFilter === 'no' ? 'all' : 'no')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                  logoFilter === 'no' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                }`}
+              >
+                🖼️ Sin logo
+              </button>
+            </div>
+
+            {/* Filtro por cantidad de promos */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={promoCountFilterOn}
+                  onChange={e => setPromoCountFilterOn(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
+                />
+                <span className="text-[11px] font-bold text-slate-600">Filtrar por cantidad de promos</span>
+              </label>
+
+              {promoCountFilterOn && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Mín."
+                    value={minPromos}
+                    onChange={e => setMinPromos(e.target.value)}
+                    className="w-full text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-[10px] text-slate-400 font-bold">a</span>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Máx."
+                    value={maxPromos}
+                    onChange={e => setMaxPromos(e.target.value)}
+                    className="w-full text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -578,9 +641,27 @@ export default function CommercesManagerView({
             )}
           </div>
 
-          {/* Footer conteo */}
-          <div className="p-3 bg-slate-50 border-t border-slate-100 text-center text-[11px] font-semibold text-slate-500">
-            {commerces.length} comercios visualizados
+          {/* Footer con paginación */}
+          <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={!pagination || pagination.page <= 1}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100"
+            >
+              ← Anterior
+            </button>
+            <span className="text-[11px] font-semibold text-slate-500 text-center">
+              {pagination
+                ? `Página ${pagination.page} de ${pagination.totalPages || 1} · ${pagination.total} comercios`
+                : `${commerces.length} comercios`}
+            </span>
+            <button
+              onClick={() => setPage(p => (pagination && p < pagination.totalPages ? p + 1 : p))}
+              disabled={!pagination || pagination.page >= pagination.totalPages}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100"
+            >
+              Siguiente →
+            </button>
           </div>
         </div>
 

@@ -111,11 +111,17 @@ const CENCOSUD_GENERIC_NAMES = new Set([
 // nombre propio forma parte de la identidad del comercio (rubro salud, no supermercado).
 const GENERIC_PREFIXES = new Set(['super', 'supermercado', 'supermercados', 'hipermercado', 'hipermercados', 'tienda', 'tiendas', 'mercado', 'mercados', 'local', 'locales'])
 
+// Chequea que lo que rodea al nombre del comercio dentro del string completo
+// sea solo prefijos/sufijos genéricos ("Supermercados Disco" → Disco) y no
+// una palabra propia que indique un comercio distinto ("Jumbo Express" NO
+// debe matchear "Jumbo" — "Express" es parte de la identidad de otro local).
 function hasOnlyGenericPrefix(fullNorm: string, commerceNorm: string): boolean {
   const idx = fullNorm.indexOf(commerceNorm)
-  if (idx === 0) return true
   const prefix = fullNorm.slice(0, idx).trim()
-  return prefix.split(/\s+/).every(w => GENERIC_PREFIXES.has(w))
+  const suffix = fullNorm.slice(idx + commerceNorm.length).trim()
+  const prefixOk = prefix === '' || prefix.split(/\s+/).every(w => GENERIC_PREFIXES.has(w))
+  const suffixOk = suffix === '' || suffix.split(/\s+/).every(w => GENERIC_PREFIXES.has(w))
+  return prefixOk && suffixOk
 }
 
 // Busca un comercio existente por nombre exacto, substring (con word boundary,
