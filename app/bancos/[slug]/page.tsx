@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
 import { BANK_DETAIL_TAG } from '@/lib/cache/detailCache'
+import DetailPageShell from '@/app/components/DetailPageShell'
+import EntityPromoGrid from '@/app/components/EntityPromoGrid'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 const PAGE_SIZE = 200
@@ -39,18 +41,78 @@ const getCachedEntity = unstable_cache(
   { tags: [BANK_DETAIL_TAG], revalidate: false },
 )
 
+// Nota: con filtros (cats/commerces/entities) no se cachea — unstable_cache
+// no soporta bien claves dinámicas de cardinalidad alta, y la URL filtrada
+// es un camino secundario (no el primer render cacheado por SSG/ISR).
 const getCachedPromos = unstable_cache(
-  async (entityId: string, entityType: 'bank' | 'wallet', page: number) => getPromos({ id: entityId, type: entityType } as EntityInfo, page),
+  async (entityId: string, entityType: 'bank' | 'wallet', page: number) => getPromos({ id: entityId, type: entityType } as EntityInfo, page, {}),
   ['bank-detail-promos'],
   { tags: [BANK_DETAIL_TAG], revalidate: false },
 )
 
-async function getPromos(entity: EntityInfo, page: number) {
+type PromoFilters = { catSlugs?: string[]; commerceSlugs?: string[] }
+
+// Comercios con al menos una promo activa de esta entidad, para popular el
+// buscador multiselección "Comercios" del sidebar.
+const getCachedEntityCommerces = unstable_cache(
+  async (entityId: string, entityType: 'bank' | 'wallet') => {
+    const where = entityType === 'bank' ? { bankId: entityId } : { walletId: entityId }
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+    const commerces = await prisma.commerce.findMany({
+      where: {
+        active: true,
+        promos: {
+          some: {
+            status: 'ACTIVE',
+            requirements: { some: where },
+            OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+          },
+        },
+      },
+      select: { id: true, name: true, slug: true, logoUrl: true },
+      orderBy: { name: 'asc' },
+    })
+    return commerces
+  },
+  ['bank-detail-entity-commerces'],
+  { tags: [BANK_DETAIL_TAG], revalidate: false },
+)
+
+// Otros bancos/billeteras con promos activas, para que el usuario chusmee
+// más entidades sin salir de la pantalla de detalle.
+const getCachedOtherEntities = unstable_cache(
+  async (excludeId: string): Promise<EntityInfo[]> => {
+    const [banks, wallets] = await Promise.all([
+      prisma.bank.findMany({
+        where: { active: true, id: { not: excludeId }, promoRequirements: { some: { promo: { status: 'ACTIVE' } } } },
+        select: { id: true, name: true, slug: true, logoUrl: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.wallet.findMany({
+        where: { active: true, id: { not: excludeId }, promoRequirements: { some: { promo: { status: 'ACTIVE' } } } },
+        select: { id: true, name: true, slug: true, logoUrl: true },
+        orderBy: { name: 'asc' },
+      }),
+    ])
+    return [
+      ...banks.map(b => ({ ...b, type: 'bank' as const })),
+      ...wallets.map(w => ({ ...w, type: 'wallet' as const })),
+    ]
+  },
+  ['bank-detail-other-entities'],
+  { tags: [BANK_DETAIL_TAG], revalidate: false },
+)
+
+async function getPromos(entity: EntityInfo, page: number, filters: PromoFilters) {
   const where = entity.type === 'bank'
     ? { bankId: entity.id }
     : { walletId: entity.id }
 
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+
+  const extraWhere: any = {}
+  if (filters.catSlugs?.length) extraWhere.category = { slug: { in: filters.catSlugs } }
+  if (filters.commerceSlugs?.length) extraWhere.commerce = { slug: { in: filters.commerceSlugs } }
 
   const [promos, total] = await Promise.all([
     prisma.promo.findMany({
@@ -58,6 +120,7 @@ async function getPromos(entity: EntityInfo, page: number) {
         status: 'ACTIVE',
         requirements: { some: where },
         OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+        ...extraWhere,
       },
       include: {
         commerce: { select: { id: true, name: true, slug: true, logoUrl: true } },
@@ -66,6 +129,12 @@ async function getPromos(entity: EntityInfo, page: number) {
           where,
           orderBy: { discountValue: 'desc' },
           take: 1,
+          include: {
+            bank: { select: { name: true, slug: true, logoUrl: true } },
+            wallet: { select: { name: true, slug: true, logoUrl: true } },
+            cardNetwork: { select: { name: true, slug: true } },
+            cardSegmentRef: { select: { name: true } },
+          },
         },
       },
       orderBy: [{ isCSIOnly: 'asc' }, { maxDiscountPct: 'desc' }, { commerce: { activePromoCount: 'desc' } }, { id: 'asc' }],
@@ -77,6 +146,7 @@ async function getPromos(entity: EntityInfo, page: number) {
         status: 'ACTIVE',
         requirements: { some: where },
         OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+        ...extraWhere,
       },
     }),
   ])
@@ -114,23 +184,41 @@ export async function generateStaticParams() {
   return [...banks, ...wallets].map(e => ({ slug: e.slug }))
 }
 
-export default async function BancoPage({ params, searchParams }: { params: { slug: string }, searchParams: { page?: string } }) {
+export default async function BancoPage({ params, searchParams }: { params: { slug: string }, searchParams: { page?: string; cats?: string; commerces?: string; entities?: string } }) {
   const entity = await getCachedEntity(params.slug)
   if (!entity) notFound()
 
   const page = Math.max(1, parseInt(searchParams.page ?? '1') || 1)
-  const { promos, total, totalPages } = await getCachedPromos(entity.id, entity.type, page)
+  const catSlugs = searchParams.cats ? searchParams.cats.split(',').filter(Boolean) : []
+  const commerceSlugs = searchParams.commerces ? searchParams.commerces.split(',').filter(Boolean) : []
+  const hasFilters = catSlugs.length > 0 || commerceSlugs.length > 0
 
-  // Agrupar por categoría
-  const byCategory = new Map<string, { name: string; icon: string; color: string; promos: typeof promos }>()
-  for (const promo of promos) {
+  const [{ promos, total, totalPages }, otherEntities, entityCommerces] = await Promise.all([
+    hasFilters
+      ? getPromos(entity, page, { catSlugs, commerceSlugs })
+      : getCachedPromos(entity.id, entity.type, page),
+    getCachedOtherEntities(entity.id),
+    getCachedEntityCommerces(entity.id, entity.type),
+  ])
+
+  // Agrupar por categoría — mapea cardSegmentRef → cardSegment para que
+  // coincida con el shape que espera PromoCard (compartido con /promos).
+  const cardPromos = promos.map(p => ({
+    ...p,
+    requirements: p.requirements.map(r => ({ ...r, cardSegment: (r as any).cardSegmentRef ?? null })),
+  }))
+  const byCategory = new Map<string, { name: string; slug: string; icon: string; color: string; promos: typeof cardPromos }>()
+  for (const promo of cardPromos) {
     const key = promo.category.name
     if (!byCategory.has(key)) {
-      byCategory.set(key, { name: promo.category.name, icon: promo.category.icon ?? '🏷️', color: promo.category.color, promos: [] })
+      byCategory.set(key, { name: promo.category.name, slug: (promo.category as any).slug, icon: promo.category.icon ?? '🏷️', color: promo.category.color, promos: [] })
     }
     byCategory.get(key)!.promos.push(promo)
   }
-  const categories = Array.from(byCategory.values()).sort((a, b) => b.promos.length - a.promos.length)
+  for (const cat of Array.from(byCategory.values())) {
+    cat.promos.sort((a, b) => a.commerce.name.localeCompare(b.commerce.name, 'es'))
+  }
+  const categories = Array.from(byCategory.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'))
 
   const bestDiscount = promos.reduce((max, p) => {
     const v = p.requirements[0]?.discountValue ?? 0
@@ -150,8 +238,17 @@ export default async function BancoPage({ params, searchParams }: { params: { sl
     })),
   })
 
+  const sidebarCategories = categories.map(cat => ({
+    name: cat.name,
+    slug: cat.slug,
+    icon: cat.icon,
+    color: cat.color,
+    count: cat.promos.length,
+    anchor: `cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`,
+  }))
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <DetailPageShell categories={sidebarCategories} otherEntities={otherEntities} commerces={entityCommerces}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -160,9 +257,11 @@ export default async function BancoPage({ params, searchParams }: { params: { sl
       {/* ── Header ── */}
       <div className="bg-[#1E3A5F] text-white">
         <div className="max-w-3xl mx-auto px-4 pt-10 pb-8">
-          <Link href="/promos" className="inline-flex items-center gap-1.5 text-blue-300 text-xs font-semibold mb-6 hover:text-white transition-colors">
-            ← Volver a PromoAR
-          </Link>
+          <div className="text-[13px] font-semibold mb-6">
+            <Link href="/promos" className="text-blue-300 hover:text-white transition-colors">← Promos</Link>
+            <span className="text-blue-300/50 mx-1.5">/</span>
+            <span className="text-white">{entity.name}</span>
+          </div>
 
           <div className="flex items-center gap-4">
             {entity.logoUrl ? (
@@ -197,6 +296,15 @@ export default async function BancoPage({ params, searchParams }: { params: { sl
             </div>
           </div>
 
+          <Link href="/login?next=/promos"
+            className="flex items-center justify-between bg-gradient-to-r from-white to-blue-50 text-[#1E3A5F] rounded-3xl px-5 py-4 shadow-lg hover:shadow-xl transition-all hover:scale-[1.01] mt-6">
+            <div>
+              <p className="text-xs font-bold text-[#1E3A5F]/60 uppercase tracking-widest mb-0.5">¿Tenés tarjeta {entity.name}?</p>
+              <p className="text-sm font-black">¡Registrate 100% gratis y mirá tus promos!</p>
+            </div>
+            <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
+          </Link>
+
           <Link href="/promos/explorar"
             className="flex items-center justify-center gap-2 bg-white/10 border border-white/20 text-white rounded-2xl px-4 py-3 text-sm font-bold mt-3 hover:bg-white/20 transition-colors">
             Ver todas las promos que tenemos para vos
@@ -205,9 +313,9 @@ export default async function BancoPage({ params, searchParams }: { params: { sl
         </div>
       </div>
 
-      {/* ── Filtro rápido por categoría ── */}
+      {/* ── Categorías: fila horizontal solo en mobile (en desktop vive en el sidebar) ── */}
       {categories.length > 1 && (
-        <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="bg-white border-b border-gray-100 sticky top-0 z-10 lg:hidden">
           <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 py-3">
             {categories.map(cat => (
               <a key={cat.name} href={`#cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`}
@@ -221,93 +329,67 @@ export default async function BancoPage({ params, searchParams }: { params: { sl
         </div>
       )}
 
-      {/* ── Promos por categoría ── */}
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-8">
-        {promos.length === 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 px-5 py-10 text-center">
-            <p className="text-gray-400 text-sm">No hay promos activas en este momento.</p>
-          </div>
-        )}
-
-        {categories.map(cat => (
-          <section key={cat.name} id={`cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`}>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xl">{cat.icon}</span>
-              <h2 className="text-base font-black text-gray-900">{cat.name}</h2>
-              <span className="text-xs font-bold text-gray-400 ml-1">{cat.promos.length}</span>
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="space-y-8 min-w-0">
+          {promos.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 px-5 py-10 text-center">
+              <p className="text-gray-400 text-sm">No hay promos activas en este momento.</p>
             </div>
-            <div className="space-y-2">
-              {cat.promos.map(promo => {
-                const req = promo.requirements[0]
-                return (
-                  <Link key={promo.id} href={`/promos/${promo.slug}`}
-                    className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 hover:border-[#1E3A5F] hover:shadow-md transition-all px-4 py-3">
-                    {promo.commerce.logoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={promo.commerce.logoUrl} alt={promo.commerce.name}
-                        className="w-10 h-10 rounded-xl object-contain border border-gray-100 bg-white p-1 shrink-0" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-xs font-black text-gray-500 shrink-0">
-                        {promo.commerce.name[0]}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-black text-gray-900 truncate">{promo.commerce.name}</p>
-                      <p className="text-[11px] text-gray-400 truncate">{validDaysLabel(promo.validDays)}</p>
-                    </div>
-                    {req && (
-                      <div className="bg-[#D94F2B] text-white text-xs font-black px-2.5 py-1 rounded-xl shrink-0">
-                        {discountBadge(req as any)}
-                      </div>
-                    )}
+          )}
+
+          {categories.map(cat => (
+            <section key={cat.name} id={`cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xl">{cat.icon}</span>
+                <h2 className="text-base font-black text-gray-900">{cat.name}</h2>
+                <span className="text-xs font-bold text-gray-400 ml-1">{cat.promos.length}</span>
+              </div>
+              <EntityPromoGrid promos={cat.promos as any} />
+            </section>
+          ))}
+
+          {/* ── Paginación ── */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-gray-400">
+                Página {page} de {totalPages} · {total} promos en total
+              </p>
+              <div className="flex gap-2">
+                {page > 1 && (
+                  <Link href={`${baseUrl}?page=${page - 1}`}
+                    className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-xs font-bold text-[#1E3A5F] hover:bg-[#1E3A5F] hover:text-white hover:border-[#1E3A5F] transition-colors">
+                    ← Anterior
                   </Link>
-                )
-              })}
+                )}
+                {page < totalPages && (
+                  <Link href={`${baseUrl}?page=${page + 1}`}
+                    className="px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-xs font-bold hover:bg-[#162d54] transition-colors">
+                    Siguiente →
+                  </Link>
+                )}
+              </div>
             </div>
-          </section>
-        ))}
-      </div>
+          )}
 
-      {/* ── Paginación ── */}
-      {totalPages > 1 && (
-        <div className="max-w-3xl mx-auto px-4 pb-6 flex items-center justify-between gap-3">
-          <p className="text-xs text-gray-400">
-            Página {page} de {totalPages} · {total} promos en total
-          </p>
-          <div className="flex gap-2">
-            {page > 1 && (
-              <Link href={`${baseUrl}?page=${page - 1}`}
-                className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-xs font-bold text-[#1E3A5F] hover:bg-[#1E3A5F] hover:text-white hover:border-[#1E3A5F] transition-colors">
-                ← Anterior
-              </Link>
-            )}
-            {page < totalPages && (
-              <Link href={`${baseUrl}?page=${page + 1}`}
-                className="px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-xs font-bold hover:bg-[#162d54] transition-colors">
-                Siguiente →
-              </Link>
-            )}
+          {/* ── CTA ── */}
+          <div className="space-y-2.5">
+            <Link href="/login?next=/promos"
+              className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg hover:shadow-xl transition-all hover:scale-[1.01]">
+              <div>
+                <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Tenés tarjeta {entity.name}?</p>
+                <p className="text-sm font-black">¡Registrate 100% gratis y mirá tus promos!</p>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
+            </Link>
+            <Link href="/promos/explorar"
+              className="flex items-center justify-center gap-2 border border-[#1E3A5F]/30 text-[#1E3A5F] rounded-2xl px-4 py-3 text-sm font-bold hover:bg-[#1E3A5F]/5 transition-colors">
+              Ver todas las promos que tenemos para vos
+              <span className="text-base">→</span>
+            </Link>
           </div>
         </div>
-      )}
-
-      {/* ── CTA ── */}
-      <div className="max-w-3xl mx-auto px-4 pb-10 space-y-2.5">
-        <Link href="/login?next=/promos"
-          className="flex items-center justify-between bg-gradient-to-r from-[#1E3A5F] to-[#2a4f82] text-white rounded-3xl px-5 py-4 shadow-lg hover:shadow-xl transition-all hover:scale-[1.01]">
-          <div>
-            <p className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-0.5">¿Tenés tarjeta {entity.name}?</p>
-            <p className="text-sm font-black">¡Registrate 100% gratis y mirá tus promos!</p>
-          </div>
-          <div className="w-10 h-10 rounded-2xl bg-[#D94F2B] flex items-center justify-center shrink-0 ml-3 text-lg">🎯</div>
-        </Link>
-        <Link href="/promos/explorar"
-          className="flex items-center justify-center gap-2 border border-[#1E3A5F]/30 text-[#1E3A5F] rounded-2xl px-4 py-3 text-sm font-bold hover:bg-[#1E3A5F]/5 transition-colors">
-          Ver todas las promos que tenemos para vos
-          <span className="text-base">→</span>
-        </Link>
       </div>
 
-    </div>
+    </DetailPageShell>
   )
 }

@@ -67,7 +67,10 @@ export async function PATCH(
     const dataToUpdate: any = {}
     if ('name' in body && body.name?.trim()) dataToUpdate.name = body.name.trim()
     if ('logoUrl' in body) dataToUpdate.logoUrl = body.logoUrl?.trim() || null
-    if ('website' in body) dataToUpdate.website = body.website?.trim() || null
+    if ('website' in body) {
+      const site = body.website?.trim() || null
+      dataToUpdate.website = site && !/^https?:\/\//i.test(site) ? `https://${site}` : site
+    }
     if ('instagramUrl' in body) dataToUpdate.instagramUrl = body.instagramUrl?.trim() || null
     if ('defaultCategoryId' in body) dataToUpdate.defaultCategoryId = body.defaultCategoryId || null
     if ('locationModel' in body) dataToUpdate.locationModel = body.locationModel

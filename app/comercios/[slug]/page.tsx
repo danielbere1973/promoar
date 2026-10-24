@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
 import { COMMERCE_DETAIL_TAG } from '@/lib/cache/detailCache'
+import DetailPageShell from '@/app/components/DetailPageShell'
+import EntityPromoGrid from '@/app/components/EntityPromoGrid'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
@@ -22,26 +24,80 @@ const getCachedCommerceBySlug = unstable_cache(
   { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
 )
 
+type PromoFilters = { catSlugs?: string[]; entitySlugs?: string[] }
+
+async function getCommercePromos(commerceId: string, filters: PromoFilters = {}) {
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+  const extraWhere: any = {}
+  if (filters.catSlugs?.length) extraWhere.category = { slug: { in: filters.catSlugs } }
+  if (filters.entitySlugs?.length) {
+    extraWhere.requirements = {
+      some: {
+        OR: [
+          { bank: { slug: { in: filters.entitySlugs } } },
+          { wallet: { slug: { in: filters.entitySlugs } } },
+        ],
+      },
+    }
+  }
+
+  return prisma.promo.findMany({
+    where: {
+      commerceId,
+      status: 'ACTIVE',
+      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+      ...extraWhere,
+    },
+    include: {
+      category: { select: { name: true, icon: true, color: true, slug: true } },
+      requirements: {
+        include: {
+          bank: { select: { name: true, slug: true, logoUrl: true } },
+          wallet: { select: { name: true, slug: true, logoUrl: true } },
+          cardNetwork: { select: { name: true, slug: true } },
+          cardSegmentRef: { select: { name: true } },
+        },
+        orderBy: { discountValue: 'desc' },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
 const getCachedCommercePromos = unstable_cache(
+  async (commerceId: string) => getCommercePromos(commerceId, {}),
+  ['commerce-detail-promos'],
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
+)
+
+// Bancos/billeteras con al menos una promo activa de este comercio, para
+// popular el buscador multiselección del sidebar.
+const getCachedCommerceEntities = unstable_cache(
   async (commerceId: string) => {
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-    return prisma.promo.findMany({
-      where: {
-        commerceId,
-        status: 'ACTIVE',
-        OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
-      },
-      include: {
-        category: { select: { name: true, icon: true, color: true } },
-        requirements: {
-          include: { bank: { select: { name: true, logoUrl: true } }, wallet: { select: { name: true, logoUrl: true } } },
-          orderBy: { discountValue: 'desc' },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+    const baseWhere = {
+      status: 'ACTIVE' as const,
+      commerceId,
+      OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
+    }
+    const [banks, wallets] = await Promise.all([
+      prisma.bank.findMany({
+        where: { active: true, promoRequirements: { some: { promo: baseWhere, bankId: { not: null } } } },
+        select: { id: true, name: true, slug: true, logoUrl: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.wallet.findMany({
+        where: { active: true, promoRequirements: { some: { promo: baseWhere, walletId: { not: null } } } },
+        select: { id: true, name: true, slug: true, logoUrl: true },
+        orderBy: { name: 'asc' },
+      }),
+    ])
+    return [
+      ...banks.map(b => ({ ...b, type: 'bank' as const })),
+      ...wallets.map(w => ({ ...w, type: 'wallet' as const })),
+    ]
   },
-  ['commerce-detail-promos'],
+  ['commerce-detail-entities'],
   { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
 )
 
@@ -107,15 +163,62 @@ export async function generateStaticParams() {
   return commerces.filter(c => c.slug.trim() !== '').map(c => ({ slug: c.slug }))
 }
 
-export default async function CommercePage({ params }: { params: { slug: string } }) {
+export default async function CommercePage({ params, searchParams }: { params: { slug: string }, searchParams: { cats?: string; entities?: string } }) {
   const commerce = await getCachedCommerceBySlug(params.slug)
 
   if (!commerce || !commerce.active) notFound()
 
-  const promos = await getCachedCommercePromos(commerce.id)
+  const catSlugs = searchParams.cats ? searchParams.cats.split(',').filter(Boolean) : []
+  const entitySlugs = searchParams.entities ? searchParams.entities.split(',').filter(Boolean) : []
+  const hasFilters = catSlugs.length > 0 || entitySlugs.length > 0
+
+  const [promos, commerceEntities] = await Promise.all([
+    hasFilters
+      ? getCommercePromos(commerce.id, { catSlugs, entitySlugs })
+      : getCachedCommercePromos(commerce.id),
+    getCachedCommerceEntities(commerce.id),
+  ])
 
   const bestPromo = promos[0]
   const bestReq = bestPromo?.requirements[0]
+
+  // Shape para PromoCard (compartido con /promos): inyecta commerce (no viene
+  // en el select, es el mismo para todas las promos de esta página) y
+  // renombra cardSegmentRef → cardSegment.
+  const cardPromos = promos.map(p => ({
+    ...p,
+    commerce: { id: commerce.id, name: commerce.name, logoUrl: commerce.logoUrl },
+    requirements: p.requirements.map(r => ({ ...r, cardSegment: (r as any).cardSegmentRef ?? null })),
+  }))
+
+  // Agrupar por categoría (alfabético) — dentro de cada una, ordenar por
+  // banco/billetera (equivalente a ordenar "por comercio" en /bancos/[slug],
+  // acá todas las promos son del mismo comercio).
+  const byCategory = new Map<string, { name: string; slug: string; icon: string; color: string; promos: typeof cardPromos }>()
+  for (const promo of cardPromos) {
+    const key = promo.category.name
+    if (!byCategory.has(key)) {
+      byCategory.set(key, { name: promo.category.name, slug: (promo.category as any).slug, icon: promo.category.icon ?? '🏷️', color: promo.category.color, promos: [] })
+    }
+    byCategory.get(key)!.promos.push(promo)
+  }
+  for (const cat of Array.from(byCategory.values())) {
+    cat.promos.sort((a, b) => {
+      const an = a.requirements[0]?.bank?.name || a.requirements[0]?.wallet?.name || ''
+      const bn = b.requirements[0]?.bank?.name || b.requirements[0]?.wallet?.name || ''
+      return an.localeCompare(bn, 'es')
+    })
+  }
+  const categories = Array.from(byCategory.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'))
+
+  const sidebarCategories = categories.map(cat => ({
+    name: cat.name,
+    slug: cat.slug,
+    icon: cat.icon,
+    color: cat.color,
+    count: cat.promos.length,
+    anchor: `cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`,
+  }))
 
   const jsonLd = schemaItemList({
     name: `Promos y descuentos en ${commerce.name}`,
@@ -127,8 +230,10 @@ export default async function CommercePage({ params }: { params: { slug: string 
     })),
   })
 
+  const entitiesForSidebar = commerceEntities.map(e => ({ id: e.id, name: e.name, slug: e.slug, logoUrl: e.logoUrl, type: e.type }))
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <DetailPageShell categories={sidebarCategories} entityFilters={entitiesForSidebar}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -137,9 +242,17 @@ export default async function CommercePage({ params }: { params: { slug: string 
       {/* ── Header ── */}
       <div className="bg-[#1E3A5F] text-white">
         <div className="max-w-2xl mx-auto px-4 pt-10 pb-8">
-          <Link href="/promos" className="inline-flex items-center gap-1.5 text-blue-300 text-xs font-semibold mb-6 hover:text-white transition-colors">
-            ← Volver a PromoAR
-          </Link>
+          <div className="text-[13px] font-semibold mb-6">
+            <Link href="/promos" className="text-blue-300 hover:text-white transition-colors">← Promos</Link>
+            {commerce.defaultCategory && (
+              <>
+                <span className="text-blue-300/50 mx-1.5">/</span>
+                <Link href={`/categorias/${commerce.defaultCategory.slug}`} className="text-blue-300 hover:text-white transition-colors">{commerce.defaultCategory.name}</Link>
+              </>
+            )}
+            <span className="text-blue-300/50 mx-1.5">/</span>
+            <span className="text-white">{commerce.name}</span>
+          </div>
 
           <div className="flex items-center gap-4">
             {commerce.logoUrl ? (
@@ -196,8 +309,8 @@ export default async function CommercePage({ params }: { params: { slug: string 
       </div>
 
       {/* ── Promos ── */}
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-3">
-        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-8">
+        <p className="text-xs font-black text-gray-400 uppercase tracking-widest -mb-4">
           {promos.length} {promos.length === 1 ? 'promo activa' : 'promos activas'}
         </p>
 
@@ -207,43 +320,16 @@ export default async function CommercePage({ params }: { params: { slug: string 
           </div>
         )}
 
-        {promos.map(promo => {
-          const bestR = promo.requirements[0]
-          const entities = [
-            ...Array.from(new Map(promo.requirements.filter(r => r.bank).map(r => [r.bank!.name, r.bank!])).values()),
-            ...Array.from(new Map(promo.requirements.filter(r => r.wallet).map(r => [r.wallet!.name, r.wallet!])).values()),
-          ]
-
-          return (
-            <Link key={promo.id} href={`/promos/${promo.slug}`}
-              className="block bg-white rounded-2xl border border-gray-100 hover:border-[#1E3A5F] hover:shadow-md transition-all px-5 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black text-gray-900 leading-tight truncate">{promo.title}</p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    {promo.category.icon} {promo.category.name} · {validDaysLabel(promo.validDays)}
-                  </p>
-                  {entities.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {entities.slice(0, 3).map((e, i) => (
-                        <span key={i} className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
-                          {e.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {bestR && (
-                  <div className="bg-[#D94F2B] text-white text-sm font-black px-3 py-1.5 rounded-xl shrink-0">
-                    {bestR.discountType === 'CUOTAS_SIN_INTERES'
-                      ? `${bestR.discountValue} CSI`
-                      : `${bestR.discountValue}%`}
-                  </div>
-                )}
-              </div>
-            </Link>
-          )
-        })}
+        {categories.map(cat => (
+          <section key={cat.name} id={`cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <span>{cat.icon}</span>
+              <h2 className="text-sm font-black text-gray-700">{cat.name}</h2>
+              <span className="text-xs text-gray-400">({cat.promos.length})</span>
+            </div>
+            <EntityPromoGrid promos={cat.promos as any} />
+          </section>
+        ))}
       </div>
 
       {/* ── CTA ── */}
@@ -263,6 +349,6 @@ export default async function CommercePage({ params }: { params: { slug: string 
         </Link>
       </div>
 
-    </div>
+    </DetailPageShell>
   )
 }

@@ -20,6 +20,9 @@ export async function GET(req: NextRequest) {
     const categoryId = searchParams.get('categoryId') || ''
     const hasBranches = searchParams.get('hasBranches') || 'all' // 'all' | 'yes' | 'no'
     const locationModel = searchParams.get('locationModel') || ''
+    const hasLogo = searchParams.get('hasLogo') || 'all' // 'all' | 'yes' | 'no'
+    const minPromos = searchParams.get('minPromos')
+    const maxPromos = searchParams.get('maxPromos')
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
     const limit = Math.min(100, Math.max(10, parseInt(searchParams.get('limit') || '50', 10)))
     const skip = (page - 1) * limit
@@ -46,6 +49,18 @@ export async function GET(req: NextRequest) {
       where.branches = { some: {} }
     } else if (hasBranches === 'no') {
       where.branches = { none: {} }
+    }
+
+    if (hasLogo === 'no') {
+      where.logoUrl = null
+    } else if (hasLogo === 'yes') {
+      where.logoUrl = { not: null }
+    }
+
+    if (minPromos != null || maxPromos != null) {
+      where.activePromoCount = {}
+      if (minPromos != null && minPromos !== '') where.activePromoCount.gte = Math.max(0, parseInt(minPromos, 10) || 0)
+      if (maxPromos != null && maxPromos !== '') where.activePromoCount.lte = Math.max(0, parseInt(maxPromos, 10) || 0)
     }
 
     const [total, commerces, categories] = await Promise.all([
@@ -126,7 +141,10 @@ export async function POST(req: NextRequest) {
         name: trimmedName,
         slug: finalSlug,
         logoUrl: logoUrl?.trim() || null,
-        website: website?.trim() || null,
+        website: (() => {
+          const site = website?.trim() || null
+          return site && !/^https?:\/\//i.test(site) ? `https://${site}` : site
+        })(),
         instagramUrl: instagramUrl?.trim() || null,
         defaultCategoryId: defaultCategoryId || null,
         locationModel: locationModel || 'UNKNOWN',
