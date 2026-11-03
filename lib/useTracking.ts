@@ -46,6 +46,9 @@ type TrackEvent =
   | { type: 'PUSH_PERMISSION_GRANTED' }
   | { type: 'PUSH_PERMISSION_DENIED' }
   | { type: 'PUSH_PROMPT_DISMISS' }
+  | { type: 'INSTALL_PROMPT_DISMISS'; platform: 'android' | 'ios' }
+  | { type: 'INSTALL_ACCEPTED'; platform: 'android' | 'ios' }
+  | { type: 'INSTALL_DISMISSED'; platform: 'android' | 'ios' }
   | { type: 'HOME_VIEW'; authenticated: boolean }
   | { type: 'RECOMMENDATION_IMPRESSION'; rubroId: string; promoId?: string; commerceName: string; variant: 'spotlight' | 'secondary' }
   | { type: 'RECOMMENDATION_CLICK'; rubroId: string; promoId?: string; commerceName: string; variant: 'spotlight' | 'secondary' }

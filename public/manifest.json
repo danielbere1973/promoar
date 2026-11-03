@@ -1,0 +1,32 @@
+{
+  "name": "PromoAR — Todas las promos de tus tarjetas",
+  "short_name": "PromoAR",
+  "description": "Descubrí descuentos, cuotas sin interés y reintegros de tus bancos y billeteras, filtrados por tu perfil financiero.",
+  "start_url": "/promos?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1D3D6E",
+  "theme_color": "#1D3D6E",
+  "lang": "es-AR",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
