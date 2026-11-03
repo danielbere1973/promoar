@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { getServerSession } from 'next-auth/next'
 import { Analytics } from '@vercel/analytics/next'
 import { GoogleAnalytics } from '@next/third-parties/google'
@@ -7,6 +7,7 @@ import PostHogProvider from './components/PostHogProvider'
 import SupportChat from './components/SupportChat'
 import MLOAuthHandler from './components/MLOAuthHandler'
 import PushNotificationPrompt from './components/PushNotificationPrompt'
+import InstallPrompt from './components/InstallPrompt'
 import { schemaOrganization, schemaWebSite } from '@/lib/schema'
 import './globals.css'
 
@@ -20,9 +21,10 @@ export const metadata: Metadata = {
   },
   description: 'Descubrí descuentos, cuotas sin interés y reintegros de tus bancos y billeteras. Galicia, BBVA, Santander, Nación, ICBC y más de 20 entidades. Gratis.',
   keywords: 'promociones bancarias, descuentos tarjetas, promos bancos argentina, cuotas sin interés',
+  manifest: '/manifest.json',
   icons: {
     icon: '/favicon.png',
-    apple: '/favicon.png',
+    apple: '/apple-touch-icon.png',
   },
   openGraph: {
     type: 'website',
@@ -50,6 +52,15 @@ export const metadata: Metadata = {
   verification: {
     other: { 'msvalidate.01': '3C0BC04C6B361721148576B592ADDE88' },
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'PromoAR',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#1D3D6E',
 }
 
 export default async function RootLayout({
@@ -83,6 +94,7 @@ export default async function RootLayout({
             {children}
             <SupportChat />
             <PushNotificationPrompt />
+            <InstallPrompt />
           </PostHogProvider>
         </Providers>
         <Analytics />

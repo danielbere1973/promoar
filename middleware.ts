@@ -179,7 +179,8 @@ export async function middleware(req: NextRequest) {
     pathname.endsWith('.jpg') ||
     pathname.endsWith('.jpeg') ||
     pathname.endsWith('.webp') ||
-    pathname === '/sw.js'
+    pathname === '/sw.js' ||
+    pathname === '/manifest.json'
   ) {
     return NextResponse.next()
   }
