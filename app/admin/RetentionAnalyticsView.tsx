@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import { Eye, MousePointerClick, BookmarkCheck, Users, TrendingUp, RefreshCw } from 'lucide-react'
+import UserRetentionCohort from './UserRetentionCohort'
+import TopClicksView from './TopClicksView'
 
 type AnalyticsData = {
   since: string
@@ -95,6 +97,9 @@ export default function RetentionAnalyticsView() {
 
   return (
     <div className="space-y-6">
+      <UserRetentionCohort />
+      <TopClicksView />
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-black text-slate-800">Retención — Mi Ahorro de Hoy</h2>
