@@ -557,6 +557,18 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
   const [loadingMore, setLoadingMore] = useState(false)
   const [showProximas, setShowProximas] = useState(false)
   const [showSearchOverlay, setShowSearchOverlay] = useState(false)
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
+  // El cartel de búsqueda no debe auto-abrirse mientras el tour guiado está pendiente
+  // (se superponen). Arranca en true y se decide en el mount effect de abajo.
+  const [tourPending, setTourPending] = useState(true)
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('promoar_tour_done')) setTourPending(false)
+    } catch {
+      setTourPending(false)
+    }
+  }, [])
   const [proximas, setProximas] = useState<Promo[]>([])
   const [loadingProximas, setLoadingProximas] = useState(false)
   const [focusedCatPromos, setFocusedCatPromos] = useState<Promo[]>([])
@@ -2870,11 +2882,22 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         />
       )}
 
-      <TourOverlay isAuthenticated={status === 'authenticated'} blocked={showProvinceSelector} />
+      <TourOverlay
+        isAuthenticated={status === 'authenticated'}
+        blocked={showProvinceSelector || searchOverlayOpen}
+        onFinish={() => {
+          // Pausa tras terminar el tour (completo o salteado) para que el
+          // buscador no se sienta simultáneo — sigue auto-abriéndose después,
+          // solo con un respiro.
+          setTimeout(() => setTourPending(false), 2500)
+        }}
+      />
 
       <SearchOverlay
         forceOpen={showSearchOverlay}
         onForceOpenHandled={() => setShowSearchOverlay(false)}
+        onShowChange={setSearchOverlayOpen}
+        holdAutoOpen={tourPending}
         forMe={forMe}
         guestProfile={status !== 'authenticated' ? guestProfile : null}
         onSelectCommerce={(name) => {

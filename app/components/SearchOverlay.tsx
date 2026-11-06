@@ -21,6 +21,9 @@ type ResultGroup = {
   items: { id: string; name: string; subtitle?: string }[]
 }
 
+type ProductCommerce = { id: string; name: string; slug: string; logoUrl: string | null; promoCount: number }
+type ProductCategoryGroup = { key: string; categoria: string; subcategoria: string; commerces: ProductCommerce[] }
+
 type SearchOverlayProps = {
   /** Si se pasa, el overlay aplica el filtro en la página actual en vez de navegar. */
   onSelectCommerce?: (commerceName: string) => void
@@ -33,6 +36,10 @@ type SearchOverlayProps = {
   /** Perfil financiero del usuario, para que "buscar productos" devuelva solo comercios con promo que aplica. */
   forMe?: boolean
   guestProfile?: GuestProfile
+  /** Notifica a la página cada vez que el overlay se abre/cierra (incluido el auto-open), para coordinar con otras UI modales (ej. el tour guiado). */
+  onShowChange?: (show: boolean) => void
+  /** Mientras es true, no se auto-abre solo (ej. mientras el tour guiado está en curso). Al pasar a false, se auto-abre si todavía no se mostró esta sesión. */
+  holdAutoOpen?: boolean
 }
 
 export default function SearchOverlay({
@@ -41,19 +48,29 @@ export default function SearchOverlay({
   onSearchProduct,
   forceOpen,
   onForceOpenHandled,
+  onShowChange,
+  holdAutoOpen,
 }: SearchOverlayProps) {
   const router = useRouter()
   const [show, setShow] = useState(false)
   const [query, setQuery] = useState('')
   const [commerces, setCommerces] = useState<CommerceItem[]>([])
   const [entities, setEntities] = useState<EntitiesResponse>({})
+  const [productGroups, setProductGroups] = useState<ProductCategoryGroup[]>([])
+  const [productsLoading, setProductsLoading] = useState(false)
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
 
   useEffect(() => {
+    onShowChange?.(show)
+  }, [show, onShowChange])
+
+  useEffect(() => {
+    if (holdAutoOpen) return
     try {
       if (sessionStorage.getItem(SESSION_KEY)) return
     } catch {}
     setShow(true)
-  }, [])
+  }, [holdAutoOpen])
 
   useEffect(() => {
     if (!forceOpen) return
@@ -73,6 +90,41 @@ export default function SearchOverlay({
       .then(data => { if (data?.banks) setEntities(data) })
       .catch(() => {})
   }, [show])
+
+  // Búsqueda por producto (ej. "hamburguesas"): agrupa por categoría/subcategoría
+  // del catálogo real (CommerceProduct) para que el usuario elija el rubro antes
+  // de ver comercios — separa gastronomía de congelados de supermercado, etc.
+  useEffect(() => {
+    const q = query.trim()
+    setExpandedCategory(null)
+    if (q.length < 2) {
+      setProductGroups([])
+      return
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      setProductsLoading(true)
+      fetch(`/api/search/products?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          const list: (ProductCommerce & { matchedCategories?: string[] })[] = data?.commerces ?? []
+          const groups = new Map<string, ProductCategoryGroup>()
+          for (const c of list) {
+            const cats: string[] = c.matchedCategories?.length ? c.matchedCategories : ['Otros']
+            for (const cat of cats) {
+              const key = cat
+              const g = groups.get(key) ?? { key, categoria: cat, subcategoria: cat, commerces: [] }
+              g.commerces.push({ id: c.id, name: c.name, slug: c.slug, logoUrl: c.logoUrl, promoCount: c.promoCount })
+              groups.set(key, g)
+            }
+          }
+          setProductGroups(Array.from(groups.values()).sort((a, b) => b.commerces.length - a.commerces.length))
+        })
+        .catch(() => {})
+        .finally(() => setProductsLoading(false))
+    }, 300)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [query])
 
   const close = () => {
     setShow(false)
@@ -195,7 +247,7 @@ export default function SearchOverlay({
         </div>
         {q.length >= 2 && (
           <p className="text-[11px] text-slate-400 mb-3">
-            Comercios, bancos, billeteras y tarjetas se filtran solos. Para buscar un producto (ej. &quot;carteras de cuero&quot;) apretá Enter o la lupa — te lleva a los resultados en la página.
+            Comercios, bancos, billeteras y tarjetas se filtran solos. Si es un producto (ej. &quot;hamburguesas&quot;), elegí la categoría para ver dónde conseguirlo.
           </p>
         )}
 
@@ -218,10 +270,52 @@ export default function SearchOverlay({
           )
         ) : (
           <div className="max-h-[360px] overflow-y-auto space-y-4">
-            {results.length === 0 && (
+            {results.length === 0 && productGroups.length === 0 && !productsLoading && (
               <p className="text-[13px] text-slate-400 py-4 text-center">
-                Sin coincidencias de comercio/banco/billetera/tarjeta para &quot;{query}&quot;. Si es un producto, apretá Enter o la lupa.
+                Sin coincidencias para &quot;{query}&quot;.
               </p>
+            )}
+
+            {productGroups.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">Categorías de productos</p>
+                <div className="space-y-1">
+                  {productGroups.map(group => {
+                    const isOpen = expandedCategory === group.key
+                    return (
+                      <div key={group.key} className="rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => setExpandedCategory(isOpen ? null : group.key)}
+                          className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 rounded-lg text-[14px] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                        >
+                          <span>{group.categoria}</span>
+                          <span className="text-[11px] text-slate-400 shrink-0">
+                            {group.commerces.length} comercio{group.commerces.length === 1 ? '' : 's'} {isOpen ? '▲' : '▼'}
+                          </span>
+                        </button>
+                        {isOpen && (
+                          <div className="pl-3 pb-1 space-y-0.5">
+                            {group.commerces.map(c => (
+                              <button
+                                key={c.id}
+                                onClick={() => selectCommerce(c.name)}
+                                className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 rounded-lg text-[13px] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
+                              >
+                                <span>{c.name}</span>
+                                {c.promoCount > 0 && (
+                                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 shrink-0 font-medium">
+                                    {c.promoCount} promo{c.promoCount === 1 ? '' : 's'}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             )}
 
             {results.map(group => (
