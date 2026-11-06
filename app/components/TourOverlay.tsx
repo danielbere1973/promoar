@@ -355,7 +355,7 @@ function MobileBar({ step, rect, onNext, onPrev, onSkip, current, total }: {
   )
 }
 
-export default function TourOverlay({ isAuthenticated, blocked }: { isAuthenticated: boolean; blocked?: boolean }) {
+export default function TourOverlay({ isAuthenticated, blocked, onFinish }: { isAuthenticated: boolean; blocked?: boolean; onFinish?: () => void }) {
   const [active, setActive] = useState(false)
   const [step, setStep] = useState(0)
   const [rect, setRect] = useState<Rect | null>(null)
@@ -392,6 +392,7 @@ export default function TourOverlay({ isAuthenticated, blocked }: { isAuthentica
   const finish = () => {
     localStorage.setItem('promoar_tour_done', '1')
     setActive(false)
+    onFinish?.()
   }
 
   const next = () => {
