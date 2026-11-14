@@ -69,7 +69,16 @@ export async function GET(req: NextRequest) {
       params.day || params.dayIndices?.length
     )
     const hasRealProfile = !!email || !!params.guestProfileParam
-    const paginate = !(forMe && hasRealProfile) && !email && !hasFilters
+    // BUG (11/11/2026): un usuario LOGUEADO en modo "Todas" (forMe=false, toggle
+    // Todas/Para Mí — ej. entrando a /promos/explorar) caía igual fuera del
+    // camino paginado/cacheado solo por tener `email`, aunque no pida perfil
+    // activo. Sin narrowing SQL por perfil (forMe=false) ese camino hace un
+    // findMany sin filtro real sobre miles de promos ACTIVE — medido en ~8s
+    // solo de query + ~3s de sort JS adicional, tiempo suficiente para que
+    // /promos/explorar quede cargando en blanco en producción (timeout) y
+    // tarde ~30s en local. Es el mismo `where` amplio que vería un invitado
+    // (sin perfil, sin filtros) — debe entrar al mismo camino cacheado.
+    const paginate = !(forMe && hasRealProfile) && (!email || !forMe) && !hasFilters
     const page = parseInt(searchParams.get('page') ?? '1') || 1
 
     // Fechas clave: buscar si hoy está dentro del window de alguna fecha especial
