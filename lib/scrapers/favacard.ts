@@ -1,283 +1,231 @@
 // lib/scrapers/favacard.ts
 // Favacard — tarjeta regional de Buenos Aires (Mar del Plata, Bahía Blanca, Necochea, etc.)
-import * as cheerio from 'cheerio'
+// Fuente: JSON estático publicado por el sitio nuevo (fava.com.ar), que reemplazó a
+// promosfavacard.com.ar (dominio viejo, degradado a ~7 cards). Un solo fetch trae:
+// - comercios: cada uno con su lista de ids de "promo template" aplicables (`promos: ["t44", ...]`)
+// - promos: ~24 templates de condiciones (kind: 'pct' | 'cuotas' | 'dual') compartidas entre comercios
+// Cada combinación comercio×template es una promo real para PromoAR.
 import { Scraper, ScrapedPromo } from './types'
 
-const BASE_URL = 'https://promosfavacard.com.ar'
-const LIST_URL = `${BASE_URL}//promociones/promociones_todas.php`
+const DATA_URL = 'https://fava.com.ar/assets/data/beneficios.json'
 
 const FETCH_HEADERS = {
-  'Referer': `${BASE_URL}/`,
-  'X-Requested-With': 'XMLHttpRequest',
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-// Favacard → PromoAR category mapping
+interface PromoTemplatePct {
+  kind: 'pct'
+  pct: number
+  label: string
+  dias: string
+  diasSemana: number[]
+  fechas?: string[]
+  tope: string
+  hasta: string
+  cond: string
+}
+
+interface PromoTemplateCuotas {
+  kind: 'cuotas'
+  n: number
+  label: string
+  dias: string
+  diasSemana: number[]
+  fechas?: string[]
+  tope: string
+  hasta: string
+  cond: string
+}
+
+interface PromoTemplateDual {
+  kind: 'dual'
+  a: number
+  b: number
+  label: string
+  dias: string
+  diasSemana: number[]
+  fechas?: string[]
+  tope: string
+  hasta: string
+  cond: string
+}
+
+// "cupon": requiere retirar/activar una cuponera en sucursal antes de usarse (PLANAZOS, etc.)
+// Misma estructura de descuento que 'pct' (campo `pct`), se trata igual a fines de armar la promo.
+interface PromoTemplateCupon {
+  kind: 'cupon'
+  pct: number
+  label: string
+  dias: string
+  diasSemana: number[]
+  fechas?: string[]
+  tope: string
+  hasta: string
+  cond: string
+}
+
+type PromoTemplate = PromoTemplatePct | PromoTemplateCuotas | PromoTemplateDual | PromoTemplateCupon
+
+interface Sucursal {
+  l: string
+  d: string
+}
+
+interface ComercioEntry {
+  n: string
+  logo: string
+  r: number
+  det: string
+  locs: string[]
+  promos: string[]
+  star: number
+  suc: Sucursal[]
+}
+
+interface BeneficiosData {
+  source: string
+  generatedAt: string
+  logoBase: string
+  rubros: { id: number; label: string }[]
+  localidades: string[]
+  promos: Record<string, PromoTemplate>
+  promoGroups: [string, string[]][]
+  comercios: ComercioEntry[]
+}
+
+// Favacard rubro label → PromoAR category mapping
 const CAT_MAP: [RegExp, string][] = [
-  [/gastronom|restaurant|bar\b|parrilla|heladeria|heladería|cafe|café|cafetería|confiteria/i, 'Gastronomía'],
-  [/super|autoserv|almacen|almacén|alimenta|carniceria|carnicería|verduleria|frutería|panaderia|panadería/i, 'Supermercados'],
+  [/gastronom|recreac/i, 'Gastronomía'],
+  [/^super/i, 'Supermercados'],
   [/farmac/i, 'Farmacias'],
-  [/combust|estacion|nafta|dapsa|ypf\b|shell|axion|puma/i, 'Combustible'],
-  [/moda|ropa|vestim|indument|calzado|zapateria|zapatería|jeans|boutique|lenceria|lencería/i, 'Indumentaria'],
-  [/belleza|peluquer|estetica|estética|spa|cosmet/i, 'Salud y Belleza'],
-  [/farmac|salud|optica|óptica|clinica|clínica|medic/i, 'Salud y Belleza'],
-  [/hogar|deco|mueble|cortina|colchon|colchón|bazar|menaje|ceramica|pintura|construc|ferreteria|ferretería|materiales/i, 'Hogar'],
-  [/tecnol|electro|comput|celular|smartphone|informatica|informática/i, 'Tecnología'],
-  [/libreria|librería|papeler|escolar|educac/i, 'Librerías'],
-  [/mascota|petshop|veterinaria/i, 'Petshops'],
-  [/cine|teatro|entretenimiento|recreac|juego|laser|bowling|escape/i, 'Entretenimiento'],
-  [/shopping|paseo\s+de\s+compras|mall/i, 'Shoppings'],
-  [/infantil|niño|bebe|bebé|juguet/i, 'Jugueterías'],
-  [/joyeria|joyería|bijou|relojeria|relojería/i, 'Otros'],
-  [/rodado|bicicleta|moto|auto\b|neumatico|neumático|vehiculo|vehículo/i, 'Automotores'],
-  [/deport|gym|fitness|natacion|natación/i, 'Deportes'],
-  [/viaje|turismo|hotel|hospedaje|aereolinea/i, 'Viajes y Turismo'],
+  [/combust/i, 'Combustible'],
+  [/^moda/i, 'Indumentaria'],
+  [/belleza/i, 'Salud y Belleza'],
+  [/hogar|deco|construc/i, 'Hogar'],
+  [/tecnolog/i, 'Tecnología'],
+  [/librer/i, 'Librerías'],
+  [/mascota/i, 'Petshops'],
+  [/shopping/i, 'Shoppings'],
+  [/infantil/i, 'Jugueterías'],
+  [/joyer/i, 'Otros'],
+  [/rodado/i, 'Automotores'],
+  [/servicio/i, 'Otros'],
 ]
 
-function mapCategoria(rubro: string): string {
+function mapCategoria(rubroLabel: string, det: string): string {
   for (const [re, cat] of CAT_MAP) {
-    if (re.test(rubro)) return cat
+    if (re.test(rubroLabel) || re.test(det)) return cat
   }
   return 'Otros'
 }
 
-// "california" → "California", "top-ten-deportes" → "Top Ten Deportes"
-function slugToName(slug: string): string {
-  return slug
-    .split('-')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-    .trim()
+// "30/11/2026" → Date
+function parseDateDMY(s: string): Date | undefined {
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (!m) return undefined
+  const d = parseInt(m[1], 10)
+  const mo = parseInt(m[2], 10) - 1
+  const y = parseInt(m[3], 10)
+  return new Date(y, mo, d)
 }
 
-// "DDMMYYYY" → Date
-function parseDate(s: string): Date | undefined {
-  if (s.length !== 8) return undefined
-  const d = parseInt(s.slice(0, 2), 10)
-  const m = parseInt(s.slice(2, 4), 10) - 1
-  const y = parseInt(s.slice(4, 8), 10)
-  if (isNaN(d) || isNaN(m) || isNaN(y)) return undefined
-  return new Date(y, m, d)
-}
-
-function parseDiscount(text: string): { value: number; type: string } | null {
-  // "40%" or "40% de descuento"
-  const pct = text.match(/(\d+)\s*%/)
-  if (pct) return { value: parseInt(pct[1], 10), type: 'PERCENTAGE_REINTEGRO' }
-
-  // "3 sin interés", "6 cuotas sin interés", "3 sin interés"
-  const csi = text.match(/(\d+)\s*(?:cuotas?\s*)?sin\s*inter/i)
-  if (csi) return { value: parseInt(csi[1], 10), type: 'CUOTAS_SIN_INTERES' }
-
-  // "2x1"
-  if (/2x1/i.test(text)) return { value: 2, type: 'PERCENTAGE_REINTEGRO' }
-
-  return null
-}
-
-// Day bitmask: bit 0=Sunday, bit 1=Monday ... bit 6=Saturday
-const DAY_BITS: Record<string, number> = {
-  'domingo': 1 << 0,
-  'lunes':   1 << 1,
-  'martes':  1 << 2,
-  'miercoles': 1 << 3,
-  'miércoles': 1 << 3,
-  'jueves':  1 << 4,
-  'viernes': 1 << 5,
-  'sabado':  1 << 6,
-  'sábado':  1 << 6,
-}
-
-function parseDays(text: string): number {
-  const t = text.toLowerCase()
-
-  if (/todos los d[íi]as|lunes a domingo/i.test(t)) return 127
-
-  // "Lunes a Viernes" range
-  const rangeMatch = t.match(/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+a\s+(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/)
-  if (rangeMatch) {
-    const dayOrder = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
-    const normalize = (s: string) => s.replace(/[áéíóú]/g, c => ({á:'a',é:'e',í:'i',ó:'o',ú:'u'}[c] ?? c))
-    const from = dayOrder.indexOf(normalize(rangeMatch[1]))
-    const to   = dayOrder.indexOf(normalize(rangeMatch[2]))
-    if (from >= 0 && to >= 0) {
-      let mask = 0
-      for (let i = from; i <= to; i++) mask |= (1 << i)
-      return mask
-    }
-  }
-
-  // Individual days
+// diasSemana del JSON: 0=lunes ... 6=domingo (confirmado con "Viernes, sábados y domingos" → [4,5,6])
+// Bitmask PromoAR: bit 0=domingo, bit 1=lunes ... bit 6=sábado
+function diasSemanaToBitmask(diasSemana: number[]): number {
   let mask = 0
-  for (const [name, bit] of Object.entries(DAY_BITS)) {
-    if (t.includes(name)) mask |= bit
+  for (const d of diasSemana) {
+    const bit = d === 6 ? 0 : d + 1 // domingo(6)->bit0, lunes(0)->bit1, ... sabado(5)->bit6
+    mask |= (1 << bit)
   }
   return mask || 127
 }
 
-// "Tope de reintegro: $15.000" → 15000
-function parseCap(text: string): number | null {
-  const m = text.match(/tope[^:$\n]{0,30}:\s*\$?\s*([\d.,]+)/i)
+function parseCap(tope: string): number | null {
+  if (/sin tope/i.test(tope)) return null
+  const m = tope.match(/\$\s*([\d.,]+)/)
   if (!m) return null
   const n = parseInt(m[1].replace(/\./g, '').replace(',', '.'), 10)
   return isNaN(n) ? null : n
 }
 
-interface CardData {
-  promoId: string
-  validFrom: Date | undefined
-  validUntil: Date | undefined
-  commerceSlug: string
-  logoUrl: string
-  rubro: string
-  discountText: string
-  detailUrl: string
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&eacute;/g, 'é').replace(/&aacute;/g, 'á').replace(/&iacute;/g, 'í')
+    .replace(/&oacute;/g, 'ó').replace(/&uacute;/g, 'ú').replace(/&ntilde;/g, 'ñ')
+    .replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
-interface PromoTerms {
-  validDays: number
-  cap: number | null
-  description: string
-}
-
-async function sleep(ms: number) {
-  return new Promise(r => setTimeout(r, ms))
-}
-
-async function fetchPromoTerms(url: string): Promise<PromoTerms> {
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': FETCH_HEADERS['User-Agent'] } })
-    const html = await res.text()
-    const $ = cheerio.load(html)
-
-    // Strip scripts/styles and get body text
-    $('script, style, nav, header, footer').remove()
-    const bodyText = $('body').text().replace(/\s+/g, ' ').trim()
-
-    // Find days section — look for "Válido" or day names near promo details
-    const validDays = parseDays(bodyText)
-    const cap = parseCap(bodyText)
-
-    // Extract promo terms from body text (skip navigation/header noise)
-    const desc = bodyText.slice(0, 300).trim()
-
-    return { validDays, cap, description: desc }
-  } catch {
-    return { validDays: 127, cap: null, description: '' }
+function buildDiscount(tpl: PromoTemplate): { discount: string; discountType: string; title: string } {
+  if (tpl.kind === 'pct' || tpl.kind === 'cupon') {
+    return { discount: String(tpl.pct), discountType: 'PERCENTAGE_REINTEGRO', title: `${tpl.pct}% de descuento` }
   }
+  if (tpl.kind === 'cuotas') {
+    return { discount: String(tpl.n), discountType: 'CUOTAS_SIN_INTERES', title: `${tpl.n} cuotas sin interés` }
+  }
+  // dual: dos descuentos según categoría de tarjeta (general vs Trayectoria) — usamos el mayor
+  const value = Math.max(tpl.a, tpl.b)
+  return { discount: String(value), discountType: 'PERCENTAGE_REINTEGRO', title: `Hasta ${value}% de descuento` }
 }
 
 export const FavacardScraper: Scraper = {
   name: 'favacard',
 
   async run(): Promise<ScrapedPromo[]> {
-    // 1. Fetch full promo list
-    const listRes = await fetch(LIST_URL, {
-      method: 'POST',
-      headers: { ...FETCH_HEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'sucursal=todas&rubro=0&rubrosolapa=0&rubrotipo=0&destacado=0&dia=0',
-    })
-    if (!listRes.ok) throw new Error(`Favacard list fetch failed: ${listRes.status}`)
-    const listHtml = await listRes.text()
-    const $ = cheerio.load(listHtml)
+    const res = await fetch(DATA_URL, { headers: FETCH_HEADERS })
+    if (!res.ok) throw new Error(`Favacard data fetch failed: ${res.status}`)
+    const data = (await res.json()) as BeneficiosData
 
-    // 2. Parse cards
-    const cards: CardData[] = []
-    const seen = new Set<string>()
-
-    $('.col-md-2.col-sm-4.col-6').each((_, el) => {
-      const card = $(el)
-      const link = card.find('a[href*="/detalles/"]').first()
-      let detailUrl = link.attr('href') ?? ''
-      detailUrl = detailUrl.replace(/"$/, '').trim() // strip stray trailing "
-
-      if (!detailUrl) return
-
-      // /detalles/1629-25062026-26062026-california-4592
-      const m = detailUrl.match(/\/detalles\/(\d+)-(\d{8})-(\d{8})-(.+)-(\d+)$/)
-      if (!m) return
-
-      const [, promoId, fromStr, untilStr, commerceSlug] = m
-
-      // Deduplicate by promoId+commerceSlug (same combo can appear multiple times)
-      const key = `${promoId}|${commerceSlug}`
-      if (seen.has(key)) return
-      seen.add(key)
-
-      const logoUrl = card.find('figure img').first().attr('src') ?? ''
-      const rubro   = card.find('.rubro p').first().text().trim()
-
-      // Discount: grab all text from second figure
-      const figures = card.find('figure')
-      const discountText = figures.length >= 2
-        ? figures.eq(figures.length - 1).text().replace(/\s+/g, ' ').trim()
-        : card.find('font').text().trim()
-
-      cards.push({
-        promoId,
-        validFrom:  parseDate(fromStr),
-        validUntil: parseDate(untilStr),
-        commerceSlug,
-        logoUrl,
-        rubro,
-        discountText,
-        detailUrl,
-      })
-    })
-
-    if (cards.length === 0) {
-      console.log('[Favacard] Sin cards en la respuesta')
+    if (!data.comercios?.length || !data.promos) {
+      console.log('[Favacard] Respuesta sin comercios/promos')
       return []
     }
-    console.log(`[Favacard] ${cards.length} cards únicas encontradas`)
 
-    // 3. Fetch promo terms once per unique promoId
-    const uniquePromoIds = [...new Set(cards.map(c => c.promoId))]
-    const termsCache = new Map<string, PromoTerms>()
+    const rubroMap = new Map<number, string>()
+    for (const r of data.rubros ?? []) rubroMap.set(r.id, r.label)
 
-    for (const promoId of uniquePromoIds) {
-      const rep = cards.find(c => c.promoId === promoId)!
-      termsCache.set(promoId, await fetchPromoTerms(rep.detailUrl))
-      await sleep(300)
-    }
-    console.log(`[Favacard] Terms cacheados para ${uniquePromoIds.length} tipos de promo`)
-
-    // 4. Build ScrapedPromo[]
     const promos: ScrapedPromo[] = []
 
-    for (const card of cards) {
-      const disc = parseDiscount(card.discountText)
-      if (!disc || disc.value === 0) continue
+    for (const comercio of data.comercios) {
+      const rubroLabel = rubroMap.get(comercio.r) ?? ''
+      const cat = mapCategoria(rubroLabel, comercio.det)
+      const logoUrl = comercio.logo ? `${data.logoBase}${comercio.logo}` : undefined
+      const storeName = comercio.n.trim()
 
-      const terms = termsCache.get(card.promoId)!
-      const name  = slugToName(card.commerceSlug)
-      const cat   = mapCategoria(card.rubro)
+      for (const promoId of comercio.promos ?? []) {
+        const tpl = data.promos[promoId]
+        if (!tpl) continue
 
-      const discLabel = disc.type === 'CUOTAS_SIN_INTERES'
-        ? `${disc.value} cuotas sin interés`
-        : `${disc.value}% de descuento`
+        const { discount, discountType, title } = buildDiscount(tpl)
+        const cap = parseCap(tpl.tope)
 
-      promos.push({
-        title:          `${discLabel} – ${name}`,
-        description:    terms.description || `Promo Favacard: ${discLabel} en ${name}`,
-        sourceUrl:      card.detailUrl,
-        discount:       String(disc.value),
-        discountType:   disc.type,
-        cap:            terms.cap,
-        capPeriod:      terms.cap ? 'MONTHLY' : null,
-        validFrom:      card.validFrom,
-        validUntil:     card.validUntil,
-        validDays:      terms.validDays,
-        walletNames:    ['Favacard'],
-        storeName:      name,
-        storeLogoUrl:   card.logoUrl || undefined,
-        categoria:      cat,
-        paymentChannel: 'TARJETA_FISICA',
-        salesChannel:   'FISICA',
-      })
+        promos.push({
+          title: `${title} – ${storeName}`,
+          description: stripHtml(tpl.cond) || `Promo Favacard: ${title} en ${storeName}`,
+          sourceUrl: 'https://fava.com.ar/beneficios/',
+          source: 'favacard',
+          externalId: `${promoId}-${comercio.n}`,
+          discount,
+          discountType,
+          cap,
+          capPeriod: cap ? 'MONTHLY' : null,
+          validFrom: undefined,
+          validUntil: parseDateDMY(tpl.hasta),
+          validDays: diasSemanaToBitmask(tpl.diasSemana),
+          specificDates: tpl.fechas,
+          walletNames: ['Favacard'],
+          storeName,
+          storeLogoUrl: logoUrl,
+          categoria: cat,
+          paymentChannel: 'TARJETA_FISICA',
+          salesChannel: 'FISICA',
+        })
+      }
     }
 
-    console.log(`[Favacard] ${promos.length} promos generadas`)
+    console.log(`[Favacard] ${promos.length} promos generadas (${data.comercios.length} comercios)`)
     return promos
   },
 }
