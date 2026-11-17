@@ -812,6 +812,12 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
         candidatePerfBox.value = { queryMs: candidates.queryMs, rows: candidates.ids.length, hitLimit: candidates.hitLimit }
         if (!candidates.ids.length) return [[], 0] as const
         const hydrationT0 = Date.now()
+        // BUG (17/11/2026): este camino usaba `include` (todas las columnas
+        // escalares de Promo, incl. `description`/`sourceText` — texto largo)
+        // en vez del `select` angostado que ya usa el camino viejo más abajo
+        // (RFC perf-payload-and-sort, 25/8/2026). Con ~6000 candidatos la
+        // hidratación tardaba ~14.5s solo por el payload de más — reportado
+        // por usuario real: filtro "Para Mí" logueado tardaba ~1 minuto.
         const rows = await prisma.promo.findMany({
           where: {
             id: { in: candidates.ids },
@@ -820,7 +826,29 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             // cambia en el futuro y alguien olvida propagar el filtro.
             ...(categorySlugs.length > 0 ? { category: { slug: { in: categorySlugs, not: 'sin-categoria' } } } : {}),
           },
-          include: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            validDays: true,
+            validDaysNote: true,
+            specificDates: true,
+            salesChannel: true,
+            geographicScope: true,
+            provinces: true,
+            validFrom: true,
+            validUntil: true,
+            categoryId: true,
+            commerceId: true,
+            isFeatured: true,
+            commerceNote: true,
+            validFromHour: true,
+            validToHour: true,
+            stackable: true,
+            description: true,
+            sourceUrl: true,
+            sourceText: true,
+            stackableNote: true,
             category: { select: { name: true, slug: true, icon: true, color: true } },
             commerce: {
               select: {
@@ -1173,8 +1201,25 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   // `filtered` (no cambia el conteo de "promos hoy" ni el modo Semana). El
   // frontend (CommerceGroupCard) decide si dispara el aviso comparando %.
   const isDefaultTodayView = view !== 'week' && !dayIndices?.length && day === null
-  if (isDefaultTodayView && filtered.length) {
-    const commerceIds = Array.from(new Set(filtered.map(p => (p as any).commerceId).filter(Boolean)))
+  const otherDayT0 = Date.now()
+  // PERF (17/11/2026): sin perfil activo este bloque igual hacía el findMany
+  // completo (con requirements+bank+wallet+cardNetwork) y descartaba cada fila
+  // en el loop (`else { continue }`, línea ~1244 antes del fix) — un roundtrip
+  // completo a Neon tirado a la basura en cada request sin perfil. Guardado
+  // detrás de `hasProfile` evita ese costo para invitados/forMe=false.
+  // PERF (17/11/2026): con perfil real, `filtered` puede tener miles de
+  // promos matched (ej. 1142 en test con perfil Galicia+Visa) — el bloque
+  // hacía un `commerceId: { in: [...] }` sobre TODOS esos comercios, aun
+  // sabiendo que el cliente solo pinta ~8 tarjetas por categoría antes de
+  // "Ver todas" (PromosClient.tsx, `PREVIEW = 8`). Medido: findMany de
+  // ~2.9-3.1s solo para calcular un aviso visual que el usuario nunca llega
+  // a ver para el 95% de esos comercios. Acotar a los primeros N comercios
+  // de `filtered` (orden de llegada, ya viene rankeado por descuento/
+  // popularidad desde la candidate query) cubre de sobra cualquier vista
+  // inicial expandida sin pagar el costo completo.
+  const OTHER_DAY_COMMERCE_LIMIT = 30
+  if (isDefaultTodayView && filtered.length && hasProfile) {
+    const commerceIds = Array.from(new Set(filtered.map(p => (p as any).commerceId).filter(Boolean))).slice(0, OTHER_DAY_COMMERCE_LIMIT)
     if (commerceIds.length) {
       const otherDayWhere: any = {
         status: 'ACTIVE',
@@ -1185,6 +1230,13 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
           { validUntil: { gte: startOfToday } },
         ],
       }
+      // PERF (17/11/2026): el `include` traía logoUrl/slug de bank/wallet/
+      // cardNetwork completos, pero el mapeo de abajo (línea ~1255) solo lee
+      // `bank?.name`/`wallet?.name` — nunca logoUrl/slug/cardNetwork. Angostar
+      // a `select` con solo `name` reduce el payload que Prisma debe armar por
+      // cada requirement de cada promo candidata (hasta miles de filas con
+      // perfiles amplios). No cambia el resultado visible (otherDayPromos solo
+      // expone bankName/walletName).
       const otherDayCandidates = await prisma.promo.findMany({
         where: otherDayWhere,
         select: {
@@ -1192,10 +1244,16 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
           commerceId: true,
           validDays: true,
           requirements: {
-            include: {
-              bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
-              wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
-              cardNetwork: { select: { id: true, name: true, slug: true } },
+            select: {
+              id: true,
+              bankId: true,
+              walletId: true,
+              cardNetworkId: true,
+              discountType: true,
+              discountValue: true,
+              bank: { select: { name: true } },
+              wallet: { select: { name: true } },
+              cardNetwork: { select: { id: true } },
             },
           },
         },
@@ -1206,14 +1264,10 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       for (const cand of otherDayCandidates) {
         // Ya válida hoy → no es "otro día", el usuario ya la ve en la lista principal.
         if ((cand.validDays & defaultDayBit) !== 0) continue
-        // Con perfil activo, solo adjuntar promos que matcheen — sin perfil, no hay
-        // base para comparar "mejor descuento para vos", se omite el cálculo.
-        if (hasProfile) {
-          const matches = cand.requirements.some((req: any) => matchesProfileShared(req, uCards, tierToSegmentId))
-          if (!matches) continue
-        } else {
-          continue
-        }
+        // Bloque corre solo con hasProfile=true (ver guard de arriba) — siempre hay
+        // base real para comparar "mejor descuento para vos".
+        const matches = cand.requirements.some((req: any) => matchesProfileShared(req, uCards, tierToSegmentId))
+        if (!matches) continue
         const list = byCommerce.get(cand.commerceId!) ?? []
         list.push(cand)
         byCommerce.set(cand.commerceId!, list)
@@ -1238,6 +1292,9 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       }
     }
   }
+
+  perf.otherDayMs = Date.now() - otherDayT0
+  __mark(`after otherDayPromos block (filtered=${filtered.length})`)
 
   // ── Filtro rango de descuento ─────────────────────────────────────────
   if (discountRanges.length > 0) {

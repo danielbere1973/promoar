@@ -101,7 +101,20 @@ export async function GET(req: NextRequest) {
     const defaultPageSize = params.view === 'week' ? baseWeek : baseToday
     const pageSize = Math.min(parseInt(searchParams.get('pageSize') ?? String(defaultPageSize)) || defaultPageSize, 7000)
 
-    const result = await getPromosData({ ...params, paginate, page, pageSize }, email, isAdmin)
+    // BUG (17/11/2026): reporte de usuario real — filtrar "Para Mí" estando
+    // logueado tardaba ~1 minuto (vs instantáneo de invitado). Causa: esta ruta
+    // nunca pasaba `useCandidateQuery`, así que forMe=true siempre caía en el
+    // camino viejo sin narrowing SQL por perfil (findMany sobre TODAS las
+    // promos ACTIVE — ya 18.000+ — + matching en JS). `recommended`,
+    // `home-decision` y el snapshot de recomendaciones ya usaban el candidate
+    // selection (DR-003/DR-004) desde antes; esta ruta había quedado afuera.
+    // Ver getPromos.ts línea ~738: useCandidates ya hace fallback seguro al
+    // camino viejo si hay filtros manuales de banco/wallet/red/etc (reqFilter).
+    const result = await getPromosData(
+      { ...params, paginate, page, pageSize, useCandidateQuery: true },
+      email,
+      isAdmin
+    )
     return NextResponse.json(result)
   } catch (error) {
     console.error('[GET /api/promos]', error)
