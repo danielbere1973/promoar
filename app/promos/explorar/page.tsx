@@ -24,13 +24,22 @@ export default async function PromosPage({
     ? decodeURIComponent(cookieStore.get('userProvince')!.value)
     : null
 
-  // Mismo criterio que /api/promos (paginate = invitado sin filtros): permite que
-  // este preview SSR reutilice getPublicPromosPage (RFC-002/003), en vez de ir
-  // siempre directo a Prisma. isPublicCacheableView (lib/getPromos.ts) además
-  // exige !userProvince — con provincia seteada, cae solo al camino directo,
-  // igual que el fetch del cliente.
+  // Mismo criterio que /api/promos (paginate = invitado sin filtros, o logueado
+  // en modo "Todas" sin perfil real detrás): permite que este preview SSR
+  // reutilice getPublicPromosPage (RFC-002/003), en vez de ir siempre directo a
+  // Prisma. isPublicCacheableView (lib/getPromos.ts) además exige !userProvince
+  // — con provincia seteada, cae solo al camino directo, igual que el fetch del
+  // cliente.
+  // BUG (11/11/2026): este preview SSR usaba `forMe = !!session` (true para
+  // CUALQUIER usuario logueado) sin importar el toggle real Todas/Para Mí del
+  // cliente — para un usuario logueado, el SSR siempre caía en el camino lento
+  // sin narrowing por perfil, bloqueando el render inicial de /promos/explorar
+  // (pantalla en blanco en producción — mismo bug de fondo que app/api/promos/route.ts).
+  // No hay forma de saber el toggle real en el primer render SSR (el cliente lo
+  // decide), así que se asume "Todas" (forMe=false) para el preview — coincide
+  // con el comportamiento por default de PromosClient al montar.
   const noFilters = initialCats.length === 0
-  const paginate = !forMe && noFilters
+  const paginate = noFilters
 
   const { promos: rawPromos, totalCount } = await getPromosData(
     paginate
