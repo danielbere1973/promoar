@@ -15,6 +15,8 @@ interface ImageSlide extends BaseSlide {
   type: 'image'
   src: string
   alt: string
+  /** Nombre de marca mostrado en el título del modal de promos ("Promos en {entityName}") */
+  entityName?: string
 }
 
 interface CssSlide extends BaseSlide {
@@ -22,7 +24,9 @@ interface CssSlide extends BaseSlide {
   title: string
   subtitle: string
   brandName: string
-  gradientClasses: string
+  /** Color de marca (hex) usado para el halo y el CTA — reemplaza al gradiente plano anterior. */
+  accent: string
+  ctaLabel: string
   logoUrl?: string
   icon?: React.ReactNode
 }
@@ -34,55 +38,73 @@ const SLIDES: Slide[] = [
   { 
     type: 'image', 
     src: '/EM/carousel/envios-gratis.webp',       
-    alt: 'Envío gratis a partir de $25.000 en CABA — Estación Mascotera',        
+    alt: 'Envío gratis a partir de $32.000 en CABA — Estación Mascotera',
     href: 'https://www.estacionmascotera.com.ar/marcas' 
   },
-  // Banners Dinámicos CSS (Relevantes para PromoAR)
+  // Banners con imagen real (reemplazan a las tarjetas CSS planas — ver banner-specs-sponsors.md)
   {
-    type: 'css',
-    title: 'Ahorrá en tu súper',
-    subtitle: 'Mirá todas las promos vigentes de Coto.',
-    brandName: 'Coto',
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/coto.webp',
+    alt: 'Ahorrá en tu súper — Mirá todas las promos vigentes de Coto',
     href: '/comercios/coto',
-    gradientClasses: 'bg-gradient-to-br from-blue-600 to-sky-400 text-white',
-    logoUrl: 'https://beneficiosclub.personalpay.dev/partner/Logo_Supermercado_Coto.jpg',
+    entityName: 'Coto',
   },
   {
-    type: 'css',
-    title: 'Multiplicá tus ahorros',
-    subtitle: 'Pagá con MODO y sumá reintegros en el acto.',
-    brandName: 'MODO',
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/modo.webp',
+    alt: 'Multiplicá tus ahorros — Pagá con MODO y sumá reintegros en el acto',
     href: '/bancos/modo',
-    gradientClasses: 'bg-gradient-to-br from-emerald-500 to-teal-400 text-white',
-    logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=modo.com.ar',
+    entityName: 'MODO',
   },
   {
-    type: 'css',
-    title: 'Descubrí tus promos',
-    subtitle: 'Exprimí al máximo tus tarjetas Galicia.',
-    brandName: 'Galicia',
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/galicia.webp',
+    alt: 'Descubrí tus promos — Exprimí al máximo tus tarjetas Galicia',
     href: '/bancos/galicia',
-    gradientClasses: 'bg-gradient-to-br from-orange-500 to-amber-400 text-white',
-    logoUrl: 'https://www.google.com/s2/favicons?sz=128&domain=galicia.ar',
+    entityName: 'Galicia',
   },
   {
-    type: 'css',
-    title: 'Descuentos exclusivos',
-    subtitle: 'Llená el changuito en Carrefour y pagá menos.',
-    brandName: 'Carrefour',
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/carrefour.webp',
+    alt: 'Descuentos exclusivos — Llená el changuito en Carrefour y pagá menos',
     href: '/comercios/carrefour',
-    gradientClasses: 'bg-gradient-to-br from-blue-800 to-red-600 text-white',
-    logoUrl: 'https://backwebclub-media.glanacion.com/Club.LN-Strapi/A768333_57b63bd572.jpg',
+    entityName: 'Carrefour',
   },
   {
-    type: 'css',
-    title: 'Ahorrá todos los días',
-    subtitle: 'Conocé los beneficios que Santander tiene para vos.',
-    brandName: 'Santander',
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/santander.webp',
+    alt: 'Ahorrá todos los días — Conocé los beneficios que Santander tiene para vos',
     href: '/bancos/santander',
-    gradientClasses: 'bg-gradient-to-br from-red-600 to-rose-400 text-white',
-    logoUrl: 'https://th.bing.com/th/id/OIP.OORn3fPcgxkyv5tmoGvPFgHaG5?w=148&h=180&c=7&r=0&o=7&pid=1.7&rm=3',
-  }
+    entityName: 'Santander',
+  },
+  {
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/luccianos.webp',
+    alt: 'Endulzá tu día — Descubrí las promos vigentes de Lucciano\'s',
+    href: '/comercios/lucciano-s',
+    entityName: 'Lucciano\'s',
+  },
+  {
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/freddo.webp',
+    alt: 'Helado con descuento — Mirá las promos vigentes de Freddo',
+    href: '/comercios/freddo',
+    entityName: 'Freddo',
+  },
+  {
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/mcdonalds.webp',
+    alt: 'Comé y ahorrá — Mirá las promos vigentes de McDonald\'s',
+    href: '/comercios/mcdonald-s',
+    entityName: 'McDonald\'s',
+  },
+  {
+    type: 'image',
+    src: '/EM/carousel/banners-promoar/mostaza.webp',
+    alt: 'Más sabor, menos precio — Descubrí las promos vigentes de Mostaza',
+    href: '/comercios/mostaza',
+    entityName: 'Mostaza',
+  },
 ]
 
 const DESKTOP_GROUP_SIZE = 3
@@ -93,7 +115,9 @@ const DESKTOP_GROUPS = Array.from({ length: Math.ceil(SLIDES.length / DESKTOP_GR
 const AUTOPLAY_MS = 5000
 
 function trackClick(slide: Slide) {
-  const slideId = slide.type === 'image' ? 'estacion_mascotera' : slide.brandName.toLowerCase().replace(/\s+/g, '_')
+  const slideId = slide.type === 'css'
+    ? slide.brandName.toLowerCase().replace(/\s+/g, '_')
+    : (slide.entityName ?? 'estacion_mascotera').toLowerCase().replace(/\s+/g, '_')
   fetch('/api/track/click', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -108,43 +132,79 @@ function RenderSlide({ slide, priority }: { slide: Slide, priority: boolean }) {
         src={slide.src}
         alt={slide.alt}
         fill
-        className="object-cover sm:object-contain bg-[#f9eed2]"
+        className="object-cover sm:object-contain bg-gray-100"
         sizes="(min-width: 1024px) 340px, 100vw"
         priority={priority}
       />
     )
   }
 
-  // CSS Banner
+  // CSS Banner — ficha tipo "credencial de beneficio": logo grande a la izquierda como
+  // protagonista, bloque de texto compacto a la derecha, franja de acento vertical como
+  // única firma de color (en vez de gradiente/halo ocupando toda la superficie).
   return (
-    <div className={`w-full h-full p-4 sm:p-5 flex flex-col justify-between ${slide.gradientClasses}`}>
-      <div className="flex justify-between items-start">
-        <div className="flex flex-col">
-          <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest opacity-70 mb-1">
+    <div
+      className="relative w-full h-full flex overflow-hidden bg-[#0F2040] text-white"
+    >
+      {/* Franja de acento: identifica la marca de un vistazo, no compite con el texto */}
+      <div className="w-1.5 sm:w-2 shrink-0" style={{ background: slide.accent }} />
+
+      {/* Textura de marca sutil: puntos del color de acento, muy baja opacidad, solo decorativa */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        style={{
+          backgroundImage: `radial-gradient(${slide.accent} 1px, transparent 1px)`,
+          backgroundSize: '14px 14px',
+        }}
+      />
+
+      <div className="relative flex-1 min-w-0 flex items-center gap-3 px-3 sm:px-4 py-2.5">
+        {(slide.logoUrl || slide.icon) && (
+          <div className="shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white shadow-lg flex items-center justify-center">
+            {slide.logoUrl ? (
+              <img src={slide.logoUrl} alt={slide.brandName} className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-full" />
+            ) : (
+              slide.icon
+            )}
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+          <span
+            className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] leading-none"
+            style={{ color: slide.accent }}
+          >
             {slide.brandName}
           </span>
-          <h3 className="text-sm sm:text-base font-bold leading-tight drop-shadow-sm max-w-[80%]">
+          <h3 className="text-xs sm:text-sm font-black leading-tight truncate">
             {slide.title}
           </h3>
-        </div>
-        <div className="shrink-0 drop-shadow-sm">
-          {slide.logoUrl ? (
-            <div className="bg-white rounded-full p-1 shadow-sm flex items-center justify-center">
-              <img src={slide.logoUrl} alt={slide.brandName} className="w-6 h-6 sm:w-8 sm:h-8 object-contain rounded-full" />
-            </div>
-          ) : (
-            slide.icon
-          )}
+          <p className="text-[11px] sm:text-xs font-medium text-white/65 leading-tight truncate">
+            {slide.subtitle}
+          </p>
+          <span
+            className="ad-cta inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold w-fit mt-0.5"
+            style={{ color: slide.accent }}
+          >
+            {slide.ctaLabel}
+            <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
         </div>
       </div>
-      <div className="flex items-end justify-between mt-2">
-        <p className="text-xs sm:text-sm font-medium opacity-90 leading-tight max-w-[75%]">
-          {slide.subtitle}
-        </p>
-        <div className="bg-white/20 p-1.5 sm:p-2 rounded-full shrink-0 backdrop-blur-sm">
-          <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
-        </div>
-        </div>
+
+      <style jsx>{`
+        .ad-cta {
+          background-image: linear-gradient(currentColor, currentColor);
+          background-size: 0% 1.5px;
+          background-position: 0 100%;
+          background-repeat: no-repeat;
+          padding-bottom: 1px;
+          transition: background-size 0.25s ease-out;
+        }
+        :global(.group:hover) .ad-cta {
+          background-size: 100% 1.5px;
+        }
+      `}</style>
     </div>
   )
 }
@@ -182,7 +242,7 @@ export function DynamicAdBanner() {
         setModalConfig({
           entityType: parts[1] as 'bancos' | 'comercios',
           entitySlug: parts[2],
-          entityName: slide.type === 'css' ? slide.brandName : null
+          entityName: slide.type === 'css' ? slide.brandName : slide.entityName ?? null
         })
       }
     }

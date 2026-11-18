@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
     // Scrapers que requieren Playwright — no pueden correr en Vercel (Chromium no disponible)
     const PLAYWRIGHT_SCRAPER_NAMES = new Set([
       'jumbo', 'disco', 'vea', 'amex', 'cabal', 'changomas',
-      'banco galicia', 'icbc', 'banco macro 1', 'banco macro 2', 'naranjax', 'banco provincia',
+      'banco galicia', 'icbc', 'naranjax', 'banco provincia',
       'banco santander', 'banco supervielle', 'banco ciudad', 'visa', 'banco patagonia',
       // BBVA es HTTP puro pero usa launchBrowser() internamente (túnel BrightData
       // por geo-IP) — sin Chromium disponible en Vercel, necesita el mismo guard.
@@ -483,15 +483,16 @@ export async function POST(req: NextRequest) {
           });
           branchesByCommerce.set(comMatch.id, existing);
         }
+        const branchSource = p.source ?? 'BBVA';
         for (const b of p.branches) {
           // Evitar duplicar un pin ya existente (OSM u otra fuente) a ~100m o menos
           const isDuplicate = existing.some(e => distanceKm(e.lat, e.lng, b.lat, b.lng) < 0.1);
           if (isDuplicate) continue;
           const osmId = `${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
           await prisma.commerceBranch.upsert({
-            where: { source_osmId: { source: 'BBVA', osmId } },
+            where: { source_osmId: { source: branchSource, osmId } },
             update: { address: b.address, city: b.city, commerceId: comMatch.id },
-            create: { commerceId: comMatch.id, address: b.address, city: b.city, lat: b.lat, lng: b.lng, source: 'BBVA', osmId },
+            create: { commerceId: comMatch.id, address: b.address, city: b.city, lat: b.lat, lng: b.lng, source: branchSource, osmId },
           });
           existing.push({ lat: b.lat, lng: b.lng });
         }

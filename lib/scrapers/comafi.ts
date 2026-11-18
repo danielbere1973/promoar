@@ -9,14 +9,20 @@
 // fechas, pero NO el tope de reintegro; el tope sale del <meta name="description">
 // de la página de detalle /{id}-{slug}.benefit.aspx (formato fijo:
 // "{rubro} - {info de descuento} - {tope o 'Sin tope de reintegro'} - Consultar vigencia").
-// El sitio usa Cloudflare con Bot Management (__cf_bm): desde IP residencial/local
-// responde sin reto, pero desde la IP de datacenter de Vercel devuelve body vacío/challenge
-// sin error HTTP visible (totalFound:0 silencioso) — mismo síntoma que ICBC/BBVA/Galicia.
-// Fix (01/10/2026): requests vía context.request de Playwright (launchBrowser) para salir
-// por la IP residencial del Scraping Browser de BrightData cuando SCRAPING_BROWSER_WS
-// está seteada; sin esa env var cae a Playwright local (sin cambios en dev).
+// El sitio usa Cloudflare con Bot Management (__cf_bm + JS challenge): desde IP
+// residencial/local responde sin reto, pero desde la IP de datacenter de Vercel
+// devuelve 403 "Just a moment..." — mismo síntoma que ICBC/BBVA/Galicia.
+// Fix (01/10/2026): salir por la IP residencial del Scraping Browser de BrightData
+// cuando SCRAPING_BROWSER_WS está seteada; sin esa env var cae a Playwright local.
+// Fix 2 (16/11/2026): con BrightData activo, context.request.get() seguía dando 403
+// "Just a moment..." — context.request es un cliente HTTP aparte, no corre el JS del
+// challenge de Cloudflare y no comparte cookies con la navegación real de la página
+// (cf_clearance/__cf_bm se fijan recién cuando page.goto() resuelve el challenge en el
+// browser). Fix: navegar primero con page.goto() a /beneficios.aspx (eso resuelve el
+// challenge), y hacer todos los fetches posteriores con page.evaluate(() => fetch(url))
+// — así corren dentro del browser real, con las cookies de sesión ya puestas.
 
-import type { APIRequestContext } from 'playwright';
+import type { Page } from 'playwright';
 import { launchBrowser } from './browserFactory';
 import { Scraper, ScrapedPromo, CardNetworkWithType } from './types';
 import { extractCap, detectCategoria, dedup } from './bank-helpers';
@@ -180,28 +186,34 @@ function buildDetailUrl(item: BenefitItem): string {
   return `${BASE_URL}/${item.i}-${slugify(item.b)}.benefit.aspx`;
 }
 
-async function fetchItems(request: APIRequestContext): Promise<BenefitItem[]> {
-  const url = `${BASE_URL}/json/apps/benefits.aspx?pagesize=500&allfields=&state=0&city=0&t=${Date.now()}`;
+async function pageFetch(page: Page, url: string): Promise<{ status: number; text: string } | null> {
   try {
-    const res = await request.get(url, { headers: { 'User-Agent': UA } });
-    if (!res.ok()) return [];
-    return await res.json();
+    return await page.evaluate(async (u) => {
+      const res = await fetch(u);
+      return { status: res.status, text: await res.text() };
+    }, url);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchItems(page: Page): Promise<BenefitItem[]> {
+  const url = `${BASE_URL}/json/apps/benefits.aspx?pagesize=500&allfields=&state=0&city=0&t=${Date.now()}`;
+  const res = await pageFetch(page, url);
+  if (!res || res.status !== 200) return [];
+  try {
+    return JSON.parse(res.text);
   } catch {
     return [];
   }
 }
 
-async function fetchCapFromDetail(request: APIRequestContext, url: string): Promise<number | null> {
-  try {
-    const res = await request.get(url, { headers: { 'User-Agent': UA } });
-    if (!res.ok()) return null;
-    const html = await res.text();
-    const m = html.match(/<meta name="description" content="([^"]*)"/);
-    if (!m) return null;
-    return extractCap(m[1]);
-  } catch {
-    return null;
-  }
+async function fetchCapFromDetail(page: Page, url: string): Promise<number | null> {
+  const res = await pageFetch(page, url);
+  if (!res || res.status !== 200) return null;
+  const m = res.text.match(/<meta name="description" content="([^"]*)"/);
+  if (!m) return null;
+  return extractCap(m[1]);
 }
 
 function itemToPromos(item: BenefitItem, cap: number | null): ScrapedPromo[] {
@@ -261,11 +273,16 @@ export const ComafiScraper: Scraper = {
   name: 'Comafi',
   async run(): Promise<ScrapedPromo[]> {
     const browser = await launchBrowser({ headless: true, args: ['--no-sandbox'] });
-    const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
-    const request = ctx.request;
+    const ctx = await browser.newContext({ ignoreHTTPSErrors: true, userAgent: UA });
+    const page = await ctx.newPage();
 
     try {
-      const items = await fetchItems(request);
+      // Navegar primero resuelve el challenge JS de Cloudflare y fija las cookies
+      // de sesión (cf_clearance/__cf_bm) que los fetches de abajo necesitan.
+      await page.goto(`${BASE_URL}/beneficios.aspx`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForTimeout(3000);
+
+      const items = await fetchItems(page);
       const all: ScrapedPromo[] = [];
 
       for (const item of items) {
@@ -276,7 +293,7 @@ export const ComafiScraper: Scraper = {
         if (![406, 407, 409].includes(item.t)) continue;
 
         const sourceUrl = buildDetailUrl(item);
-        const cap = await fetchCapFromDetail(request, sourceUrl);
+        const cap = await fetchCapFromDetail(page, sourceUrl);
         all.push(...itemToPromos(item, cap));
         await new Promise(r => setTimeout(r, 120));
       }
