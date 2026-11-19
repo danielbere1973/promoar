@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth/next'
 import { cookies } from 'next/headers'
 import { getPromosData } from '@/lib/getPromos'
 import PromosClient from './PromosClient'
+import CategoryPillarLinks from '@/app/components/CategoryPillarLinks'
 
 export const revalidate = 0
 
@@ -53,5 +54,11 @@ export default async function PromosPage({
   // para que coincida con el tipo `Promo` esperado por PromosClient
   const initialPromos = rawPromos ? JSON.parse(JSON.stringify(rawPromos)) : null
 
-  return <PromosClient initialPromos={initialPromos} initialCats={initialCats} initialTotalCount={totalCount} initialProvince={initialProvince} />
+  return (
+    <>
+      {/* Server-rendered, no interfiere con el layout client sidebar/mobile de PromosClient */}
+      <CategoryPillarLinks />
+      <PromosClient initialPromos={initialPromos} initialCats={initialCats} initialTotalCount={totalCount} initialProvince={initialProvince} />
+    </>
+  )
 }
