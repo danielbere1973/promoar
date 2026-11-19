@@ -137,10 +137,26 @@ function banIp(ip: string) {
 // completas sin cortar.
 const GOOGLEBOT_RATE_LIMIT_WINDOW_MS = 60_000
 const GOOGLEBOT_RATE_LIMIT_MAX = 20
-let googlebotHits: number[] = []
 
-function isGooglebotRateLimited(): boolean {
+// Plan SEO 18/11/2026 (Fase 1): /promos/categoria/[categoria] usa unstable_cache
+// (revalidate=600s, pageSize acotado) — no golpea Prisma en cada hit como
+// /promos/[slug]. Compartir el mismo contador agregado que las páginas de
+// promo individual significa que el crawl de las nuevas páginas pilar puede
+// agotar el presupuesto de Googlebot sobre /promos/[slug] (y viceversa) sin
+// que ninguna de las dos esté realmente sobrecargando Neon. Se les da un
+// contador propio, separado del de /promos/[slug]/comercios/api — cacheadas,
+// toleran un crawl más generoso sin costo real de DB.
+const GOOGLEBOT_CATEGORY_RATE_LIMIT_MAX = 60
+let googlebotHits: number[] = []
+let googlebotCategoryHits: number[] = []
+
+function isGooglebotRateLimited(pathname: string): boolean {
   const now = Date.now()
+  if (pathname.startsWith('/promos/categoria/')) {
+    googlebotCategoryHits = googlebotCategoryHits.filter(t => now - t < GOOGLEBOT_RATE_LIMIT_WINDOW_MS)
+    googlebotCategoryHits.push(now)
+    return googlebotCategoryHits.length > GOOGLEBOT_CATEGORY_RATE_LIMIT_MAX
+  }
   googlebotHits = googlebotHits.filter(t => now - t < GOOGLEBOT_RATE_LIMIT_WINDOW_MS)
   googlebotHits.push(now)
   return googlebotHits.length > GOOGLEBOT_RATE_LIMIT_MAX
@@ -232,7 +248,7 @@ export async function middleware(req: NextRequest) {
     const ipMaskedRL = ip === 'unknown' ? 'unknown' : ip.split('.').slice(0, 3).join('.') + '.x'
     console.log(`[rate-limit-debug] ip=${ipMaskedRL} bot=${isLikelyBot} path=${pathname} ua="${userAgent.slice(0, 60)}"`)
     if (isAllowedBotUA) {
-      if (isGooglebotRateLimited()) {
+      if (isGooglebotRateLimited(pathname)) {
         return new NextResponse('Too Many Requests', { status: 429 })
       }
     } else if (ip !== 'unknown') {

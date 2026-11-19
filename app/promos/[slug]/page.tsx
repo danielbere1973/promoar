@@ -212,6 +212,8 @@ function discountLabel(req: any): string {
     case 'CUOTAS_SIN_INTERES':   return `${v} cuotas sin interés`
     case 'BONIFICACION':         return `${v}% bonificación`
     case 'FIXED_AMOUNT':         return `$${v} de descuento`
+    case 'NXM':                  return `${req.nxmN ?? 2}x${req.nxmM ?? 1}`
+    case 'SEGUNDA_UNIDAD':       return `${v}% en la 2da unidad`
     default: return `${v}%`
   }
 }
@@ -420,7 +422,7 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   // Descuentos únicos
   const discountMap = new Map<string, any>()
   for (const r of reqs) {
-    const key = `${r.discountValue}-${r.discountType}`
+    const key = `${r.discountValue}-${r.discountType}-${r.nxmN ?? ''}-${r.nxmM ?? ''}`
     if (!discountMap.has(key)) discountMap.set(key, r)
   }
   const discounts = Array.from(discountMap.values())

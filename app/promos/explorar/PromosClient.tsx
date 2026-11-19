@@ -916,6 +916,13 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
       wallets: wallet ? [wallet] : prev.wallets,
       networks: network ? [network] : prev.networks,
     }))
+    // Viene de un link externo (ej. barra de filtros de /promos/categoria/[slug])
+    // eligiendo una entidad puntual (banco/billetera/tarjeta) — el usuario quiere
+    // ver esa entidad en todas las promos y toda la semana, no acotado a su
+    // perfil propio ni al día de hoy (feedback de Pablo, 19/11/2026: clickeó
+    // "Banco Macro" sin tener Macro en su perfil y no le trajo nada).
+    setForMe(false)
+    setTimeFilter('week')
   }, [searchParams])
 
   // Sincroniza selectedCats (slugs) → URL, sin re-render

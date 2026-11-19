@@ -35,7 +35,7 @@ type UserProfile = {
 // /promos/explorar. Componente independiente del viejo PromosClient
 // (ahora en app/promos/explorar/PromosClient.tsx) — no comparte estado
 // ni fetch con el catálogo.
-export default function PromosClient() {
+export default function PromosClient({ children }: { children?: React.ReactNode }) {
   const router = useRouter()
   const { status } = useSession()
 
@@ -144,6 +144,7 @@ export default function PromosClient() {
       <CommerceLights />
 
       <div className="max-w-3xl mx-auto">
+        {children}
         <OnboardingBanner isLoggedIn={status === 'authenticated'} hasProfile={hasProfile} profileReady={profileReady} />
 
         {/* CPO Dictamen "Estado guest/sin perfil en Home v2" (31/8/2026): 'incomplete_profile'

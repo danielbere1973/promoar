@@ -1,5 +1,6 @@
 import { MetadataRoute } from 'next'
 import { prisma } from '@/lib/prisma'
+import { PRIORITY_CATEGORY_SLUGS } from './promos/categoria/[categoria]/page'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
@@ -72,7 +73,16 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       priority: 0.8,
     }))
 
-    return [...staticRoutes, ...finanzasRoutes, ...bankRoutes, ...commerceRoutes]
+    // Páginas pilar de categoría (plan SEO 18/11/2026, Fase 1): 7 rubros
+    // priorizados, no las 19 categorías — ver PRIORITY_CATEGORY_SLUGS.
+    const categoryRoutes: MetadataRoute.Sitemap = PRIORITY_CATEGORY_SLUGS.map(slug => ({
+      url: `${BASE_URL}/promos/categoria/${slug}`,
+      lastModified: now,
+      changeFrequency: 'daily' as const,
+      priority: 0.9,
+    }))
+
+    return [...staticRoutes, ...finanzasRoutes, ...bankRoutes, ...commerceRoutes, ...categoryRoutes]
   }
 
   return []
