@@ -22,7 +22,12 @@ const BANKS: { param: string; displayName: string; logoMatch: string; type?: str
   { param: 'Banco Comafi',        displayName: 'Banco Comafi',               logoMatch: 'comafi' },
   { param: ' Tarjeta Naranja X',  displayName: 'Naranja X',                  logoMatch: 'naranjax' },
   { param: 'Amex',                displayName: 'American Express Banco',     logoMatch: 'amex' },
-  { param: 'Visa y Master',       displayName: 'Visa / Mastercard',          logoMatch: 'fiserv' },
+  // "Visa / Mastercard" no es un Bank en la DB — es un CardNetwork (Visa y
+  // Mastercard por separado). Mandarlo como bankNames nunca matcheaba y
+  // dejaba el requirement sin ninguna entidad financiera (bug reportado por
+  // Pablo, 20/11/2026: promos "huérfanas" en pendientes aunque el texto
+  // mencionara un medio de pago válido, ej. "20% abonando con Cencopay").
+  { param: 'Visa y Master',       displayName: 'Visa / Mastercard',          logoMatch: 'fiserv', type: 'cardNetwork' as const },
   { param: 'MODO',                displayName: 'MODO',        type: 'wallet' as const, logoMatch: 'modo' },
   { param: 'Jumbo Mas Clarin',    displayName: 'Clarín 365',                 logoMatch: 'clarin' },
   { param: 'Banco Patagonia 365', displayName: 'Banco Patagonia 365',        logoMatch: 'patagonia365' },
@@ -263,6 +268,7 @@ function parsePageText(
   bankDisplayName: string,
   sourceUrl: string,
   isWallet = false,
+  isCardNetwork = false,
 ): ScrapedPromo[] {
   const promos: ScrapedPromo[] = [];
 
@@ -348,8 +354,9 @@ function parsePageText(
       validUntil,
       specificDates,
       validDays,
-      bankNames:   isWallet ? undefined : [bankDisplayName],
+      bankNames:   (isWallet || isCardNetwork) ? undefined : [bankDisplayName],
       walletNames: isWallet ? [bankDisplayName] : undefined,
+      cardNetworks: isCardNetwork ? [{ network: 'Visa', type: null }, { network: 'Mastercard', type: null }] : undefined,
       cardType,
       paymentChannel,
       accountType: accountType as any,
@@ -418,7 +425,7 @@ async function scrapeBankPage(
       return [];
     }
 
-    const promos = parsePageText(fullText, bank.displayName, BASE_URL, bank.type === 'wallet');
+    const promos = parsePageText(fullText, bank.displayName, BASE_URL, bank.type === 'wallet', bank.type === 'cardNetwork');
     console.log(`[Vea] ${bank.displayName}: ${promos.length} promos`);
     return promos;
   } catch (err) {
