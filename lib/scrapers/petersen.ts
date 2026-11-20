@@ -15,10 +15,14 @@ interface PetersenBankConfig {
   domain: string;
 }
 
+// bankName debe coincidir (vía includes() en ambas direcciones) con el nombre real
+// del Bank en la DB — "Nuevo Banco de Santa Fe" no matcheaba "Banco Santa Fe" y dejaba
+// el requirement sin bankId (bug reportado por Pablo, 20/11/2026: promos "huérfanas"
+// en pendientes con "Sin requisitos de pago" aunque el texto sí mencionaba el banco).
 const BANKS: PetersenBankConfig[] = [
   { bankName: 'Banco San Juan',   domain: 'www.bancosanjuan.com' },
-  { bankName: 'Nuevo Banco de Santa Fe', domain: 'www.bancosantafe.com.ar' },
-  { bankName: 'Banco de Entre Ríos', domain: 'www.bancoentrerios.com.ar' },
+  { bankName: 'Banco Santa Fe', domain: 'www.bancosantafe.com.ar' },
+  { bankName: 'Banco Entre Ríos', domain: 'www.bancoentrerios.com.ar' },
   { bankName: 'Banco Santa Cruz', domain: 'www.bancosantacruz.com' },
 ];
 
@@ -52,6 +56,11 @@ function daysToMask(days: string[] | undefined): number {
   return mask || 127;
 }
 
+// "Pago con QR" es MODO, pero MODO es una Wallet en la DB, no un CardNetwork
+// (no existe ningún CardNetwork llamado "MODO") — bug reportado por Pablo,
+// 20/11/2026: requirements con cardNetworkId null + bankId null (por el bug de
+// nombre de banco arriba) quedaban sin ninguna entidad financiera y el
+// auto-validador los marcaba "Requisito sin entidad financiera".
 function paymentMethodsToNetworks(methods: string[] | undefined): CardNetworkWithType[] {
   if (!methods) return [];
   const nets: CardNetworkWithType[] = [];
@@ -61,9 +70,13 @@ function paymentMethodsToNetworks(methods: string[] | undefined): CardNetworkWit
     const type: 'CREDIT' | 'DEBIT' | null = isCredit ? 'CREDIT' : isDebit ? 'DEBIT' : null;
     if (/visa/i.test(m)) nets.push({ network: 'Visa', type });
     else if (/master/i.test(m)) nets.push({ network: 'Mastercard', type });
-    else if (/\bqr\b/i.test(m)) nets.push({ network: 'MODO', type: null });
   }
   return nets;
+}
+
+function paymentMethodsToWallets(methods: string[] | undefined): string[] {
+  if (!methods) return [];
+  return methods.some(m => /\bqr\b/i.test(m)) ? ['Modo'] : [];
 }
 
 function toISODate(s: string | undefined): string | undefined {
@@ -152,6 +165,7 @@ function benefitToPromos(b: RawBenefit, bankName: string, sourceUrl: string): Sc
   const validFrom = toISODate(b.dateFrom);
   const validUntil = toISODate(b.dateTo);
   const cardNetworks = paymentMethodsToNetworks(b.paymentMethod);
+  const walletNames = paymentMethodsToWallets(b.paymentMethod);
   const cap = b.repaymentCap ?? extractCap(b.description) ?? null;
   const categoria = b.storeCategories[0] ? mapCategoria(b.storeCategories[0]) : detectCategoria(`${b.storeName} ${b.description}`);
 
@@ -167,6 +181,7 @@ function benefitToPromos(b: RawBenefit, bankName: string, sourceUrl: string): Sc
     capPeriod: cap ? 'MONTHLY' : null,
     bankNames: [bankName],
     cardNetworks: cardNetworks.length > 0 ? cardNetworks : undefined,
+    walletNames: walletNames.length > 0 ? walletNames : undefined,
     paymentChannel: 'ANY',
     categoria,
   };
