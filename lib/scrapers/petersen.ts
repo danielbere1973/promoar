@@ -165,7 +165,12 @@ function benefitToPromos(b: RawBenefit, bankName: string, sourceUrl: string): Sc
   const validFrom = toISODate(b.dateFrom);
   const validUntil = toISODate(b.dateTo);
   const cardNetworks = paymentMethodsToNetworks(b.paymentMethod);
-  const walletNames = paymentMethodsToWallets(b.paymentMethod);
+  // Varios beneficios mencionan "pagando con Modo" solo en la descripción libre,
+  // sin que paymentMethod incluya "QR" (bug reportado por Pablo 20/11/2026: ej.
+  // RIO RESTO BAR, Shopping del Siglo — quedaban sin ninguna entidad financiera).
+  const walletNames = paymentMethodsToWallets(b.paymentMethod).length > 0 || /\bmodo\b/i.test(b.description)
+    ? ['Modo']
+    : [];
   const cap = b.repaymentCap ?? extractCap(b.description) ?? null;
   const categoria = b.storeCategories[0] ? mapCategoria(b.storeCategories[0]) : detectCategoria(`${b.storeName} ${b.description}`);
 
