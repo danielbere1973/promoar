@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
+import { invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 export async function POST(
   req: NextRequest,
@@ -33,7 +33,8 @@ export async function POST(
       },
     })
 
-    invalidateCommerceDetailCache()
+    const commerce = await prisma.commerce.findUnique({ where: { id: commerceId }, select: { slug: true } })
+    if (commerce?.slug) invalidateCommerceDetailBySlugs([commerce.slug])
 
     return NextResponse.json({ branch }, { status: 201 })
   } catch (error: any) {

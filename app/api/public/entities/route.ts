@@ -53,6 +53,7 @@ const getEntitiesCached = unstable_cache(
         where: { active: true },
         select: {
           id: true, name: true, slug: true, logoUrl: true,
+          cardSegments: { select: { id: true, name: true, cardNetworkId: true, cardType: true } },
           _count: { select: { promoRequirements: true } },
         },
         orderBy: { name: 'asc' },
@@ -70,7 +71,7 @@ const getEntitiesCached = unstable_cache(
     return { banks, wallets, cardNetworks, segments, currencies, accountTypes }
   },
   ['public-entities'],
-  { revalidate: 600, tags: [ENTITIES_PUBLIC_TAG] },
+  { revalidate: 86400, tags: [ENTITIES_PUBLIC_TAG] },
 )
 
 export async function GET() {

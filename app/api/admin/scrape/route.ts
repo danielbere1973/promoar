@@ -8,7 +8,7 @@ import { generatePromoSlug } from '@/lib/utils/promoSlug';
 import { detectCategoria, detectSalesChannel, normalizeSalesChannel } from '@/lib/scrapers/bank-helpers';
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache';
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache';
-import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache';
+import { invalidatePromoDetailBySlugs, invalidateCommerceDetailBySlugs, invalidateBankDetailCache } from '@/lib/cache/detailCache';
 
 // Cache in-memory de tablas estáticas (no se mutan durante el procesamiento de un batch).
 // TTL corto: solo busca aprovechar reuso de instancia serverless entre batches
@@ -805,6 +805,7 @@ export async function POST(req: NextRequest) {
     // ── FASE 3: Guardar en batches paralelos de 10 ────────────────────────────
     const newPromoIds: string[] = []
     const updatedPromoIds: string[] = []
+    const touchedPromoSlugs: string[] = []
 
     const savePromo = async (item: ResolvedItem) => {
       const { promoData, reqData, baseSlug, sourceUrl, source, externalId, title, commerceId } = item;
@@ -844,6 +845,7 @@ export async function POST(req: NextRequest) {
           const nextStatus = renewedAndValid ? 'ACTIVE' : existing.status;
           await prisma.promo.update({ where: { id: existing.id }, data: { ...promoData, slug, status: nextStatus, requirements: { create: reqData } } });
           updatedPromoIds.push(existing.id);
+          touchedPromoSlugs.push(slug);
         } catch (e: any) {
           if (e?.code === 'P2002') {
             // Slug duplicado al actualizar — skipear, ya existe una promo con ese slug
@@ -856,6 +858,7 @@ export async function POST(req: NextRequest) {
         try {
           const created = await prisma.promo.create({ data: { ...promoData, stackable: promoData.stackable ?? false, slug, status: 'DRAFT', requirements: { create: reqData } } });
           newPromoIds.push(created.id);
+          touchedPromoSlugs.push(slug);
           changedCommerceIds.add(commerceId);
         } catch (e: any) {
           if (e?.code === 'P2002') {
@@ -900,13 +903,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (processedCount > 0) { 
-      await invalidatePublicPromosCache(); 
-      invalidateCategoriesCache(); 
-      invalidatePromoDetailCache(); 
-      invalidateCommerceDetailCache();
-      
-      const { invalidateBankDetailCache } = await import('@/lib/cache/detailCache');
+    if (processedCount > 0) {
+      await invalidatePublicPromosCache();
+      invalidateCategoriesCache();
+
+      invalidatePromoDetailBySlugs(touchedPromoSlugs);
+      if (affectedCommerceIds.length > 0) {
+        const affectedCommerces = await prisma.commerce.findMany({
+          where: { id: { in: affectedCommerceIds } },
+          select: { slug: true },
+        })
+        invalidateCommerceDetailBySlugs(affectedCommerces.map(c => c.slug))
+      }
+      // Bancos: se mantiene invalidación global — ningún caller trackea bankId por requirement tocado,
+      // y el volumen de páginas de banco es chico (no justifica agregar ese tracking ahora).
       invalidateBankDetailCache();
     }
 

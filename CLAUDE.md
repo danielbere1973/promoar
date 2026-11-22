@@ -1085,3 +1085,13 @@ schedules siguen activos con la frecuencia baja ya configurada.
 están pendientes; los jobs `run-http`/`run-playwright` solo corren (con `if` a nivel de
 job) si hay algo pendiente — evita el pull del contenedor pesado de Playwright en corridas
 sin trabajo.
+
+## Regla: invalidar caché tras escribir directo en la DB de producción (22/11/2026)
+Todo script que escriba directo en la DB de producción debe terminar corriendo
+`npm run revalidate:prod`, porque `revalidateTag` solo funciona dentro del runtime de
+Next.js — un script suelto que usa Prisma contra `DATABASE_URL` de prod nunca lo dispara,
+así que el caché público queda con datos viejos hasta que venza el TTL de seguridad (12h).
+El comando llama a `POST /api/internal/revalidate` (protegido con `VTEX_SESSION_SECRET`,
+mismo secreto que `save-promos`), que invalida promos/categorías/entities/site-config y el
+detalle de promos/comercios/bancos; acepta `--promo-slugs=`/`--commerce-slugs=` para
+invalidación puntual.

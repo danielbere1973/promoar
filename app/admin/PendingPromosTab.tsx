@@ -34,8 +34,9 @@ type Promo = {
 
 type Category = { id: string; name: string; icon: string }
 type Commerce = { id: string; name: string }
-type Bank = { id: string; name: string }
-type Wallet = { id: string; name: string }
+type CardSegment = { id: string; name: string; cardNetworkId: string }
+type Bank = { id: string; name: string; cardSegments?: CardSegment[] }
+type Wallet = { id: string; name: string; cardSegments?: CardSegment[] }
 type CardNetwork = { id: string; name: string }
 
 // ── Constants ───────────────────────────────────────────────────
@@ -51,13 +52,16 @@ const DISCOUNT_LABELS: Record<string, string> = {
   CUOTAS_SIN_INTERES: 'CSI',
 }
 
+// Valores deben matchear el enum PaymentChannel de prisma/schema.prisma —
+// ONLINE/IN_STORE/APP no existen ahí y tiraban 500 en el PATCH.
 const CHANNEL_META: Record<string, { label: string; color: string }> = {
-  ANY:      { label: 'Online y presencial', color: 'bg-slate-100 text-slate-500' },
-  QR:       { label: 'QR',        color: 'bg-amber-50 text-amber-700 border border-amber-200' },
-  NFC:      { label: 'NFC',       color: 'bg-violet-50 text-violet-700 border border-violet-200' },
-  ONLINE:   { label: 'Online',    color: 'bg-blue-50 text-blue-700 border border-blue-200' },
-  IN_STORE: { label: 'Presencial',color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-  APP:      { label: 'App',       color: 'bg-pink-50 text-pink-700 border border-pink-200' },
+  ANY:              { label: 'Online y presencial', color: 'bg-slate-100 text-slate-500' },
+  QR:               { label: 'QR',             color: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  NFC:              { label: 'NFC',            color: 'bg-violet-50 text-violet-700 border border-violet-200' },
+  TARJETA_FISICA:   { label: 'Presencial',    color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  TRANSFERENCIA:    { label: 'Transferencia',  color: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  DINERO_EN_CUENTA: { label: 'Dinero en cuenta', color: 'bg-pink-50 text-pink-700 border border-pink-200' },
+  LINK_DE_PAGO:     { label: 'Link de pago',   color: 'bg-cyan-50 text-cyan-700 border border-cyan-200' },
 }
 
 const CAP_LABELS: Record<string, string> = {
@@ -68,7 +72,7 @@ const CAP_LABELS: Record<string, string> = {
   TOTAL: 'total',
 }
 
-const PAYMENT_CHANNELS = ['ANY', 'ONLINE', 'IN_STORE', 'QR', 'NFC', 'APP']
+const PAYMENT_CHANNELS = ['ANY', 'QR', 'NFC', 'TARJETA_FISICA', 'TRANSFERENCIA', 'DINERO_EN_CUENTA', 'LINK_DE_PAGO']
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -166,6 +170,14 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
   banks: Bank[]; wallets: Wallet[]; cardNetworks: CardNetwork[]
   onSave: (updated: Promo) => void; onClose: () => void
 }) {
+  // Segmentos disponibles para una fila: los del banco o billetera elegidos en esa
+  // fila, filtrados por red si también hay una red elegida (un segmento siempre
+  // pertenece a una sola red — ver model CardSegment en el schema).
+  function segmentsFor(bankId: string, walletId: string, cardNetworkId: string): CardSegment[] {
+    const owner = banks.find(b => b.id === bankId) ?? wallets.find(w => w.id === walletId)
+    const segs = owner?.cardSegments ?? []
+    return cardNetworkId ? segs.filter(s => s.cardNetworkId === cardNetworkId) : segs
+  }
   const [form, setForm] = useState(() => buildForm(promo))
   const [saving, setSaving] = useState(false)
   function setF(patch: Partial<typeof form>) { setForm(f => ({ ...f, ...patch })) }
@@ -304,10 +316,11 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 {/* Table header */}
                 <div className="grid gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[9px] font-black uppercase tracking-widest text-slate-400"
-                  style={{ gridTemplateColumns: '1.3fr 1.3fr 0.9fr 1fr 1fr 0.8fr 1fr 1fr 1fr 0.4fr' }}>
+                  style={{ gridTemplateColumns: '1.3fr 1.3fr 0.9fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1fr 0.4fr' }}>
                   <span>Banco</span>
                   <span>Billetera</span>
                   <span>Red</span>
+                  <span>Segmento</span>
                   <span>Canal</span>
                   <span>Tipo desc.</span>
                   <span>Valor</span>
@@ -320,18 +333,22 @@ function EditModal({ promo, categories, commerces, banks, wallets, cardNetworks,
                 {form.requirements.map((r, i) => (
                   <div key={r.reqId || `new-${i}`}
                     className={`grid gap-2 px-3 py-2.5 items-center ${i < form.requirements.length - 1 ? 'border-b border-slate-100' : ''} ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
-                    style={{ gridTemplateColumns: '1.3fr 1.3fr 0.9fr 1fr 1fr 0.8fr 1fr 1fr 1fr 0.4fr' }}>
-                    <select value={r.bankId} onChange={e => setReq(i, { bankId: e.target.value })} className={sel}>
+                    style={{ gridTemplateColumns: '1.3fr 1.3fr 0.9fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1fr 0.4fr' }}>
+                    <select value={r.bankId} onChange={e => setReq(i, { bankId: e.target.value, cardSegmentId: '' })} className={sel}>
                       <option value="">—</option>
                       {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
-                    <select value={r.walletId} onChange={e => setReq(i, { walletId: e.target.value })} className={sel}>
+                    <select value={r.walletId} onChange={e => setReq(i, { walletId: e.target.value, cardSegmentId: '' })} className={sel}>
                       <option value="">—</option>
                       {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
-                    <select value={r.cardNetworkId} onChange={e => setReq(i, { cardNetworkId: e.target.value })} className={sel}>
+                    <select value={r.cardNetworkId} onChange={e => setReq(i, { cardNetworkId: e.target.value, cardSegmentId: '' })} className={sel}>
                       <option value="">—</option>
                       {cardNetworks.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                    </select>
+                    <select value={r.cardSegmentId} onChange={e => setReq(i, { cardSegmentId: e.target.value })} className={sel}>
+                      <option value="">—</option>
+                      {segmentsFor(r.bankId, r.walletId, r.cardNetworkId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                     <select value={r.paymentChannel} onChange={e => setReq(i, { paymentChannel: e.target.value })} className={sel}>
                       {PAYMENT_CHANNELS.map(ch => <option key={ch} value={ch}>{CHANNEL_META[ch]?.label ?? ch}</option>)}

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
-import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
+import { invalidatePromoDetailBySlugs, invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 async function isAdmin() {
   const session = await getServerSession()
@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id },
     data: promoData,
     include: {
-      commerce: { select: { id: true, name: true, logoUrl: true } },
+      commerce: { select: { id: true, name: true, logoUrl: true, slug: true } },
       category: { select: { id: true, name: true, icon: true } },
       requirements: {
         include: {
@@ -107,15 +107,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const final = await prisma.promo.findUnique({
       where: { id },
       include: {
-        commerce: { select: { id: true, name: true, logoUrl: true } },
+        commerce: { select: { id: true, name: true, logoUrl: true, slug: true } },
         category: { select: { id: true, name: true, icon: true } },
         requirements: { include: reqInclude },
       },
     })
     await invalidatePublicPromosCache()
     invalidateCategoriesCache()
-    invalidatePromoDetailCache()
-    invalidateCommerceDetailCache()
+    if (final?.slug) invalidatePromoDetailBySlugs([final.slug])
+    if (final?.commerce?.slug) invalidateCommerceDetailBySlugs([final.commerce.slug])
     return NextResponse.json({ promo: final })
   }
 
@@ -124,21 +124,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const final = await prisma.promo.findUnique({
       where: { id },
       include: {
-        commerce: { select: { id: true, name: true, logoUrl: true } },
+        commerce: { select: { id: true, name: true, logoUrl: true, slug: true } },
         category: { select: { id: true, name: true, icon: true } },
         requirements: { include: reqInclude },
       },
     })
     await invalidatePublicPromosCache()
     invalidateCategoriesCache()
-    invalidatePromoDetailCache()
-    invalidateCommerceDetailCache()
+    if (final?.slug) invalidatePromoDetailBySlugs([final.slug])
+    if (final?.commerce?.slug) invalidateCommerceDetailBySlugs([final.commerce.slug])
     return NextResponse.json({ promo: final })
   }
 
   await invalidatePublicPromosCache()
   invalidateCategoriesCache()
-  invalidatePromoDetailCache()
-  invalidateCommerceDetailCache()
+  if (updated.slug) invalidatePromoDetailBySlugs([updated.slug])
+  if (updated.commerce?.slug) invalidateCommerceDetailBySlugs([updated.commerce.slug])
   return NextResponse.json({ promo: updated })
 }

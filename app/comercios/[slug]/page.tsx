@@ -4,7 +4,7 @@ import { Metadata } from 'next'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
-import { COMMERCE_DETAIL_TAG } from '@/lib/cache/detailCache'
+import { COMMERCE_DETAIL_TAG, commerceDetailIdTag } from '@/lib/cache/detailCache'
 import DetailPageShell from '@/app/components/DetailPageShell'
 import EntityPromoGrid from '@/app/components/EntityPromoGrid'
 
@@ -12,17 +12,29 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 export const revalidate = false
 
-const getCachedCommerceBySlug = unstable_cache(
-  async (slug: string) => prisma.commerce.findUnique({
-    where: { slug },
-    include: {
-      defaultCategory: true,
-      _count: { select: { branches: true } },
+// Mismo problema que getCachedPromoBySlug en app/promos/[slug]/page.tsx: el id
+// del comercio no se conoce hasta resolver el slug, así que se tagea por slug
+// (factory por slug en vez de un unstable_cache con tags fijos).
+function makeGetCommerceBySlug(slug: string) {
+  return unstable_cache(
+    async (slug: string) => {
+      if (process.env.NODE_ENV === 'production') console.log(`[cache-miss] comercio-detail ${slug}`)
+      return prisma.commerce.findUnique({
+        where: { slug },
+        include: {
+          defaultCategory: true,
+          _count: { select: { branches: true } },
+        },
+      }).catch(() => null)
     },
-  }).catch(() => null),
-  ['commerce-detail-by-slug'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
-)
+    ['commerce-detail-by-slug'],
+    { tags: [COMMERCE_DETAIL_TAG, commerceDetailIdTag(slug)], revalidate: 43200 },
+  )
+}
+
+async function getCachedCommerceBySlug(slug: string) {
+  return makeGetCommerceBySlug(slug)(slug)
+}
 
 type PromoFilters = { catSlugs?: string[]; entitySlugs?: string[] }
 
@@ -67,7 +79,7 @@ async function getCommercePromos(commerceId: string, filters: PromoFilters = {})
 const getCachedCommercePromos = unstable_cache(
   async (commerceId: string) => getCommercePromos(commerceId, {}),
   ['commerce-detail-promos'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: 43200 },
 )
 
 // Bancos/billeteras con al menos una promo activa de este comercio, para
@@ -98,7 +110,7 @@ const getCachedCommerceEntities = unstable_cache(
     ]
   },
   ['commerce-detail-entities'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: 43200 },
 )
 
 const DAYS_LABELS: Record<number, string> = {

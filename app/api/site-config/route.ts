@@ -14,7 +14,7 @@ const getSiteConfigCached = unstable_cache(
     return result
   },
   ['site-config-public'],
-  { revalidate: 600, tags: [SITE_CONFIG_PUBLIC_TAG] },
+  { revalidate: 86400, tags: [SITE_CONFIG_PUBLIC_TAG] },
 )
 
 export async function GET() {

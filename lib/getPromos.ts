@@ -29,17 +29,17 @@ function normalizeAccents(s: string): string {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-// Cache del count total de promos activas — se recalcula cada 5 minutos
-let cachedTotalCount: number | null = null
-let cachedTotalCountAt: number = 0
-async function getActiveTotalCount(): Promise<number> {
-  if (cachedTotalCount !== null && Date.now() - cachedTotalCountAt < 5 * 60 * 1000) {
-    return cachedTotalCount
-  }
-  cachedTotalCount = await prisma.promo.count({ where: { status: 'ACTIVE' } })
-  cachedTotalCountAt = Date.now()
-  return cachedTotalCount
-}
+// Count total de promos activas. Antes era un cache en memoria de 5 minutos;
+// se convierte a unstable_cache (igual criterio que getPublicPromosPage) para
+// no recalcular en cada instancia/lambda fría y para poder invalidarse por
+// tag junto con el resto de la caché pública en vez de por TTL ciego.
+const getActiveTotalCount = unstable_cache(
+  async (): Promise<number> => {
+    return prisma.promo.count({ where: { status: 'ACTIVE' } })
+  },
+  ['public-active-total-count'],
+  { revalidate: 21600, tags: [PROMOS_PUBLIC_TAG] }, // 6h techo, invalidado por evento
+)
 
 // Normaliza nombres de provincia para comparar texto libre (perfil de usuario)
 // contra nombres de Nominatim (CommerceBranch.province): sin acentos, minúsculas,
@@ -59,6 +59,30 @@ export function normalizeProvince(s: string): string {
 // que el comercio tiene cobertura nacional y no se filtra por ubicación.
 export const NATIONAL_COVERAGE_THRESHOLD = 4
 
+// Whitelist estática de slugs de categoría válidos para la clave de cache
+// pública (modificación Paso 2 aprobada 21/11/2026: NO consultar la DB cada
+// 5 minutos para validar esto). Lista espejo de `prisma/seed.ts` — un slug
+// nuevo requiere agregar la categoría acá también. Cualquier categorySlug que
+// no esté en esta lista cae fuera de isPublicCacheableView (camino no
+// cacheado, igual que hoy con filtros no soportados).
+const VALID_CATEGORY_SLUGS = new Set<string>([
+  'supermercados', 'combustible', 'gastronomia', 'farmacias', 'indumentaria',
+  'tecnologia', 'mascotas', 'transporte', 'heladerias', 'hogar',
+  'entretenimiento', 'salud-y-belleza', 'deportes', 'jugueterias', 'librerias',
+  'viajes-y-turismo', 'shoppings', 'automotores', 'otros', 'sin-categoria',
+])
+
+// Fecha de hoy en Argentina (America/Argentina/Buenos_Aires, UTC-3 fijo) como
+// string YYYY-MM-DD — usada como parte de la clave de cache de
+// getPublicPromosPage para view='today': sin esto, a medianoche el cache
+// seguiría devolviendo promos filtradas por el dayBit de ayer hasta que
+// expire el TTL (ahora largo/sin TTL — ver modificación #1 del Paso 2).
+function getArgentinaDateString(): string {
+  const now = new Date()
+  const argNow = new Date(now.getTime() - 3 * 60 * 60 * 1000)
+  return argNow.toISOString().slice(0, 10)
+}
+
 // RFC-002 Fase 1 — caché exclusiva de la rama pública de invitado sin filtros
 // de banco/wallet/red/categoría/etc (sin email, sin filtros). `province` entra
 // como parte de la clave de cache: cada provincia distinta cachea su propia
@@ -73,28 +97,34 @@ export const NATIONAL_COVERAGE_THRESHOLD = 4
 // email/isAdmin/perfil real por construcción; esta función no acepta esos
 // parámetros en su firma para que sea imposible colarlos por error.
 //
-// Cache del count total de promos activas Y válidas hoy (por dayBit) — mismo criterio
-// que getActiveTotalCount pero acotado al bitmask del día, recalculado cada 5 minutos.
-// Sin esto, el totalCount que ve el invitado en view=today incluiría promos de otros días.
-const cachedTodayCountByBit = new Map<number, { count: number; at: number }>()
-async function getActiveTodayCount(dayBit: number): Promise<number> {
-  const cached = cachedTodayCountByBit.get(dayBit)
-  if (cached && Date.now() - cached.at < 5 * 60 * 1000) return cached.count
-  const count = await prisma.$queryRaw<{ count: bigint }[]>`
-    SELECT count(*)::bigint as count FROM "promos"
-    WHERE status = 'ACTIVE'
-      AND "validFrom" <= now()
-      AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
-      AND ("validDays" & ${dayBit}) != 0
-  `.then(rows => Number(rows[0]?.count ?? 0))
-  cachedTodayCountByBit.set(dayBit, { count, at: Date.now() })
-  return count
-}
+// Count total de promos activas Y válidas hoy (por dayBit) — mismo criterio que
+// getActiveTotalCount pero acotado al bitmask del día. Convertido de cache en
+// memoria (5 min) a unstable_cache con el mismo tag/TTL techo. `dayBit` entra
+// en el key-parts porque el resultado varía genuinamente por día de la semana
+// (no por fecha — el bitmask ya es estable lun/mar/mié/etc, así que NO hace
+// falta la fecha de Argentina acá; eso solo aplica a getPublicPromosPage, que
+// filtra por rango de vigencia validFrom/validUntil con `now()`).
+const getActiveTodayCount = unstable_cache(
+  async (dayBit: number): Promise<number> => {
+    return prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT count(*)::bigint as count FROM "promos"
+      WHERE status = 'ACTIVE'
+        AND "validFrom" <= now()
+        AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
+        AND ("validDays" & ${dayBit}) != 0
+    `.then(rows => Number(rows[0]?.count ?? 0))
+  },
+  ['public-active-today-count'],
+  { revalidate: 21600, tags: [PROMOS_PUBLIC_TAG] },
+)
 
-// TTL de 10 minutos como red de seguridad (por si una invalidación por evento
-// falla en algún punto de escritura) + revalidateTag('promos-public') disparado
-// desde cada mutación real (scraper, admin CRUD, auto-validate, cron de
-// expiración) — ver lib/cache/promosCache.ts.
+// TTL de seguridad de 12h (antes revalidate: false): invalidación principal
+// sigue siendo por revalidateTag('promos-public') disparado desde cada
+// mutación real (scraper, admin CRUD, auto-validate, cron de expiración) —
+// ver lib/cache/promosCache.ts. El TTL es solo una red de seguridad para
+// scripts sueltos que escriben directo en la DB de producción sin pasar por
+// un endpoint Next.js (revalidateTag no existe fuera de ese runtime) — ver
+// npm run revalidate:prod y la regla en CLAUDE.md.
 //
 // El filtro de día (dayBit) se aplica en el WHERE de la query SQL, ANTES del
 // take/skip — filtrarlo en JS después de paginar (como se hacía antes) recorta
@@ -103,9 +133,24 @@ async function getActiveTodayCount(dayBit: number): Promise<number> {
 // (bug: invitado veía ~37 promos en vez de miles). dayBit forma parte de la
 // clave de cache — sin esto, el resultado de hoy quedaría sirviéndose mañana
 // hasta vencer el TTL.
+//
+// `argDateStr` (YYYY-MM-DD Argentina) entra en la clave SOLO para separar
+// entradas de cache de distintos días calendario cuando view='today' — sin
+// esto, al no haber más TTL (revalidate: false), la entrada cacheada el
+// lunes seguiría sirviéndose el martes hasta que algo dispare
+// revalidateTag (una mutación real), mostrando "hoy" con el dayBit de ayer.
+// No afecta a view='week' en la práctica (ver dayFiltered abajo), pero se
+// pasa siempre por simplicidad de firma — una key-part extra no cambia el
+// comportamiento de cache para 'week'.
+//
+// `categorySlug` (como máximo 1, validado contra VALID_CATEGORY_SLUGS por el
+// caller antes de decidir si esta vista es cacheable) permite que las vistas
+// de categoría (ej. /promos/categoria/supermercados, o /promos/explorar con
+// un solo filtro de categoría) reutilicen este mismo camino cacheado en vez
+// de caer siempre al camino directo a Prisma.
 const getPublicPromosPage = unstable_cache(
-  async (page: number, pageSize: number, view: string, dayBit: number, province: string | null) => {
-    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view} dayBit=${dayBit} province=${province})`)
+  async (page: number, pageSize: number, view: string, dayBit: number, province: string | null, argDateStr: string, categorySlug: string | null) => {
+    console.log(`[promos-cache] MISS — ejecutando query real (page=${page} pageSize=${pageSize} view=${view} dayBit=${dayBit} province=${province} argDateStr=${argDateStr} categorySlug=${categorySlug})`)
 
     const today = new Date()
     const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
@@ -117,6 +162,10 @@ const getPublicPromosPage = unstable_cache(
         { validUntil: null },
         { validUntil: { gte: startOfToday } },
       ],
+    }
+
+    if (categorySlug) {
+      where.category = { slug: categorySlug }
     }
 
     if (province) {
@@ -141,10 +190,11 @@ const getPublicPromosPage = unstable_cache(
       // (miles) para terminar usando sólo `pageSize` — generaba un `IN (...)` con
       // miles de parámetros en cada visita de invitado, manteniendo el compute de
       // Neon siempre activo (nunca llegaba a idle/suspend).
-      // El filtro de provincia (promos.provinces[]) se replica acá en SQL crudo —
-      // si solo se aplicara en el where de Prisma más abajo, el LIMIT/OFFSET de
-      // esta query ya habría cortado la página por dayBit sin tener en cuenta
-      // provincia, devolviendo menos de pageSize filas de las que corresponden.
+      // El filtro de provincia (promos.provinces[]) y de categoría se replican acá
+      // en SQL crudo — si solo se aplicaran en el where de Prisma más abajo, el
+      // LIMIT/OFFSET de esta query ya habría cortado la página por dayBit sin
+      // tener en cuenta provincia/categoría, devolviendo menos de pageSize filas
+      // de las que corresponden (o filas de otra categoría).
       const idRows = await prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM "promos"
         WHERE status = 'ACTIVE'
@@ -152,6 +202,7 @@ const getPublicPromosPage = unstable_cache(
           AND ("validUntil" IS NULL OR "validUntil" >= date_trunc('day', now()))
           AND ("validDays" & ${dayBit}) != 0
           AND (${province}::text IS NULL OR cardinality(provinces) = 0 OR provinces && ARRAY[${province}::text, 'Todas', 'TODAS'])
+          AND (${categorySlug}::text IS NULL OR "categoryId" IN (SELECT id FROM "categories" WHERE slug = ${categorySlug}::text))
         ORDER BY
           "isCSIOnly" ASC,
           "maxDiscountPct" DESC NULLS LAST,
@@ -235,7 +286,7 @@ const getPublicPromosPage = unstable_cache(
     return [promos, totalCount] as const
   },
   ['public-promos-page'],
-  { revalidate: 600, tags: [PROMOS_PUBLIC_TAG] }, // 600s = 10min TTL de seguridad
+  { revalidate: 43200, tags: [PROMOS_PUBLIC_TAG] }, // 12h techo de seguridad — invalidación principal por evento (ver comentario arriba)
 )
 
 // ─── Alternativa 2 (DR-004) — Candidate Selection con conocimiento de perfil ──
@@ -692,17 +743,36 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
       ]
     : undefined
 
-  // RFC-002 Fase 1 (+ ampliación provincia + ADR-001): la rama pública (invitado
-  // sin filtros, CON o sin provincia, siempre que no haya perfil real detrás) va
-  // por una función cacheada (10 min TTL + invalidación por tag). `province` es
-  // parte de la clave de cache — cada provincia cachea su propia página, con el
-  // filtro grueso por `provinces[]` ya resuelto en SQL dentro de la función. El
-  // filtro fino ADR-001 (salesChannel/geographicScope/locationModel/branches) se
-  // aplica después, en el bloque más abajo, sobre este resultado ya cacheado —
-  // igual que sobre el camino no-cacheado. `paginate` (route.ts) ya excluye
-  // forMe/email/filtros; acá además hace falta excluir el guest profile (perfil
-  // temporal sin cuenta) para no cachear una vista personalizada por error.
-  const isPublicCacheableView = paginate && !guestProfileParam
+  // Categoría efectiva para decidir cacheabilidad: como máximo 1 categoría
+  // (regla explícita del plan aprobado — "Mantené el límite de máximo 1
+  // categoría"), y esa única categoría debe estar en VALID_CATEGORY_SLUGS.
+  // categorySlugs con 2+ elementos, o cualquier slug fuera de la whitelist,
+  // deja effectiveCategorySlug en null y por lo tanto cae fuera del camino
+  // cacheado (mismo comportamiento de hoy: no-cacheado).
+  const singleCategoryCandidate =
+    categorySlugs.length === 1 ? categorySlugs[0] :
+    categorySlugs.length === 0 && categorySlug && categorySlug !== 'todos' ? categorySlug :
+    null
+  const effectiveCategorySlug =
+    singleCategoryCandidate && VALID_CATEGORY_SLUGS.has(singleCategoryCandidate)
+      ? singleCategoryCandidate
+      : null
+  const hasUnsupportedCategoryFilter =
+    categorySlugs.length > 1 || (singleCategoryCandidate !== null && effectiveCategorySlug === null)
+
+  // RFC-002 Fase 1 (+ ampliación provincia + ADR-001 + categoría): la rama
+  // pública (invitado sin filtros, o con como máximo 1 categoría válida,
+  // CON o sin provincia, siempre que no haya perfil real detrás) va por una
+  // función cacheada (sin TTL — invalidación por tag, ver getPublicPromosPage).
+  // `province`, la fecha Argentina (para view='today') y `effectiveCategorySlug`
+  // son parte de la clave de cache. El filtro fino ADR-001 (salesChannel/
+  // geographicScope/locationModel/branches) se aplica después, en el bloque
+  // más abajo, sobre este resultado ya cacheado — igual que sobre el camino
+  // no-cacheado. `paginate` (route.ts) ya excluye forMe/email/filtros de
+  // requirements; acá además hace falta excluir el guest profile (perfil
+  // temporal sin cuenta) y cualquier filtro de categoría no soportado para no
+  // cachear una vista personalizada o parcial por error.
+  const isPublicCacheableView = paginate && !guestProfileParam && !hasUnsupportedCategoryFilter
   __mark('before findMany')
 
   // Fix mismo bug ya resuelto para invitados (ver comentario línea ~87): en el
@@ -782,7 +852,7 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
   }
 
   const [promos, totalCount] = isPublicCacheableView
-    ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit, userProvince)
+    ? await getPublicPromosPage(page, pageSize, view ?? 'today', defaultDayBit, userProvince, getArgentinaDateString(), effectiveCategorySlug)
     : useCandidates
     ? await (async () => {
         // view='week' (caso de Recommendation Block) no filtra por día en SQL —
