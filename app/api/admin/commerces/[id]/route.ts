@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
+import { invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 
 export async function GET(
@@ -88,7 +88,7 @@ export async function PATCH(
       },
     })
 
-    invalidateCommerceDetailCache()
+    invalidateCommerceDetailBySlugs([updated.slug])
     await invalidatePublicPromosCache()
 
     return NextResponse.json({ commerce: updated })
@@ -115,11 +115,12 @@ export async function DELETE(
       )
     }
 
-    await prisma.commerce.delete({
+    const deleted = await prisma.commerce.delete({
       where: { id },
+      select: { slug: true },
     })
 
-    invalidateCommerceDetailCache()
+    invalidateCommerceDetailBySlugs([deleted.slug])
     await invalidatePublicPromosCache()
 
     return NextResponse.json({ ok: true })

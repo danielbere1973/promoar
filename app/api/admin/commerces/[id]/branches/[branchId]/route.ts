@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
+import { invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 export async function PATCH(
   req: NextRequest,
@@ -25,7 +25,8 @@ export async function PATCH(
       data: dataToUpdate,
     })
 
-    invalidateCommerceDetailCache()
+    const commerce = await prisma.commerce.findUnique({ where: { id: commerceId }, select: { slug: true } })
+    if (commerce?.slug) invalidateCommerceDetailBySlugs([commerce.slug])
 
     return NextResponse.json({ branch: updated })
   } catch (error: any) {
@@ -39,13 +40,14 @@ export async function DELETE(
   { params }: { params: { id: string; branchId: string } }
 ) {
   try {
-    const { branchId } = params
+    const { id: commerceId, branchId } = params
 
     await prisma.commerceBranch.delete({
       where: { id: branchId },
     })
 
-    invalidateCommerceDetailCache()
+    const commerce = await prisma.commerce.findUnique({ where: { id: commerceId }, select: { slug: true } })
+    if (commerce?.slug) invalidateCommerceDetailBySlugs([commerce.slug])
 
     return NextResponse.json({ ok: true })
   } catch (error: any) {

@@ -10,28 +10,45 @@ import PromoUnavailable from '@/app/components/PromoUnavailable'
 import DetailSidebar from './DetailSidebar'
 import DetailCTA from './DetailCTA'
 import { schemaOffer } from '@/lib/schema'
-import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
+import { PROMO_DETAIL_TAG, promoDetailIdTag } from '@/lib/cache/detailCache'
 import { getPromoScope } from '@/lib/utils/promoScope'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 export const revalidate = false
 
-const getCachedPromoBySlug = unstable_cache(
-  async (slug: string) => prisma.promo.findUnique({
-    where: { slug },
-    include: {
-      commerce: true,
-      category: true,
-      requirements: {
-        include: { bank: true, wallet: true, cardNetwork: true },
-        orderBy: { discountValue: 'desc' },
-      },
+// unstable_cache exige un array de tags estático por función — no puede
+// depender del resultado (acá no se conoce el promo.id hasta resolver el
+// slug). Por eso se usa una factory: se crea un unstable_cache nuevo por
+// slug, con el tag `promo:<slug>` ya armado en ese momento. Next.js dedupea
+// por keyParts + argumentos reales, no por identidad del closure, así que
+// llamar a la factory de nuevo con el mismo slug en otro request reusa la
+// misma entrada de cache sin problema.
+function makeGetPromoBySlug(slug: string) {
+  return unstable_cache(
+    async (slug: string) => {
+      if (process.env.NODE_ENV === 'production') console.log(`[cache-miss] promo-detail ${slug}`)
+      const promo = await prisma.promo.findUnique({
+        where: { slug },
+        include: {
+          commerce: true,
+          category: true,
+          requirements: {
+            include: { bank: true, wallet: true, cardNetwork: true },
+            orderBy: { discountValue: 'desc' },
+          },
+        },
+      })
+      return promo
     },
-  }),
-  ['promo-detail-by-slug'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: false },
-)
+    ['promo-detail-by-slug'],
+    { tags: [PROMO_DETAIL_TAG, promoDetailIdTag(slug)], revalidate: false },
+  )
+}
+
+async function getCachedPromoBySlug(slug: string) {
+  return makeGetPromoBySlug(slug)(slug)
+}
 
 const getCachedCommerceBranchesCount = unstable_cache(
   async (commerceId: string) => prisma.commerceBranch.findMany({
