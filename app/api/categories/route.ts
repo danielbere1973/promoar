@@ -11,9 +11,13 @@ const POPULAR_SLUGS = ['combustible', 'supermercados', 'hogar', 'indumentaria', 
 // resuelto en SQL (bitmask, no expresable en groupBy de Prisma) + 1 findMany
 // de categorías — reemplaza el N+1 anterior (1 findMany completo por
 // categoría, filtrado en JS después).
+// Keyed por dayBit + fecha argentina (YYYY-MM-DD): dayBit solo (1-7) se repite
+// cada semana, así que sin la fecha el cache de un lunes podría servirse en el
+// lunes siguiente con TTL de 86400s. argDateStr rompe ese ciclo sin tener que
+// bajar el TTL.
 const getCategoriesCached = unstable_cache(
-  async (dayBit: number) => {
-    console.log(`[categories-cache] MISS — ejecutando queries reales (dayBit=${dayBit})`)
+  async (dayBit: number, argDateStr: string) => {
+    console.log(`[categories-cache] MISS — ejecutando queries reales (dayBit=${dayBit}, fecha=${argDateStr})`)
     const today = new Date()
     const startOfToday = new Date(today); startOfToday.setHours(0, 0, 0, 0)
 
@@ -53,7 +57,7 @@ const getCategoriesCached = unstable_cache(
     }))
   },
   ['public-categories'],
-  { revalidate: 180, tags: [CATEGORIES_PUBLIC_TAG] },
+  { revalidate: 86400, tags: [CATEGORIES_PUBLIC_TAG] },
 )
 
 export async function GET(req: NextRequest) {
@@ -70,6 +74,7 @@ export async function GET(req: NextRequest) {
     // getUTCDay(), no getDay() — evita doble desplazamiento de zona horaria en
     // localhost/Windows (bug 27/8/2026).
     const dayBit = 1 << argNow.getUTCDay()
+    const argDateStr = argNow.toISOString().slice(0, 10)
 
     let userCards: any[] = []
     if (forMe && email) {
@@ -82,7 +87,7 @@ export async function GET(req: NextRequest) {
 
     // Caso público (sin perfil aplicado): cacheado.
     if (!forMe || !email || userCards.length === 0) {
-      const result = await getCategoriesCached(dayBit)
+      const result = await getCategoriesCached(dayBit, argDateStr)
       return NextResponse.json({ categories: result })
     }
 
