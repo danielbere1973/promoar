@@ -1095,3 +1095,51 @@ El comando llama a `POST /api/internal/revalidate` (protegido con `VTEX_SESSION_
 mismo secreto que `save-promos`), que invalida promos/categorías/entities/site-config y el
 detalle de promos/comercios/bancos; acepta `--promo-slugs=`/`--commerce-slugs=` para
 invalidación puntual.
+
+## Regla: dedup de detalle (React cache()) y TTL de 3 días en /promos/[slug] y /comercios/[slug] (22/11/2026)
+`generateMetadata` y el componente de página de ambas rutas llamaban cada uno, por
+separado, a su propio fetcher `unstable_cache`-eado por slug — Next.js no dedupea
+closures distintos aunque compartan la misma cache key, así que en cada cache-miss
+real la query de Prisma (y el log `[cache-miss] ...`) corría 2 veces por request.
+Fix: `getCachedPromoBySlug`/`getCachedCommerceBySlug` ahora están envueltas en
+`cache()` de React (dedupea dentro de UN request; `unstable_cache` sigue siendo quien
+persiste entre requests, con los mismos tags). Con el fix, el TTL de seguridad de esas
+dos funciones se subió de 12h (43200) a 3 días (259200) — es solo el piso de
+seguridad si `revalidateTag` fallara, el mecanismo primario sigue siendo la
+invalidación por tag/slug en cada escritura real (ver `lib/cache/detailCache.ts`).
+
+**Orden correcto después de cualquier operación que modifique promos o comercios**
+(scraper manual, limpieza, script suelto contra prod):
+```
+scrapers (o el script que corresponda) -> npm run revalidate:prod -> npm run warm:prod
+```
+- `revalidate:prod` invalida por tag/slug (ver arriba) — sin este paso, un script que
+  escribe directo a la DB de prod vía Prisma deja contenido viejo cacheado hasta que
+  venza el TTL (ahora 3 días, antes 12h).
+- `warm:prod` (`scripts/warm-detail-cache.ts`) recorre los slugs de promos ACTIVE y
+  comercios con `activePromoCount > 0`, pidiendo cada `/promos/<slug>` y
+  `/comercios/<slug>` en producción para que el próximo visitante (o el próximo crawl
+  de Googlebot) encuentre un HIT en vez de disparar el miss. Pacing deliberadamente
+  lento (1 request cada 12s, ~5/min) para quedar por debajo del límite de bots del
+  middleware (`RATE_LIMIT_BOT_MAX = 6/min` por IP, con ban de 5 min si se excede) — el
+  script nunca falsea un User-Agent de navegador ni de Googlebot, así que cae en esa
+  categoría y se throttlea en vez de intentar saltarse el límite. Soporta
+  `--limit=N` (probar con las primeras N de cada tipo) y `--only=promos|comercios`.
+
+**Gap conocido, sin resolver todavía**: varios scripts sueltos en `scripts/` escriben
+directo sobre `Promo`/`Commerce` vía Prisma (contra la DB de prod) sin llamar a
+`revalidate:prod` después, y nada los obliga a hacerlo — es un paso manual que depende
+de que quien corre el script se acuerde. Ejemplos confirmados: `seed-logos.ts`,
+`fix-broken-logos.ts`, `load-instagram-urls.ts`, `normalize-commerces.ts` (todos tocan
+`commerce.logoUrl`/`name`/`instagramUrl`, campos que se renderizan directo en las
+páginas de detalle cacheadas), y varios scripts de limpieza/scope
+(`cleanup-*.ts`, `sync-scopes-targeted.ts`, `fix-and-enrich-scopes.ts`,
+`enrich-promo-scopes.ts`, `seed-bank-promo-stacking.ts`, `backfill-sort-fields.ts`,
+`restore-structural.ts`). Además, `scripts/expire-promos.ts` es una versión standalone
+duplicada de la lógica de `app/api/internal/expire-promos/route.ts` — ese endpoint SÍ
+invalida correctamente por slug y es el que corre `expire-promos.yml` en GitHub
+Actions, pero si alguien corre el script suelto a mano en vez del endpoint, expira
+promos sin invalidar nada. Con el TTL ahora en 3 días, el costo de olvidarse
+`revalidate:prod` después de uno de estos scripts es mayor que con 12h — evaluar si
+conviene que estos scripts llamen a `revalidate:prod` automáticamente al final, o al
+menos imprimir un recordatorio en su output.

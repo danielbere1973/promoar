@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test": "vitest run",
     "revalidate:prod": "npx tsx scripts/revalidate-prod.ts",
+    "warm:prod": "npx tsx scripts/warm-detail-cache.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

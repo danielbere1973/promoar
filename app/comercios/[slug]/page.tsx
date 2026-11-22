@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { Metadata } from 'next'
 import Link from 'next/link'
@@ -28,13 +29,21 @@ function makeGetCommerceBySlug(slug: string) {
       }).catch(() => null)
     },
     ['commerce-detail-by-slug'],
-    { tags: [COMMERCE_DETAIL_TAG, commerceDetailIdTag(slug)], revalidate: 43200 },
+    // TTL de seguridad subido de 12h a 3 días (10/11/2026) — mismo criterio que
+    // getCachedPromoBySlug en app/promos/[slug]/page.tsx: toda escritura real que afecta
+    // esta página invalida por slug, este revalidate es el piso de seguridad, no el
+    // mecanismo primario.
+    { tags: [COMMERCE_DETAIL_TAG, commerceDetailIdTag(slug)], revalidate: 259200 },
   )
 }
 
-async function getCachedCommerceBySlug(slug: string) {
+// cache() de React dedupea esta llamada DENTRO de un mismo request — mismo problema y
+// mismo fix que getCachedPromoBySlug en app/promos/[slug]/page.tsx (ver ese comentario
+// para el detalle completo). generateMetadata y el componente de página llamaban cada
+// uno a su propia factory unstable_cache, duplicando la query en cada cache-miss real.
+const getCachedCommerceBySlug = cache(async (slug: string) => {
   return makeGetCommerceBySlug(slug)(slug)
-}
+})
 
 type PromoFilters = { catSlugs?: string[]; entitySlugs?: string[] }
 
