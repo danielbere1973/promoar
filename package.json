@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "revalidate:prod": "npx tsx scripts/revalidate-prod.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

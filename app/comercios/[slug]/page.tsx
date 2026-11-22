@@ -28,7 +28,7 @@ function makeGetCommerceBySlug(slug: string) {
       }).catch(() => null)
     },
     ['commerce-detail-by-slug'],
-    { tags: [COMMERCE_DETAIL_TAG, commerceDetailIdTag(slug)], revalidate: false },
+    { tags: [COMMERCE_DETAIL_TAG, commerceDetailIdTag(slug)], revalidate: 43200 },
   )
 }
 
@@ -79,7 +79,7 @@ async function getCommercePromos(commerceId: string, filters: PromoFilters = {})
 const getCachedCommercePromos = unstable_cache(
   async (commerceId: string) => getCommercePromos(commerceId, {}),
   ['commerce-detail-promos'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: 43200 },
 )
 
 // Bancos/billeteras con al menos una promo activa de este comercio, para
@@ -110,7 +110,7 @@ const getCachedCommerceEntities = unstable_cache(
     ]
   },
   ['commerce-detail-entities'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: false },
+  { tags: [COMMERCE_DETAIL_TAG], revalidate: 43200 },
 )
 
 const DAYS_LABELS: Record<number, string> = {

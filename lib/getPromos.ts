@@ -118,14 +118,13 @@ const getActiveTodayCount = unstable_cache(
   { revalidate: 21600, tags: [PROMOS_PUBLIC_TAG] },
 )
 
-// Sin TTL ciego (revalidate: false, como /promos/[slug] y /comercios/[slug]):
-// invalidación exclusivamente por revalidateTag('promos-public') disparado
-// desde cada mutación real (scraper, admin CRUD, auto-validate, cron de
-// expiración) — ver lib/cache/promosCache.ts. Antes tenía un TTL de 10 min
-// como red de seguridad; se saca porque con la invalidación por evento ya
-// cubierta en todos los puntos de escritura, ese TTL solo generaba misses
-// (y por lo tanto carga a Neon) innecesarios cada 10 minutos sin que nada
-// hubiera cambiado.
+// TTL de seguridad de 12h (antes revalidate: false): invalidación principal
+// sigue siendo por revalidateTag('promos-public') disparado desde cada
+// mutación real (scraper, admin CRUD, auto-validate, cron de expiración) —
+// ver lib/cache/promosCache.ts. El TTL es solo una red de seguridad para
+// scripts sueltos que escriben directo en la DB de producción sin pasar por
+// un endpoint Next.js (revalidateTag no existe fuera de ese runtime) — ver
+// npm run revalidate:prod y la regla en CLAUDE.md.
 //
 // El filtro de día (dayBit) se aplica en el WHERE de la query SQL, ANTES del
 // take/skip — filtrarlo en JS después de paginar (como se hacía antes) recorta
@@ -287,7 +286,7 @@ const getPublicPromosPage = unstable_cache(
     return [promos, totalCount] as const
   },
   ['public-promos-page'],
-  { revalidate: false, tags: [PROMOS_PUBLIC_TAG] }, // sin TTL — invalidación solo por evento (ver comentario arriba)
+  { revalidate: 43200, tags: [PROMOS_PUBLIC_TAG] }, // 12h techo de seguridad — invalidación principal por evento (ver comentario arriba)
 )
 
 // ─── Alternativa 2 (DR-004) — Candidate Selection con conocimiento de perfil ──

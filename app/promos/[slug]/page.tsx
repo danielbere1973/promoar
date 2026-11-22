@@ -42,7 +42,7 @@ function makeGetPromoBySlug(slug: string) {
       return promo
     },
     ['promo-detail-by-slug'],
-    { tags: [PROMO_DETAIL_TAG, promoDetailIdTag(slug)], revalidate: false },
+    { tags: [PROMO_DETAIL_TAG, promoDetailIdTag(slug)], revalidate: 43200 },
   )
 }
 
@@ -56,7 +56,7 @@ const getCachedCommerceBranchesCount = unstable_cache(
     take: 1,
   }),
   ['promo-detail-commerce-branches'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
 )
 
 // Otras promos activas del mismo comercio con bancos/billeteras distintos — alimenta
@@ -77,7 +77,7 @@ const getCachedCommerceOtherPromos = unstable_cache(
     take: 6,
   }),
   ['promo-detail-commerce-other-promos'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
 )
 
 // Descubrimiento cruzado ("También te podría interesar"): otros comercios con
@@ -115,7 +115,7 @@ const getCachedRelatedCommerces = unstable_cache(
       .slice(0, 8)
   },
   ['promo-detail-related-commerces'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
 )
 
 const FEATURED_PROMO_SELECT = {
@@ -145,7 +145,7 @@ const getCachedFeaturedPromos = unstable_cache(
     take: 6,
   }),
   ['promo-detail-featured-promos'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
 )
 
 // Mismo pool pero acotado al rubro de la promo vencida — si alguien buscaba
@@ -203,7 +203,7 @@ const getCachedFeaturedPromosByCategory = unstable_cache(
     return result
   },
   ['promo-detail-featured-promos-by-category'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
 )
 
 // Slugs de promos borradas (expiradas y purgadas) son re-pedidos por bots una y
@@ -215,7 +215,7 @@ const getCachedGuessedCommerceSlug = unstable_cache(
     select: { slug: true },
   }),
   ['promo-detail-guessed-commerce'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: false },
+  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
 )
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

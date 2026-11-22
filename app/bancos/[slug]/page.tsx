@@ -38,7 +38,7 @@ const getCachedEntity = unstable_cache(
     return null
   },
   ['bank-detail-entity-by-slug'],
-  { tags: [BANK_DETAIL_TAG], revalidate: false },
+  { tags: [BANK_DETAIL_TAG], revalidate: 43200 },
 )
 
 // Nota: con filtros (cats/commerces/entities) no se cachea — unstable_cache
@@ -47,7 +47,7 @@ const getCachedEntity = unstable_cache(
 const getCachedPromos = unstable_cache(
   async (entityId: string, entityType: 'bank' | 'wallet', page: number) => getPromos({ id: entityId, type: entityType } as EntityInfo, page, {}),
   ['bank-detail-promos'],
-  { tags: [BANK_DETAIL_TAG], revalidate: false },
+  { tags: [BANK_DETAIL_TAG], revalidate: 43200 },
 )
 
 type PromoFilters = { catSlugs?: string[]; commerceSlugs?: string[] }
@@ -75,7 +75,7 @@ const getCachedEntityCommerces = unstable_cache(
     return commerces
   },
   ['bank-detail-entity-commerces'],
-  { tags: [BANK_DETAIL_TAG], revalidate: false },
+  { tags: [BANK_DETAIL_TAG], revalidate: 43200 },
 )
 
 // Otros bancos/billeteras con promos activas, para que el usuario chusmee
@@ -100,7 +100,7 @@ const getCachedOtherEntities = unstable_cache(
     ]
   },
   ['bank-detail-other-entities'],
-  { tags: [BANK_DETAIL_TAG], revalidate: false },
+  { tags: [BANK_DETAIL_TAG], revalidate: 43200 },
 )
 
 async function getPromos(entity: EntityInfo, page: number, filters: PromoFilters) {
