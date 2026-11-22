@@ -1,8 +1,26 @@
-import { revalidateTag } from 'next/cache'
+import { revalidateTag, unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 
 export const PROMOS_PUBLIC_TAG = 'promos-public'
 export const CATALOG_VERSION_KEY = 'catalogVersion'
+
+/**
+ * Lectura cacheada de catalogVersion para la ruta pública (/promos/explorar,
+ * /api/promos/public) — a diferencia de getCurrentCatalogVersion() en
+ * lib/recommendationSnapshot.ts (lectura directa sin caché, usada por el
+ * RecommendationSnapshot autenticado por usuario), esta NO debe pegarle a la
+ * DB en cada visita de invitado. Mismo tag que getPublicPromosPage
+ * (PROMOS_PUBLIC_TAG) y mismo techo de seguridad de 12h — se invalida por
+ * evento vía invalidatePublicPromosCache(), no por el TTL.
+ */
+export const getCachedCatalogVersion = unstable_cache(
+  async (): Promise<string> => {
+    const config = await prisma.siteConfig.findUnique({ where: { key: CATALOG_VERSION_KEY } })
+    return config?.value ?? '0'
+  },
+  ['public-catalog-version'],
+  { revalidate: 43200, tags: [PROMOS_PUBLIC_TAG] },
+)
 
 /**
  * Incrementa SiteConfig.catalogVersion de forma atómica (UPDATE en el propio

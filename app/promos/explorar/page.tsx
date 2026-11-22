@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth/next'
 import { cookies } from 'next/headers'
 import { getPromosData } from '@/lib/getPromos'
+import { getCachedCatalogVersion } from '@/lib/cache/promosCache'
 import PromosClient from './PromosClient'
 import CategoryPillarLinks from '@/app/components/CategoryPillarLinks'
 
@@ -42,13 +43,19 @@ export default async function PromosPage({
   const noFilters = initialCats.length === 0
   const paginate = noFilters
 
-  const { promos: rawPromos, totalCount } = await getPromosData(
-    paginate
-      ? { forMe, view: 'today', categorySlugs: initialCats, paginate: true, page: 1, pageSize: PREVIEW_TAKE, province: initialProvince }
-      : { forMe, view: 'today', categorySlugs: initialCats, take: PREVIEW_TAKE, province: initialProvince },
-    session?.user?.email,
-    isAdmin,
-  ).catch(() => ({ promos: null, totalCount: 0 }))
+  const [{ promos: rawPromos, totalCount }, catalogVersion] = await Promise.all([
+    getPromosData(
+      paginate
+        ? { forMe, view: 'today', categorySlugs: initialCats, paginate: true, page: 1, pageSize: PREVIEW_TAKE, province: initialProvince }
+        : { forMe, view: 'today', categorySlugs: initialCats, take: PREVIEW_TAKE, province: initialProvince },
+      session?.user?.email,
+      isAdmin,
+    ).catch(() => ({ promos: null, totalCount: 0 })),
+    // catalogVersion cacheado (mismo tag PROMOS_PUBLIC_TAG) — se embebe como `v`
+    // en la URL que el cliente llama a /api/promos/public para que un bump de
+    // catálogo produzca una cache-key distinta en la CDN (ver ese route.ts).
+    getCachedCatalogVersion().catch(() => '0'),
+  ])
 
   // Mismo round-trip de serialización que NextResponse.json (convierte Date -> string ISO)
   // para que coincida con el tipo `Promo` esperado por PromosClient
@@ -58,7 +65,13 @@ export default async function PromosPage({
     <>
       {/* Server-rendered, no interfiere con el layout client sidebar/mobile de PromosClient */}
       <CategoryPillarLinks />
-      <PromosClient initialPromos={initialPromos} initialCats={initialCats} initialTotalCount={totalCount} initialProvince={initialProvince} />
+      <PromosClient
+        initialPromos={initialPromos}
+        initialCats={initialCats}
+        initialTotalCount={totalCount}
+        initialProvince={initialProvince}
+        catalogVersion={catalogVersion}
+      />
     </>
   )
 }

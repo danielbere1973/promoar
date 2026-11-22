@@ -468,7 +468,7 @@ function ConfettiBurst() {
   )
 }
 
-export default function PromosClient({ initialPromos, initialCats, initialTotalCount, initialProvince }: { initialPromos: Promo[] | null, initialCats: string[], initialTotalCount: number, initialProvince?: string | null }) {
+export default function PromosClient({ initialPromos, initialCats, initialTotalCount, initialProvince, catalogVersion }: { initialPromos: Promo[] | null, initialCats: string[], initialTotalCount: number, initialProvince?: string | null, catalogVersion?: string }) {
   const { data: session, status } = useSession()
   const nombre = session?.user?.name || 'Invitado'
   const iniciales = (() => {
@@ -1036,12 +1036,41 @@ export default function PromosClient({ initialPromos, initialCats, initialTotalC
         // Hay promos visibles y el usuario cambió algo → overlay de transición
         setFilterLoading(true)
       }
+      // Caso invitado cacheable por CDN (pedido explícito de Pablo, 22/11/2026):
+      // sin sesión, sin perfil guest, sin filtros manuales, página 1, a lo sumo
+      // 1 categoría. Cualquier otra condición sigue yendo por /api/promos (sin
+      // cache HTTP) exactamente como antes. `v` embebe catalogVersion para que
+      // un bump de catálogo produzca una cache-key distinta en la CDN en vez de
+      // depender de una purga.
+      const isCacheableGuest =
+        !session?.user?.email &&
+        !(guestProfile?.cards?.length && status !== 'authenticated') &&
+        page === 1 &&
+        selectedCats.length <= 1 &&
+        activeFilters.banks.length === 0 && activeFilters.wallets.length === 0 &&
+        activeFilters.networks.length === 0 && activeFilters.days.length === 0 &&
+        activeFilters.channels.length === 0 && activeFilters.capPeriods.length === 0 &&
+        activeFilters.hasCap === null && activeFilters.capMin === null && activeFilters.capMax === null &&
+        activeFilters.commerces.length === 0 && activeFilters.discountRanges.length === 0 &&
+        activeFilters.hasInstallments === null
+
+      let fetchUrl = `/api/promos?${cacheKey}`
+      let fetchOptions: RequestInit = {
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: session?.user?.email ? { 'x-user-email': session.user.email } : {},
+      }
+      if (isCacheableGuest) {
+        const publicParams = new URLSearchParams()
+        publicParams.set('view', timeFilter)
+        if (selectedCats.length === 1) publicParams.set('category', selectedCats[0])
+        if (province) publicParams.set('province', province)
+        if (catalogVersion) publicParams.set('v', catalogVersion)
+        fetchUrl = `/api/promos/public?${publicParams.toString()}`
+        fetchOptions = { signal: controller.signal }
+      }
       try {
-        const res = await fetch(`/api/promos?${cacheKey}`, {
-          cache: 'no-store',
-          signal: controller.signal,
-          headers: session?.user?.email ? { 'x-user-email': session.user.email } : {},
-        })
+        const res = await fetch(fetchUrl, fetchOptions)
         if (res.ok) {
           const data = await res.json()
           if (page > 1) {

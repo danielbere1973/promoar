@@ -10,9 +10,14 @@
  *   npm run revalidate:prod -- --promo-slugs=slug-1,slug-2
  *   npm run revalidate:prod -- --commerce-slugs=coto,jumbo
  */
+import 'dotenv/config'
 
 const PROD_URL = 'https://www.promoar.com.ar'
-const SECRET = process.env.VTEX_SESSION_SECRET
+
+// trim + despoja comillas envolventes (por si el .env las trae literales,
+// cosa que el --env-file nativo de Node no normaliza como sí hace dotenv)
+const RAW_SECRET = process.env.VTEX_SESSION_SECRET
+const SECRET = RAW_SECRET?.trim().replace(/^['"]|['"]$/g, '')
 
 if (!SECRET) {
   console.error('ERROR: Falta VTEX_SESSION_SECRET en el .env')
