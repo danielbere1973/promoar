@@ -227,6 +227,12 @@ const getPublicPromosPage = unstable_cache(
           validDaysNote: true,
           specificDates: true,
           salesChannel: true,
+          // geographicScope/provinces: NO se pueden sacar — las consume el filtro
+          // geográfico ADR-001 server-side (más abajo, `if (userProvince && !isAdmin)`)
+          // para calcular coverageStatus/coverageLabel y decidir inclusión/exclusión
+          // por provincia. Verificado con grep antes de este edit (RFC
+          // perf-payload-and-sort): remover estos 2 campos rompe silenciosamente el
+          // filtrado por ubicación para cualquier guest/usuario con provincia.
           geographicScope: true,
           provinces: true,
           validFrom: true,
@@ -235,8 +241,6 @@ const getPublicPromosPage = unstable_cache(
           commerceId: true,
           isFeatured: true,
           commerceNote: true,
-          validFromHour: true,
-          validToHour: true,
           category: { select: { name: true, slug: true, icon: true, color: true } },
           commerce: {
             select: {
@@ -256,10 +260,35 @@ const getPublicPromosPage = unstable_cache(
               } : {}),
             },
           },
+          // select explícito (no include): mismo recorte de columnas de
+          // promo_requirements que el findMany de getPromosData (RFC
+          // perf-payload-and-sort, 25/8/2026) — auditado contra
+          // PromoCard/PromoDetailSheet/PromosClient/CommerceGroupCard/
+          // RecommendationSpotlight/SecondaryCard/PaymentMethodBadge/CategoryFilterBar
+          // antes de recortar.
+          // `id` SE MANTIENE: lo consume el flujo de "Registrar uso" (tope de
+          // gasto) de punta a punta — PromoCard -> PromosClient.handleRegisterUsage
+          // -> RegisterUsageModal -> POST /api/promo-usage { requirementId }.
+          // Sacarlo rompe ese flujo en silencio (404 "Requisito no encontrado").
+          // Encontrado por auditoría de uso de campos antes de este commit.
           requirements: {
-            include: {
-              bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
-              wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
+            select: {
+              id: true,
+              cardType: true,
+              note: true,
+              accountType: true,
+              paymentChannel: true,
+              cap: true,
+              capUnlimited: true,
+              capPeriod: true,
+              discountType: true,
+              discountValue: true,
+              minPurchase: true,
+              nxmM: true,
+              nxmN: true,
+              segment: true,
+              bank: { select: { id: true, name: true, logoUrl: true } },
+              wallet: { select: { id: true, name: true, logoUrl: true } },
               cardNetwork: { select: { id: true, name: true, slug: true } },
             },
           },
@@ -904,6 +933,10 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             validDaysNote: true,
             specificDates: true,
             salesChannel: true,
+            // geographicScope/provinces: NO se pueden sacar — las consume el filtro
+            // geográfico ADR-001 server-side (más abajo, `if (userProvince && !isAdmin)`)
+            // para calcular coverageStatus/coverageLabel y decidir inclusión/exclusión
+            // por provincia. Ver mismo comentario en getPublicPromosPage más arriba.
             geographicScope: true,
             provinces: true,
             validFrom: true,
@@ -912,13 +945,6 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
             commerceId: true,
             isFeatured: true,
             commerceNote: true,
-            validFromHour: true,
-            validToHour: true,
-            stackable: true,
-            description: true,
-            sourceUrl: true,
-            sourceText: true,
-            stackableNote: true,
             category: { select: { name: true, slug: true, icon: true, color: true } },
             commerce: {
               select: {
@@ -932,10 +958,35 @@ export async function getPromosData(params: PromoQueryParams, email?: string | n
                 ...(userProvince && !isAdmin ? { branches: { select: { province: true }, where: { province: { not: null } } } } : {}),
               },
             },
+            // select explícito (no include): recorta columnas de promo_requirements
+            // no leídas por ningún componente cliente (ids de FK planas, cardTier,
+            // cardSegmentId, segmentId, accountTypeId, capTarget) — auditado contra
+            // PromoCard/PromoDetailSheet/PromosClient/CommerceGroupCard/
+            // RecommendationSpotlight/SecondaryCard/PaymentMethodBadge/CategoryFilterBar
+            // antes de recortar. Ver commit de este cambio para el detalle.
+            // `id` SE MANTIENE: lo consume el flujo de "Registrar uso" (tope de
+            // gasto) de punta a punta — PromoCard -> PromosClient.handleRegisterUsage
+            // -> RegisterUsageModal -> POST /api/promo-usage { requirementId }.
+            // Sacarlo rompe ese flujo en silencio (404 "Requisito no encontrado").
+            // Encontrado por auditoría de uso de campos antes de este commit.
             requirements: {
-              include: {
-                bank: { select: { id: true, name: true, slug: true, logoUrl: true } },
-                wallet: { select: { id: true, name: true, slug: true, logoUrl: true } },
+              select: {
+                id: true,
+                cardType: true,
+                note: true,
+                accountType: true,
+                paymentChannel: true,
+                cap: true,
+                capUnlimited: true,
+                capPeriod: true,
+                discountType: true,
+                discountValue: true,
+                minPurchase: true,
+                nxmM: true,
+                nxmN: true,
+                segment: true,
+                bank: { select: { id: true, name: true, logoUrl: true } },
+                wallet: { select: { id: true, name: true, logoUrl: true } },
                 cardNetwork: { select: { id: true, name: true, slug: true } },
               },
             },

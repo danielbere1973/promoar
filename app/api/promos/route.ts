@@ -115,7 +115,24 @@ export async function GET(req: NextRequest) {
       email,
       isAdmin
     )
-    return NextResponse.json(result)
+
+    // Alarma de tamaño de payload — pedido explícito de Pablo (22/11/2026):
+    // avisar bien antes del límite real de ~4.5MB que ya se vio pegar un 200
+    // con payloads de ~4.7MB. 3.8MB es el umbral de alerta temprana.
+    const serialized = JSON.stringify(result)
+    const bytes = Buffer.byteLength(serialized, 'utf8')
+    const SIZE_WARN_THRESHOLD = 3_800_000
+    if (bytes > SIZE_WARN_THRESHOLD) {
+      console.warn(
+        `[promos-size-warning] /api/promos devolvió ${(bytes / 1_000_000).toFixed(2)}MB ` +
+        `(${result.promos?.length ?? 0} promos) — supera el umbral de alerta de ` +
+        `${(SIZE_WARN_THRESHOLD / 1_000_000).toFixed(1)}MB. Límite de riesgo real: ~4.5MB.`
+      )
+    }
+
+    return new NextResponse(serialized, {
+      headers: { 'Content-Type': 'application/json' },
+    })
   } catch (error) {
     console.error('[GET /api/promos]', error)
     return NextResponse.json({ error: 'Error al obtener promos' }, { status: 500 })
