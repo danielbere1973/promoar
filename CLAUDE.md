@@ -1096,6 +1096,35 @@ mismo secreto que `save-promos`), que invalida promos/categorías/entities/site-
 detalle de promos/comercios/bancos; acepta `--promo-slugs=`/`--commerce-slugs=` para
 invalidación puntual.
 
+## Endpoint interno `/api/internal/warm-detail` (22/11/2026)
+`lib/cache/detailFetchers.ts` centraliza `makeGetPromoBySlug`/`getCachedPromoBySlug` y
+`makeGetCommerceBySlug`/`getCachedCommerceBySlug` (antes vivían inline en cada `page.tsx`).
+Tanto `app/promos/[slug]/page.tsx` y `app/comercios/[slug]/page.tsx` como el endpoint
+`POST /api/internal/warm-detail` importan estas mismas funciones — mismos `keyParts`, mismos
+tags, mismo `revalidate` (259200s) — así que calentar vía el endpoint llena exactamente la
+misma entrada de caché que lee la página. Si alguna vez se duplica esta lógica en vez de
+importar desde `detailFetchers.ts`, calentar deja de tener efecto real sobre lo que ve la
+página (dos entradas de caché distintas, aunque "equivalentes" en el código).
+
+Auth: mismo secreto y mismo algoritmo (`timingSafeEqual` contra `VTEX_SESSION_SECRET`) que
+`/api/internal/revalidate` — no se expone como helper compartido todavía porque
+`revalidate/route.ts` tampoco lo exporta (es una función de módulo privada ahí); si se
+necesita reusar literalmente, extraer a `lib/internalAuth.ts` en el futuro.
+
+Body: `{ type: "promo" | "comercio", slugs: string[] }`, máximo 50 slugs por request
+(400 si se excede), concurrencia interna 5 (por el `connection_limit=10` de Prisma).
+Devuelve `{ ok, requested, warmed, notFound, errors, ms }`.
+
+`scripts/warm-detail-cache.ts` (`npm run warm:prod`) lee de la DB (solo lectura) los slugs
+de promos ACTIVE y comercios con `activePromoCount > 0`, y los manda al endpoint en tandas
+secuenciales de 50. Flags: `--dry-run`, `--limit=N`, `--type=promo|comercio`. Reintenta una
+vez ante error de red y sale con código ≠0 si hubo errores.
+
+**Orden correcto (actualiza la nota de abajo)**: `scrapers -> npm run revalidate:prod ->
+npm run warm:prod`. Importante: `revalidate:prod` invalida/limpia el caché de detalle por
+tag, así que si se corre `warm:prod` ANTES, está calentando entradas que `revalidate:prod`
+va a borrar un segundo después — siempre en ese orden, nunca al revés ni por separado.
+
 ## Regla: dedup de detalle (React cache()) y TTL de 3 días en /promos/[slug] y /comercios/[slug] (22/11/2026)
 `generateMetadata` y el componente de página de ambas rutas llamaban cada uno, por
 separado, a su propio fetcher `unstable_cache`-eado por slug — Next.js no dedupea

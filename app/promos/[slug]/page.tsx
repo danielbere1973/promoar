@@ -1,5 +1,4 @@
 import { notFound, redirect } from 'next/navigation'
-import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
@@ -11,56 +10,13 @@ import PromoUnavailable from '@/app/components/PromoUnavailable'
 import DetailSidebar from './DetailSidebar'
 import DetailCTA from './DetailCTA'
 import { schemaOffer } from '@/lib/schema'
-import { PROMO_DETAIL_TAG, promoDetailIdTag } from '@/lib/cache/detailCache'
+import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
+import { getCachedPromoBySlug } from '@/lib/cache/detailFetchers'
 import { getPromoScope } from '@/lib/utils/promoScope'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 export const revalidate = false
-
-// unstable_cache exige un array de tags estático por función — no puede
-// depender del resultado (acá no se conoce el promo.id hasta resolver el
-// slug). Por eso se usa una factory: se crea un unstable_cache nuevo por
-// slug, con el tag `promo:<slug>` ya armado en ese momento. Next.js dedupea
-// por keyParts + argumentos reales, no por identidad del closure, así que
-// llamar a la factory de nuevo con el mismo slug en otro request reusa la
-// misma entrada de cache sin problema.
-function makeGetPromoBySlug(slug: string) {
-  return unstable_cache(
-    async (slug: string) => {
-      if (process.env.NODE_ENV === 'production') console.log(`[cache-miss] promo-detail ${slug}`)
-      const promo = await prisma.promo.findUnique({
-        where: { slug },
-        include: {
-          commerce: true,
-          category: true,
-          requirements: {
-            include: { bank: true, wallet: true, cardNetwork: true },
-            orderBy: { discountValue: 'desc' },
-          },
-        },
-      })
-      return promo
-    },
-    ['promo-detail-by-slug'],
-    // TTL de seguridad subido de 12h a 3 días (10/11/2026) — toda escritura real sobre
-    // Promo/Commerce que afecta esta página invalida por slug (ver detailCache.ts y el
-    // audit en el PR que subió este TTL); el revalidate acá es solo el piso de
-    // seguridad si revalidateTag llegara a fallar, no el mecanismo primario.
-    { tags: [PROMO_DETAIL_TAG, promoDetailIdTag(slug)], revalidate: 259200 },
-  )
-}
-
-// cache() de React dedupea esta llamada DENTRO de un mismo request — generateMetadata
-// y el componente de página llaman a getCachedPromoBySlug independientemente, y sin esto
-// cada uno invoca su propia factory unstable_cache (misma key, pero Next.js no dedupea
-// closures distintos), corriendo la query de Prisma 2 veces en cada cache-miss real
-// (confirmado en logs de producción: "[cache-miss] promo-detail <slug>" duplicado con el
-// mismo timestamp). unstable_cache sigue siendo quien persiste el resultado entre
-// requests/instancias — cache() solo evita la duplicación dentro de UN request.
-const getCachedPromoBySlug = cache(async (slug: string) => {
-  return makeGetPromoBySlug(slug)(slug)
-})
 
 const getCachedCommerceBranchesCount = unstable_cache(
   async (commerceId: string) => prisma.commerceBranch.findMany({

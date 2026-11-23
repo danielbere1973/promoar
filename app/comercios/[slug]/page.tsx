@@ -1,49 +1,17 @@
 import { notFound } from 'next/navigation'
-import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
-import { COMMERCE_DETAIL_TAG, commerceDetailIdTag } from '@/lib/cache/detailCache'
+import { COMMERCE_DETAIL_TAG } from '@/lib/cache/detailCache'
+import { getCachedCommerceBySlug } from '@/lib/cache/detailFetchers'
 import DetailPageShell from '@/app/components/DetailPageShell'
 import EntityPromoGrid from '@/app/components/EntityPromoGrid'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 export const revalidate = false
-
-// Mismo problema que getCachedPromoBySlug en app/promos/[slug]/page.tsx: el id
-// del comercio no se conoce hasta resolver el slug, así que se tagea por slug
-// (factory por slug en vez de un unstable_cache con tags fijos).
-function makeGetCommerceBySlug(slug: string) {
-  return unstable_cache(
-    async (slug: string) => {
-      if (process.env.NODE_ENV === 'production') console.log(`[cache-miss] comercio-detail ${slug}`)
-      return prisma.commerce.findUnique({
-        where: { slug },
-        include: {
-          defaultCategory: true,
-          _count: { select: { branches: true } },
-        },
-      }).catch(() => null)
-    },
-    ['commerce-detail-by-slug'],
-    // TTL de seguridad subido de 12h a 3 días (10/11/2026) — mismo criterio que
-    // getCachedPromoBySlug en app/promos/[slug]/page.tsx: toda escritura real que afecta
-    // esta página invalida por slug, este revalidate es el piso de seguridad, no el
-    // mecanismo primario.
-    { tags: [COMMERCE_DETAIL_TAG, commerceDetailIdTag(slug)], revalidate: 259200 },
-  )
-}
-
-// cache() de React dedupea esta llamada DENTRO de un mismo request — mismo problema y
-// mismo fix que getCachedPromoBySlug en app/promos/[slug]/page.tsx (ver ese comentario
-// para el detalle completo). generateMetadata y el componente de página llamaban cada
-// uno a su propia factory unstable_cache, duplicando la query en cada cache-miss real.
-const getCachedCommerceBySlug = cache(async (slug: string) => {
-  return makeGetCommerceBySlug(slug)(slug)
-})
 
 type PromoFilters = { catSlugs?: string[]; entitySlugs?: string[] }
 
