@@ -1260,14 +1260,15 @@ de que quien corre el script se acuerde. Ejemplos confirmados: `seed-logos.ts`,
 páginas de detalle cacheadas), y varios scripts de limpieza/scope
 (`cleanup-*.ts`, `sync-scopes-targeted.ts`, `fix-and-enrich-scopes.ts`,
 `enrich-promo-scopes.ts`, `seed-bank-promo-stacking.ts`, `backfill-sort-fields.ts`,
-`restore-structural.ts`). Además, `scripts/expire-promos.ts` es una versión standalone
-duplicada de la lógica de `app/api/internal/expire-promos/route.ts` — ese endpoint SÍ
-invalida correctamente por slug y es el que corre `expire-promos.yml` en GitHub
-Actions, pero si alguien corre el script suelto a mano en vez del endpoint, expira
-promos sin invalidar nada. Con el TTL ahora en 7 días, el costo de olvidarse
-`revalidate:prod` después de uno de estos scripts es mayor que antes — evaluar si
-conviene que estos scripts llamen a `revalidate:prod` automáticamente al final, o al
-menos imprimir un recordatorio en su output.
+`restore-structural.ts`). El único flujo real de expiración es
+`app/api/internal/expire-promos/route.ts` (corrido por `expire-promos.yml` en GitHub
+Actions), que SÍ invalida correctamente por slug
+(`invalidatePromoDetailBySlugs`/`invalidateCommerceDetailBySlugs`, líneas 36-37) —
+confirmado el 23/11/2026. No existe un `scripts/expire-promos.ts` standalone (nota
+anterior sobre un duplicado desactualizado, corregida). Con el TTL ahora en 7 días, el
+costo de olvidarse `revalidate:prod` después de uno de los scripts sueltos listados
+arriba es mayor que antes — evaluar si conviene que llamen a `revalidate:prod`
+automáticamente al final, o al menos imprimir un recordatorio en su output.
 
 ## Warm proactivo de /api/internal/warm-detail — ABANDONADO (23/11/2026)
 Después de 2 PRs de intentos de fix (#75 deps de CI, #76 "opción B" forzando
