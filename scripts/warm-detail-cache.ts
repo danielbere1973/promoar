@@ -14,6 +14,11 @@
  * bots) y llama DESDE ADENTRO de Next.js a las mismas funciones cacheadas que usan
  * las páginas (ver lib/cache/detailFetchers.ts) — sin HTTP de por medio, sin rate-limit.
  *
+ * La lista de slugs a calentar se pide por HTTP a GET /api/internal/warm-detail
+ * (mismo Bearer) en vez de abrir una conexión Prisma propia — así el script corre
+ * igual en local o en GitHub Actions sin necesitar DATABASE_URL como secret de CI
+ * (ver .github/workflows/warm-detail-cache.yml y la nota en CLAUDE.md).
+ *
  * Uso:
  *   npm run warm:prod
  *   npm run warm:prod -- --dry-run          (solo imprime cuántas promos/comercios y el ETA)
@@ -21,9 +26,6 @@
  *   npm run warm:prod -- --type=promo       (solo promos, o --type=comercio)
  */
 import 'dotenv/config'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
 
 const PROD_URL = 'https://www.promoar.com.ar'
 const BATCH_SIZE = 50
@@ -50,24 +52,18 @@ function hasFlag(flag: string): boolean {
   return process.argv.includes(flag)
 }
 
-async function getActivePromoSlugs(limit: number | null): Promise<string[]> {
-  const promos = await prisma.promo.findMany({
-    where: { status: 'ACTIVE', slug: { not: null } },
-    select: { slug: true },
-    orderBy: { updatedAt: 'desc' },
-    take: limit ?? undefined,
+async function getSlugList(type: 'promo' | 'comercio', limit: number | null): Promise<string[]> {
+  const params = new URLSearchParams({ type })
+  if (limit) params.set('limit', String(limit))
+  const res = await fetch(`${PROD_URL}/api/internal/warm-detail?${params.toString()}`, {
+    headers: { 'Authorization': `Bearer ${SECRET}` },
   })
-  return promos.map(p => p.slug).filter((s): s is string => !!s)
-}
-
-async function getActiveCommerceSlugs(limit: number | null): Promise<string[]> {
-  const commerces = await prisma.commerce.findMany({
-    where: { activePromoCount: { gt: 0 } },
-    select: { slug: true },
-    orderBy: { activePromoCount: 'desc' },
-    take: limit ?? undefined,
-  })
-  return commerces.map(c => c.slug).filter((s): s is string => !!s)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`No se pudo obtener la lista de slugs (${type}): HTTP ${res.status} — ${text.slice(0, 300)}`)
+  }
+  const data = await res.json() as { slugs: string[] }
+  return data.slugs
 }
 
 function sleep(ms: number): Promise<void> {
@@ -146,14 +142,14 @@ async function main() {
   const typeArg = parseStringArg('--type') // 'promo' | 'comercio' | null (ambos)
 
   const [promoSlugs, commerceSlugs] = await Promise.all([
-    typeArg === 'comercio' ? Promise.resolve([]) : getActivePromoSlugs(limit),
-    typeArg === 'promo' ? Promise.resolve([]) : getActiveCommerceSlugs(limit),
+    typeArg === 'comercio' ? Promise.resolve([]) : getSlugList('promo', limit),
+    typeArg === 'promo' ? Promise.resolve([]) : getSlugList('comercio', limit),
   ])
 
   const total = promoSlugs.length + commerceSlugs.length
   const totalBatches = Math.ceil(promoSlugs.length / BATCH_SIZE) + Math.ceil(commerceSlugs.length / BATCH_SIZE)
-  // Estimación conservadora: cada tanda de 50 slugs, con concurrencia interna 5,
-  // asumiendo ~300-500ms por query de Prisma -> ~3-5s por tanda.
+  // Estimación conservadora: cada tanda de 50 slugs, con concurrencia interna 5
+  // dentro del endpoint, asumiendo ~300-500ms por query de Prisma -> ~3-5s por tanda.
   const etaSec = totalBatches * 4
 
   console.log(`Calentando ${PROD_URL} — ${promoSlugs.length} promos + ${commerceSlugs.length} comercios = ${total} slugs.`)
@@ -161,7 +157,6 @@ async function main() {
 
   if (dryRun) {
     console.log('\n--dry-run: no se llamó al endpoint.')
-    await prisma.$disconnect()
     return
   }
 
@@ -176,11 +171,10 @@ async function main() {
   }
 
   console.log(totalErrors > 0 ? `\nTerminado con ${totalErrors} errores.` : '\nListo, sin errores.')
-  await prisma.$disconnect()
   if (totalErrors > 0) process.exit(1)
 }
 
 main().catch(e => {
   console.error('ERROR:', e.message)
-  prisma.$disconnect().finally(() => process.exit(1))
+  process.exit(1)
 })
