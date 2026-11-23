@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
-import { warmGetPromoBySlug, warmGetCommerceBySlug } from '@/lib/cache/detailFetchers'
+import { makeGetPromoBySlug, makeGetCommerceBySlug } from '@/lib/cache/detailFetchers'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -32,15 +32,13 @@ async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T
 }
 
 /**
- * Llena el caché de detalle (/promos/[slug] y /comercios/[slug]) llamando,
- * desde adentro del runtime de Next, a las MISMAS funciones cacheadas
- * (makeGetPromoBySlug / makeGetCommerceBySlug, ver lib/cache/detailFetchers.ts)
- * que usan esas páginas — mismos keyParts, mismos tags, mismo revalidate. Así
- * la página encuentra un HIT real, no una entrada de caché distinta que nadie lee.
- *
- * Pensado para scripts/warm-detail-cache.ts (npm run warm:prod), que manda
- * tandas de hasta MAX_SLUGS slugs — no para ser llamado desde el navegador ni
- * sin auth. Ver CLAUDE.md: scrapers -> npm run revalidate:prod -> npm run warm:prod.
+ * ABANDONADO (22/11/2026) — ver CLAUDE.md, sección "Warm proactivo de
+ * /api/internal/warm-detail — ABANDONADO". Escribir el caché desde este Route
+ * Handler NO llena la entrada que lee la página — el motivo exacto vive en el
+ * backend cerrado de Vercel y no se pudo confirmar desde el código. El botón
+ * del admin y el workflow que disparaban una corrida masiva están
+ * deshabilitados; esta ruta queda sin uso productivo, no borrada por si se
+ * retoma la investigación con más información de Vercel.
  */
 export async function POST(request: Request) {
   const auth = request.headers.get('Authorization') || ''
@@ -79,8 +77,8 @@ export async function POST(request: Request) {
   await runWithConcurrency(slugs, CONCURRENCY, async (slug) => {
     try {
       const result = type === 'promo'
-        ? await warmGetPromoBySlug(slug)
-        : await warmGetCommerceBySlug(slug)
+        ? await makeGetPromoBySlug(slug)(slug)
+        : await makeGetCommerceBySlug(slug)(slug)
       if (result) warmed++
       else notFound++
     } catch (error) {

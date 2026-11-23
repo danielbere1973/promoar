@@ -21,10 +21,6 @@ export default function WarmCachePanel() {
   const [run, setRun] = useState<WarmRun | null>(null)
   const [loadingStatus, setLoadingStatus] = useState(true)
   const [statusError, setStatusError] = useState('')
-  const [revalidate, setRevalidate] = useState(true)
-  const [triggering, setTriggering] = useState(false)
-  const [triggerError, setTriggerError] = useState('')
-  const [confirming, setConfirming] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -66,28 +62,11 @@ export default function WarmCachePanel() {
     }
   }, [run?.status, fetchStatus])
 
-  async function handleTrigger() {
-    setTriggering(true)
-    setTriggerError('')
-    try {
-      const res = await fetch('/api/admin/warm-cache', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revalidate }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setConfirming(false)
-        await fetchStatus()
-      } else {
-        setTriggerError(data.error || `Error ${res.status}`)
-      }
-    } catch {
-      setTriggerError('No se pudo disparar el workflow (GitHub no responde)')
-    } finally {
-      setTriggering(false)
-    }
-  }
+  // DESHABILITADO (22/11/2026) — warm proactivo abandonado, ver CLAUDE.md
+  // sección "Warm proactivo de /api/internal/warm-detail — ABANDONADO".
+  // El endpoint /api/admin/warm-cache devuelve 410 ahora; este botón ya no
+  // dispara nada. Se deja el panel solo para ver el historial de corridas
+  // viejas (GET sigue funcionando), no para lanzar una nueva.
 
   const isRunning = run?.status === 'queued' || run?.status === 'in_progress'
 
@@ -114,48 +93,19 @@ export default function WarmCachePanel() {
         <Flame size={14} className="text-orange-500" /> Precalentar cache de detalle
       </p>
       <p className="text-[11px] text-gray-400 mb-3">
-        Corre en GitHub Actions (~1 hora). Invalida y/o recalienta /promos/[slug] y /comercios/[slug] en producción.
+        Deshabilitado: lo que este workflow escribe no lo lee la página real en producción
+        (causa exacta no confirmable, backend de caché cerrado de Vercel) — ver CLAUDE.md.
+        Se abandonó el warm proactivo; el caché de detalle ahora se llena solo con TTL de 7 días.
       </p>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
-          <input
-            type="checkbox"
-            checked={revalidate}
-            onChange={e => setRevalidate(e.target.checked)}
-            disabled={isRunning || confirming}
-            className="w-4 h-4 accent-indigo-600"
-          />
-          Invalidar antes (revalidate)
-        </label>
-
-        {!confirming ? (
-          <button
-            onClick={() => setConfirming(true)}
-            disabled={isRunning || triggering}
-            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isRunning ? 'Ya hay una corrida en curso' : 'Precalentar cache'}
-          </button>
-        ) : (
-          <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">
-            <span className="text-xs text-orange-800 font-medium">Esto tarda ~1 hora y mantiene la base activa</span>
-            <button
-              onClick={handleTrigger}
-              disabled={triggering}
-              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
-            >
-              {triggering ? 'Disparando...' : 'Confirmar'}
-            </button>
-            <button
-              onClick={() => setConfirming(false)}
-              disabled={triggering}
-              className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-bold rounded-lg transition-colors"
-            >
-              Cancelar
-            </button>
-          </div>
-        )}
+        <button
+          disabled
+          title="Deshabilitado — ver CLAUDE.md, sección Warm proactivo abandonado"
+          className="px-4 py-2 bg-gray-200 text-gray-400 text-sm font-bold rounded-xl cursor-not-allowed"
+        >
+          Precalentar cache (deshabilitado)
+        </button>
 
         {statusBadge()}
 
@@ -170,10 +120,6 @@ export default function WarmCachePanel() {
           </a>
         )}
       </div>
-
-      {triggerError && (
-        <p className="text-xs text-red-600 font-medium mt-2">⚠️ {triggerError}</p>
-      )}
 
       {run && (
         <p className="text-[11px] text-gray-400 mt-2">

@@ -1096,7 +1096,14 @@ mismo secreto que `save-promos`), que invalida promos/categorías/entities/site-
 detalle de promos/comercios/bancos; acepta `--promo-slugs=`/`--commerce-slugs=` para
 invalidación puntual.
 
-## Endpoint interno `/api/internal/warm-detail` (22/11/2026)
+## Endpoint interno `/api/internal/warm-detail` — OBSOLETO, ver "Warm proactivo... ABANDONADO" (22/11/2026)
+> **Esta sección describe el diseño original, que terminó NO funcionando en producción.**
+> El mecanismo de abajo (llamar a `makeGetPromoBySlug`/`makeGetCommerceBySlug` desde un
+> Route Handler) nunca llenó la entrada de caché que lee la página real — ver la sección
+> "Warm proactivo de /api/internal/warm-detail — ABANDONADO (23/11/2026)" más abajo para
+> la investigación completa y la decisión final. Se deja esta sección sin borrar como
+> registro histórico de por qué se construyó así.
+
 `lib/cache/detailFetchers.ts` centraliza `makeGetPromoBySlug`/`getCachedPromoBySlug` y
 `makeGetCommerceBySlug`/`getCachedCommerceBySlug` (antes vivían inline en cada `page.tsx`).
 Tanto `app/promos/[slug]/page.tsx` y `app/comercios/[slug]/page.tsx` como el endpoint
@@ -1125,7 +1132,12 @@ npm run warm:prod`. Importante: `revalidate:prod` invalida/limpia el caché de d
 tag, así que si se corre `warm:prod` ANTES, está calentando entradas que `revalidate:prod`
 va a borrar un segundo después — siempre en ese orden, nunca al revés ni por separado.
 
-## Workflow `warm-detail-cache.yml` — precalentar cache de detalle desde GitHub Actions (22/11/2026)
+## Workflow `warm-detail-cache.yml` — OBSOLETO, ver "Warm proactivo... ABANDONADO" (22/11/2026)
+> **Deshabilitado desde el 23/11/2026** — el botón del admin y `POST /api/admin/warm-cache`
+> ya no disparan nada real (el endpoint devuelve 410). El workflow en sí sigue existiendo
+> sin triggers automáticos, pero correrlo a mano no tiene ningún efecto en lo que ve la
+> página. Ver "Warm proactivo de /api/internal/warm-detail — ABANDONADO (23/11/2026)".
+
 Una función de Vercel no puede correr ~68 minutos (el tiempo real medido para calentar
 el universo completo de ~50.880 slugs), así que ese trabajo largo corre en GitHub Actions
 y el admin solo lo dispara y muestra el estado — mismo patrón ya usado para
@@ -1206,35 +1218,38 @@ fallara. Conclusión: subir a 7-10 días no introduce el riesgo específico de "
 desactualizado por depender de la hora actual" — ese riesgo no existe en el código tal como
 está hoy. (No se cambió el valor; queda en 3 días hasta que se decida subirlo explícitamente.)
 
-## Regla: dedup de detalle (React cache()) y TTL de 3 días en /promos/[slug] y /comercios/[slug] (22/11/2026)
+## Regla: dedup de detalle (React cache()) y TTL de 7 días en /promos/[slug] y /comercios/[slug] (22/11/2026, TTL actualizado 23/11/2026)
 `generateMetadata` y el componente de página de ambas rutas llamaban cada uno, por
 separado, a su propio fetcher `unstable_cache`-eado por slug — Next.js no dedupea
 closures distintos aunque compartan la misma cache key, así que en cada cache-miss
 real la query de Prisma (y el log `[cache-miss] ...`) corría 2 veces por request.
 Fix: `getCachedPromoBySlug`/`getCachedCommerceBySlug` ahora están envueltas en
 `cache()` de React (dedupea dentro de UN request; `unstable_cache` sigue siendo quien
-persiste entre requests, con los mismos tags). Con el fix, el TTL de seguridad de esas
-dos funciones se subió de 12h (43200) a 3 días (259200) — es solo el piso de
-seguridad si `revalidateTag` fallara, el mecanismo primario sigue siendo la
-invalidación por tag/slug en cada escritura real (ver `lib/cache/detailCache.ts`).
+persiste entre requests, con los mismos tags).
+
+**TTL subido de 3 días (259200) a 7 días (604800)** el 23/11/2026, como parte del
+abandono del warm proactivo (ver "Warm proactivo de /api/internal/warm-detail —
+ABANDONADO" más abajo): sin precalentado, la única forma de llenar una entrada de
+caché es que alguien (usuario real o Googlebot) visite esa página y dispare el
+cache-miss — un TTL más largo reduce cuántas veces eso vuelve a pasar para páginas de
+baja visita. Sigue siendo solo el piso de seguridad si `revalidateTag` fallara; el
+mecanismo primario de frescura es la invalidación por tag/slug en cada escritura real
+(ver `lib/cache/detailCache.ts`). Confirmado (22/11) que ninguna de las dos funciones
+tiene lógica dependiente de la hora actual dentro de lo cacheado, así que subir el TTL
+no agrega riesgo de servir un render obsoleto por depender de `new Date()`.
 
 **Orden correcto después de cualquier operación que modifique promos o comercios**
 (scraper manual, limpieza, script suelto contra prod):
 ```
-scrapers (o el script que corresponda) -> npm run revalidate:prod -> npm run warm:prod
+scrapers (o el script que corresponda) -> npm run revalidate:prod
 ```
 - `revalidate:prod` invalida por tag/slug (ver arriba) — sin este paso, un script que
   escribe directo a la DB de prod vía Prisma deja contenido viejo cacheado hasta que
-  venza el TTL (ahora 3 días, antes 12h).
-- `warm:prod` (`scripts/warm-detail-cache.ts`) recorre los slugs de promos ACTIVE y
-  comercios con `activePromoCount > 0`, pidiendo cada `/promos/<slug>` y
-  `/comercios/<slug>` en producción para que el próximo visitante (o el próximo crawl
-  de Googlebot) encuentre un HIT en vez de disparar el miss. Pacing deliberadamente
-  lento (1 request cada 12s, ~5/min) para quedar por debajo del límite de bots del
-  middleware (`RATE_LIMIT_BOT_MAX = 6/min` por IP, con ban de 5 min si se excede) — el
-  script nunca falsea un User-Agent de navegador ni de Googlebot, así que cae en esa
-  categoría y se throttlea en vez de intentar saltarse el límite. Soporta
-  `--limit=N` (probar con las primeras N de cada tipo) y `--only=promos|comercios`.
+  venza el TTL (ahora 7 días).
+- `npm run warm:prod` **ya no forma parte de este flujo** (ver "Warm proactivo...
+  ABANDONADO" abajo) — sigue existiendo en `package.json` y sigue corriendo sin error,
+  pero no tiene ningún efecto comprobado sobre lo que ve la página real en producción.
+  No hace falta correrlo.
 
 **Gap conocido, sin resolver todavía**: varios scripts sueltos en `scripts/` escriben
 directo sobre `Promo`/`Commerce` vía Prisma (contra la DB de prod) sin llamar a
@@ -1249,7 +1264,65 @@ páginas de detalle cacheadas), y varios scripts de limpieza/scope
 duplicada de la lógica de `app/api/internal/expire-promos/route.ts` — ese endpoint SÍ
 invalida correctamente por slug y es el que corre `expire-promos.yml` en GitHub
 Actions, pero si alguien corre el script suelto a mano en vez del endpoint, expira
-promos sin invalidar nada. Con el TTL ahora en 3 días, el costo de olvidarse
-`revalidate:prod` después de uno de estos scripts es mayor que con 12h — evaluar si
+promos sin invalidar nada. Con el TTL ahora en 7 días, el costo de olvidarse
+`revalidate:prod` después de uno de estos scripts es mayor que antes — evaluar si
 conviene que estos scripts llamen a `revalidate:prod` automáticamente al final, o al
 menos imprimir un recordatorio en su output.
+
+## Warm proactivo de /api/internal/warm-detail — ABANDONADO (23/11/2026)
+Después de 2 PRs de intentos de fix (#75 deps de CI, #76 "opción B" forzando
+`urlPathname`), se confirmó que **el warm proactivo nunca funcionó en producción**:
+`POST /api/internal/warm-detail` corre, hace el `findUnique` de Prisma, y llama a
+`unstable_cache(...)(slug)` sin error — pero cuando después se visita la página real
+(`/promos/[slug]` o `/comercios/[slug]`), el log `[cache-miss] ...` vuelve a aparecer
+igual, como si el warm nunca hubiera escrito nada. Confirmado con evidencia de logs
+reales de Pablo incluso después de la "opción B".
+
+**Investigación de causa raíz — por qué se descartó cada hipótesis**:
+- *Hipótesis "opción B" (mismatch de `urlPathname`)*: se leyó el código fuente completo
+  de `unstable_cache` en
+  `node_modules/next/dist/server/web/spec-extension/unstable-cache.js`. La cache key
+  real es `fixedKey = cb.toString() + "-" + keyParts.join(",")` y
+  `invocationKey = fixedKey + "-" + JSON.stringify(args)` — **idéntica sin importar el
+  contexto del caller**. `store?.urlPathname` solo se usa para armar `fetchUrl` (una
+  etiqueta de debug/telemetría, `` `unstable_cache ${pathname}...` ``) que se pasa a
+  `incrementalCache.get()/.set()` únicamente para logging — nunca es parte de la key de
+  búsqueda. Esto prueba que forzar `urlPathname` (lo que hizo la "opción B") no podía
+  ser la causa real — era cosmético.
+- *Opción D (`revalidatePath`)*: descartada sin implementar — en App Router,
+  `revalidatePath` solo invalida, no regenera en el momento. Usarla haría lo opuesto a
+  lo buscado (vaciaría cache que sí funcionaba, en vez de llenar cache que no).
+- *Opción C masiva (warm real por HTTP GET a cada URL)*: descartada por Pablo — muy
+  costosa en minutos de GitHub Actions y en el plan Hobby de Vercel, que ya está sobre
+  el límite de uso.
+
+**Conclusión**: el punto real de divergencia entre "escribir desde un Route Handler" y
+"leer desde el render de la página" vive en el backend de Data Cache de Vercel
+(`FetchCache`, enrutado vía `x-vercel-sc-host`), que es **código cerrado, no
+inspeccionable** desde el repo de Next.js de código abierto. No se pudo confirmar la
+causa exacta sin acceso a ese backend — investigación cerrada como no resoluble desde
+este lado.
+
+**Decisión**: abandonar el warm proactivo por completo, no seguir invirtiendo tiempo en
+diagnosticarlo. El caché de detalle sigue funcionando igual que siempre por su
+mecanismo orgánico normal — `unstable_cache` con tags, poblado por cada visita real y
+invalidado por tag/slug en cada escritura (`revalidateTag`, ver `detailCache.ts`) — eso
+nunca estuvo roto, solo el intento de "adelantarlo" desde afuera. Como mitigación se
+subió el TTL de seguridad de esas funciones de 3 a 7 días (ver sección de dedup/TTL
+arriba), para que una página de baja visita tarde más en volver a pagar un cache-miss.
+
+**Qué se deshabilitó (branch `fix/disable-warm-detail-proactive`, sin mergear)**:
+- Botón "Precalentar cache de detalle" en el admin (`WarmCachePanel.tsx`): deshabilitado
+  visualmente, ya no dispara nada. El panel sigue mostrando el historial de corridas
+  viejas (solo lectura).
+- `POST /api/admin/warm-cache`: devuelve `410` en vez de disparar el workflow. Lógica
+  original queda comentada en el archivo, no borrada.
+- `workflow_dispatch` de `warm-detail-cache.yml`: sigue existiendo (correrlo a mano no
+  rompe nada, solo no tiene efecto real), pero sin ningún trigger automático — ya estaba
+  así (`schedule:` comentado desde que se creó).
+- `POST /api/internal/warm-detail`: queda sin uso productivo (nada lo llama), no
+  borrado — documentado como abandonado por si se retoma con más información del lado
+  de Vercel.
+- Se sacó el truco de `urlPathname`/`staticGenerationAsyncStorage` de la "opción B" y
+  los logs `[cache-key-debug]` de `lib/cache/detailFetchers.ts` — ya probado que no
+  hacía nada, solo quedaba como ruido/complejidad.

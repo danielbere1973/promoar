@@ -94,56 +94,71 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST: dispara el workflow warm-detail-cache.yml vía workflow_dispatch.
- * Rechaza si ya hay una corrida en curso (queued/in_progress) para evitar
- * pisar la DB con dos invalidaciones/calentamientos simultáneos.
+ * DESHABILITADO (22/11/2026) — warm proactivo abandonado, ver CLAUDE.md
+ * sección "Warm proactivo de /api/internal/warm-detail — ABANDONADO".
+ * Lo que este workflow escribe no lo lee la página real (causa exacta no
+ * confirmable, backend cerrado de Vercel), así que dispararlo solo gasta
+ * minutos de GitHub Actions y conexiones a Neon sin ningún efecto en
+ * producción. Devuelve 410 en vez de ejecutar el dispatch real para que no
+ * se pueda lanzar una corrida completa por accidente. Lógica original
+ * comentada más abajo por si se retoma la investigación.
  */
 export async function POST(req: NextRequest) {
   if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-
-  const pat = process.env.GITHUB_PAT
-  if (!pat) {
-    return NextResponse.json({ error: 'GITHUB_PAT no configurado en el servidor' }, { status: 500 })
-  }
-
-  let revalidate = true
-  try {
-    const body = await req.json()
-    if (typeof body?.revalidate === 'boolean') revalidate = body.revalidate
-  } catch {
-    // sin body -> default true
-  }
-
-  try {
-    const latest = await getLatestRun(pat)
-    if (latest && (latest.status === 'queued' || latest.status === 'in_progress')) {
-      return NextResponse.json(
-        { error: 'Ya hay una corrida en curso', run: { id: latest.id, status: latest.status, url: latest.html_url } },
-        { status: 409 },
-      )
-    }
-
-    const res = await fetch(`${GITHUB_API}/dispatches`, {
-      method: 'POST',
-      headers: { ...githubHeaders(pat), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ref: 'main', inputs: { revalidate: String(revalidate) } }),
-    })
-
-    if (res.status === 204) {
-      return NextResponse.json({ ok: true })
-    }
-
-    const text = await res.text()
-    if (res.status === 404) {
-      return NextResponse.json({ error: 'Workflow no encontrado en GitHub (warm-detail-cache.yml)' }, { status: 404 })
-    }
-    if (res.status === 401 || res.status === 403) {
-      return NextResponse.json({ error: 'Token de GitHub inválido o vencido' }, { status: 502 })
-    }
-    return NextResponse.json({ error: text.slice(0, 300) }, { status: res.status })
-  } catch (error: any) {
-    return NextResponse.json({ error: `GitHub no respondió: ${error?.message ?? error}` }, { status: 502 })
-  }
+  return NextResponse.json(
+    { error: 'Warm proactivo deshabilitado — ver CLAUDE.md ("Warm proactivo... ABANDONADO"). No tiene efecto real en producción.' },
+    { status: 410 },
+  )
 }
+
+// async function POST_original(req: NextRequest) {
+//   if (!(await isAuthorized(req))) {
+//     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+//   }
+//
+//   const pat = process.env.GITHUB_PAT
+//   if (!pat) {
+//     return NextResponse.json({ error: 'GITHUB_PAT no configurado en el servidor' }, { status: 500 })
+//   }
+//
+//   let revalidate = true
+//   try {
+//     const body = await req.json()
+//     if (typeof body?.revalidate === 'boolean') revalidate = body.revalidate
+//   } catch {
+//     // sin body -> default true
+//   }
+//
+//   try {
+//     const latest = await getLatestRun(pat)
+//     if (latest && (latest.status === 'queued' || latest.status === 'in_progress')) {
+//       return NextResponse.json(
+//         { error: 'Ya hay una corrida en curso', run: { id: latest.id, status: latest.status, url: latest.html_url } },
+//         { status: 409 },
+//       )
+//     }
+//
+//     const res = await fetch(`${GITHUB_API}/dispatches`, {
+//       method: 'POST',
+//       headers: { ...githubHeaders(pat), 'Content-Type': 'application/json' },
+//       body: JSON.stringify({ ref: 'main', inputs: { revalidate: String(revalidate) } }),
+//     })
+//
+//     if (res.status === 204) {
+//       return NextResponse.json({ ok: true })
+//     }
+//
+//     const text = await res.text()
+//     if (res.status === 404) {
+//       return NextResponse.json({ error: 'Workflow no encontrado en GitHub (warm-detail-cache.yml)' }, { status: 404 })
+//     }
+//     if (res.status === 401 || res.status === 403) {
+//       return NextResponse.json({ error: 'Token de GitHub inválido o vencido' }, { status: 502 })
+//     }
+//     return NextResponse.json({ error: text.slice(0, 300) }, { status: res.status })
+//   } catch (error: any) {
+//     return NextResponse.json({ error: `GitHub no respondió: ${error?.message ?? error}` }, { status: 502 })
+//   }
+// }
