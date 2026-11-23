@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
-import { makeGetPromoBySlug, makeGetCommerceBySlug } from '@/lib/cache/detailFetchers'
+import { warmGetPromoBySlug, warmGetCommerceBySlug } from '@/lib/cache/detailFetchers'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -79,8 +79,8 @@ export async function POST(request: Request) {
   await runWithConcurrency(slugs, CONCURRENCY, async (slug) => {
     try {
       const result = type === 'promo'
-        ? await makeGetPromoBySlug(slug)(slug)
-        : await makeGetCommerceBySlug(slug)(slug)
+        ? await warmGetPromoBySlug(slug)
+        : await warmGetCommerceBySlug(slug)
       if (result) warmed++
       else notFound++
     } catch (error) {
@@ -133,7 +133,11 @@ export async function GET(request: Request) {
       ? prisma.promo.findMany({
           where: { status: 'ACTIVE', slug: { not: null } },
           select: { slug: true },
-          orderBy: { updatedAt: 'desc' },
+          // id como desempate: sin esto, "updatedAt desc" solo no garantiza el
+          // mismo orden (ni el mismo top-N con --limit) entre corridas cuando
+          // hay timestamps iguales — necesario para que el test de Pablo
+          // (warm --limit=20, abrir 2-3 de esa lista) sea reproducible.
+          orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
           take,
         })
       : Promise.resolve([]),
@@ -141,7 +145,7 @@ export async function GET(request: Request) {
       ? prisma.commerce.findMany({
           where: { activePromoCount: { gt: 0 } },
           select: { slug: true },
-          orderBy: { activePromoCount: 'desc' },
+          orderBy: [{ activePromoCount: 'desc' }, { id: 'asc' }],
           take,
         })
       : Promise.resolve([]),
