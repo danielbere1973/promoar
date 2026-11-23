@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "revalidate:prod": "npx tsx scripts/revalidate-prod.ts",
-    "warm:prod": "npx tsx scripts/warm-detail-cache.ts",
+    "revalidate:prod": "tsx scripts/revalidate-prod.ts",
+    "warm:prod": "tsx scripts/warm-detail-cache.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -44,6 +44,7 @@
     "@types/react-dom": "^18",
     "@types/web-push": "^3.6.4",
     "cross-env": "^10.1.0",
+    "dotenv": "^16.4.7",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "pg": "^8.20.0",
@@ -51,6 +52,7 @@
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.1",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
     "typescript": "^5",
     "vitest": "^4.1.10",
     "xlsx": "^0.18.5"

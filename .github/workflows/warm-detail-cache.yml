@@ -10,6 +10,11 @@ on:
         required: false
         default: 'true'
         type: boolean
+      limit:
+        description: 'Límite de slugs por tipo (vacío = corrida completa, ~50.000). Usar un número bajo (ej. 20) para probar.'
+        required: false
+        default: ''
+        type: string
   # Esquema sugerido: cada 3 días de madrugada hora Argentina (05:00 UTC = 02:00 ART).
   # Dejado COMENTADO a pedido explícito — activar manualmente cuando se decida.
   # schedule:
@@ -51,4 +56,10 @@ jobs:
       - name: Calentar cache de detalle
         env:
           VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
-        run: npm run warm:prod
+          LIMIT_ARG: ${{ github.event.inputs.limit }}
+        run: |
+          if [ -n "$LIMIT_ARG" ]; then
+            npm run warm:prod -- --limit="$LIMIT_ARG"
+          else
+            npm run warm:prod
+          fi
