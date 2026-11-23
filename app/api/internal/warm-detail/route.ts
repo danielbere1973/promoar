@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { makeGetPromoBySlug, makeGetCommerceBySlug } from '@/lib/cache/detailFetchers'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -96,4 +97,60 @@ export async function POST(request: Request) {
     errors,
     ms: Date.now() - start,
   })
+}
+
+/**
+ * Lista los slugs a calentar (promos ACTIVE + comercios con activePromoCount > 0),
+ * misma auth que el POST. Pensada para que scripts/warm-detail-cache.ts pida la
+ * lista por HTTP en vez de abrir una conexión Prisma propia — así GitHub Actions
+ * (o cualquier runner fuera de Vercel) nunca necesita DATABASE_URL como secret,
+ * solo el mismo Bearer que ya usa para /api/internal/revalidate.
+ *
+ * GET /api/internal/warm-detail?type=promo|comercio&limit=N
+ * Sin "type": devuelve { promoSlugs, commerceSlugs }. Con "type": solo esa lista
+ * bajo la clave "slugs" (ambos formatos se devuelven igual para no romper nada
+ * que ya exista).
+ */
+export async function GET(request: Request) {
+  const auth = request.headers.get('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+
+  if (!token || !secretMatches(token)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const url = new URL(request.url)
+  const type = url.searchParams.get('type')
+  const limitParam = url.searchParams.get('limit')
+  const limit = limitParam ? parseInt(limitParam, 10) : undefined
+  const take = Number.isFinite(limit) && limit! > 0 ? limit : undefined
+
+  const wantPromos = type !== 'comercio'
+  const wantCommerces = type !== 'promo'
+
+  const [promos, commerces] = await Promise.all([
+    wantPromos
+      ? prisma.promo.findMany({
+          where: { status: 'ACTIVE', slug: { not: null } },
+          select: { slug: true },
+          orderBy: { updatedAt: 'desc' },
+          take,
+        })
+      : Promise.resolve([]),
+    wantCommerces
+      ? prisma.commerce.findMany({
+          where: { activePromoCount: { gt: 0 } },
+          select: { slug: true },
+          orderBy: { activePromoCount: 'desc' },
+          take,
+        })
+      : Promise.resolve([]),
+  ])
+
+  const promoSlugs = promos.map(p => p.slug).filter((s): s is string => !!s)
+  const commerceSlugs = commerces.map(c => c.slug).filter((s): s is string => !!s)
+
+  if (type === 'promo') return NextResponse.json({ slugs: promoSlugs, promoSlugs, commerceSlugs: [] })
+  if (type === 'comercio') return NextResponse.json({ slugs: commerceSlugs, promoSlugs: [], commerceSlugs })
+  return NextResponse.json({ promoSlugs, commerceSlugs })
 }

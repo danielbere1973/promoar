@@ -8,6 +8,7 @@ import PendingPromosTab from './PendingPromosTab'
 import { NewsletterEditor } from './NewsletterEditor'
 import CommercesManagerView from './CommercesManagerView'
 import UserCommercesView from './UserCommercesView'
+import WarmCachePanel from './WarmCachePanel'
 import {
   Pencil, Trash2, Plus, X, Check, RefreshCw, Bot,
   Users, Building2, CreditCard, Layers, DollarSign, Wallet as WalletIcon,
@@ -1130,6 +1131,8 @@ export default function AdminPage() {
               </div>
               <p className="text-[11px] text-gray-400 mt-1.5">Se muestra en el cartel azul de la pantalla principal.</p>
             </div>
+
+            <WarmCachePanel />
 
             {/* Banner EM — clicks */}
             <BannerClickStats />

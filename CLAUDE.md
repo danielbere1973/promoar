@@ -1125,6 +1125,87 @@ npm run warm:prod`. Importante: `revalidate:prod` invalida/limpia el caché de d
 tag, así que si se corre `warm:prod` ANTES, está calentando entradas que `revalidate:prod`
 va a borrar un segundo después — siempre en ese orden, nunca al revés ni por separado.
 
+## Workflow `warm-detail-cache.yml` — precalentar cache de detalle desde GitHub Actions (22/11/2026)
+Una función de Vercel no puede correr ~68 minutos (el tiempo real medido para calentar
+el universo completo de ~50.880 slugs), así que ese trabajo largo corre en GitHub Actions
+y el admin solo lo dispara y muestra el estado — mismo patrón ya usado para
+`expire-promos.yml`.
+
+**Workflow** (`.github/workflows/warm-detail-cache.yml`): `workflow_dispatch` con input
+booleano `revalidate` (default `true`). Si es `true`, corre `npm run revalidate:prod`
+antes de `npm run warm:prod`; si cualquiera de los dos scripts termina con código ≠0, el
+job falla. `timeout-minutes: 120` (margen sobre los ~68 min medidos). Tiene un bloque
+`schedule` **comentado** (cada 3 días, 05:00 UTC = 02:00 ART) — activar manualmente cuando
+se decida correrlo solo, sacando el `#` de esas 2 líneas.
+
+**Decisión de diseño — sin `DATABASE_URL` en Actions**: igual que el resto de los
+workflows del repo (`run-scrapers.yml`, `expire-promos.yml`), este tampoco usa
+`DATABASE_URL` ni abre una conexión Prisma desde el runner de CI. En vez de eso,
+`scripts/warm-detail-cache.ts` pide la lista de slugs a calentar por HTTP a
+`GET /api/internal/warm-detail?type=promo|comercio` (mismo Bearer que ya usaba el POST),
+endpoint nuevo agregado a `app/api/internal/warm-detail/route.ts` que sí corre dentro de
+Vercel y ahí sí usa Prisma. Motivos: (1) consistencia con el patrón ya establecido en todo
+el repo, (2) cero credenciales de DB como secret de CI — si se filtra un secret de Actions,
+no expone la base, (3) sin riesgo de sumar conexiones al pool de Neon desde un runner
+efímero de GitHub, (4) sin acoplar la versión de `@prisma/client`/schema del runner de CI a
+la de producción.
+
+**Secrets usados — todos ya existían, ninguno nuevo**: `secrets.VTEX_SESSION_SECRET` (el
+mismo Bearer que ya usan `expire-promos.yml` y `run-scrapers.yml`). No usa `secrets.API_URL`
+porque tanto `revalidate-prod.ts` como `warm-detail-cache.ts` tienen `PROD_URL` hardcodeado
+(`https://www.promoar.com.ar`).
+
+**Admin — botón "Precalentar cache de detalle"** (`app/admin/WarmCachePanel.tsx`, montado en
+el tab Estadísticas de `app/admin/page.tsx`, debajo de "Última actualización de promos"):
+- `POST /api/admin/warm-cache`: dispara el workflow (misma protección de admin que
+  `app/api/admin/scrape/route.ts` — Bearer `VTEX_SESSION_SECRET` o sesión con rol `ADMIN`).
+  Rechaza con 409 si ya hay una corrida `queued`/`in_progress` (consulta
+  `GET /repos/.../actions/workflows/warm-detail-cache.yml/runs` antes de disparar).
+- `GET /api/admin/warm-cache`: devuelve el estado de la última corrida (en cola / en curso /
+  terminada ok / falló), timestamps y el link a la corrida en GitHub.
+- El token de GitHub se lee de `process.env.GITHUB_PAT` (mismo nombre que ya usan
+  `app/api/admin/trigger-scraper/route.ts` y `app/api/admin/trigger-vtex-refresh/route.ts`)
+  — nunca se envía al cliente ni se logea; solo se devuelven campos públicos de la corrida
+  (status, conclusion, url, timestamps).
+- UI: casilla "Invalidar antes (revalidate)" marcada por defecto, botón con confirmación
+  inline ("Esto tarda ~1 hora y mantiene la base activa"), badge de estado con
+  auto-refresco cada 20s mientras hay una corrida en curso, link "Ver corrida en GitHub".
+  Errores mostrados: token faltante/vencido (500/502), workflow no encontrado (404),
+  GitHub caído (502 con mensaje de conexión).
+
+**Cómo correrlo a mano desde GitHub** (sin pasar por el admin): repo → tab Actions →
+"Precalentar cache de detalle" → "Run workflow" → tildar o destildar `revalidate` → "Run
+workflow". Útil si el admin no está disponible o para debug directo.
+
+**Variables a configurar — ninguna nueva, ya cargadas**:
+- GitHub (repo secrets): `VTEX_SESSION_SECRET` (ya existe, usado por `expire-promos.yml` y
+  `run-scrapers.yml`).
+- Vercel (project env vars): `GITHUB_PAT` (ya existe, usado por `trigger-scraper` y
+  `trigger-vtex-refresh`) y `VTEX_SESSION_SECRET` (ya existe). El admin corre dentro de
+  Vercel, así que lee `GITHUB_PAT` de ahí, no de GitHub.
+
+**Cuándo conviene correrlo**: después de una corrida de scrapers (sea manual o vía
+"Ejecutar todos GH") y antes de fechas de tráfico alto (Black Friday, Hot Sale, Navidad) —
+para que el primer visitante real o el próximo crawl de Googlebot encuentre cache tibio en
+vez de pagar el miss. Si solo se escribió a mano con un script suelto (no scraper), alcanza
+con `npm run revalidate:prod` + `npm run warm:prod` en local; el workflow de Actions es para
+cuando se quiere dejar corriendo ~1 hora sin ocupar una terminal local ni una función de
+Vercel.
+
+**Revisión de TTL (item pedido, SIN cambios de código)**: se evaluó si el TTL de 3 días
+(259200s) de `makeGetPromoBySlug`/`makeGetCommerceBySlug` en `lib/cache/detailFetchers.ts`
+podría subir a 7-10 días sin dejar datos viejos. Ambas funciones hacen un `prisma.X.findUnique`
+plano (promo: incluye commerce/category/requirements; commerce: incluye defaultCategory y
+`_count.branches`) — **ningún campo calculado dentro del cuerpo cacheado depende de la fecha
+u hora actual** (no hay "días hasta vencer", ni "válido hoy", ni ningún cálculo con
+`new Date()`/`Date.now()` en esas dos funciones). Lo único que podría quedar obsoleto con un
+TTL más largo es el dato crudo de la fila (`validUntil`, `validDays`, etc.), y eso ya está
+cubierto por la invalidación por tag/slug en cada escritura real (scraper, `revalidate:prod`,
+expire-promos), no por el TTL — el TTL es solo el piso de seguridad si `revalidateTag`
+fallara. Conclusión: subir a 7-10 días no introduce el riesgo específico de "render
+desactualizado por depender de la hora actual" — ese riesgo no existe en el código tal como
+está hoy. (No se cambió el valor; queda en 3 días hasta que se decida subirlo explícitamente.)
+
 ## Regla: dedup de detalle (React cache()) y TTL de 3 días en /promos/[slug] y /comercios/[slug] (22/11/2026)
 `generateMetadata` y el componente de página de ambas rutas llamaban cada uno, por
 separado, a su propio fetcher `unstable_cache`-eado por slug — Next.js no dedupea

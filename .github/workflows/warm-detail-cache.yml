@@ -1,0 +1,54 @@
+name: Precalentar cache de detalle
+
+run-name: "Warm cache (revalidate=${{ github.event.inputs.revalidate }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      revalidate:
+        description: 'Invalidar antes de calentar (npm run revalidate:prod)'
+        required: false
+        default: 'true'
+        type: boolean
+  # Esquema sugerido: cada 3 días de madrugada hora Argentina (05:00 UTC = 02:00 ART).
+  # Dejado COMENTADO a pedido explícito — activar manualmente cuando se decida.
+  # schedule:
+  #   - cron: '0 5 */3 * *'
+
+# Evita que dos corridas (manual + schedule, si se llega a activar) pisen la DB
+# al mismo tiempo. No afecta el chequeo de "ya hay una corrida" del admin, que
+# consulta el estado real vía API de GitHub.
+concurrency:
+  group: warm-detail-cache
+  cancel-in-progress: false
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    # ~68 min medidos para el universo completo (50.880 slugs); 2h de margen
+    # para picos de latencia de Neon/Vercel sin que el job quede colgado para
+    # siempre si algo se traba.
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci --prefer-offline
+
+      - name: Revalidar cache (si revalidate=true)
+        if: ${{ github.event.inputs.revalidate != 'false' }}
+        env:
+          VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
+        run: npm run revalidate:prod
+
+      - name: Calentar cache de detalle
+        env:
+          VTEX_SESSION_SECRET: ${{ secrets.VTEX_SESSION_SECRET }}
+        run: npm run warm:prod
