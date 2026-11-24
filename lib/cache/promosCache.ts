@@ -4,6 +4,20 @@ import { prisma } from '@/lib/prisma'
 export const PROMOS_PUBLIC_TAG = 'promos-public'
 export const CATALOG_VERSION_KEY = 'catalogVersion'
 
+// Candidatos de /api/search/products (etapa pública por texto, antes del
+// filtro de perfil) — independiente de catalogVersion porque CommerceProduct
+// no forma parte del catálogo de promos; se invalida por su propio tag, TTL
+// corto (10min) como piso de seguridad.
+export const SEARCH_PRODUCTS_TAG = 'search-products'
+
+export function invalidateSearchProductsCache(): void {
+  try {
+    revalidateTag(SEARCH_PRODUCTS_TAG)
+  } catch (error) {
+    console.error('[promos-cache] revalidateTag(search-products) failed, relying on 10min TTL fallback', error)
+  }
+}
+
 /**
  * Lectura cacheada de catalogVersion para la ruta pública (/promos/explorar,
  * /api/promos/public) — a diferencia de getCurrentCatalogVersion() en

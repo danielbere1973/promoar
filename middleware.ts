@@ -223,7 +223,7 @@ export async function middleware(req: NextRequest) {
   // 1.4. INSTRUMENTACIÓN TEMPORAL RFC-003 — ver bloque de comentario arriba. Corre para
   // más rutas que el rate-limit (incluye /bancos/, que hoy no tiene ningún logging), y
   // nunca bloquea ni altera la request — solo observa.
-  if (TRAFFIC_DEBUG_PREFIXES.some(p => pathname.startsWith(p))) {
+  if (process.env.DEBUG_TRAFFIC && TRAFFIC_DEBUG_PREFIXES.some(p => pathname.startsWith(p))) {
     const ip =
       req.headers.get('x-real-ip') ??
       req.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ??
@@ -245,8 +245,10 @@ export async function middleware(req: NextRequest) {
     const userAgent = req.headers.get('user-agent') || ''
     const isLikelyBot = !BROWSER_UA.test(userAgent)
     const isAllowedBotUA = ALLOWED_BOT_UA.test(userAgent)
-    const ipMaskedRL = ip === 'unknown' ? 'unknown' : ip.split('.').slice(0, 3).join('.') + '.x'
-    console.log(`[rate-limit-debug] ip=${ipMaskedRL} bot=${isLikelyBot} path=${pathname} ua="${userAgent.slice(0, 60)}"`)
+    if (process.env.DEBUG_TRAFFIC) {
+      const ipMaskedRL = ip === 'unknown' ? 'unknown' : ip.split('.').slice(0, 3).join('.') + '.x'
+      console.log(`[rate-limit-debug] ip=${ipMaskedRL} bot=${isLikelyBot} path=${pathname} ua="${userAgent.slice(0, 60)}"`)
+    }
     if (isAllowedBotUA) {
       if (isGooglebotRateLimited(pathname)) {
         return new NextResponse('Too Many Requests', { status: 429 })
