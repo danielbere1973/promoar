@@ -47,6 +47,7 @@ function hasWordMatch(text: string | null, term: string): boolean {
 const STOP_WORDS = new Set(['para', 'de', 'del', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'con', 'sin', 'en', 'a'])
 
 type CandidateRow = { commerceId: string; categoria: string; subcategoria: string | null; productos: string | null }
+type CommerceNameMatch = { commerceId: string; commerceName: string }
 
 // Etapa cara y 100% pública (no depende de usuario/perfil, ver PASO 1 punto c):
 // candidate set por texto normalizado. Antes era un findMany sin WHERE que
@@ -76,6 +77,28 @@ function getCachedCandidates(qLower: string, searchTerms: string[]) {
   )(qLower, searchTerms)
 }
 
+// Match directo por nombre de comercio (ej. "freddo", "farmacity") — antes
+// este endpoint solo buscaba en CommerceProduct (categoría/producto), así
+// que un comercio sin productos cuyo nombre contenga el término (el caso
+// común: casi ningún producto dice "Freddo" en su categoría) nunca aparecía
+// pese a tener promos activas. Universo de Commerce es mucho más chico que
+// CommerceProduct — igual se cachea por consistencia con el mismo tag/TTL.
+function getCachedCommerceNameMatches(qLower: string) {
+  return unstable_cache(
+    async (qLower: string): Promise<CommerceNameMatch[]> => {
+      if (process.env.NODE_ENV === 'production') console.log(`[cache-miss] search-commerce-name ${qLower}`)
+      const rows = await prisma.commerce.findMany({
+        where: { name: { contains: qLower, mode: 'insensitive' } },
+        select: { id: true, name: true },
+        take: 200,
+      })
+      return rows.map(r => ({ commerceId: r.id, commerceName: r.name }))
+    },
+    ['search-products-commerce-name'],
+    { tags: [SEARCH_PRODUCTS_TAG], revalidate: 600 },
+  )(qLower)
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -98,7 +121,10 @@ export async function GET(req: NextRequest) {
     // (hasWordMatch) porque Prisma/Postgres `contains`+`insensitive` solo
     // ignora mayúsculas, no acentos — el WHERE de arriba solo acota el
     // candidate set, no reemplaza este filtro fino.
-    const allMatches = await getCachedCandidates(qLower, searchTerms)
+    const [allMatches, commerceNameMatches] = await Promise.all([
+      getCachedCandidates(qLower, searchTerms),
+      getCachedCommerceNameMatches(qLower),
+    ])
 
     // Filter out word-boundary false positives and score by how many search terms match
     const matchedCategoriesByCommerce = new Map<string, Set<string>>()
@@ -129,6 +155,23 @@ export async function GET(req: NextRequest) {
       else if (matchedTerms.some(t => hasWordMatch(m.categoria, t) && normCategoria.split(/[\s|,]+/).some(w => w.trim() === t))) rel = 3
       else if (matchedTerms.some(t => hasWordMatch(m.subcategoria, t))) rel = 2
       if (rel > currentRel) relevanceByCommerce.set(m.commerceId, rel)
+    }
+
+    // Match directo por nombre de comercio (ej. "Freddo", "Farmacity") — se
+    // suma al candidate set de arriba aunque el comercio no tenga ningún
+    // producto cuyo texto matchee. Relevancia máxima (3): coincidir con el
+    // nombre del comercio es una señal más fuerte que coincidir con una
+    // categoría de producto. No pisa un rel/wordMatchCount ya puesto por
+    // match de producto, solo lo sube si corresponde.
+    for (const m of commerceNameMatches) {
+      if (!matchedCategoriesByCommerce.has(m.commerceId)) {
+        matchedCategoriesByCommerce.set(m.commerceId, new Set<string>())
+      }
+      const currentRel = relevanceByCommerce.get(m.commerceId) ?? 0
+      if (3 > currentRel) relevanceByCommerce.set(m.commerceId, 3)
+      const termSet = wordMatchCountByCommerce.get(m.commerceId) ?? new Set<string>()
+      termSet.add(qLower)
+      wordMatchCountByCommerce.set(m.commerceId, termSet)
     }
 
     const matches = allMatches.filter(m => matchedCategoriesByCommerce.has(m.commerceId))
