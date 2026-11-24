@@ -1127,10 +1127,15 @@ de promos ACTIVE y comercios con `activePromoCount > 0`, y los manda al endpoint
 secuenciales de 50. Flags: `--dry-run`, `--limit=N`, `--type=promo|comercio`. Reintenta una
 vez ante error de red y sale con código ≠0 si hubo errores.
 
-**Orden correcto (actualiza la nota de abajo)**: `scrapers -> npm run revalidate:prod ->
-npm run warm:prod`. Importante: `revalidate:prod` invalida/limpia el caché de detalle por
-tag, así que si se corre `warm:prod` ANTES, está calentando entradas que `revalidate:prod`
-va a borrar un segundo después — siempre en ese orden, nunca al revés ni por separado.
+**Orden ACTUALIZADO 24/11/2026 — ver "Regla: dedup de detalle..." más abajo, sección
+"Flujo correcto de invalidación + warm"**: el orden `scrapers -> revalidate:prod ->
+warm:prod` de este párrafo quedó viejo y es **incorrecto** para el flujo normal: los
+scrapers ya invalidan por slug ellos mismos (no hace falta `revalidate:prod` después de
+una corrida normal), y `npm run warm:prod` SIN flags usa el endpoint `POST
+/api/internal/warm-detail`, que es el mecanismo de warm proactivo **abandonado** (ver
+"Warm proactivo... ABANDONADO" abajo — nunca tuvo efecto real en producción). El único
+modo de `warm:prod` con efecto confirmado es `--http-get` (GET real a las páginas). No
+seguir esta nota tal cual — ver el flujo nuevo más abajo.
 
 ## Workflow `warm-detail-cache.yml` — OBSOLETO, ver "Warm proactivo... ABANDONADO" (22/11/2026)
 > **Deshabilitado desde el 23/11/2026** — el botón del admin y `POST /api/admin/warm-cache`
@@ -1218,7 +1223,7 @@ fallara. Conclusión: subir a 7-10 días no introduce el riesgo específico de "
 desactualizado por depender de la hora actual" — ese riesgo no existe en el código tal como
 está hoy. (No se cambió el valor; queda en 3 días hasta que se decida subirlo explícitamente.)
 
-## Regla: dedup de detalle (React cache()) y TTL de 7 días en /promos/[slug] y /comercios/[slug] (22/11/2026, TTL actualizado 23/11/2026)
+## Regla: dedup de detalle (React cache()) y TTL de 30 días en /promos/[slug] y /comercios/[slug] (22/11/2026, TTL a 7 días 23/11/2026, TTL a 30 días 24/11/2026)
 `generateMetadata` y el componente de página de ambas rutas llamaban cada uno, por
 separado, a su propio fetcher `unstable_cache`-eado por slug — Next.js no dedupea
 closures distintos aunque compartan la misma cache key, así que en cada cache-miss
@@ -1238,18 +1243,60 @@ mecanismo primario de frescura es la invalidación por tag/slug en cada escritur
 tiene lógica dependiente de la hora actual dentro de lo cacheado, así que subir el TTL
 no agrega riesgo de servir un render obsoleto por depender de `new Date()`.
 
-**Orden correcto después de cualquier operación que modifique promos o comercios**
-(scraper manual, limpieza, script suelto contra prod):
+**TTL subido de nuevo, de 7 días (604800) a 30 días (2592000)**, el 24/11/2026
+(`lib/cache/detailFetchers.ts`, ambas funciones) — mismo razonamiento que el bump
+anterior, llevado más lejos: sin warm proactivo, el único TTL que importa es el piso de
+seguridad ante una falla de `revalidateTag`, y ese piso puede ser largo porque la
+invalidación por tag/slug en cada escritura real sigue siendo el mecanismo primario de
+frescura (scrapers, `revalidate:prod` con flags, `expire-promos`). El único costo real
+es el gap conocido de scripts sueltos que no llaman a `revalidate:prod` (ver abajo): con
+30 días, el peor caso de esos scripts pasa de 7 a 30 días de staleness si nadie corre
+`revalidate:prod` a mano después.
+
+### Flujo correcto de invalidación + warm (ACTUALIZADO 24/11/2026 — reemplaza la nota
+"Orden correcto (actualiza la nota de abajo)" de la sección del endpoint `warm-detail`,
+que queda desactualizada y no debe seguirse)
+
+**Después de una corrida de scraper normal ("Ejecutar todos GH" o manual)**: no hace
+falta ningún paso extra. `app/api/admin/scrape/route.ts` ya invalida por slug lo que
+cambió (`touchedPromoSlugs`/`affectedCommerceIds`, vía `promoFingerprint()` — si el
+fingerprint de una promo no cambió respecto de la corrida anterior, se skippea sin
+tocar la DB ni el caché). `revalidate:prod` sobra en este caso — correrlo sin flags
+invalidaría de más (todo el dominio de detalle, global) y sin flags no hay forma de
+apuntarlo solo a lo que tocó el scraper.
+
+**Después de un script suelto que escribe directo a la DB de prod vía Prisma**
+(`seed-logos.ts`, `fix-broken-logos.ts`, `normalize-commerces.ts`, limpiezas, etc. — ver
+el gap conocido más abajo): esos scripts SÍ necesitan `revalidate:prod`, porque no
+corren dentro del runtime de Next.js y por lo tanto nunca disparan `revalidateTag` por
+su cuenta. Correrlo **siempre con flags**, apuntado a los slugs que tocó el script:
 ```
-scrapers (o el script que corresponda) -> npm run revalidate:prod
+npm run revalidate:prod -- --promo-slugs=slug-a,slug-b --commerce-slugs=slug-x,slug-y
 ```
-- `revalidate:prod` invalida por tag/slug (ver arriba) — sin este paso, un script que
-  escribe directo a la DB de prod vía Prisma deja contenido viejo cacheado hasta que
-  venza el TTL (ahora 7 días).
-- `npm run warm:prod` **ya no forma parte de este flujo** (ver "Warm proactivo...
-  ABANDONADO" abajo) — sigue existiendo en `package.json` y sigue corriendo sin error,
-  pero no tiene ningún efecto comprobado sobre lo que ve la página real en producción.
-  No hace falta correrlo.
+`revalidate:prod` SIN flags no es "más seguro", es más destructivo: invalida TODO el
+dominio de detalle (todas las promos y comercios), no solo lo que cambió, forzando un
+cache-miss universal en el próximo visitante/crawl de cada página de detalle. Usar la
+forma sin flags solo si de verdad se necesita invalidar todo (por ejemplo, tras un
+cambio de schema o de la lógica de render que afecta a todas las páginas por igual).
+
+**Warm del caché de detalle**: el único modo con efecto confirmado en producción es
+`npm run warm:prod -- --http-get` (`scripts/warm-detail-cache.ts`, modo agregado
+24/11/2026) — hace GET reales a `/promos/<slug>` y `/comercios/<slug>` (no al endpoint
+interno `POST /api/internal/warm-detail`, que es el warm proactivo abandonado, ver
+sección de abajo). Flags: `--limit=N`/`--offset=N` para repartir el trabajo en varias
+corridas (por ejemplo, en varios días), `--base-url` (default
+`https://www.promoar.com.ar`). Es **manual, corrido a mano por Pablo, nunca
+automatizado** — no agregar triggers de cron ni llamarlo desde ningún workflow sin que
+él lo pida explícitamente. Si se va a invalidar (paso anterior) y luego calentar, ese
+orden importa: invalidar primero, calentar después — calentar antes de invalidar deja
+tibio un caché que el `revalidate:prod` siguiente va a borrar.
+
+**Resumen del orden correcto, de punta a punta**:
+```
+scraper normal                 -> (nada más — ya invalida por slug solo)
+script suelto contra prod      -> npm run revalidate:prod -- --promo-slugs=... --commerce-slugs=...
+warm manual (opcional, Pablo)  -> npm run warm:prod -- --http-get --limit=N --offset=M
+```
 
 **Gap conocido, sin resolver todavía**: varios scripts sueltos en `scripts/` escriben
 directo sobre `Promo`/`Commerce` vía Prisma (contra la DB de prod) sin llamar a
@@ -1265,10 +1312,13 @@ páginas de detalle cacheadas), y varios scripts de limpieza/scope
 Actions), que SÍ invalida correctamente por slug
 (`invalidatePromoDetailBySlugs`/`invalidateCommerceDetailBySlugs`, líneas 36-37) —
 confirmado el 23/11/2026. No existe un `scripts/expire-promos.ts` standalone (nota
-anterior sobre un duplicado desactualizado, corregida). Con el TTL ahora en 7 días, el
-costo de olvidarse `revalidate:prod` después de uno de los scripts sueltos listados
-arriba es mayor que antes — evaluar si conviene que llamen a `revalidate:prod`
-automáticamente al final, o al menos imprimir un recordatorio en su output.
+anterior sobre un duplicado desactualizado, corregida). Con el TTL ahora en 30 días
+(24/11/2026), el costo de olvidarse `revalidate:prod` después de uno de los scripts
+sueltos listados arriba es mayor que antes (peor caso: 30 días de staleness, no 7) —
+evaluar si conviene que llamen a `revalidate:prod` automáticamente al final, o al menos
+imprimir un recordatorio en su output. Mientras eso no se haga, recordar correr
+`npm run revalidate:prod -- --promo-slugs=... --commerce-slugs=...` (con flags, no en
+seco) a mano después de correr cualquiera de esos scripts.
 
 ## Warm proactivo de /api/internal/warm-detail — ABANDONADO (23/11/2026)
 Después de 2 PRs de intentos de fix (#75 deps de CI, #76 "opción B" forzando
@@ -1309,8 +1359,12 @@ diagnosticarlo. El caché de detalle sigue funcionando igual que siempre por su
 mecanismo orgánico normal — `unstable_cache` con tags, poblado por cada visita real y
 invalidado por tag/slug en cada escritura (`revalidateTag`, ver `detailCache.ts`) — eso
 nunca estuvo roto, solo el intento de "adelantarlo" desde afuera. Como mitigación se
-subió el TTL de seguridad de esas funciones de 3 a 7 días (ver sección de dedup/TTL
-arriba), para que una página de baja visita tarde más en volver a pagar un cache-miss.
+subió el TTL de seguridad de esas funciones, primero de 3 a 7 días y luego (24/11/2026)
+a 30 días (ver sección de dedup/TTL arriba), para que una página de baja visita tarde
+más en volver a pagar un cache-miss. El warm real con efecto confirmado quedó resuelto
+por otra vía, no por este endpoint: `npm run warm:prod -- --http-get` (GET reales a las
+páginas, ver "Flujo correcto de invalidación + warm" en la sección de arriba) — manual,
+corrido solo por Pablo, nunca automatizado.
 
 **Qué se deshabilitó (branch `fix/disable-warm-detail-proactive`, sin mergear)**:
 - Botón "Precalentar cache de detalle" en el admin (`WarmCachePanel.tsx`): deshabilitado
