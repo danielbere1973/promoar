@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
+import { SEARCH_PRODUCTS_TAG } from '@/lib/cache/promosCache'
 
 export const dynamic = 'force-dynamic'
+
+const MAX_QUERY_LENGTH = 60
+const CANDIDATE_TAKE = 2000
 
 // Búsqueda de productos: "¿qué comercios venden carteras?"
 // Busca en el catálogo scrapeado (CommerceProduct) y devuelve los comercios
@@ -41,28 +46,59 @@ function hasWordMatch(text: string | null, term: string): boolean {
 
 const STOP_WORDS = new Set(['para', 'de', 'del', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'con', 'sin', 'en', 'a'])
 
+type CandidateRow = { commerceId: string; categoria: string; subcategoria: string | null; productos: string | null }
+
+// Etapa cara y 100% pública (no depende de usuario/perfil, ver PASO 1 punto c):
+// candidate set por texto normalizado. Antes era un findMany sin WHERE que
+// traía toda la tabla CommerceProduct en cada request — ahora un WHERE por
+// OR de `contains` (DB, insensitive) por cada término + la query completa
+// acota el candidate set antes de traerlo, y el resultado se cachea por
+// query normalizada (TTL 10min, invalidado por SEARCH_PRODUCTS_TAG).
+function getCachedCandidates(qLower: string, searchTerms: string[]) {
+  return unstable_cache(
+    async (qLower: string, searchTerms: string[]): Promise<CandidateRow[]> => {
+      if (process.env.NODE_ENV === 'production') console.log(`[cache-miss] search-products ${qLower}`)
+      const orConditions = [qLower, ...searchTerms].map(term => ({
+        OR: [
+          { categoria: { contains: term, mode: 'insensitive' as const } },
+          { subcategoria: { contains: term, mode: 'insensitive' as const } },
+          { productos: { contains: term, mode: 'insensitive' as const } },
+        ],
+      }))
+      return prisma.commerceProduct.findMany({
+        where: { OR: orConditions.flatMap(c => c.OR) },
+        select: { commerceId: true, categoria: true, subcategoria: true, productos: true },
+        take: CANDIDATE_TAKE,
+      })
+    },
+    ['search-products-candidates'],
+    { tags: [SEARCH_PRODUCTS_TAG], revalidate: 600 },
+  )(qLower, searchTerms)
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const q = searchParams.get('q')?.trim()
+    const qRaw = searchParams.get('q')?.trim()
     const forMe = searchParams.get('for_me') === 'true'
 
-    if (!q || q.length < 2) {
+    if (!qRaw || qRaw.length < 2) {
+      return NextResponse.json({ commerces: [] })
+    }
+    if (qRaw.length > MAX_QUERY_LENGTH) {
       return NextResponse.json({ commerces: [] })
     }
 
+    const q = qRaw
     const qLower = normalizeAccents(q)
     const words = qLower.split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS.has(w))
     const searchTerms = words.length > 0 ? words : [qLower]
 
-    // Prisma/Postgres `contains`+`insensitive` solo ignora mayúsculas, no acentos,
-    // así que no podemos filtrar por acento-insensible a nivel DB. En vez de eso,
-    // pedimos un candidate set amplio con `contains` plano (sin mode) sobre la
-    // query sin normalizar y además sobre términos individuales, y el filtro real
-    // de acento-insensibilidad + word-boundary se hace en JS con hasWordMatch.
-    const allMatches = await prisma.commerceProduct.findMany({
-      select: { commerceId: true, categoria: true, subcategoria: true, productos: true },
-    })
+    // El filtro de acento-insensibilidad + word-boundary exacto sigue en JS
+    // (hasWordMatch) porque Prisma/Postgres `contains`+`insensitive` solo
+    // ignora mayúsculas, no acentos — el WHERE de arriba solo acota el
+    // candidate set, no reemplaza este filtro fino.
+    const allMatches = await getCachedCandidates(qLower, searchTerms)
 
     // Filter out word-boundary false positives and score by how many search terms match
     const matchedCategoriesByCommerce = new Map<string, Set<string>>()

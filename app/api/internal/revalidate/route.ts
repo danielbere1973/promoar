@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
-import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
+import { invalidatePublicPromosCache, invalidateSearchProductsCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache, invalidateEntitiesCache, invalidateSiteConfigCache } from '@/lib/cache/filtersCache'
 import {
   invalidatePromoDetailCache,
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
   }
 
   await invalidatePublicPromosCache()
+  invalidateSearchProductsCache()
   invalidateCategoriesCache()
   invalidateEntitiesCache()
   invalidateSiteConfigCache()
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     invalidated: {
-      global: ['promos-public', 'categories-public', 'entities-public', 'site-config-public', 'bancos-detail'],
+      global: ['promos-public', 'search-products', 'categories-public', 'entities-public', 'site-config-public', 'bancos-detail'],
       promos: promoSlugs.length > 0 ? promoSlugs : 'global',
       commerces: commerceSlugs.length > 0 ? commerceSlugs : 'global',
     },
