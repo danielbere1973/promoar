@@ -40,7 +40,7 @@ export function makeGetPromoBySlug(slug: string) {
       return promo
     },
     ['promo-detail-by-slug'],
-    { tags: [PROMO_DETAIL_TAG, promoDetailIdTag(slug)], revalidate: 604800 },
+    { tags: [PROMO_DETAIL_TAG, promoDetailIdTag(slug)], revalidate: 2592000 },
   )
 }
 
@@ -64,7 +64,7 @@ export function makeGetCommerceBySlug(slug: string) {
       }).catch(() => null)
     },
     ['commerce-detail-by-slug'],
-    { tags: [COMMERCE_DETAIL_TAG, commerceDetailIdTag(slug)], revalidate: 604800 },
+    { tags: [COMMERCE_DETAIL_TAG, commerceDetailIdTag(slug)], revalidate: 2592000 },
   )
 }
 
