@@ -1381,3 +1381,71 @@ corrido solo por Pablo, nunca automatizado.
 - Se sacó el truco de `urlPathname`/`staticGenerationAsyncStorage` de la "opción B" y
   los logs `[cache-key-debug]` de `lib/cache/detailFetchers.ts` — ya probado que no
   hacía nada, solo quedaba como ruido/complejidad.
+
+## Incidente 25/11/2026: umbral de invalidación masiva vació el caché de fichas de promo — RESUELTO
+`expire-promos` corrió con 248 promos vencidas en un solo `updateMany`. El helper
+`invalidatePromoDetailBySlugs` (`lib/cache/detailCache.ts`) tiene un
+`DETAIL_INVALIDATION_BULK_THRESHOLD = 200`: por encima de ese número, en vez de
+invalidar cada slug individualmente cae al fallback global
+(`revalidateTag(PROMO_DETAIL_TAG)`), pensado originalmente para runs masivos
+(reseteo de categoría, migración) donde invalidar de a uno sería un desperdicio.
+248 > 200, así que cayó al fallback y vació el caché de **todas** las fichas de
+promo del sitio, no solo las 248 vencidas. Las fichas de comercio no se vieron
+afectadas porque esas mismas 248 promos mapeaban a solo 143 comercios distintos
+(143 < 200) — de ahí la asimetría que noté Pablo (promos stale, comercios no).
+
+Investigado también: `revalidateTag` es una operación en memoria (microsegundos
+por llamada, no hay red de por medio), así que invalidar por slug en loop, aunque
+sean miles, es seguro y no se acerca a ningún timeout de función serverless — el
+umbral de 200 nunca debió aplicarse a flujos automáticos, solo tiene sentido como
+optimización para corridas manuales de admin donde el volumen puede ser enorme y
+nadie está esperando una respuesta rápida.
+
+**Fix** (rama `fix/detail-invalidation-safety`, sin tocar `lib/cache/detailFetchers.ts`):
+- `invalidatePromoDetailBySlugs`/`invalidateCommerceDetailBySlugs` ahora aceptan un
+  segundo parámetro opcional `opts?: { alwaysBySlug?: boolean }`. Con
+  `alwaysBySlug: true`, el umbral se ignora completamente y siempre invalida por
+  slug en loop, sin importar cuántos sean. Sin ese parámetro (comportamiento
+  default, sin cambios), sigue funcionando exactamente igual que antes.
+- `app/api/internal/expire-promos/route.ts` y `app/api/admin/scrape/route.ts`
+  (los dos flujos 100% automáticos, sin intervención humana) ahora pasan
+  `{ alwaysBySlug: true }` en sus llamadas a ambos helpers — **nunca más caen al
+  fallback global**, sin importar cuántas promos/comercios toque el run.
+- Los callers manuales de admin (`app/api/internal/revalidate/route.ts`,
+  `app/api/admin/pending-promos/[id]/route.ts`, `app/api/admin/commerces/[id]/route.ts`
+  y sus sub-rutas de `branches`) **no se tocaron** — siguen con el comportamiento
+  original (fallback global por encima de 200), que ahí sí tiene sentido porque son
+  operaciones manuales donde cualquiera puede decidir forzar una invalidación total
+  a propósito.
+
+**Regla**: cualquier flujo automático nuevo que invalide detalle por lote (otro
+cron, otro script de limpieza recurrente) debe pasar `{ alwaysBySlug: true }` — el
+umbral de 200 es una optimización válida únicamente para operaciones manuales de
+admin, nunca para algo que corre sin supervisión humana.
+
+## Auditoría de seguridad `POST /api/promos` — RESUELTO (25/11/2026)
+`POST /api/promos` (`app/api/promos/route.ts`) creaba promos sin ningún auth check
+propio, y el path estaba en `PUBLIC_PATHS` de `middleware.ts` (necesario para que el
+`GET` siga siendo público). Resultado: cualquiera, sin sesión, podía crear una promo
+y disparar el fallback global de `invalidatePromoDetailCache()`/
+`invalidateCommerceDetailCache()` (líneas 207-208 del handler original) — un vector
+de cache-wipe completo, no solo de datos falsos.
+
+**Quién lo usa realmente** (confirmado por grep, sin scripts ni CI de por medio):
+solo dos formularios dentro del panel admin — `app/admin/page.tsx` y
+`app/admin/promos-v2/page.tsx` — ambos protegidos hoy indirectamente por la cookie
+de sesión que exige `middleware.ts` para entrar a `/admin`, nunca por un check
+propio del endpoint.
+
+**Fix**: se agregó una función `isAuthorized(req)` a `app/api/promos/route.ts`,
+mismo patrón ya usado en `app/api/admin/scrape/route.ts` — Bearer
+`VTEX_SESSION_SECRET` (para un futuro caller interno) o sesión con rol `ADMIN`. El
+handler `POST` ahora devuelve `401` sin esas credenciales, antes de tocar la DB. El
+`GET` no se tocó y `/api/promos` **sigue en `PUBLIC_PATHS`** a propósito — si se
+sacara, el `GET` público (usado por toda la grilla de promos sin sesión) quedaría
+redirigido a `/login` por el middleware.
+
+**Verificación de explotación**: chequeo de solo lectura en la DB (promos creadas en
+las últimas 72h) — **0 promos creadas en ese rango**, de ningún origen. No hay
+evidencia de que el endpoint sin auth haya sido usado por nadie fuera de los dos
+formularios admin.

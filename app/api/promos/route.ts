@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
 export const dynamic = 'force-dynamic'
 
 import { getAuthToken } from '@/lib/auth'
@@ -7,6 +8,25 @@ import { getPromosData, PromoQueryParams } from '@/lib/getPromos'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
+
+// Mismo patrón que app/api/admin/scrape/route.ts: Bearer VTEX_SESSION_SECRET
+// (callers internos/server-to-server) o sesión con rol ADMIN (formularios de
+// app/admin/page.tsx y app/admin/promos-v2/page.tsx, los únicos callers reales
+// hoy). Agregado 25/11/2026 — antes POST no tenía ningún auth check propio y
+// el path estaba en PUBLIC_PATHS de middleware.ts.
+async function isAuthorized(req: NextRequest): Promise<boolean> {
+  const auth = req.headers.get('Authorization') || ''
+  const secret = process.env.VTEX_SESSION_SECRET
+  if (secret && auth === `Bearer ${secret}`) return true
+
+  const session = await getServerSession()
+  if (!session?.user?.email) return false
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true },
+  })
+  return user?.role === 'ADMIN'
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -140,6 +160,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await isAuthorized(req))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const body = await req.json()
     const {
