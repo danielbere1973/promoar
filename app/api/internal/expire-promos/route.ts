@@ -35,8 +35,9 @@ export async function POST(request: Request) {
     invalidateCategoriesCache()
     // alwaysBySlug: true — este flujo automático nunca debe caer al fallback
     // global (incidente 25/11/2026, ver CLAUDE.md), aunque haya miles de slugs.
-    invalidatePromoDetailBySlugs(toExpire.map(p => p.slug).filter((s): s is string => !!s), { alwaysBySlug: true })
-    invalidateCommerceDetailBySlugs(Array.from(new Set(toExpire.map(p => p.commerce?.slug).filter((s): s is string => !!s))), { alwaysBySlug: true })
+    const commerceSlugs = Array.from(new Set(toExpire.map(p => p.commerce?.slug).filter((s): s is string => !!s)))
+    invalidatePromoDetailBySlugs(toExpire.map(p => p.slug).filter((s): s is string => !!s), { alwaysBySlug: true, commerceSlugs })
+    invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true })
   }
 
   return NextResponse.json({ expired: toExpire.length })

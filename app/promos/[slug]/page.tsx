@@ -10,7 +10,7 @@ import PromoUnavailable from '@/app/components/PromoUnavailable'
 import DetailSidebar from './DetailSidebar'
 import DetailCTA from './DetailCTA'
 import { schemaOffer } from '@/lib/schema'
-import { PROMO_DETAIL_TAG } from '@/lib/cache/detailCache'
+import { PROMO_DETAIL_TAG, commerceAuxTag } from '@/lib/cache/detailCache'
 import { getCachedPromoBySlug } from '@/lib/cache/detailFetchers'
 import { getPromoScope } from '@/lib/utils/promoScope'
 
@@ -18,20 +18,28 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 export const revalidate = false
 
-const getCachedCommerceBranchesCount = unstable_cache(
+// Las 3 funciones de abajo no tienen tag por comercio (solo PROMO_DETAIL_TAG,
+// de dominio), así que invalidar por slug de promo/comercio nunca las
+// alcanzaba — dependían solo del TTL. Fix: factory por commerceSlug, igual
+// patrón que makeGetPromoBySlug en lib/cache/detailFetchers.ts — un
+// unstable_cache nuevo por slug, con el tag commerce-aux:<slug> ya armado
+// (unstable_cache exige un array de tags estático, no puede depender del
+// resultado). Next.js dedupea por keyParts + argumentos reales, así que
+// llamar a la factory de nuevo con el mismo slug reusa la misma entrada.
+const makeGetCommerceBranchesCount = (commerceSlug: string) => unstable_cache(
   async (commerceId: string) => prisma.commerceBranch.findMany({
     where: { commerceId },
     take: 1,
   }),
-  ['promo-detail-commerce-branches'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
+  ['promo-detail-commerce-branches', commerceSlug],
+  { tags: [PROMO_DETAIL_TAG, commerceAuxTag(commerceSlug)], revalidate: 2592000 },
 )
 
 // Otras promos activas del mismo comercio con bancos/billeteras distintos — alimenta
 // el comparador del hero (principio tomado de Manguito: grid con condición real por
 // opción, nunca solo el dato repetido). Se trae por comercio, no por promo individual,
 // para que el comparador no dependa de la promo actual estar en el top del ranking.
-const getCachedCommerceOtherPromos = unstable_cache(
+const makeGetCommerceOtherPromos = (commerceSlug: string) => unstable_cache(
   async (commerceId: string, excludePromoId: string) => prisma.promo.findMany({
     where: { commerceId, status: 'ACTIVE', id: { not: excludePromoId } },
     include: {
@@ -44,8 +52,8 @@ const getCachedCommerceOtherPromos = unstable_cache(
     orderBy: { maxDiscountPct: 'desc' },
     take: 6,
   }),
-  ['promo-detail-commerce-other-promos'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
+  ['promo-detail-commerce-other-promos', commerceSlug],
+  { tags: [PROMO_DETAIL_TAG, commerceAuxTag(commerceSlug)], revalidate: 604800 },
 )
 
 // Descubrimiento cruzado ("También te podría interesar"): otros comercios con
@@ -54,7 +62,7 @@ const getCachedCommerceOtherPromos = unstable_cache(
 // mostrarlo) y se reordena en memoria por el % de descuento real de la mejor
 // promo de cada uno (mismo criterio isCSIOnly/maxDiscountPct que el resto del
 // sitio) — Prisma no permite ordenar Commerce por un campo de su relación.
-const getCachedRelatedCommerces = unstable_cache(
+const makeGetRelatedCommerces = (commerceSlug: string) => unstable_cache(
   async (excludeCategoryId: string, excludeCommerceId: string) => {
     const pool = await prisma.commerce.findMany({
       where: {
@@ -82,8 +90,8 @@ const getCachedRelatedCommerces = unstable_cache(
       .sort((a, b) => (b.promos[0].requirements[0].discountValue ?? 0) - (a.promos[0].requirements[0].discountValue ?? 0))
       .slice(0, 8)
   },
-  ['promo-detail-related-commerces'],
-  { tags: [PROMO_DETAIL_TAG], revalidate: 43200 },
+  ['promo-detail-related-commerces', commerceSlug],
+  { tags: [PROMO_DETAIL_TAG, commerceAuxTag(commerceSlug)], revalidate: 2592000 },
 )
 
 const FEATURED_PROMO_SELECT = {
@@ -396,9 +404,9 @@ export default async function PromoDetailPage({ params }: { params: { slug: stri
   }
 
   const [branches, otherPromosRaw, relatedCommercesRaw] = await Promise.all([
-    getCachedCommerceBranchesCount(promo.commerce.id),
-    getCachedCommerceOtherPromos(promo.commerce.id, promo.id),
-    getCachedRelatedCommerces(promo.category.id, promo.commerce.id),
+    makeGetCommerceBranchesCount(promo.commerce.slug)(promo.commerce.id),
+    makeGetCommerceOtherPromos(promo.commerce.slug)(promo.commerce.id, promo.id),
+    makeGetRelatedCommerces(promo.commerce.slug)(promo.category.id, promo.commerce.id),
   ])
 
   const specificDates: string[] = promo.specificDates ? JSON.parse(promo.specificDates) : []

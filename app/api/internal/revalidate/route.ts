@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
+import { prisma } from '@/lib/prisma'
 import { invalidatePublicPromosCache, invalidateSearchProductsCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache, invalidateEntitiesCache, invalidateSiteConfigCache } from '@/lib/cache/filtersCache'
 import {
@@ -62,14 +63,30 @@ export async function POST(request: Request) {
   invalidateSiteConfigCache()
   invalidateBankDetailCache()
 
+  // --promo-slugs y --commerce-slugs son flags independientes del script —
+  // si solo se pasa el primero, derivamos el comercio de cada promo para que
+  // igual se invalide su commerce-aux tag (sucursales/otras promos/comercios
+  // relacionados), en vez de depender de que quien corre el script se
+  // acuerde de pasar también --commerce-slugs. Ver CLAUDE.md.
+  let derivedCommerceSlugs: string[] = []
   if (promoSlugs.length > 0) {
-    invalidatePromoDetailBySlugs(promoSlugs)
+    const promosWithCommerce = await prisma.promo.findMany({
+      where: { slug: { in: promoSlugs } },
+      select: { commerce: { select: { slug: true } } },
+    })
+    derivedCommerceSlugs = promosWithCommerce.map(p => p.commerce?.slug).filter((s): s is string => !!s)
+  }
+
+  const allCommerceSlugs = Array.from(new Set([...commerceSlugs, ...derivedCommerceSlugs]))
+
+  if (promoSlugs.length > 0) {
+    invalidatePromoDetailBySlugs(promoSlugs, { commerceSlugs: allCommerceSlugs })
   } else {
     invalidatePromoDetailCache()
   }
 
-  if (commerceSlugs.length > 0) {
-    invalidateCommerceDetailBySlugs(commerceSlugs)
+  if (allCommerceSlugs.length > 0) {
+    invalidateCommerceDetailBySlugs(allCommerceSlugs)
   } else {
     invalidateCommerceDetailCache()
   }
@@ -79,7 +96,7 @@ export async function POST(request: Request) {
     invalidated: {
       global: ['promos-public', 'search-products', 'categories-public', 'entities-public', 'site-config-public', 'bancos-detail'],
       promos: promoSlugs.length > 0 ? promoSlugs : 'global',
-      commerces: commerceSlugs.length > 0 ? commerceSlugs : 'global',
+      commerces: allCommerceSlugs.length > 0 ? allCommerceSlugs : 'global',
     },
   })
 }

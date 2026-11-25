@@ -4,7 +4,7 @@ import { Metadata } from 'next'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
-import { COMMERCE_DETAIL_TAG } from '@/lib/cache/detailCache'
+import { COMMERCE_DETAIL_TAG, commerceAuxTag } from '@/lib/cache/detailCache'
 import { getCachedCommerceBySlug } from '@/lib/cache/detailFetchers'
 import DetailPageShell from '@/app/components/DetailPageShell'
 import EntityPromoGrid from '@/app/components/EntityPromoGrid'
@@ -53,15 +53,23 @@ async function getCommercePromos(commerceId: string, filters: PromoFilters = {})
   })
 }
 
-const getCachedCommercePromos = unstable_cache(
+// Las 2 funciones de abajo no tienen tag por comercio (solo COMMERCE_DETAIL_TAG,
+// de dominio), así que invalidar por slug de promo/comercio nunca las
+// alcanzaba — dependían solo del TTL. Fix: factory por commerceSlug, igual
+// patrón que makeGetCommerceBySlug en lib/cache/detailFetchers.ts — un
+// unstable_cache nuevo por slug, con el tag commerce-aux:<slug> ya armado
+// (unstable_cache exige un array de tags estático, no puede depender del
+// resultado). Next.js dedupea por keyParts + argumentos reales, así que
+// llamar a la factory de nuevo con el mismo slug reusa la misma entrada.
+const makeGetCommercePromos = (commerceSlug: string) => unstable_cache(
   async (commerceId: string) => getCommercePromos(commerceId, {}),
-  ['commerce-detail-promos'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: 43200 },
+  ['commerce-detail-promos', commerceSlug],
+  { tags: [COMMERCE_DETAIL_TAG, commerceAuxTag(commerceSlug)], revalidate: 604800 },
 )
 
 // Bancos/billeteras con al menos una promo activa de este comercio, para
 // popular el buscador multiselección del sidebar.
-const getCachedCommerceEntities = unstable_cache(
+const makeGetCommerceEntities = (commerceSlug: string) => unstable_cache(
   async (commerceId: string) => {
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
     const baseWhere = {
@@ -86,8 +94,8 @@ const getCachedCommerceEntities = unstable_cache(
       ...wallets.map(w => ({ ...w, type: 'wallet' as const })),
     ]
   },
-  ['commerce-detail-entities'],
-  { tags: [COMMERCE_DETAIL_TAG], revalidate: 43200 },
+  ['commerce-detail-entities', commerceSlug],
+  { tags: [COMMERCE_DETAIL_TAG, commerceAuxTag(commerceSlug)], revalidate: 604800 },
 )
 
 const DAYS_LABELS: Record<number, string> = {
@@ -164,8 +172,8 @@ export default async function CommercePage({ params, searchParams }: { params: {
   const [promos, commerceEntities] = await Promise.all([
     hasFilters
       ? getCommercePromos(commerce.id, { catSlugs, entitySlugs })
-      : getCachedCommercePromos(commerce.id),
-    getCachedCommerceEntities(commerce.id),
+      : makeGetCommercePromos(commerce.slug)(commerce.id),
+    makeGetCommerceEntities(commerce.slug)(commerce.id),
   ])
 
   const bestPromo = promos[0]
