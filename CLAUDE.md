@@ -1382,6 +1382,71 @@ corrido solo por Pablo, nunca automatizado.
   los logs `[cache-key-debug]` de `lib/cache/detailFetchers.ts` — ya probado que no
   hacía nada, solo quedaba como ruido/complejidad.
 
+## Tag por comercio para las funciones auxiliares de detalle (`commerce-aux:<slug>`) — 25/11/2026
+Las 5 funciones auxiliares de `/promos/[slug]` y `/comercios/[slug]` (sucursales,
+otras promos del comercio, comercios relacionados, lista de promos del comercio,
+entidades del comercio) vivían como `unstable_cache` sueltos **dentro de cada
+page.tsx** (no en `lib/cache/detailFetchers.ts` — ese archivo sigue intacto, solo
+cubre `getCachedPromoBySlug`/`getCachedCommerceBySlug`), tageadas únicamente con el
+tag de dominio (`PROMO_DETAIL_TAG`/`COMMERCE_DETAIL_TAG`). Invalidar por slug de
+promo o comercio (`invalidatePromoDetailBySlugs`/`invalidateCommerceDetailBySlugs`)
+nunca las alcanzaba — dependían solo del TTL.
+
+**Fix**: cada una ahora es una factory parametrizada por slug de comercio
+(`makeGetCommerceBranchesCount(commerceSlug)`, etc. — mismo patrón factory que ya
+usaba `detailFetchers.ts` para poder tagear por un valor que solo se conoce en
+runtime) que agrega el tag nuevo `commerceAuxTag(slug)` = `` `commerce-aux:${slug}` ``
+(`lib/cache/detailCache.ts`) además del tag de dominio existente.
+
+**TTLs diferenciados** (antes: 12h fijo para las 5):
+- **7 días (604800s)** — datos que cambian con cierta frecuencia:
+  `getCachedCommerceOtherPromos` (promos/[slug]), `getCachedCommercePromos` y
+  `getCachedCommerceEntities` (comercios/[slug]).
+- **30 días (2592000s)** — datos que rara vez cambian:
+  `getCachedCommerceBranchesCount` (promos/[slug]), `getCachedRelatedCommerces`
+  (promos/[slug]).
+
+**Invalidación — quién invalida `commerce-aux` y cómo**:
+- `invalidateCommerceDetailBySlugs(slugs)` invalida `commerceAuxTag(slug)` para
+  cada slug **siempre, sin flag ni parámetro extra** — cualquier caller existente
+  que ya invalida el comercio por esta función queda cubierto automáticamente.
+- `invalidatePromoDetailBySlugs(slugs, opts)` ahora acepta `opts.commerceSlugs?:
+  string[]` — si se pasa, invalida también `commerceAuxTag` para esos comercios.
+  Es opt-in: si un caller nuevo solo pasa `slugs` de promo sin `commerceSlugs`, el
+  aux tag de ese comercio NO se invalida.
+
+**Regla para callers nuevos o futuros**: cualquier código que invalide detalle de
+promo tras un cambio que afecte a un comercio (nueva promo, promo editada, promo
+expirada) debe pasar `opts.commerceSlugs` con el/los slug(s) del comercio
+correspondiente — de lo contrario, las 5 auxiliares de la ficha de ese comercio
+quedan con datos viejos hasta 7-30 días (antes bastaba con el TTL corto de 12h, el
+riesgo de olvidarse ahora es mucho más caro). Si el caller ya invoca
+`invalidateCommerceDetailBySlugs` para ese mismo comercio en el mismo flujo (como
+hacen `admin/pending-promos/[id]`, `admin/commerces/[id]` y sus subrutas de
+`branches`), no hace falta repetirlo vía `commerceSlugs` — esa llamada ya cubre el
+aux tag.
+
+**Auditoría de cobertura de los callers existentes** (25/11/2026):
+- `expire-promos` y `scrape` (flujos automáticos): actualizados para derivar y
+  pasar `commerceSlugs` explícitamente junto con `alwaysBySlug: true`.
+- `admin/pending-promos/[id]`, `admin/commerces/[id]`,
+  `admin/commerces/[id]/branches`, `admin/commerces/[id]/branches/[branchId]`:
+  sin cambios necesarios — ya invocan `invalidateCommerceDetailBySlugs([slug])`
+  para el comercio afectado (solo o junto a `invalidatePromoDetailBySlugs`), que
+  cubre el aux tag igual sin pasar por `opts.commerceSlugs`.
+- `POST /api/promos` (crear promo desde el admin): usaba solo los fallbacks
+  globales (`invalidatePromoDetailCache()`/`invalidateCommerceDetailCache()`), que
+  **no tocan `commerce-aux`** (es un tag separado, no cubierto por el
+  `revalidateTag` de dominio). Fix: se agregó
+  `invalidateCommerceDetailBySlugs([promo.commerce.slug])` tras crear la promo.
+- `POST /api/internal/revalidate` (detrás de `npm run revalidate:prod --
+  --promo-slugs=...`/`--commerce-slugs=...`): estos dos flags son independientes
+  — un script suelto puede invalidar por `--promo-slugs=` sin pasar
+  `--commerce-slugs=`, dejando sin cubrir el aux tag del comercio de esas promos.
+  Fix: el endpoint ahora resuelve el comercio de cada `promoSlugs` vía Prisma y lo
+  mergea con los `commerceSlugs` explícitos antes de invalidar — no depende de que
+  quien corre el script se acuerde de pasar ambos flags.
+
 ## Incidente 25/11/2026: umbral de invalidación masiva vació el caché de fichas de promo — RESUELTO
 `expire-promos` corrió con 248 promos vencidas en un solo `updateMany`. El helper
 `invalidatePromoDetailBySlugs` (`lib/cache/detailCache.ts`) tiene un

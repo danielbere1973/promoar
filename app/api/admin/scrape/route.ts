@@ -910,13 +910,17 @@ export async function POST(req: NextRequest) {
       // alwaysBySlug: true — el scraper es un flujo automático, nunca debe caer
       // al fallback global (incidente 25/11/2026, ver CLAUDE.md), aunque un run
       // toque miles de slugs.
-      invalidatePromoDetailBySlugs(touchedPromoSlugs, { alwaysBySlug: true });
+      let affectedCommerceSlugs: string[] = []
       if (affectedCommerceIds.length > 0) {
         const affectedCommerces = await prisma.commerce.findMany({
           where: { id: { in: affectedCommerceIds } },
           select: { slug: true },
         })
-        invalidateCommerceDetailBySlugs(affectedCommerces.map(c => c.slug), { alwaysBySlug: true })
+        affectedCommerceSlugs = affectedCommerces.map(c => c.slug)
+      }
+      invalidatePromoDetailBySlugs(touchedPromoSlugs, { alwaysBySlug: true, commerceSlugs: affectedCommerceSlugs });
+      if (affectedCommerceSlugs.length > 0) {
+        invalidateCommerceDetailBySlugs(affectedCommerceSlugs, { alwaysBySlug: true })
       }
       // Bancos: se mantiene invalidación global — ningún caller trackea bankId por requirement tocado,
       // y el volumen de páginas de banco es chico (no justifica agregar ese tracking ahora).

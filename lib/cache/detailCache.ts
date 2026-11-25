@@ -21,6 +21,16 @@ export function bankDetailIdTag(id: string) {
   return `banco:${id}`
 }
 
+// Tag por comercio para las funciones auxiliares de /promos/[slug] y
+// /comercios/[slug] (sucursales, otras promos del comercio, comercios
+// relacionados, lista de promos del comercio, entidades del comercio) — hoy
+// solo llevan el tag de dominio (PROMO_DETAIL_TAG/COMMERCE_DETAIL_TAG) y
+// ningún tag por comercio, así que invalidar por slug de promo/comercio nunca
+// las alcanzaba: dependían solo del TTL de 12h. Ver CLAUDE.md.
+export function commerceAuxTag(slug: string) {
+  return `commerce-aux:${slug}`
+}
+
 export function invalidatePromoDetailCache() {
   try {
     revalidateTag(PROMO_DETAIL_TAG)
@@ -68,16 +78,31 @@ export function invalidateBankDetailCache() {
 // getCachedPromoBySlug (app/promos/[slug]/page.tsx) solo conoce el slug antes
 // de resolver la promo (el id es parte del resultado, no del input), así que
 // se tagea por slug en vez de por id — este helper invalida por esa misma clave.
-export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean }) {
-  if (slugs.length === 0) return
-  if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
-    invalidatePromoDetailCache()
-    return
+//
+// `commerceSlugs` (opcional): el slug del comercio de cada promo tocada —
+// invalida también el tag commerce-aux de esos comercios, para que las 5
+// funciones auxiliares de la ficha de promo (sucursales, otras promos del
+// comercio, comercios relacionados) se enteren cuando una promo de ese
+// comercio cambia, no solo cuando cambia el comercio en sí.
+export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean; commerceSlugs?: string[] }) {
+  if (slugs.length > 0) {
+    if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
+      invalidatePromoDetailCache()
+    } else {
+      try {
+        for (const slug of slugs) revalidateTag(promoDetailIdTag(slug))
+      } catch (error) {
+        console.error('[promo-detail-cache] revalidateTag by slug failed, relying on TTL fallback', error)
+      }
+    }
   }
+
+  const commerceSlugs = opts?.commerceSlugs ?? []
+  if (commerceSlugs.length === 0) return
   try {
-    for (const slug of slugs) revalidateTag(promoDetailIdTag(slug))
+    for (const slug of commerceSlugs) revalidateTag(commerceAuxTag(slug))
   } catch (error) {
-    console.error('[promo-detail-cache] revalidateTag by slug failed, relying on TTL fallback', error)
+    console.error('[commerce-aux-cache] revalidateTag by commerce slug failed, relying on TTL fallback', error)
   }
 }
 
@@ -85,6 +110,10 @@ export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysByS
 // (app/comercios/[slug]/page.tsx) tagea por slug, no por id (el id del
 // comercio es parte del resultado, no del input) — invalidar por id ahí no
 // tendría efecto, hay que invalidar por esta misma clave de slug.
+//
+// También invalida el tag commerce-aux de cada slug — las 5 funciones
+// auxiliares (branches, other-promos, related-commerces, commerce-promos,
+// entities) llevan ese tag además del tag de dominio.
 export function invalidateCommerceDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean }) {
   if (slugs.length === 0) return
   if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
@@ -92,7 +121,10 @@ export function invalidateCommerceDetailBySlugs(slugs: string[], opts?: { always
     return
   }
   try {
-    for (const slug of slugs) revalidateTag(commerceDetailIdTag(slug))
+    for (const slug of slugs) {
+      revalidateTag(commerceDetailIdTag(slug))
+      revalidateTag(commerceAuxTag(slug))
+    }
   } catch (error) {
     console.error('[commerce-detail-cache] revalidateTag by slug failed, relying on TTL fallback', error)
   }
