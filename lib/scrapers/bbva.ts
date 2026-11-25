@@ -142,13 +142,36 @@ function parseItem(item: any, rubroId: number, detail?: CommunicationDetail): Sc
   // tarjeta MASTERCARD BBVA...", confirmado en id=cmv0i1ynz9ya267radeu8xvae /
   // "Transporte | Mastercard") sin que grupoTarjeta lo refleje — hay que leerlo
   // del texto. Sin mención exclusiva, se asume que aplica a las 3 redes.
+  // La palabra "TARJETA" es opcional: confirmado en id=88930 ("Exclusivo Visa
+  // Signature Black+ All y Black+ Save..."), que no la incluye y con el regex
+  // viejo (que la exigía) caía siempre al default de las 3 redes.
   const exclusiveNetwork =
-    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?TARJETA\s+VISA\b/.test(allText) ? 'VISA' :
-    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?TARJETA\s+MASTERCARD\b/.test(allText) ? 'Mastercard' :
-    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?TARJETA\s+AMERICAN\s+EXPRESS\b/.test(allText) ? 'American Express Banco' :
+    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?(?:TARJETA\s+)?VISA\b/.test(allText) ? 'VISA' :
+    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?(?:TARJETA\s+)?MASTERCARD\b/.test(allText) ? 'Mastercard' :
+    /EXCLUSIV[AO]?(?:MENTE)?\s+(?:CON\s+)?(?:TU\s+)?(?:TARJETA\s+)?AMERICAN\s+EXPRESS\b/.test(allText) ? 'American Express Banco' :
     null;
+
+  // Segmento exclusivo (tier): BBVA nombra su propio sub-producto dentro del
+  // tier ("Black+ All", "Black+ Save") pero el CardSegment en la DB usa el
+  // nombre genérico del tier ("Signature", "Gold", "Platinum", "Black",
+  // "Classic", "Internacional") — se busca ese nombre genérico, no la frase
+  // completa de marketing. Solo se asigna si también hay una red exclusiva
+  // detectada (un segmento siempre pertenece a una red+tipo de tarjeta
+  // puntual en el schema, ver CardSegment).
+  const exclusiveSegment =
+    /\bSIGNATURE\b/.test(allText)     ? 'Signature' :
+    /\bPLATINUM\b/.test(allText)      ? 'Platinum' :
+    /\bBLACK\+?\b/.test(allText)      ? 'Black' :
+    /\bGOLD\b/.test(allText)          ? 'Gold' :
+    /\bCLASSIC\b/.test(allText)       ? 'Classic' :
+    /\bINTERNACIONAL\b/.test(allText) ? 'Internacional' :
+    null;
+
   const cardNetworks: CardNetworkWithType[] = exclusiveNetwork
-    ? [{ network: exclusiveNetwork, type: cardType }]
+    ? [{
+        network: exclusiveNetwork, type: cardType,
+        ...(exclusiveSegment ? { cardNetworkName: exclusiveNetwork, segmentName: exclusiveSegment } : {}),
+      }]
     : [
         { network: 'VISA',                   type: cardType },
         { network: 'Mastercard',             type: cardType },

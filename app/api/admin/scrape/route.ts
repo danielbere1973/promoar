@@ -422,11 +422,24 @@ export async function POST(req: NextRequest) {
       // Si el nombre completo no matcheó un comercio exacto y ambas partes
       // separadas por "y"/"&" matchean comercios reales distintos, duplicar
       // la promo en cada uno en vez de crear/usar un comercio combinado ficticio.
+      // Bug confirmado 25/11/2026 (reporte Pablo, promo BBVA id=88930): "Super Y
+      // Combustible" matcheaba la mitad "Combustible" contra el comercio-placeholder
+      // genérico "Combustible" (nombre = categoría, no una cadena real) y, en otra
+      // corrida, "Supermercados Y Combustible" matcheaba "Supermercados" contra el
+      // placeholder "supermercados" — generando 2-3 comercios/promos ficticios
+      // distintos para la misma promo real. Fix: una mitad que matchea un comercio
+      // cuyo nombre normalizado es igual al de una categoría real (son los
+      // placeholders genéricos, no cadenas) nunca es válida como mitad de un split.
+      const isGenericCategoryCommerce = (c: any) =>
+        categories.some(cat => normalizeStr(cat.name) === normalizeStr(c.name));
       if (!comMatch && !multiComMatches && p.storeName && /\s(y|&)\s/i.test(p.storeName)) {
         const parts = p.storeName.split(/\s+(?:y|&)\s+/i).map((s: string) => s.trim()).filter(Boolean);
         if (parts.length === 2) {
           const matches = parts.map((part: string) => matchCommerceByName(part, commerces, commerceAliases));
-          if (matches[0] && matches[1] && matches[0].id !== matches[1].id) {
+          if (
+            matches[0] && matches[1] && matches[0].id !== matches[1].id &&
+            !isGenericCategoryCommerce(matches[0]) && !isGenericCategoryCommerce(matches[1])
+          ) {
             multiComMatches = matches;
           }
         }
