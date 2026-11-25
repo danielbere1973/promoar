@@ -52,13 +52,25 @@ export function invalidateBankDetailCache() {
 // resolver el slug, no es parte del input) — por eso no hay una variante "ByIds".
 // Si `slugs.length` supera el umbral, cae a la invalidación global del dominio
 // — N revalidateTag individuales en un run masivo es más caro que 1 global.
+//
+// Incidente 25/11/2026: expire-promos corrió con 248 promos vencidas (>200),
+// cayó a la invalidación global de PROMO_DETAIL_TAG, y vació el caché de TODAS
+// las fichas de promo del sitio (no solo las 248 vencidas) — las fichas de
+// comercio no se vieron afectadas porque esas mismas 248 promos mapeaban a
+// solo 143 comercios distintos, bajo el umbral. Fix: los flujos automáticos
+// (expire-promos, scrape) nunca deben caer al fallback global — revalidateTag
+// es una operación en memoria (microsegundos/pocos ms por llamada), así que
+// invalidar por slug en loop, aunque sean miles, es seguro y no se acerca a
+// ningún timeout de función. El fallback global queda reservado para rutas
+// manuales de admin (cleanup, auto-validate) vía `alwaysBySlug: true`.
+// Ver CLAUDE.md, sección "Umbral de invalidación masiva (DETAIL_INVALIDATION_BULK_THRESHOLD)".
 
 // getCachedPromoBySlug (app/promos/[slug]/page.tsx) solo conoce el slug antes
 // de resolver la promo (el id es parte del resultado, no del input), así que
 // se tagea por slug en vez de por id — este helper invalida por esa misma clave.
-export function invalidatePromoDetailBySlugs(slugs: string[]) {
+export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean }) {
   if (slugs.length === 0) return
-  if (slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
+  if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
     invalidatePromoDetailCache()
     return
   }
@@ -73,9 +85,9 @@ export function invalidatePromoDetailBySlugs(slugs: string[]) {
 // (app/comercios/[slug]/page.tsx) tagea por slug, no por id (el id del
 // comercio es parte del resultado, no del input) — invalidar por id ahí no
 // tendría efecto, hay que invalidar por esta misma clave de slug.
-export function invalidateCommerceDetailBySlugs(slugs: string[]) {
+export function invalidateCommerceDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean }) {
   if (slugs.length === 0) return
-  if (slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
+  if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
     invalidateCommerceDetailCache()
     return
   }
