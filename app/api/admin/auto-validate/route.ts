@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
-import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
+import { invalidatePromoDetailBySlugs, invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 async function isAdmin() {
   const session = await getServerSession()
@@ -143,14 +143,16 @@ export async function POST() {
     })
     await invalidatePublicPromosCache()
     invalidateCategoriesCache()
-    invalidatePromoDetailCache()
-    invalidateCommerceDetailCache()
-    // Obtener slugs para IndexNow
+    // Slugs de promo + comercio para invalidar puntual (no global) — ver
+    // incidente 25/11/2026 en CLAUDE.md. También se usan para IndexNow.
     const approved = await prisma.promo.findMany({
       where: { id: { in: toApprove }, slug: { not: null } },
-      select: { slug: true },
+      select: { slug: true, commerce: { select: { slug: true } } },
     })
     approvedSlugs = approved.map(p => p.slug!).filter(Boolean)
+    const commerceSlugs = Array.from(new Set(approved.map(p => p.commerce?.slug).filter((s): s is string => !!s)))
+    invalidatePromoDetailBySlugs(approvedSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'POST /api/admin/auto-validate' })
+    invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'POST /api/admin/auto-validate' })
   }
 
   // Notificar IndexNow (fire-and-forget, no bloquea la respuesta)

@@ -31,16 +31,21 @@ export function commerceAuxTag(slug: string) {
   return `commerce-aux:${slug}`
 }
 
-export function invalidatePromoDetailCache() {
+// `origin` es solo para logging (ver incidente 25/11/2026 — necesitábamos saber
+// qué endpoint vació el caché global y no había forma de verlo en los logs de
+// Vercel). No cambia el comportamiento de la invalidación.
+export function invalidatePromoDetailCache(origin?: string) {
   try {
+    console.log(`[detail-invalidate-global] promos-detail${origin ? ` <- ${origin}` : ''}`)
     revalidateTag(PROMO_DETAIL_TAG)
   } catch (error) {
     console.error('[promo-detail-cache] revalidateTag failed, relying on TTL fallback', error)
   }
 }
 
-export function invalidateCommerceDetailCache() {
+export function invalidateCommerceDetailCache(origin?: string) {
   try {
+    console.log(`[detail-invalidate-global] comercios-detail${origin ? ` <- ${origin}` : ''}`)
     revalidateTag(COMMERCE_DETAIL_TAG)
   } catch (error) {
     console.error('[commerce-detail-cache] revalidateTag failed, relying on TTL fallback', error)
@@ -84,10 +89,10 @@ export function invalidateBankDetailCache() {
 // funciones auxiliares de la ficha de promo (sucursales, otras promos del
 // comercio, comercios relacionados) se enteren cuando una promo de ese
 // comercio cambia, no solo cuando cambia el comercio en sí.
-export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean; commerceSlugs?: string[] }) {
+export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean; commerceSlugs?: string[]; origin?: string }) {
   if (slugs.length > 0) {
     if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
-      invalidatePromoDetailCache()
+      invalidatePromoDetailCache(opts?.origin)
     } else {
       try {
         for (const slug of slugs) revalidateTag(promoDetailIdTag(slug))
@@ -114,10 +119,10 @@ export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysByS
 // También invalida el tag commerce-aux de cada slug — las 5 funciones
 // auxiliares (branches, other-promos, related-commerces, commerce-promos,
 // entities) llevan ese tag además del tag de dominio.
-export function invalidateCommerceDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean }) {
+export function invalidateCommerceDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean; origin?: string }) {
   if (slugs.length === 0) return
   if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
-    invalidateCommerceDetailCache()
+    invalidateCommerceDetailCache(opts?.origin)
     return
   }
   try {

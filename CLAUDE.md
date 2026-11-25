@@ -1478,15 +1478,69 @@ nadie está esperando una respuesta rápida.
   fallback global**, sin importar cuántas promos/comercios toque el run.
 - Los callers manuales de admin (`app/api/internal/revalidate/route.ts`,
   `app/api/admin/pending-promos/[id]/route.ts`, `app/api/admin/commerces/[id]/route.ts`
-  y sus sub-rutas de `branches`) **no se tocaron** — siguen con el comportamiento
-  original (fallback global por encima de 200), que ahí sí tiene sentido porque son
-  operaciones manuales donde cualquiera puede decidir forzar una invalidación total
-  a propósito.
+  y sus sub-rutas de `branches`) **no se tocaron en este momento** — ver sección
+  más abajo ("Extensión de `alwaysBySlug` a endpoints manuales del admin —
+  RESUELTO (25/11/2026)"), donde se revirtió esta decisión para 5 de ellos tras
+  un nuevo pedido explícito de Pablo.
 
 **Regla**: cualquier flujo automático nuevo que invalide detalle por lote (otro
 cron, otro script de limpieza recurrente) debe pasar `{ alwaysBySlug: true }` — el
 umbral de 200 es una optimización válida únicamente para operaciones manuales de
 admin, nunca para algo que corre sin supervisión humana.
+
+## Extensión de `alwaysBySlug` a endpoints manuales del admin — RESUELTO (25/11/2026)
+Tras el incidente de arriba, Pablo pidió ir más lejos: ninguna acción rutinaria
+del admin (no solo los 2 flujos 100% automáticos) debería poder vaciar las
+fichas completas del sitio, aunque sea una operación manual. Motivo: estas 5
+rutas se usan constantemente desde el panel admin en el uso normal del día a
+día (aprobar/rechazar drafts, auto-validar, destacar una promo, reasignar
+categoría en bulk, limpiar promos vencidas) — no son el caso "alguien decide a
+propósito forzar un reset total" que justificaba mantener el fallback global,
+son tareas de rutina que no deberían tener ese efecto secundario.
+
+**Convertidos a invalidación por slug con `{ alwaysBySlug: true }`**, leyendo
+los slugs de promo/comercio afectados ANTES de la mutación (porque `reject`/
+`deleteMany` borra las filas y ya no se puede volver a consultar qué slugs
+tenían):
+- `POST /api/promos` (crear promo) — ya no llama al fallback global al crear.
+- `PATCH /api/admin/pending-promos` (aprobar/rechazar drafts, bulk por `ids`).
+- `POST /api/admin/auto-validate` (aprobación automática de drafts limpios).
+- `PATCH /api/admin/promos` — ambas ramas: toggle `isFeatured` y reasignación
+  de categoría en bulk.
+- `POST /api/admin/cleanup` — ramas `expired`, `by_commerce`, `by_source`
+  (leen los slugs afectados por el mismo `where` del `deleteMany`, con un
+  helper `affectedSlugs(where)` compartido entre las 3).
+
+**Excepción deliberada, FLAGGEADA a Pablo**: `POST /api/admin/cleanup` con
+`tipo === 'all'` (borra la tabla `Promo` entera, sin `where`) se dejó como
+invalidación global explícita (con logging de origen, ver abajo), no se
+convirtió a por-slug. Razón: leer todos los slugs antes de un `deleteMany({})`
+sin filtro sería técnicamente posible pero tiene el mismo costo que invalidar
+globalmente — no hay ningún riesgo de "wipe parcial" que evitar cuando la
+operación en sí ya es un wipe total a propósito. Sigue siendo manual y
+deliberado (requiere elegir explícitamente "all" en el panel), igual que los
+otros manuales que quedaron sin tocar (`internal/revalidate`,
+`admin/pending-promos/[id]`, `admin/commerces/[id]` y sus sub-rutas de
+`branches` — esos ya invalidan por slug cuando corresponde o son operaciones
+de un solo recurso, no bulk).
+
+**Logging de origen** (`lib/cache/detailCache.ts`): `invalidatePromoDetailCache`
+e `invalidateCommerceDetailCache` ahora aceptan un `origin?: string` opcional,
+logueado como `` `[detail-invalidate-global] <tag> <- <origin>` `` justo antes
+del `revalidateTag`. También enhebrado como `opts?.origin` en el fallback
+global de `invalidatePromoDetailBySlugs`/`invalidateCommerceDetailBySlugs`
+(cuando se supera el umbral de 200 sin `alwaysBySlug: true`). Puramente
+aditivo — no cambia qué se invalida, solo deja rastro en los logs de Vercel de
+qué endpoint disparó un wipe global, para que un futuro incidente como el de
+arriba se pueda diagnosticar sin tener que investigar a ciegas.
+
+**Tests**: `lib/cache/detailCache.test.ts` — 4 casos nuevos que cubren
+`alwaysBySlug: true` por encima del umbral de 200 (para promos y para
+comercios), que sin el flag sigue cayendo al fallback global (comportamiento
+preexistente sin romper), y que `origin` es solo cosmético (no cambia qué tags
+se invalidan). 9/9 tests pasando.
+
+`lib/cache/detailFetchers.ts` no se tocó — fuera de alcance de este fix.
 
 ## Auditoría de seguridad `POST /api/promos` — RESUELTO (25/11/2026)
 `POST /api/promos` (`app/api/promos/route.ts`) creaba promos sin ningún auth check

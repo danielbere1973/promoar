@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
-import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
+import { invalidatePromoDetailBySlugs, invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 async function isAdmin() {
   const session = await getServerSession()
@@ -51,6 +51,15 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 })
   }
 
+  // Slugs ANTES de mutar — tras approve/reject ya no se puede volver a
+  // consultar el estado previo (reject borra las filas).
+  const affected = await prisma.promo.findMany({
+    where: { id: { in: ids }, status: 'DRAFT' },
+    select: { slug: true, commerce: { select: { slug: true } } },
+  })
+  const promoSlugs = affected.map(p => p.slug).filter((s): s is string => !!s)
+  const commerceSlugs = Array.from(new Set(affected.map(p => p.commerce?.slug).filter((s): s is string => !!s)))
+
   if (action === 'approve') {
     await prisma.promo.updateMany({
       where: { id: { in: ids }, status: 'DRAFT' },
@@ -64,7 +73,7 @@ export async function PATCH(req: NextRequest) {
 
   await invalidatePublicPromosCache()
   invalidateCategoriesCache()
-  invalidatePromoDetailCache()
-  invalidateCommerceDetailCache()
+  invalidatePromoDetailBySlugs(promoSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/pending-promos' })
+  invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/pending-promos' })
   return NextResponse.json({ ok: true, count: ids.length })
 }

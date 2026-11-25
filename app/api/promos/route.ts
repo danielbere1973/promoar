@@ -7,7 +7,7 @@ import { getAuthToken } from '@/lib/auth'
 import { getPromosData, PromoQueryParams } from '@/lib/getPromos'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
-import { invalidatePromoDetailCache, invalidateCommerceDetailCache, invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
+import { invalidatePromoDetailBySlugs, invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 // Mismo patrón que app/api/admin/scrape/route.ts: Bearer VTEX_SESSION_SECRET
 // (callers internos/server-to-server) o sesión con rol ADMIN (formularios de
@@ -228,14 +228,16 @@ export async function POST(req: NextRequest) {
 
     await invalidatePublicPromosCache()
     invalidateCategoriesCache()
-    invalidatePromoDetailCache()
-    invalidateCommerceDetailCache()
-    // invalidateCommerceDetailCache() de arriba es el fallback global del tag de
-    // dominio (comercios-detail), pero NO toca commerce-aux:<slug> — ese tag es
-    // aparte y solo lo invalidan los helpers *BySlugs. Sin esto, las 5 funciones
-    // auxiliares de la ficha de este comercio (otras promos, sucursales, etc.)
-    // quedarían con la promo nueva ausente hasta que venza el TTL de 30 días.
-    if (promo.commerce?.slug) invalidateCommerceDetailBySlugs([promo.commerce.slug])
+    // Invalidación puntual por slug (no global) — crear 1 promo nunca debe
+    // vaciar las fichas de todo el sitio. Ver incidente 25/11/2026 en CLAUDE.md.
+    invalidatePromoDetailBySlugs(promo.slug ? [promo.slug] : [], {
+      alwaysBySlug: true,
+      commerceSlugs: promo.commerce?.slug ? [promo.commerce.slug] : [],
+      origin: 'POST /api/promos',
+    })
+    if (promo.commerce?.slug) {
+      invalidateCommerceDetailBySlugs([promo.commerce.slug], { alwaysBySlug: true, origin: 'POST /api/promos' })
+    }
     return NextResponse.json({ promo }, { status: 201 })
   } catch (error) {
     console.error('[POST /api/promos]', error)

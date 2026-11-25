@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
 import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
-import { invalidatePromoDetailCache, invalidateCommerceDetailCache } from '@/lib/cache/detailCache'
+import { invalidatePromoDetailBySlugs, invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 // Toggle isFeatured o bulk update category
 export async function PATCH(req: NextRequest) {
@@ -15,11 +15,13 @@ export async function PATCH(req: NextRequest) {
       const promo = await prisma.promo.update({
         where: { id: body.id },
         data: { isFeatured: body.isFeatured },
+        select: { isFeatured: true, slug: true, commerce: { select: { slug: true } } },
       })
       await invalidatePublicPromosCache()
       invalidateCategoriesCache()
-      invalidatePromoDetailCache()
-      invalidateCommerceDetailCache()
+      const commerceSlugs = promo.commerce?.slug ? [promo.commerce.slug] : []
+      invalidatePromoDetailBySlugs(promo.slug ? [promo.slug] : [], { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/promos (isFeatured)' })
+      invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/promos (isFeatured)' })
       return NextResponse.json({ ok: true, isFeatured: promo.isFeatured })
     }
 
@@ -35,7 +37,7 @@ export async function PATCH(req: NextRequest) {
     // Aprender: actualizar defaultCategoryId de los comercios asociados
     const promos = await prisma.promo.findMany({
       where: { id: { in: ids } },
-      select: { commerceId: true },
+      select: { commerceId: true, slug: true, commerce: { select: { slug: true } } },
     })
     const commerceIds = Array.from(new Set(promos.map(p => p.commerceId)))
     if (commerceIds.length > 0) {
@@ -45,10 +47,13 @@ export async function PATCH(req: NextRequest) {
       })
     }
 
+    const promoSlugs = promos.map(p => p.slug).filter((s): s is string => !!s)
+    const commerceSlugs = Array.from(new Set(promos.map(p => p.commerce?.slug).filter((s): s is string => !!s)))
+
     await invalidatePublicPromosCache()
     invalidateCategoriesCache()
-    invalidatePromoDetailCache()
-    invalidateCommerceDetailCache()
+    invalidatePromoDetailBySlugs(promoSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/promos (bulk category)' })
+    invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/promos (bulk category)' })
     return NextResponse.json({ updated: result.count })
   } catch (error) {
     console.error('[PATCH /api/admin/promos]', error)
