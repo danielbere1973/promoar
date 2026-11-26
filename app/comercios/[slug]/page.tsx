@@ -7,35 +7,26 @@ import { schemaItemList } from '@/lib/schema'
 import { COMMERCE_DETAIL_TAG, commerceAuxTag } from '@/lib/cache/detailCache'
 import { getCachedCommerceBySlug } from '@/lib/cache/detailFetchers'
 import DetailPageShell from '@/app/components/DetailPageShell'
-import EntityPromoGrid from '@/app/components/EntityPromoGrid'
+import CommercePromosSection from './CommercePromosSection'
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://promoar.com.ar'
 
 export const revalidate = false
 
-type PromoFilters = { catSlugs?: string[]; entitySlugs?: string[] }
-
-async function getCommercePromos(commerceId: string, filters: PromoFilters = {}) {
+// EXPERIMENTO cdn-cache-static-detail (26/11/2026): ya no acepta `filters` —
+// el server siempre trae el set completo (dataset cacheado por
+// makeGetCommercePromos); el filtro por cats/entities se mudó a
+// CommercePromosSection (cliente), ver nota ahí. Antes esta función se
+// llamaba también sin cache con el where filtrado cuando había searchParams,
+// lo que forzaba dynamic rendering en toda la página.
+async function getCommercePromos(commerceId: string) {
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-  const extraWhere: any = {}
-  if (filters.catSlugs?.length) extraWhere.category = { slug: { in: filters.catSlugs } }
-  if (filters.entitySlugs?.length) {
-    extraWhere.requirements = {
-      some: {
-        OR: [
-          { bank: { slug: { in: filters.entitySlugs } } },
-          { wallet: { slug: { in: filters.entitySlugs } } },
-        ],
-      },
-    }
-  }
 
   return prisma.promo.findMany({
     where: {
       commerceId,
       status: 'ACTIVE',
       OR: [{ validUntil: null }, { validUntil: { gte: startOfToday } }],
-      ...extraWhere,
     },
     include: {
       category: { select: { name: true, icon: true, color: true, slug: true } },
@@ -62,7 +53,7 @@ async function getCommercePromos(commerceId: string, filters: PromoFilters = {})
 // resultado). Next.js dedupea por keyParts + argumentos reales, así que
 // llamar a la factory de nuevo con el mismo slug reusa la misma entrada.
 const makeGetCommercePromos = (commerceSlug: string) => unstable_cache(
-  async (commerceId: string) => getCommercePromos(commerceId, {}),
+  async (commerceId: string) => getCommercePromos(commerceId),
   ['commerce-detail-promos', commerceSlug],
   { tags: [COMMERCE_DETAIL_TAG, commerceAuxTag(commerceSlug)], revalidate: 604800 },
 )
@@ -160,19 +151,13 @@ export async function generateStaticParams() {
   return commerces.filter(c => c.slug.trim() !== '').map(c => ({ slug: c.slug }))
 }
 
-export default async function CommercePage({ params, searchParams }: { params: { slug: string }, searchParams: { cats?: string; entities?: string } }) {
+export default async function CommercePage({ params }: { params: { slug: string } }) {
   const commerce = await getCachedCommerceBySlug(params.slug)
 
   if (!commerce || !commerce.active) notFound()
 
-  const catSlugs = searchParams.cats ? searchParams.cats.split(',').filter(Boolean) : []
-  const entitySlugs = searchParams.entities ? searchParams.entities.split(',').filter(Boolean) : []
-  const hasFilters = catSlugs.length > 0 || entitySlugs.length > 0
-
   const [promos, commerceEntities] = await Promise.all([
-    hasFilters
-      ? getCommercePromos(commerce.id, { catSlugs, entitySlugs })
-      : makeGetCommercePromos(commerce.slug)(commerce.id),
+    makeGetCommercePromos(commerce.slug)(commerce.id),
     makeGetCommerceEntities(commerce.slug)(commerce.id),
   ])
 
@@ -306,28 +291,16 @@ export default async function CommercePage({ params, searchParams }: { params: {
       </div>
 
       {/* ── Promos ── */}
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-8">
-        <p className="text-xs font-black text-gray-400 uppercase tracking-widest -mb-4">
-          {promos.length} {promos.length === 1 ? 'promo activa' : 'promos activas'}
-        </p>
-
-        {promos.length === 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 px-5 py-8 text-center">
-            <p className="text-gray-400 text-sm">No hay promos activas en este momento.</p>
-          </div>
-        )}
-
-        {categories.map(cat => (
-          <section key={cat.name} id={`cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`}>
-            <div className="flex items-center gap-2 mb-3">
-              <span>{cat.icon}</span>
-              <h2 className="text-sm font-black text-gray-700">{cat.name}</h2>
-              <span className="text-xs text-gray-400">({cat.promos.length})</span>
-            </div>
-            <EntityPromoGrid promos={cat.promos as any} />
-          </section>
-        ))}
-      </div>
+      <CommercePromosSection
+        categories={categories.map(cat => ({
+          name: cat.name,
+          slug: cat.slug,
+          icon: cat.icon,
+          color: cat.color,
+          anchor: `cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`,
+          promos: cat.promos,
+        }))}
+      />
 
       {/* ── CTA ── */}
       <div className="max-w-2xl mx-auto px-4 pb-10 space-y-2.5">

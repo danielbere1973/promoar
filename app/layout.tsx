@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next'
-import { getServerSession } from 'next-auth/next'
 import { Analytics } from '@vercel/analytics/next'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import Providers from './providers'
@@ -63,12 +62,26 @@ export const viewport: Viewport = {
   themeColor: '#1D3D6E',
 }
 
+// EXPERIMENTO cdn-cache-static-detail (26/11/2026): el root layout llamaba a
+// getServerSession() en cada request solo para precargar el estado inicial de
+// SessionProvider (next-auth/react) y evitar el parpadeo "cargando sesión" al
+// montar. getServerSession() lee la cookie de sesión vía next/headers, lo que
+// fuerza dynamic rendering en TODAS las rutas de la app sin excepción —
+// incluidas /promos/[slug] y /comercios/[slug], que no tocan cookies/headers
+// por su cuenta. Esta es la causa raíz real de por qué ninguna página del
+// sitio se servía desde el Full Route Cache de Vercel (confirmado con curl en
+// producción: Cache-Control: private, no-store en todas las rutas probadas),
+// no el middleware (que ya evita su propio getToken() en rutas públicas).
+// Fix: SessionProvider sin `session` inicial hace su propio fetch client-side
+// a /api/auth/session al montar (comportamiento estándar de next-auth/react
+// cuando no se le pasa sesión precargada) — mismo resultado final, solo con
+// un breve estado `loading` en useSession() en vez de session ya resuelta en
+// el primer render. Sin esto, ningún layout page puede ser estático.
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession()
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
@@ -88,7 +101,7 @@ export default async function RootLayout({
         />
       </head>
       <body>
-        <Providers session={session}>
+        <Providers>
           <PostHogProvider>
             <MLOAuthHandler />
             {children}
