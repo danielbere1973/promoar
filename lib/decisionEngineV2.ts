@@ -290,8 +290,8 @@ function buildValidityFact(promo: any, now: Date): ValidityFact {
   return { validDaysLabel, expiresAt, expiresSoon }
 }
 
-function buildFacts(promo: any, rubroId: string, now: Date): Facts {
-  const best = promo.userBestDiscount ?? promo.globalMaxDiscount ?? null
+function buildFacts(promo: any, rubroId: string, now: Date, allowGlobalFallback: boolean): Facts {
+  const best = promo.userBestDiscount ?? (allowGlobalFallback ? promo.globalMaxDiscount : null)
   return {
     rubroId,
     commerceName: promo.commerce?.name ?? 'Comercio',
@@ -360,7 +360,7 @@ function toDecisionCandidate(
   rubroId: string,
   now: Date
 ): DecisionCandidate {
-  const facts = buildFacts(promo, rubroId, now)
+  const facts = buildFacts(promo, rubroId, now, !!ctx.allowGlobalDiscountFallback)
   const confidence = buildConfidence(score, factors.afinidadSource)
   const reasons = buildReasons(promo, factors, ctx, isTopSavingInRubro, facts)
   return { promo, facts, score, confidence, reasons, recurrence: null }
