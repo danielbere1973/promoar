@@ -1,4 +1,5 @@
 'use client'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -67,32 +68,44 @@ export default function DetailSidebar({ categories, otherEntities, commerces, en
         })}
       </nav>
 
+      {/* EXPERIMENTO cdn-cache-static-detail (26/11/2026): Suspense obligatorio
+          — SidebarMultiSelect usa useSearchParams(), y sin este boundary
+          Next.js tira "useSearchParams() should be wrapped in a suspense
+          boundary" y falla el prerender estático de /comercios/[slug] (que
+          sí pasa entityFilters/commerces no vacíos; /promos/[slug] no los
+          pasaba y por eso nunca disparaba el bug). */}
       {categories && categories.length > 1 && (
-        <SidebarMultiSelect
-          title="Categorías"
-          paramKey="cats"
-          options={categories.map(cat => ({ value: cat.slug ?? cat.anchor, label: cat.name, icon: cat.icon, count: cat.count }))}
-        />
+        <Suspense fallback={null}>
+          <SidebarMultiSelect
+            title="Categorías"
+            paramKey="cats"
+            options={categories.map(cat => ({ value: cat.slug ?? cat.anchor, label: cat.name, icon: cat.icon, count: cat.count }))}
+          />
+        </Suspense>
       )}
 
       {commerces && commerces.length > 0 && (
-        <SidebarMultiSelect
-          title="Comercios"
-          paramKey="commerces"
-          searchable
-          searchPlaceholder="Buscar comercio..."
-          options={commerces.map(c => ({ value: c.slug, label: c.name, logoUrl: c.logoUrl }))}
-        />
+        <Suspense fallback={null}>
+          <SidebarMultiSelect
+            title="Comercios"
+            paramKey="commerces"
+            searchable
+            searchPlaceholder="Buscar comercio..."
+            options={commerces.map(c => ({ value: c.slug, label: c.name, logoUrl: c.logoUrl }))}
+          />
+        </Suspense>
       )}
 
       {entityFilters && entityFilters.length > 0 && (
-        <SidebarMultiSelect
-          title="Bancos y billeteras"
-          paramKey="entities"
-          searchable
-          searchPlaceholder="Buscar banco o billetera..."
-          options={entityFilters.map(e => ({ value: e.slug, label: e.name, logoUrl: e.logoUrl }))}
-        />
+        <Suspense fallback={null}>
+          <SidebarMultiSelect
+            title="Bancos y billeteras"
+            paramKey="entities"
+            searchable
+            searchPlaceholder="Buscar banco o billetera..."
+            options={entityFilters.map(e => ({ value: e.slug, label: e.name, logoUrl: e.logoUrl }))}
+          />
+        </Suspense>
       )}
 
       {otherEntities && otherEntities.length > 0 && (

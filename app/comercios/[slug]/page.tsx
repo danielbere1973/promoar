@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { unstable_cache } from 'next/cache'
 import { Metadata } from 'next'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { prisma } from '@/lib/prisma'
 import { schemaItemList } from '@/lib/schema'
 import { COMMERCE_DETAIL_TAG, commerceAuxTag } from '@/lib/cache/detailCache'
@@ -291,16 +292,22 @@ export default async function CommercePage({ params }: { params: { slug: string 
       </div>
 
       {/* ── Promos ── */}
-      <CommercePromosSection
-        categories={categories.map(cat => ({
-          name: cat.name,
-          slug: cat.slug,
-          icon: cat.icon,
-          color: cat.color,
-          anchor: `cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`,
-          promos: cat.promos,
-        }))}
-      />
+      {/* EXPERIMENTO cdn-cache-static-detail (26/11/2026): Suspense obligatorio
+          — CommercePromosSection usa useSearchParams(), y sin este boundary
+          Next.js tira "useSearchParams() should be wrapped in a suspense
+          boundary" y falla el prerender estático de toda la página. */}
+      <Suspense fallback={null}>
+        <CommercePromosSection
+          categories={categories.map(cat => ({
+            name: cat.name,
+            slug: cat.slug,
+            icon: cat.icon,
+            color: cat.color,
+            anchor: `cat-${cat.name.toLowerCase().replace(/\s+/g, '-')}`,
+            promos: cat.promos,
+          }))}
+        />
+      </Suspense>
 
       {/* ── CTA ── */}
       <div className="max-w-2xl mx-auto px-4 pb-10 space-y-2.5">
