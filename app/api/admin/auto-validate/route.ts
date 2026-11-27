@@ -1,4 +1,8 @@
 export const dynamic = 'force-dynamic'
+// Con Fluid Compute, Hobby soporta hasta 300s — ver
+// https://vercel.com/docs/functions/configuring-functions/duration. Corre
+// sobre todos los DRAFT pendientes, puede ser un lote grande.
+export const maxDuration = 300
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'

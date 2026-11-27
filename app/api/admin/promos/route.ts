@@ -1,4 +1,8 @@
 export const dynamic = 'force-dynamic';
+// Con Fluid Compute, Hobby soporta hasta 300s — ver
+// https://vercel.com/docs/functions/configuring-functions/duration.
+// Reasignación de categoría en bulk puede tocar muchas promos a la vez.
+export const maxDuration = 300
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'

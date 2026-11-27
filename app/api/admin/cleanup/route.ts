@@ -1,4 +1,8 @@
 export const dynamic = 'force-dynamic';
+// Con Fluid Compute, Hobby soporta hasta 300s — ver
+// https://vercel.com/docs/functions/configuring-functions/duration. Puede
+// borrar/invalidar lotes grandes (expired, by_commerce, by_source).
+export const maxDuration = 300
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthToken } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'

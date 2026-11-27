@@ -5,6 +5,11 @@ import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 import { invalidatePromoDetailBySlugs, invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 export const dynamic = 'force-dynamic'
+// Con Fluid Compute, Hobby soporta hasta 300s (igual que Pro default) — ver
+// https://vercel.com/docs/functions/configuring-functions/duration. El
+// throttle de revalidateTag (25/seg) puede sumar varios segundos de espera
+// con lotes grandes (ver incidente 25/11/2026, 248 promos vencidas).
+export const maxDuration = 300
 
 const SECRET = process.env.VTEX_SESSION_SECRET
 

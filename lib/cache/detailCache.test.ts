@@ -148,4 +148,36 @@ describe('throttle — tandas de ~25 llamadas por segundo (ver pedido 27/11/2026
     expect(revalidateTagMock).toHaveBeenCalledTimes(20) // commerceDetailIdTag + commerceAuxTag por slug
     await promise
   })
+
+  it('un error en un item no frena el resto del batch ni los batches siguientes', async () => {
+    const slugs = Array.from({ length: 60 }, (_, i) => `promo-${i}`)
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    // promo-10 (tanda 1) y promo-40 (tanda 2) fallan — el resto debe seguir procesándose.
+    revalidateTagMock.mockImplementation((tag: string) => {
+      if (tag === promoDetailIdTag('promo-10') || tag === promoDetailIdTag('promo-40')) {
+        throw new Error('revalidateTag boom')
+      }
+    })
+
+    const promise = invalidatePromoDetailBySlugs(slugs, { alwaysBySlug: true })
+    await vi.runAllTimersAsync()
+    await promise
+
+    // Los 60 items se intentaron (58 ok + 2 que tiraron), nada se saltea por el error.
+    expect(revalidateTagMock).toHaveBeenCalledTimes(60)
+    expect(revalidateTagMock).toHaveBeenCalledWith(promoDetailIdTag('promo-0'))
+    expect(revalidateTagMock).toHaveBeenCalledWith(promoDetailIdTag('promo-9'))
+    expect(revalidateTagMock).toHaveBeenCalledWith(promoDetailIdTag('promo-10'))
+    expect(revalidateTagMock).toHaveBeenCalledWith(promoDetailIdTag('promo-11'))
+    expect(revalidateTagMock).toHaveBeenCalledWith(promoDetailIdTag('promo-40'))
+    expect(revalidateTagMock).toHaveBeenCalledWith(promoDetailIdTag('promo-41'))
+    expect(revalidateTagMock).toHaveBeenCalledWith(promoDetailIdTag('promo-59'))
+
+    // Se logueó el error por item, sin abortar la corrida.
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[runThrottled] item failed, continuing con el resto', expect.any(Error))
+
+    consoleErrorSpy.mockRestore()
+    revalidateTagMock.mockImplementation(() => {})
+  })
 })
