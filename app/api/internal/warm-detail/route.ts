@@ -98,11 +98,21 @@ export async function POST(request: Request) {
 }
 
 /**
- * Lista los slugs a calentar (promos ACTIVE + comercios con activePromoCount > 0),
- * misma auth que el POST. Pensada para que scripts/warm-detail-cache.ts pida la
- * lista por HTTP en vez de abrir una conexión Prisma propia — así GitHub Actions
- * (o cualquier runner fuera de Vercel) nunca necesita DATABASE_URL como secret,
- * solo el mismo Bearer que ya usa para /api/internal/revalidate.
+ * Lista los slugs a calentar (promos ACTIVE + comercios con al menos una
+ * promo ACTIVE), misma auth que el POST. Pensada para que
+ * scripts/warm-detail-cache.ts pida la lista por HTTP en vez de abrir una
+ * conexión Prisma propia — así GitHub Actions (o cualquier runner fuera de
+ * Vercel) nunca necesita DATABASE_URL como secret, solo el mismo Bearer que
+ * ya usa para /api/internal/revalidate.
+ *
+ * Criterio de comercios (27/11/2026): antes se usaba `activePromoCount > 0`
+ * (un contador denormalizado que puede desincronizarse — ver CLAUDE.md,
+ * sección "Solapamiento..."/clasificación de cache-miss). Ahora usa el mismo
+ * criterio EN VIVO que ya usa app/sitemap.ts para decidir si un comercio es
+ * indexable: `promos: { some: { status: 'ACTIVE' } }`. Un comercio con el
+ * contador en 0 pero con promos ACTIVE reales (visto en producción: 5 de 8
+ * comercios auditados) ahora SÍ entra al universo de warm, igual que ya
+ * entra al sitemap.
  *
  * GET /api/internal/warm-detail?type=promo|comercio&limit=N
  * Sin "type": devuelve { promoSlugs, commerceSlugs }. Con "type": solo esa lista
@@ -141,8 +151,11 @@ export async function GET(request: Request) {
       : Promise.resolve([]),
     wantCommerces
       ? prisma.commerce.findMany({
-          where: { activePromoCount: { gt: 0 } },
+          where: { promos: { some: { status: 'ACTIVE' } } },
           select: { slug: true },
+          // Mismo criterio que sitemap.ts, pero ese no necesita ordenar por
+          // popularidad — acá sí, para que --limit tome los comercios más
+          // relevantes primero (igual que antes con activePromoCount).
           orderBy: [{ activePromoCount: 'desc' }, { id: 'asc' }],
           take,
         })
