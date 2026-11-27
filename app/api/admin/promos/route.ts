@@ -1,4 +1,8 @@
 export const dynamic = 'force-dynamic';
+// Con Fluid Compute, Hobby soporta hasta 300s — ver
+// https://vercel.com/docs/functions/configuring-functions/duration.
+// Reasignación de categoría en bulk puede tocar muchas promos a la vez.
+export const maxDuration = 300
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { invalidatePublicPromosCache } from '@/lib/cache/promosCache'
@@ -20,8 +24,8 @@ export async function PATCH(req: NextRequest) {
       await invalidatePublicPromosCache()
       invalidateCategoriesCache()
       const commerceSlugs = promo.commerce?.slug ? [promo.commerce.slug] : []
-      invalidatePromoDetailBySlugs(promo.slug ? [promo.slug] : [], { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/promos (isFeatured)' })
-      invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/promos (isFeatured)' })
+      await invalidatePromoDetailBySlugs(promo.slug ? [promo.slug] : [], { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/promos (isFeatured)' })
+      await invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/promos (isFeatured)' })
       return NextResponse.json({ ok: true, isFeatured: promo.isFeatured })
     }
 
@@ -52,8 +56,8 @@ export async function PATCH(req: NextRequest) {
 
     await invalidatePublicPromosCache()
     invalidateCategoriesCache()
-    invalidatePromoDetailBySlugs(promoSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/promos (bulk category)' })
-    invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/promos (bulk category)' })
+    await invalidatePromoDetailBySlugs(promoSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/promos (bulk category)' })
+    await invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/promos (bulk category)' })
     return NextResponse.json({ updated: result.count })
   } catch (error) {
     console.error('[PATCH /api/admin/promos]', error)

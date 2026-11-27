@@ -26,7 +26,7 @@ export async function PATCH(
     })
 
     const commerce = await prisma.commerce.findUnique({ where: { id: commerceId }, select: { slug: true } })
-    if (commerce?.slug) invalidateCommerceDetailBySlugs([commerce.slug])
+    if (commerce?.slug) await invalidateCommerceDetailBySlugs([commerce.slug])
 
     return NextResponse.json({ branch: updated })
   } catch (error: any) {
@@ -47,7 +47,7 @@ export async function DELETE(
     })
 
     const commerce = await prisma.commerce.findUnique({ where: { id: commerceId }, select: { slug: true } })
-    if (commerce?.slug) invalidateCommerceDetailBySlugs([commerce.slug])
+    if (commerce?.slug) await invalidateCommerceDetailBySlugs([commerce.slug])
 
     return NextResponse.json({ ok: true })
   } catch (error: any) {

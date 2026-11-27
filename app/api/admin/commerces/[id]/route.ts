@@ -88,7 +88,7 @@ export async function PATCH(
       },
     })
 
-    invalidateCommerceDetailBySlugs([updated.slug])
+    await invalidateCommerceDetailBySlugs([updated.slug])
     await invalidatePublicPromosCache()
 
     return NextResponse.json({ commerce: updated })
@@ -120,7 +120,7 @@ export async function DELETE(
       select: { slug: true },
     })
 
-    invalidateCommerceDetailBySlugs([deleted.slug])
+    await invalidateCommerceDetailBySlugs([deleted.slug])
     await invalidatePublicPromosCache()
 
     return NextResponse.json({ ok: true })

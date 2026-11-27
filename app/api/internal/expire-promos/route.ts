@@ -5,6 +5,11 @@ import { invalidateCategoriesCache } from '@/lib/cache/filtersCache'
 import { invalidatePromoDetailBySlugs, invalidateCommerceDetailBySlugs } from '@/lib/cache/detailCache'
 
 export const dynamic = 'force-dynamic'
+// Con Fluid Compute, Hobby soporta hasta 300s (igual que Pro default) — ver
+// https://vercel.com/docs/functions/configuring-functions/duration. El
+// throttle de revalidateTag (25/seg) puede sumar varios segundos de espera
+// con lotes grandes (ver incidente 25/11/2026, 248 promos vencidas).
+export const maxDuration = 300
 
 const SECRET = process.env.VTEX_SESSION_SECRET
 
@@ -36,8 +41,8 @@ export async function POST(request: Request) {
     // alwaysBySlug: true — este flujo automático nunca debe caer al fallback
     // global (incidente 25/11/2026, ver CLAUDE.md), aunque haya miles de slugs.
     const commerceSlugs = Array.from(new Set(toExpire.map(p => p.commerce?.slug).filter((s): s is string => !!s)))
-    invalidatePromoDetailBySlugs(toExpire.map(p => p.slug).filter((s): s is string => !!s), { alwaysBySlug: true, commerceSlugs })
-    invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true })
+    await invalidatePromoDetailBySlugs(toExpire.map(p => p.slug).filter((s): s is string => !!s), { alwaysBySlug: true, commerceSlugs })
+    await invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true })
   }
 
   return NextResponse.json({ expired: toExpire.length })

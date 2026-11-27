@@ -34,7 +34,7 @@ export async function POST(
     })
 
     const commerce = await prisma.commerce.findUnique({ where: { id: commerceId }, select: { slug: true } })
-    if (commerce?.slug) invalidateCommerceDetailBySlugs([commerce.slug])
+    if (commerce?.slug) await invalidateCommerceDetailBySlugs([commerce.slug])
 
     return NextResponse.json({ branch }, { status: 201 })
   } catch (error: any) {

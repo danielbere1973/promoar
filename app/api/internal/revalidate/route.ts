@@ -80,13 +80,13 @@ export async function POST(request: Request) {
   const allCommerceSlugs = Array.from(new Set([...commerceSlugs, ...derivedCommerceSlugs]))
 
   if (promoSlugs.length > 0) {
-    invalidatePromoDetailBySlugs(promoSlugs, { commerceSlugs: allCommerceSlugs })
+    await invalidatePromoDetailBySlugs(promoSlugs, { commerceSlugs: allCommerceSlugs })
   } else {
     invalidatePromoDetailCache()
   }
 
   if (allCommerceSlugs.length > 0) {
-    invalidateCommerceDetailBySlugs(allCommerceSlugs)
+    await invalidateCommerceDetailBySlugs(allCommerceSlugs)
   } else {
     invalidateCommerceDetailCache()
   }

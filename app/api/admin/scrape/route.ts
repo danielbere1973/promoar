@@ -931,9 +931,9 @@ export async function POST(req: NextRequest) {
         })
         affectedCommerceSlugs = affectedCommerces.map(c => c.slug)
       }
-      invalidatePromoDetailBySlugs(touchedPromoSlugs, { alwaysBySlug: true, commerceSlugs: affectedCommerceSlugs });
+      await invalidatePromoDetailBySlugs(touchedPromoSlugs, { alwaysBySlug: true, commerceSlugs: affectedCommerceSlugs });
       if (affectedCommerceSlugs.length > 0) {
-        invalidateCommerceDetailBySlugs(affectedCommerceSlugs, { alwaysBySlug: true })
+        await invalidateCommerceDetailBySlugs(affectedCommerceSlugs, { alwaysBySlug: true })
       }
       // Bancos: se mantiene invalidación global — ningún caller trackea bankId por requirement tocado,
       // y el volumen de páginas de banco es chico (no justifica agregar ese tracking ahora).

@@ -1,4 +1,8 @@
 export const dynamic = 'force-dynamic'
+// Con Fluid Compute, Hobby soporta hasta 300s — ver
+// https://vercel.com/docs/functions/configuring-functions/duration. Corre
+// sobre todos los DRAFT pendientes, puede ser un lote grande.
+export const maxDuration = 300
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
@@ -151,8 +155,8 @@ export async function POST() {
     })
     approvedSlugs = approved.map(p => p.slug!).filter(Boolean)
     const commerceSlugs = Array.from(new Set(approved.map(p => p.commerce?.slug).filter((s): s is string => !!s)))
-    invalidatePromoDetailBySlugs(approvedSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'POST /api/admin/auto-validate' })
-    invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'POST /api/admin/auto-validate' })
+    await invalidatePromoDetailBySlugs(approvedSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'POST /api/admin/auto-validate' })
+    await invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'POST /api/admin/auto-validate' })
   }
 
   // Notificar IndexNow (fire-and-forget, no bloquea la respuesta)

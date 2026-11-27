@@ -114,8 +114,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     await invalidatePublicPromosCache()
     invalidateCategoriesCache()
-    if (final?.slug) invalidatePromoDetailBySlugs([final.slug])
-    if (final?.commerce?.slug) invalidateCommerceDetailBySlugs([final.commerce.slug])
+    if (final?.slug) await invalidatePromoDetailBySlugs([final.slug])
+    if (final?.commerce?.slug) await invalidateCommerceDetailBySlugs([final.commerce.slug])
     return NextResponse.json({ promo: final })
   }
 
@@ -131,14 +131,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     await invalidatePublicPromosCache()
     invalidateCategoriesCache()
-    if (final?.slug) invalidatePromoDetailBySlugs([final.slug])
-    if (final?.commerce?.slug) invalidateCommerceDetailBySlugs([final.commerce.slug])
+    if (final?.slug) await invalidatePromoDetailBySlugs([final.slug])
+    if (final?.commerce?.slug) await invalidateCommerceDetailBySlugs([final.commerce.slug])
     return NextResponse.json({ promo: final })
   }
 
   await invalidatePublicPromosCache()
   invalidateCategoriesCache()
-  if (updated.slug) invalidatePromoDetailBySlugs([updated.slug])
-  if (updated.commerce?.slug) invalidateCommerceDetailBySlugs([updated.commerce.slug])
+  if (updated.slug) await invalidatePromoDetailBySlugs([updated.slug])
+  if (updated.commerce?.slug) await invalidateCommerceDetailBySlugs([updated.commerce.slug])
   return NextResponse.json({ promo: updated })
 }
