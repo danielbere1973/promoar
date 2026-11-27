@@ -36,11 +36,16 @@
  *   npm run warm:prod -- --dry-run          (solo imprime cuántas promos/comercios y el ETA)
  *   npm run warm:prod -- --limit=20         (probar con pocas)
  *   npm run warm:prod -- --type=promo       (solo promos, o --type=comercio)
+ *   npm run warm:prod -- --only-commerces   (atajo de --type=comercio, pensado para
+ *                                            auditar/calentar solo el universo de
+ *                                            comercios tras el cambio de criterio
+ *                                            a paridad con sitemap.ts, 27/11/2026)
  *
  * Uso (modo HTTP GET real a las páginas públicas):
  *   npm run warm:prod -- --http-get --limit=200
  *   npm run warm:prod -- --http-get --limit=200 --offset=200   (siguiente tanda, otro día)
  *   npm run warm:prod -- --http-get --type=promo --limit=500 --offset=1000
+ *   npm run warm:prod -- --http-get --only-commerces --limit=500
  *   npm run warm:prod -- --http-get --base-url=http://localhost:3000 --limit=5  (smoke test local)
  *
  * Repartir en varios días con --offset: el orden de slugs es determinístico
@@ -91,6 +96,16 @@ function parseStringArg(flag: string): string | null {
 
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag)
+}
+
+// --only-commerces es un atajo de --type=comercio (gana si ambos se pasan,
+// aunque no tiene sentido combinarlos) — pensado para auditar/calentar solo
+// el universo de comercios después del cambio de criterio a paridad con
+// sitemap.ts, sin tener que recordar la forma exacta de --type=.
+export function resolveTypeArg(): 'promo' | 'comercio' | null {
+  if (hasFlag('--only-commerces')) return 'comercio'
+  const typeArg = parseStringArg('--type')
+  return typeArg === 'promo' || typeArg === 'comercio' ? typeArg : null
 }
 
 async function getSlugList(baseUrl: string, type: 'promo' | 'comercio', limit: number | null, offset: number | null): Promise<string[]> {
@@ -228,7 +243,7 @@ async function runHttpGetMode() {
   const baseUrl = (parseStringArg('--base-url') || DEFAULT_PROD_URL).replace(/\/$/, '')
   const limit = parseIntArg('--limit')
   const offset = parseIntArg('--offset') ?? 0
-  const typeArg = parseStringArg('--type') // 'promo' | 'comercio' | null (ambos)
+  const typeArg = resolveTypeArg() // 'promo' | 'comercio' | null (ambos)
 
   console.log(`Modo --http-get: GET real a páginas públicas de ${baseUrl}`)
   console.log(`Concurrencia=${HTTP_GET_CONCURRENCY}, pausa entre tandas=${HTTP_GET_BATCH_PAUSE_MS}ms, umbral lenta=${HTTP_GET_SLOW_THRESHOLD_MS}ms`)
@@ -299,7 +314,7 @@ async function runHttpGetMode() {
 async function runInternalEndpointMode() {
   const dryRun = hasFlag('--dry-run')
   const limit = parseIntArg('--limit')
-  const typeArg = parseStringArg('--type') // 'promo' | 'comercio' | null (ambos)
+  const typeArg = resolveTypeArg() // 'promo' | 'comercio' | null (ambos)
   const baseUrl = DEFAULT_PROD_URL
 
   const [promoSlugs, commerceSlugs] = await Promise.all([
