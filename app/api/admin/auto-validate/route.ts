@@ -151,8 +151,8 @@ export async function POST() {
     })
     approvedSlugs = approved.map(p => p.slug!).filter(Boolean)
     const commerceSlugs = Array.from(new Set(approved.map(p => p.commerce?.slug).filter((s): s is string => !!s)))
-    invalidatePromoDetailBySlugs(approvedSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'POST /api/admin/auto-validate' })
-    invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'POST /api/admin/auto-validate' })
+    await invalidatePromoDetailBySlugs(approvedSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'POST /api/admin/auto-validate' })
+    await invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'POST /api/admin/auto-validate' })
   }
 
   // Notificar IndexNow (fire-and-forget, no bloquea la respuesta)

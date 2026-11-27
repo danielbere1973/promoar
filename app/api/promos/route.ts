@@ -230,13 +230,13 @@ export async function POST(req: NextRequest) {
     invalidateCategoriesCache()
     // Invalidación puntual por slug (no global) — crear 1 promo nunca debe
     // vaciar las fichas de todo el sitio. Ver incidente 25/11/2026 en CLAUDE.md.
-    invalidatePromoDetailBySlugs(promo.slug ? [promo.slug] : [], {
+    await invalidatePromoDetailBySlugs(promo.slug ? [promo.slug] : [], {
       alwaysBySlug: true,
       commerceSlugs: promo.commerce?.slug ? [promo.commerce.slug] : [],
       origin: 'POST /api/promos',
     })
     if (promo.commerce?.slug) {
-      invalidateCommerceDetailBySlugs([promo.commerce.slug], { alwaysBySlug: true, origin: 'POST /api/promos' })
+      await invalidateCommerceDetailBySlugs([promo.commerce.slug], { alwaysBySlug: true, origin: 'POST /api/promos' })
     }
     return NextResponse.json({ promo }, { status: 201 })
   } catch (error) {

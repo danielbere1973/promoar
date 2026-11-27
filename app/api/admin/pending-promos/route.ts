@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest) {
 
   await invalidatePublicPromosCache()
   invalidateCategoriesCache()
-  invalidatePromoDetailBySlugs(promoSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/pending-promos' })
-  invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/pending-promos' })
+  await invalidatePromoDetailBySlugs(promoSlugs, { alwaysBySlug: true, commerceSlugs, origin: 'PATCH /api/admin/pending-promos' })
+  await invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: 'PATCH /api/admin/pending-promos' })
   return NextResponse.json({ ok: true, count: ids.length })
 }

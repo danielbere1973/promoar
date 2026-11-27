@@ -1,5 +1,33 @@
 import { revalidateTag } from 'next/cache'
 
+// Vercel limita revalidateTag/revalidatePath a 50 llamadas/seg a nivel
+// plataforma. Los loops de invalidación por slug podían disparar cientos de
+// llamadas en el mismo tick sin ningún throttle — folder-safe hoy porque
+// revalidateTag es en-memoria (microsegundos), pero igual expuesto al límite
+// si un batch real supera 50/seg. BATCH_SIZE deliberadamente queda por debajo
+// del límite (no en el borde) para dejar margen a otra invalidación concurrente
+// en el mismo segundo (otro request, otro cron).
+const REVALIDATE_BATCH_SIZE = 25
+const REVALIDATE_BATCH_DELAY_MS = 1000
+
+function sleep(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
+// Ejecuta `fn` para cada item de `items` en tandas de REVALIDATE_BATCH_SIZE,
+// esperando REVALIDATE_BATCH_DELAY_MS entre tandas (sin esperar tras la
+// última). Todas las llamadas de revalidateTag pasan por acá para que ningún
+// loop pueda superar el límite de 50/seg de Vercel.
+async function runThrottled<T>(items: T[], fn: (item: T) => void) {
+  for (let i = 0; i < items.length; i += REVALIDATE_BATCH_SIZE) {
+    const batch = items.slice(i, i + REVALIDATE_BATCH_SIZE)
+    for (const item of batch) fn(item)
+    if (i + REVALIDATE_BATCH_SIZE < items.length) {
+      await sleep(REVALIDATE_BATCH_DELAY_MS)
+    }
+  }
+}
+
 export const PROMO_DETAIL_TAG = 'promos-detail'
 export const COMMERCE_DETAIL_TAG = 'comercios-detail'
 export const BANK_DETAIL_TAG = 'bancos-detail'
@@ -89,13 +117,13 @@ export function invalidateBankDetailCache() {
 // funciones auxiliares de la ficha de promo (sucursales, otras promos del
 // comercio, comercios relacionados) se enteren cuando una promo de ese
 // comercio cambia, no solo cuando cambia el comercio en sí.
-export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean; commerceSlugs?: string[]; origin?: string }) {
+export async function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean; commerceSlugs?: string[]; origin?: string }) {
   if (slugs.length > 0) {
     if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
       invalidatePromoDetailCache(opts?.origin)
     } else {
       try {
-        for (const slug of slugs) revalidateTag(promoDetailIdTag(slug))
+        await runThrottled(slugs, slug => revalidateTag(promoDetailIdTag(slug)))
       } catch (error) {
         console.error('[promo-detail-cache] revalidateTag by slug failed, relying on TTL fallback', error)
       }
@@ -105,7 +133,7 @@ export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysByS
   const commerceSlugs = opts?.commerceSlugs ?? []
   if (commerceSlugs.length === 0) return
   try {
-    for (const slug of commerceSlugs) revalidateTag(commerceAuxTag(slug))
+    await runThrottled(commerceSlugs, slug => revalidateTag(commerceAuxTag(slug)))
   } catch (error) {
     console.error('[commerce-aux-cache] revalidateTag by commerce slug failed, relying on TTL fallback', error)
   }
@@ -119,17 +147,17 @@ export function invalidatePromoDetailBySlugs(slugs: string[], opts?: { alwaysByS
 // También invalida el tag commerce-aux de cada slug — las 5 funciones
 // auxiliares (branches, other-promos, related-commerces, commerce-promos,
 // entities) llevan ese tag además del tag de dominio.
-export function invalidateCommerceDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean; origin?: string }) {
+export async function invalidateCommerceDetailBySlugs(slugs: string[], opts?: { alwaysBySlug?: boolean; origin?: string }) {
   if (slugs.length === 0) return
   if (!opts?.alwaysBySlug && slugs.length > DETAIL_INVALIDATION_BULK_THRESHOLD) {
     invalidateCommerceDetailCache(opts?.origin)
     return
   }
   try {
-    for (const slug of slugs) {
+    await runThrottled(slugs, slug => {
       revalidateTag(commerceDetailIdTag(slug))
       revalidateTag(commerceAuxTag(slug))
-    }
+    })
   } catch (error) {
     console.error('[commerce-detail-cache] revalidateTag by slug failed, relying on TTL fallback', error)
   }

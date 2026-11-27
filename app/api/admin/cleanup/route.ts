@@ -73,8 +73,8 @@ export async function POST(req: NextRequest) {
       invalidatePromoDetailCache('POST /api/admin/cleanup (all)')
       invalidateCommerceDetailCache('POST /api/admin/cleanup (all)')
     } else {
-      invalidatePromoDetailBySlugs(promoSlugs, { alwaysBySlug: true, commerceSlugs, origin: `POST /api/admin/cleanup (${tipo})` })
-      invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: `POST /api/admin/cleanup (${tipo})` })
+      await invalidatePromoDetailBySlugs(promoSlugs, { alwaysBySlug: true, commerceSlugs, origin: `POST /api/admin/cleanup (${tipo})` })
+      await invalidateCommerceDetailBySlugs(commerceSlugs, { alwaysBySlug: true, origin: `POST /api/admin/cleanup (${tipo})` })
     }
   }
 
